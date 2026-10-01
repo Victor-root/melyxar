@@ -634,6 +634,26 @@ impl Database {
         Ok(())
     }
 
+    /// The model that listens, by the word the layer above knows it by.
+    /// Nothing until the administrator has chosen one.
+    pub async fn speech_model(&self) -> Result<Option<String>> {
+        Ok(
+            sqlx::query_scalar("SELECT speech_model FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?,
+        )
+    }
+
+    /// Chooses the model that listens, or none.
+    pub async fn set_speech_model(&self, model: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET speech_model = ?, updated_at = ? WHERE id = 1")
+            .bind(model)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// How many wrong passwords in a row an account takes before it is
     /// held back.
     pub async fn sign_in_tries(&self) -> Result<i64> {
@@ -1202,6 +1222,16 @@ mod tests {
         assert_eq!(database.sign_in_tries().await.expect("read"), 10);
         database.set_sign_in_tries(5).await.expect("saved");
         assert_eq!(database.sign_in_tries().await.expect("read"), 5);
+    }
+
+    #[tokio::test]
+    async fn the_model_that_listens_is_none_until_chosen_and_is_kept() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.speech_model().await.expect("read"), None);
+        database.set_speech_model(Some("small")).await.expect("saved");
+        assert_eq!(database.speech_model().await.expect("read").as_deref(), Some("small"));
+        database.set_speech_model(None).await.expect("saved");
+        assert_eq!(database.speech_model().await.expect("read"), None);
     }
 
     #[tokio::test]

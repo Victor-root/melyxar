@@ -366,7 +366,8 @@ async fn insert_track(
             channels, channel_layout, sample_rate,
             loudness_integrated_lufs, loudness_true_peak_dbfs, loudness_range_lu,
             subtitle_layout, is_hearing_impaired, is_external, external_relative_path,
-            downloaded_file, margin_top, margin_bottom, margin_left, margin_right
+            downloaded_file, margin_top, margin_bottom, margin_left, margin_right,
+            is_generated
          ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -376,7 +377,8 @@ async fn insert_track(
             ?, ?, ?,
             ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?,
+            ?
          )",
     )
     .bind(track.id.to_db_string())
@@ -439,6 +441,9 @@ async fn insert_track(
     )
     .bind(video.and_then(|details| details.margins).map(|it| it.left))
     .bind(video.and_then(|details| details.margins).map(|it| it.right))
+    .bind(bool_to_int(
+        subtitle.is_some_and(|details| details.is_generated),
+    ))
     .execute(&mut **transaction)
     .await?;
     Ok(())
@@ -522,6 +527,7 @@ fn track_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<Track> {
                 .try_get::<Option<i64>, _>("is_hearing_impaired")?
                 .map(int_to_bool)
                 .unwrap_or_default(),
+            is_generated: int_to_bool(row.try_get("is_generated")?),
             is_external: int_to_bool(row.try_get("is_external")?),
             external_relative_path: row
                 .try_get::<Option<String>, _>("external_relative_path")?
@@ -606,6 +612,7 @@ mod tests {
                 codec: "hdmv_pgs_subtitle".to_string(),
                 layout: SubtitleLayout::Bitmap,
                 is_hearing_impaired: true,
+                is_generated: false,
                 is_external: false,
                 external_relative_path: None,
                 downloaded_file: None,
@@ -802,6 +809,7 @@ mod tests {
                 codec: "subrip".to_string(),
                 layout: SubtitleLayout::Text,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: true,
                 external_relative_path: Some(PathBuf::from("Quiet.Harbour.2019.fr.forced.srt")),
                 downloaded_file: None,

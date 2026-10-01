@@ -189,6 +189,10 @@ pub struct LibraryOptions {
     /// Listen to the seasons for their opening and closing titles. Only ever
     /// asked of a library of series.
     pub detect_openings: bool,
+    /// Write subtitles by listening to the sound of the videos that have none.
+    /// Only ever asked of a library of personal videos, and off to begin with:
+    /// it is the heaviest thing the server does to a file.
+    pub generate_subtitles: bool,
     /// Do the heavy readings above as soon as a file arrives, rather than
     /// leaving them to the scheduled tasks.
     pub process_on_arrival: bool,
@@ -210,6 +214,7 @@ impl Default for LibraryOptions {
             extract_subtitles: true,
             make_thumbnails: true,
             detect_openings: true,
+            generate_subtitles: false,
             process_on_arrival: false,
             watch_in_real_time: false,
             keeps_resume_points: true,

@@ -58,6 +58,13 @@ pub enum JobKind {
     /// Looks up online the covers the albums of a library of music lack, and
     /// the photos its artists lack.
     LookUpAlbumCovers,
+    /// Writes subtitles for the videos that have none by listening to their
+    /// sound. The one reading of the upkeep that is not about the file's own
+    /// contents: it makes something new out of them.
+    GenerateSpeechSubtitles,
+    /// Downloads one of the models that listen. Kept as a job so the page
+    /// shows how far it has got, and the person who started it can stop it.
+    DownloadSpeechModel,
 }
 
 impl JobKind {
@@ -67,7 +74,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -81,6 +88,8 @@ impl JobKind {
         Self::Backup,
         Self::FetchRatings,
         Self::LookUpAlbumCovers,
+        Self::GenerateSpeechSubtitles,
+        Self::DownloadSpeechModel,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -98,6 +107,8 @@ impl JobKind {
             Self::Backup => "backup",
             Self::FetchRatings => "fetch_ratings",
             Self::LookUpAlbumCovers => "look_up_album_covers",
+            Self::GenerateSpeechSubtitles => "generate_speech_subtitles",
+            Self::DownloadSpeechModel => "download_speech_model",
         }
     }
 
@@ -116,6 +127,8 @@ impl JobKind {
             "backup" => Some(Self::Backup),
             "fetch_ratings" => Some(Self::FetchRatings),
             "look_up_album_covers" => Some(Self::LookUpAlbumCovers),
+            "generate_speech_subtitles" => Some(Self::GenerateSpeechSubtitles),
+            "download_speech_model" => Some(Self::DownloadSpeechModel),
             _ => None,
         }
     }
@@ -167,11 +180,15 @@ pub enum JobStep {
     LookingUpCovers,
     /// Asking Deezer for the photos the artists lack.
     LookingUpArtistPhotos,
+    /// Listening to each video for what is said in it.
+    ListeningToSpeech,
+    /// Downloading a model that listens.
+    DownloadingSpeechModel,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 18] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -188,6 +205,8 @@ impl JobStep {
         Self::MeasuringSongs,
         Self::LookingUpCovers,
         Self::LookingUpArtistPhotos,
+        Self::ListeningToSpeech,
+        Self::DownloadingSpeechModel,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -208,6 +227,8 @@ impl JobStep {
             Self::MeasuringSongs => "measuring_songs",
             Self::LookingUpCovers => "looking_up_covers",
             Self::LookingUpArtistPhotos => "looking_up_artist_photos",
+            Self::ListeningToSpeech => "listening_to_speech",
+            Self::DownloadingSpeechModel => "downloading_speech_model",
         }
     }
 
@@ -229,6 +250,8 @@ impl JobStep {
             "measuring_songs" => Some(Self::MeasuringSongs),
             "looking_up_covers" => Some(Self::LookingUpCovers),
             "looking_up_artist_photos" => Some(Self::LookingUpArtistPhotos),
+            "listening_to_speech" => Some(Self::ListeningToSpeech),
+            "downloading_speech_model" => Some(Self::DownloadingSpeechModel),
             _ => None,
         }
     }

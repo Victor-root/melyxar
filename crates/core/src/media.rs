@@ -492,6 +492,9 @@ pub struct SubtitleDetails {
     pub layout: SubtitleLayout,
     /// Meant for viewers who are hard of hearing.
     pub is_hearing_impaired: bool,
+    /// Written by the server from what it heard, not by anybody who knew what
+    /// was said. It can be wrong, and is shown as what it is.
+    pub is_generated: bool,
     /// Stored in a separate file rather than inside the media: next to it,
     /// or downloaded and kept by the server.
     pub is_external: bool,
@@ -694,6 +697,7 @@ mod tests {
             codec: "subrip".into(),
             layout: SubtitleLayout::Text,
             is_hearing_impaired: false,
+            is_generated: false,
             is_external: false,
             external_relative_path: None,
             downloaded_file: None,
@@ -737,6 +741,7 @@ mod tests {
             codec: "subrip".into(),
             layout: SubtitleLayout::Text,
             is_hearing_impaired: false,
+            is_generated: false,
             is_external: false,
             external_relative_path: None,
             downloaded_file: None,
