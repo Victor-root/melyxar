@@ -208,9 +208,9 @@
   }
 }
 
-/* The new account, across the page: who it is in a column on the left and
-   what it may do in columns of its own beside it, so the card fits the screen
-   instead of running past it. */
+/* The new account, across the page: who it is in a column on the left, each
+   field under its name, and what it may do in two columns beside it, so the
+   card fits the screen instead of running past it. */
 .account-new-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
@@ -218,29 +218,24 @@
   align-items: start;
 }
 
-/* What it may do runs in two columns, a line never cut in two. */
-.settings-lines.account-new-rights {
-  display: block;
-  column-count: 2;
-  column-gap: var(--gap-wide);
+.account-new-columns .setting-stacked .setting-control {
+  align-self: stretch;
 }
 
-.account-new-rights > * {
-  break-inside: avoid;
+.account-new-columns .setting-stacked .field-line {
+  width: 100%;
 }
 
-/* A column is narrow, so the words give way before the switch is pushed
-   under them. */
-.account-new-rights .setting-words {
-  flex-basis: 160px;
+.account-new-rights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--gap-wide);
+  align-items: start;
 }
 
 @media (max-width: 1100px) {
-  .account-new-columns {
+  .account-new-columns,
+  .account-new-rights {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-lines.account-new-rights {
-    column-count: 1;
   }
 }

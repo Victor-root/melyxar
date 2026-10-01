@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { api, ApiError } from "../../api";
 import type { Library, ManagedAccount, Rights } from "../../api";
 import { useAccount } from "../../account";
@@ -318,171 +319,196 @@ function RightsLines({
   libraries,
   you,
   onChange,
+  columns = 1,
 }: {
   rights: Rights;
   libraries: Library[];
   /** One's own account: stepping down is not offered from here. */
   you: boolean;
   onChange: (rights: Rights) => void;
+  /** How many columns the lines are shared out between, evenly and in
+   *  order, each opening on a line of its own with no rule above it. */
+  columns?: number;
 }) {
   const { t } = useSettings();
   const set = (changed: Partial<Rights>) =>
     onChange(settled({ ...rights, ...changed }));
 
-  return (
-    <>
-      <Setting
+  const lines: ReactNode[] = [
+    <Setting
+      key="administrator"
+      label={t("users.administrator")}
+      why={t("users.administrator_why")}
+    >
+      <Toggle
         label={t("users.administrator")}
-        why={t("users.administrator_why")}
+        checked={rights.is_administrator}
+        disabled={you}
+        onChange={(is_administrator) => set({ is_administrator })}
+      />
+    </Setting>,
+  ];
+
+  if (!rights.is_administrator) {
+    lines.push(
+      <Setting
+        key="every_library"
+        label={t("users.every_library")}
+        why={t("users.every_library_why")}
       >
         <Toggle
-          label={t("users.administrator")}
-          checked={rights.is_administrator}
-          disabled={you}
-          onChange={(is_administrator) => set({ is_administrator })}
+          label={t("users.every_library")}
+          checked={rights.sees_every_library}
+          onChange={(sees_every_library) => set({ sees_every_library })}
         />
-      </Setting>
-
-      {!rights.is_administrator && (
-        <>
-          <Setting
-            label={t("users.every_library")}
-            why={t("users.every_library_why")}
-          >
-            <Toggle
-              label={t("users.every_library")}
-              checked={rights.sees_every_library}
-              onChange={(sees_every_library) => set({ sees_every_library })}
-            />
-          </Setting>
-
-          {!rights.sees_every_library && (
-            <div className="lines account-libraries">
-              {libraries.length === 0 && (
-                <p className="empty-line">{t("users.no_library_yet")}</p>
-              )}
-              {libraries.map((library) => {
-                const granted = rights.libraries.includes(library.id);
-                return (
-                  <div className="line" key={library.id}>
-                    <span className="line-mark" aria-hidden="true">
-                      <KindIcon kind={library.kind} size={18} />
-                    </span>
-                    <span className="line-words">
-                      <span className="line-name">{library.name}</span>
-                    </span>
-                    <span className="line-end">
-                      <Toggle
-                        label={library.name}
-                        checked={granted}
-                        onChange={(wanted) =>
-                          onChange(granting(rights, library.id, wanted))
-                        }
-                      />
-                    </span>
-                  </div>
-                );
-              })}
-              {libraries.length > 0 && rights.libraries.length === 0 && (
-                <p className="panel-say">{t("users.no_library")}</p>
-              )}
-            </div>
+      </Setting>,
+    );
+    if (!rights.sees_every_library) {
+      lines.push(
+        <div className="lines account-libraries" key="libraries">
+          {libraries.length === 0 && (
+            <p className="empty-line">{t("users.no_library_yet")}</p>
           )}
+          {libraries.map((library) => {
+            const granted = rights.libraries.includes(library.id);
+            return (
+              <div className="line" key={library.id}>
+                <span className="line-mark" aria-hidden="true">
+                  <KindIcon kind={library.kind} size={18} />
+                </span>
+                <span className="line-words">
+                  <span className="line-name">{library.name}</span>
+                </span>
+                <span className="line-end">
+                  <Toggle
+                    label={library.name}
+                    checked={granted}
+                    onChange={(wanted) =>
+                      onChange(granting(rights, library.id, wanted))
+                    }
+                  />
+                </span>
+              </div>
+            );
+          })}
+          {libraries.length > 0 && rights.libraries.length === 0 && (
+            <p className="panel-say">{t("users.no_library")}</p>
+          )}
+        </div>,
+      );
+    }
+    lines.push(
+      <Setting
+        key="may_delete"
+        label={t("admin.right.may_delete")}
+        why={t("users.may_delete_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_delete")}
+          checked={rights.may_delete}
+          onChange={(may_delete) => set({ may_delete })}
+        />
+      </Setting>,
+      <Setting
+        key="may_delete_from_disk"
+        label={t("admin.right.may_delete_from_disk")}
+        why={t("users.may_delete_from_disk_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_delete_from_disk")}
+          checked={rights.may_delete_from_disk}
+          disabled={!rights.may_delete}
+          onChange={(may_delete_from_disk) => set({ may_delete_from_disk })}
+        />
+      </Setting>,
+      <Setting
+        key="streams"
+        label={t("admin.limit_streams")}
+        why={t("users.streams_why")}
+      >
+        <Picker
+          label={t("admin.limit_streams")}
+          value={
+            rights.most_streams === null ? "" : String(rights.most_streams)
+          }
+          options={[
+            ["", t("users.no_limit")] as const,
+            ...Array.from(
+              { length: MOST_STREAMS_OFFERED },
+              (_, index) => [String(index + 1), String(index + 1)] as const,
+            ),
+          ]}
+          onPick={(value) =>
+            set({ most_streams: value === "" ? null : Number(value) })
+          }
+        />
+      </Setting>,
+      <Setting
+        key="may_download"
+        label={t("admin.right.may_download")}
+        why={t("users.may_download_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_download")}
+          checked={rights.may_download}
+          onChange={(may_download) => set({ may_download })}
+        />
+      </Setting>,
+      <Setting
+        key="may_manage_collections"
+        label={t("admin.right.may_manage_collections")}
+        why={t("users.may_manage_collections_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_manage_collections")}
+          checked={rights.may_manage_collections}
+          onChange={(may_manage_collections) => set({ may_manage_collections })}
+        />
+      </Setting>,
+      <Setting
+        key="may_edit_tags"
+        label={t("admin.right.may_edit_tags")}
+        why={t("users.may_edit_tags_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_edit_tags")}
+          checked={rights.may_edit_tags}
+          onChange={(may_edit_tags) => set({ may_edit_tags })}
+        />
+      </Setting>,
+      <Setting
+        key="may_upload"
+        label={t("admin.right.may_upload")}
+        why={t("users.may_upload_why")}
+      >
+        <Toggle
+          label={t("admin.right.may_upload")}
+          checked={rights.may_upload}
+          onChange={(may_upload) => set({ may_upload })}
+        />
+      </Setting>,
+      <Setting key="limit_age" label={t("admin.limit_age")} soon>
+        <Toggle
+          label={t("admin.limit_age")}
+          checked={false}
+          onChange={() => {}}
+          disabled
+        />
+      </Setting>,
+    );
+  }
 
-          <Setting
-            label={t("admin.right.may_delete")}
-            why={t("users.may_delete_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_delete")}
-              checked={rights.may_delete}
-              onChange={(may_delete) => set({ may_delete })}
-            />
-          </Setting>
-          <Setting
-            label={t("admin.right.may_delete_from_disk")}
-            why={t("users.may_delete_from_disk_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_delete_from_disk")}
-              checked={rights.may_delete_from_disk}
-              disabled={!rights.may_delete}
-              onChange={(may_delete_from_disk) => set({ may_delete_from_disk })}
-            />
-          </Setting>
-          <Setting
-            label={t("admin.limit_streams")}
-            why={t("users.streams_why")}
-          >
-            <Picker
-              label={t("admin.limit_streams")}
-              value={
-                rights.most_streams === null ? "" : String(rights.most_streams)
-              }
-              options={[
-                ["", t("users.no_limit")] as const,
-                ...Array.from(
-                  { length: MOST_STREAMS_OFFERED },
-                  (_, index) => [String(index + 1), String(index + 1)] as const,
-                ),
-              ]}
-              onPick={(value) =>
-                set({ most_streams: value === "" ? null : Number(value) })
-              }
-            />
-          </Setting>
-          <Setting
-            label={t("admin.right.may_download")}
-            why={t("users.may_download_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_download")}
-              checked={rights.may_download}
-              onChange={(may_download) => set({ may_download })}
-            />
-          </Setting>
-          <Setting
-            label={t("admin.right.may_manage_collections")}
-            why={t("users.may_manage_collections_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_manage_collections")}
-              checked={rights.may_manage_collections}
-              onChange={(may_manage_collections) =>
-                set({ may_manage_collections })
-              }
-            />
-          </Setting>
-          <Setting
-            label={t("admin.right.may_edit_tags")}
-            why={t("users.may_edit_tags_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_edit_tags")}
-              checked={rights.may_edit_tags}
-              onChange={(may_edit_tags) => set({ may_edit_tags })}
-            />
-          </Setting>
-          <Setting
-            label={t("admin.right.may_upload")}
-            why={t("users.may_upload_why")}
-          >
-            <Toggle
-              label={t("admin.right.may_upload")}
-              checked={rights.may_upload}
-              onChange={(may_upload) => set({ may_upload })}
-            />
-          </Setting>
-          <Setting label={t("admin.limit_age")} soon>
-            <Toggle
-              label={t("admin.limit_age")}
-              checked={false}
-              onChange={() => {}}
-              disabled
-            />
-          </Setting>
-        </>
-      )}
+  if (columns <= 1) {
+    return <>{lines}</>;
+  }
+  const each = Math.ceil(lines.length / columns);
+  return (
+    <>
+      {Array.from({ length: Math.ceil(lines.length / each) }, (_, column) => (
+        <div className="settings-lines" key={column}>
+          {lines.slice(column * each, (column + 1) * each)}
+        </div>
+      ))}
     </>
   );
 }
@@ -627,7 +653,7 @@ function NewAccount({
     >
       <div className="account-new-columns">
         <div className="settings-lines">
-          <Setting label={t("users.name")}>
+          <Setting stacked label={t("users.name")}>
             <input
               type="text"
               className="field-line"
@@ -638,7 +664,7 @@ function NewAccount({
               onChange={(event) => setName(event.target.value)}
             />
           </Setting>
-          <Setting label={t("users.password")}>
+          <Setting stacked label={t("users.password")}>
             <input
               type="password"
               className="field-line"
@@ -648,7 +674,7 @@ function NewAccount({
               onChange={(event) => setPassword(event.target.value)}
             />
           </Setting>
-          <Setting label={t("users.password_again")}>
+          <Setting stacked label={t("users.password_again")}>
             <input
               type="password"
               className="field-line"
@@ -659,12 +685,13 @@ function NewAccount({
             />
           </Setting>
         </div>
-        <div className="settings-lines account-new-rights">
+        <div className="account-new-rights">
           <RightsLines
             rights={rights}
             libraries={libraries}
             you={false}
             onChange={setRights}
+            columns={2}
           />
         </div>
       </div>
