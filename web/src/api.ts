@@ -577,9 +577,13 @@ export interface SpeechModel {
 
 /** What listens to personal videos: whether the tool is on the machine, the
     model in use, and every model offered. */
+export type SpeechEffort = "quiet" | "balanced" | "maximum";
+
 export interface SpeechStatus {
   tool_found: boolean;
   chosen: string | null;
+  /** How much of the processor listening takes. */
+  effort: SpeechEffort;
   models: SpeechModel[];
 }
 
@@ -2039,6 +2043,8 @@ export const api = {
   speech: (signal?: AbortSignal) => get<SpeechStatus>("/api/v1/system/speech", signal),
   chooseSpeechModel: (model: string | null) =>
     put<SpeechStatus>("/api/v1/system/speech", { model }),
+  setSpeechEffort: (effort: SpeechEffort) =>
+    put<SpeechStatus>("/api/v1/system/speech/effort", { effort }),
   downloadSpeechModel: (id: string) =>
     post<{ job_id: string }>(`/api/v1/system/speech/models/${id}/download`),
   forgetSpeechModel: (id: string) =>

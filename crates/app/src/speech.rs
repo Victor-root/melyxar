@@ -43,7 +43,46 @@ pub struct Status {
     pub tool_found: bool,
     /// The model in use, once one has been chosen and is on the disk.
     pub chosen: Option<&'static str>,
+    pub effort: Effort,
     pub models: Vec<ModelStatus>,
+}
+
+/// How much of the processor listening takes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effort {
+    /// Half of it, so the rest is left for whoever is watching something.
+    Quiet,
+    /// Three quarters of it.
+    Balanced,
+    /// All of it. Whoever is watching something feels it.
+    Maximum,
+}
+
+impl Effort {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Quiet => "quiet",
+            Self::Balanced => "balanced",
+            Self::Maximum => "maximum",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        [Self::Quiet, Self::Balanced, Self::Maximum]
+            .into_iter()
+            .find(|effort| effort.as_str() == word)
+    }
+
+    /// How many processor threads listening takes on a machine that has
+    /// `available`. Past a point more threads do not make a model faster, so
+    /// the quiet one stops at eight and the others at twelve.
+    pub fn threads(self, available: usize) -> usize {
+        match self {
+            Self::Quiet => (available / 2).clamp(1, 8),
+            Self::Balanced => (available * 3 / 4).clamp(1, 12),
+            Self::Maximum => available.clamp(1, 12),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +102,8 @@ pub enum Refused {
     UnknownModel,
     /// A model chosen before it was downloaded.
     NotDownloaded,
+    /// An effort the server does not know.
+    UnknownEffort,
 }
 
 impl Refused {
@@ -70,6 +111,7 @@ impl Refused {
         match self {
             Self::UnknownModel => "unknown_model",
             Self::NotDownloaded => "not_downloaded",
+            Self::UnknownEffort => "unknown_effort",
         }
     }
 }
@@ -125,8 +167,22 @@ pub async fn status(state: &AppState) -> Result<Status> {
     Ok(Status {
         tool_found: tool(state).is_some(),
         chosen,
+        effort: effort(state).await?,
         models,
     })
+}
+
+/// How much of the processor listening takes. The usual one if what is kept
+/// is a word this version does not know.
+pub async fn effort(state: &AppState) -> Result<Effort> {
+    Ok(Effort::parse(&state.database().speech_effort().await?).unwrap_or(Effort::Quiet))
+}
+
+/// Chooses how much of the processor listening takes.
+pub async fn set_effort(state: &AppState, word: &str) -> std::result::Result<(), Trouble> {
+    let effort = Effort::parse(word).ok_or(Trouble::Refused(Refused::UnknownEffort))?;
+    state.database().set_speech_effort(effort.as_str()).await?;
+    Ok(())
 }
 
 /// Chooses the model that listens, or none. One that is not on the disk
@@ -260,12 +316,6 @@ pub async fn ready(state: &AppState) -> Result<Option<Ready>> {
     Ok(speech_models::is_whole(model, &path).then_some(Ready { tool, model: path }))
 }
 
-/// How many processor threads listening takes: half of what the machine has,
-/// so the rest is left for whoever is watching something.
-pub fn threads_for(available: usize) -> usize {
-    (available / 2).clamp(1, 8)
-}
-
 /// Starts listening to the videos of a library that nobody has listened to,
 /// as a job of its own. Listening is one of the upkeep's readings, so it is
 /// started the way the others are; this is what they call.
@@ -296,7 +346,9 @@ pub(crate) async fn listen_to_the_videos_of(
         handle.advance(already_done).await;
     }
     handle.set_total(already_done + waiting).await;
-    let threads = threads_for(std::thread::available_parallelism().map_or(2, usize::from));
+    let threads = effort(state)
+        .await?
+        .threads(std::thread::available_parallelism().map_or(2, usize::from));
 
     let mut listened = 0;
     let mut still_waiting = waiting;
@@ -516,10 +568,22 @@ mod tests {
     }
 
     #[test]
-    fn listening_takes_half_the_processor_and_never_less_than_one_thread() {
-        assert_eq!(threads_for(1), 1);
-        assert_eq!(threads_for(2), 1);
-        assert_eq!(threads_for(12), 6);
-        assert_eq!(threads_for(64), 8, "more threads do not make a model faster");
+    fn each_effort_takes_its_share_of_the_processor_and_never_less_than_one_thread() {
+        for effort in [Effort::Quiet, Effort::Balanced, Effort::Maximum] {
+            assert_eq!(effort.threads(1), 1, "{effort:?}");
+        }
+        assert_eq!(Effort::Quiet.threads(12), 6);
+        assert_eq!(Effort::Balanced.threads(12), 9);
+        assert_eq!(Effort::Maximum.threads(12), 12);
+        assert_eq!(Effort::Quiet.threads(64), 8, "more threads do not make a model faster");
+        assert_eq!(Effort::Maximum.threads(64), 12);
+    }
+
+    #[test]
+    fn an_effort_is_known_by_its_word_and_only_by_it() {
+        for effort in [Effort::Quiet, Effort::Balanced, Effort::Maximum] {
+            assert_eq!(Effort::parse(effort.as_str()), Some(effort));
+        }
+        assert_eq!(Effort::parse("frantic"), None);
     }
 }
