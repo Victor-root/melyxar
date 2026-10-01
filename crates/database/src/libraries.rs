@@ -217,11 +217,13 @@ impl Database {
             "UPDATE libraries
                 SET extract_subtitles = ?1, make_thumbnails = ?2, detect_openings = ?3,
                     process_on_arrival = ?4, watch_in_real_time = ?5,
-                    keeps_resume_points = ?6, keeps_watched_marks = ?7, updated_at = ?8
-              WHERE id = ?9
+                    keeps_resume_points = ?6, keeps_watched_marks = ?7,
+                    generate_subtitles = ?8, updated_at = ?9
+              WHERE id = ?10
                 AND (extract_subtitles <> ?1 OR make_thumbnails <> ?2 OR detect_openings <> ?3
                      OR process_on_arrival <> ?4 OR watch_in_real_time <> ?5
-                     OR keeps_resume_points <> ?6 OR keeps_watched_marks <> ?7)",
+                     OR keeps_resume_points <> ?6 OR keeps_watched_marks <> ?7
+                     OR generate_subtitles <> ?8)",
         )
         .bind(options.extract_subtitles)
         .bind(options.make_thumbnails)
@@ -230,6 +232,7 @@ impl Database {
         .bind(options.watch_in_real_time)
         .bind(options.keeps_resume_points)
         .bind(options.keeps_watched_marks)
+        .bind(options.generate_subtitles)
         .bind(timestamp_to_text(now()))
         .bind(id.to_db_string())
         .execute(self.writer())
@@ -277,7 +280,8 @@ impl Database {
         let rows = sqlx::query(
             "SELECT id, name, kind, metadata_language,
                     extract_subtitles, make_thumbnails, detect_openings, process_on_arrival,
-                    watch_in_real_time, keeps_resume_points, keeps_watched_marks
+                    watch_in_real_time, keeps_resume_points, keeps_watched_marks,
+                    generate_subtitles
              FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -316,7 +320,8 @@ impl Database {
     ) -> Result<Option<(LibraryKind, LibraryOptions)>> {
         let row = sqlx::query(
             "SELECT l.kind, l.extract_subtitles, l.make_thumbnails, l.detect_openings,
-                    l.process_on_arrival, l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks
+                    l.process_on_arrival, l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks,
+                    l.generate_subtitles
                FROM works w JOIN libraries l ON l.id = w.library_id
               WHERE w.id = ?",
         )
@@ -680,6 +685,7 @@ fn options_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<LibraryOptions> {
         extract_subtitles: row.try_get("extract_subtitles")?,
         make_thumbnails: row.try_get("make_thumbnails")?,
         detect_openings: row.try_get("detect_openings")?,
+        generate_subtitles: row.try_get("generate_subtitles")?,
         process_on_arrival: row.try_get("process_on_arrival")?,
         watch_in_real_time: row.try_get("watch_in_real_time")?,
         keeps_resume_points: row.try_get("keeps_resume_points")?,
@@ -843,8 +849,13 @@ mod tests {
             "a library nobody has configured leaves the heavy readings to the schedule"
         );
 
+        assert!(
+            !library.options.generate_subtitles,
+            "listening to the sound is the heaviest reading, and is asked for"
+        );
         let both = LibraryOptions {
             process_on_arrival: true,
+            generate_subtitles: true,
             ..LibraryOptions::default()
         };
         assert!(

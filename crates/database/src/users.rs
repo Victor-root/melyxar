@@ -1508,6 +1508,7 @@ mod tests {
                 codec: "subrip".into(),
                 layout: SubtitleLayout::Text,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: false,
                 external_relative_path: None,
                 downloaded_file: None,

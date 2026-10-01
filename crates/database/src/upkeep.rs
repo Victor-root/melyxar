@@ -25,6 +25,33 @@ macro_rules! a_moving_picture {
     };
 }
 
+/// The files of one library that nobody has listened to and that could be: a
+/// video with a voice track and no subtitle of any kind. One that already has
+/// words, inside it, beside it or downloaded, has no use for more, and a
+/// photo has no sound.
+///
+/// A macro for the same reason as the one above, and so that the list and the
+/// count ask the same question: the screen adds what is done to what is
+/// waiting, and the two must describe one set.
+macro_rules! awaiting_speech {
+    () => {
+        "FROM media_sources
+         JOIN library_roots ON library_roots.id = media_sources.root_id
+         LEFT JOIN media_source_speech
+                ON media_source_speech.source_id = media_sources.id
+         WHERE library_roots.library_id = ?
+           AND media_sources.analysed_at IS NOT NULL
+           AND media_sources.missing_since IS NULL
+           AND media_source_speech.source_id IS NULL
+           AND EXISTS (SELECT 1 FROM tracks
+                        WHERE tracks.source_id = media_sources.id AND tracks.kind = 'video')
+           AND EXISTS (SELECT 1 FROM tracks
+                        WHERE tracks.source_id = media_sources.id AND tracks.kind = 'audio')
+           AND NOT EXISTS (SELECT 1 FROM tracks
+                            WHERE tracks.source_id = media_sources.id AND tracks.kind = 'subtitle')"
+    };
+}
+
 impl Database {
     /// Keeps where the picture of one file can be started.
     ///
@@ -464,6 +491,72 @@ impl Database {
             "SELECT count(*)
              FROM media_source_subtitles
              JOIN media_sources ON media_sources.id = media_source_subtitles.source_id
+             JOIN library_roots ON library_roots.id = media_sources.root_id
+             WHERE library_roots.library_id = ?
+               AND media_sources.analysed_at IS NOT NULL
+               AND media_sources.missing_since IS NULL",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_one(self.reader())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Keeps that one file has been listened to, and how many lines of
+    /// subtitle came out of it. Nought is an answer: a file with no voice in
+    /// it is written down as done, and never listened to again for nothing.
+    pub async fn store_speech(&self, source_id: MediaSourceId, lines: usize) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO media_source_speech (source_id, lines, made_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT (source_id) DO UPDATE
+             SET lines = excluded.lines, made_at = excluded.made_at",
+        )
+        .bind(source_id.to_db_string())
+        .bind(lines as i64)
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Files nobody has listened to yet, oldest first, a few at a time.
+    pub async fn sources_awaiting_speech(
+        &self,
+        library_id: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<MediaSourceId>> {
+        let rows = sqlx::query(concat!(
+            "SELECT media_sources.id ",
+            awaiting_speech!(),
+            " ORDER BY media_sources.added_at LIMIT ?"
+        ))
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+        rows.into_iter()
+            .map(|row| parse_id(&row.try_get::<String, _>("id")?))
+            .collect()
+    }
+
+    /// How many files of one library are waiting to be listened to.
+    pub async fn count_awaiting_speech(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(concat!("SELECT count(*) ", awaiting_speech!()))
+            .bind(library_id.to_db_string())
+            .fetch_one(self.reader())
+            .await?;
+        Ok(row.0)
+    }
+
+    /// How many files of one library have been listened to already, over the
+    /// same files the count of those waiting looks at: what is off the disk
+    /// is neither.
+    pub async fn count_with_speech(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT count(*)
+             FROM media_source_speech
+             JOIN media_sources ON media_sources.id = media_source_speech.source_id
              JOIN library_roots ON library_roots.id = media_sources.root_id
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
@@ -1175,6 +1268,7 @@ mod tests {
                 codec: codec.to_string(),
                 layout,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external,
                 external_relative_path: is_external.then(|| PathBuf::from("Quiet.Harbour.fr.srt")),
                 downloaded_file: None,
@@ -1574,4 +1668,105 @@ mod tests {
         );
         assert_eq!(write_positions(&[]), "");
     }
+    /// A track of sound, for the queue that only wants films with a voice.
+    fn a_sound_track(source_id: MediaSourceId) -> Track {
+        Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 1,
+            language: None,
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind: TrackKind::Audio(melyxar_core::media::AudioDetails {
+                codec: "aac".to_string(),
+                profile: None,
+                channels: 2,
+                channel_layout: Some("stereo".to_string()),
+                sample_rate: Some(48_000),
+                bit_depth: None,
+                bitrate: Some(128_000),
+                loudness: Default::default(),
+            }),
+        }
+    }
+
+    #[tokio::test]
+    async fn only_a_video_with_a_voice_and_no_words_is_waiting_to_be_listened_to() {
+        let (database, library_id, root_id) = library().await;
+        let plain = a_film_with_subtitles(&database, library_id, root_id, "Bare.Clip.mkv", |id| {
+            vec![video_track(id), a_sound_track(id)]
+        })
+        .await;
+        // Already has words: inside, beside it, or as pictures, whatever the
+        // shape, there is nothing to add.
+        for (name, layout, external) in [
+            ("Inside.Clip.mkv", SubtitleLayout::Text, false),
+            ("Beside.Clip.mkv", SubtitleLayout::Text, true),
+            ("Painted.Clip.mkv", SubtitleLayout::Bitmap, false),
+        ] {
+            a_film_with_subtitles(&database, library_id, root_id, name, |id| {
+                vec![
+                    video_track(id),
+                    a_sound_track(id),
+                    subtitle_of(id, 2, "subrip", layout, external),
+                ]
+            })
+            .await;
+        }
+        // No sound to listen to, and no picture to be a video of.
+        a_film_with_subtitles(&database, library_id, root_id, "Silent.Clip.mkv", |id| {
+            vec![video_track(id)]
+        })
+        .await;
+        a_film_with_subtitles(&database, library_id, root_id, "Song.Only.mka", |id| {
+            vec![a_sound_track(id)]
+        })
+        .await;
+        // Not read yet by the analyser, so nobody knows what it holds.
+        work_with_source(&database, library_id, root_id, "Unread.Clip.mkv").await;
+
+        assert_eq!(
+            database
+                .sources_awaiting_speech(library_id, 10)
+                .await
+                .expect("read"),
+            vec![plain]
+        );
+        assert_eq!(database.count_awaiting_speech(library_id).await.expect("read"), 1);
+    }
+
+    #[tokio::test]
+    async fn a_file_listened_to_is_done_even_when_nothing_was_heard() {
+        let (database, library_id, root_id) = library().await;
+        let heard = a_film_with_subtitles(&database, library_id, root_id, "Talk.mkv", |id| {
+            vec![video_track(id), a_sound_track(id)]
+        })
+        .await;
+        let silent = a_film_with_subtitles(&database, library_id, root_id, "Wind.mkv", |id| {
+            vec![video_track(id), a_sound_track(id)]
+        })
+        .await;
+        assert_eq!(database.count_awaiting_speech(library_id).await.expect("read"), 2);
+
+        database.store_speech(heard, 42).await.expect("kept");
+        database.store_speech(silent, 0).await.expect("kept");
+
+        assert_eq!(database.count_awaiting_speech(library_id).await.expect("read"), 0);
+        assert!(database
+            .sources_awaiting_speech(library_id, 10)
+            .await
+            .expect("read")
+            .is_empty());
+        assert_eq!(database.count_with_speech(library_id).await.expect("read"), 2);
+
+        // Written again, it is a reading again and not a second row.
+        database.store_speech(heard, 40).await.expect("kept");
+        assert_eq!(database.count_with_speech(library_id).await.expect("read"), 2);
+
+        // A file off the disk is neither waiting nor done.
+        database.mark_source_missing(silent).await.expect("marked");
+        assert_eq!(database.count_with_speech(library_id).await.expect("read"), 1);
+    }
+
 }
