@@ -18,6 +18,7 @@ pub mod musicbrainz;
 pub mod omdb;
 pub mod opensubtitles;
 pub mod provider;
+pub mod speech_models;
 pub mod tmdb;
 
 pub use provider::{

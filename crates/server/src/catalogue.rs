@@ -152,6 +152,8 @@ struct LibraryView {
     extract_subtitles: bool,
     make_thumbnails: bool,
     detect_openings: bool,
+    /// Whether the videos with no subtitle are listened to for one.
+    generate_subtitles: bool,
     /// Whether those are done as soon as a file arrives, rather than by
     /// their scheduled tasks.
     process_on_arrival: bool,
@@ -217,6 +219,7 @@ async fn libraries(
                 extract_subtitles: library.options.extract_subtitles,
                 make_thumbnails: library.options.make_thumbnails,
                 detect_openings: library.options.detect_openings,
+                generate_subtitles: library.options.generate_subtitles,
                 process_on_arrival: library.options.process_on_arrival,
                 watch_in_real_time: library.options.watch_in_real_time,
                 keeps_resume_points: library.options.keeps_resume_points,
@@ -1013,6 +1016,8 @@ struct SubtitleTrackView {
     is_default: bool,
     is_forced: bool,
     is_hearing_impaired: bool,
+    /// True for a subtitle the server wrote by listening, not a person.
+    is_generated: bool,
     /// True for a file sitting next to the film rather than a stream inside it.
     is_external: bool,
     /// True when showing it means burning it into the picture, which costs a
@@ -1349,6 +1354,7 @@ fn version_view(version: &Version) -> VersionView {
                 is_default: track.is_default,
                 is_forced: track.is_forced,
                 is_hearing_impaired: details.is_hearing_impaired,
+                is_generated: details.is_generated,
                 is_external: details.is_external,
                 burns_in: details.forces_full_transcode(),
             }),
@@ -1458,6 +1464,7 @@ mod tests {
                 codec: "hdmv_pgs_subtitle".to_string(),
                 layout: SubtitleLayout::Bitmap,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: false,
                 external_relative_path: None,
                 downloaded_file: None,

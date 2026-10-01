@@ -441,6 +441,9 @@ struct OptionsAsked {
     extract_subtitles: bool,
     make_thumbnails: bool,
     detect_openings: bool,
+    /// Whether the videos with no subtitle are listened to for one. Only
+    /// asked of a library of personal videos.
+    generate_subtitles: bool,
     process_on_arrival: bool,
     /// Whether the library's folders are watched and scanned again as soon
     /// as something in them changes.
@@ -459,6 +462,7 @@ struct OptionsView {
     extract_subtitles: bool,
     make_thumbnails: bool,
     detect_openings: bool,
+    generate_subtitles: bool,
     process_on_arrival: bool,
     watch_in_real_time: bool,
     keeps_resume_points: bool,
@@ -506,6 +510,7 @@ async fn set_library_options(
         extract_subtitles: asked.extract_subtitles,
         make_thumbnails: asked.make_thumbnails,
         detect_openings: asked.detect_openings,
+        generate_subtitles: asked.generate_subtitles,
         process_on_arrival: asked.process_on_arrival,
         watch_in_real_time: asked.watch_in_real_time,
         keeps_resume_points: asked.keeps_resume_points,
@@ -536,6 +541,7 @@ async fn set_library_options(
         extract_subtitles = options.extract_subtitles,
         make_thumbnails = options.make_thumbnails,
         detect_openings = options.detect_openings,
+        generate_subtitles = options.generate_subtitles,
         process_on_arrival = options.process_on_arrival,
         watch_in_real_time = options.watch_in_real_time,
         keeps_resume_points = options.keeps_resume_points,
@@ -550,6 +556,7 @@ async fn set_library_options(
         extract_subtitles: options.extract_subtitles,
         make_thumbnails: options.make_thumbnails,
         detect_openings: options.detect_openings,
+        generate_subtitles: options.generate_subtitles,
         process_on_arrival: options.process_on_arrival,
         watch_in_real_time: options.watch_in_real_time,
         keeps_resume_points: options.keeps_resume_points,

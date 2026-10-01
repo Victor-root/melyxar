@@ -47,6 +47,7 @@ pub mod segments;
 pub mod server;
 pub mod startup;
 pub mod state;
+pub mod speech;
 pub mod subtitles;
 pub mod thumbnails;
 pub mod uploads;

@@ -25,7 +25,7 @@
 
 use melyxar_core::id::{LibraryId, MediaSourceId};
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
-use melyxar_core::library::Library;
+use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media_log::file_name_of as name_of_file;
 use melyxar_database::Database;
 use melyxar_ffmpeg::AskedToStop;
@@ -45,6 +45,9 @@ pub enum UpkeepTask {
     Thumbnails,
     /// Listening to the episodes of a season for the titles they share.
     Openings,
+    /// Listening to the sound of a personal video that has no subtitle, to
+    /// write one from what is said.
+    Speech,
 }
 
 impl UpkeepTask {
@@ -63,11 +66,16 @@ impl UpkeepTask {
     /// library of films never does at all; and what it gives is a button
     /// rather than a film that plays correctly, so nothing else should wait
     /// behind it.
-    pub const ALL: [Self; 4] = [
+    ///
+    /// Speech after all the others: it is by far the longest, it makes
+    /// something new rather than reading what is there, and nothing else
+    /// should wait behind a night of it.
+    pub const ALL: [Self; 5] = [
         Self::KeyFrames,
         Self::Subtitles,
         Self::Thumbnails,
         Self::Openings,
+        Self::Speech,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -76,6 +84,7 @@ impl UpkeepTask {
             Self::Subtitles => "subtitles",
             Self::Thumbnails => "thumbnails",
             Self::Openings => "openings",
+            Self::Speech => "speech",
         }
     }
 
@@ -85,6 +94,7 @@ impl UpkeepTask {
             "subtitles" => Some(Self::Subtitles),
             "thumbnails" => Some(Self::Thumbnails),
             "openings" => Some(Self::Openings),
+            "speech" => Some(Self::Speech),
             _ => None,
         }
     }
@@ -96,6 +106,7 @@ impl UpkeepTask {
             Self::Subtitles => JobKind::PullOutSubtitles,
             Self::Thumbnails => JobKind::GenerateThumbnails,
             Self::Openings => JobKind::ListenForOpenings,
+            Self::Speech => JobKind::GenerateSpeechSubtitles,
         }
     }
 
@@ -116,6 +127,12 @@ impl UpkeepTask {
             Self::Subtitles => library.options.extract_subtitles,
             Self::Thumbnails => library.options.make_thumbnails,
             Self::Openings => library.kind.is_episodic() && library.options.detect_openings,
+            // What somebody filmed has no subtitles from anywhere: a film or a
+            // series already has its own from the same place everybody gets
+            // theirs, and listening is the heaviest thing done to a file.
+            Self::Speech => {
+                library.kind == LibraryKind::HomeMedia && library.options.generate_subtitles
+            }
         }
     }
 
@@ -139,7 +156,7 @@ impl UpkeepTask {
     pub fn follows_an_arrival_in(self, library: &Library) -> bool {
         match self {
             Self::KeyFrames => self.applies_to(library),
-            Self::Subtitles | Self::Thumbnails | Self::Openings => {
+            Self::Subtitles | Self::Thumbnails | Self::Openings | Self::Speech => {
                 library.options.process_on_arrival && self.applies_to(library)
             }
         }
@@ -179,6 +196,12 @@ pub async fn what_is_waiting_for(
             None => 0,
         },
         UpkeepTask::Openings => database.count_seasons_to_listen_to(library).await?,
+        // Nothing waits for a model that is not there: nought rather than a
+        // queue nothing will ever empty, as for the thumbnails.
+        UpkeepTask::Speech => match crate::speech::ready(state).await? {
+            Some(_) => database.count_awaiting_speech(library).await?,
+            None => 0,
+        },
     })
 }
 
@@ -216,6 +239,9 @@ pub async fn start(
                     }
                     UpkeepTask::Openings => {
                         crate::openings::listen_to_the_seasons_of(&owned, &library, &handle).await
+                    }
+                    UpkeepTask::Speech => {
+                        crate::speech::listen_to_the_videos_of(&owned, &library, &handle).await
                     }
                 }
                 .map_err(|error| error.to_string())?;
@@ -767,6 +793,38 @@ mod tests {
     }
 
     #[test]
+    fn listening_is_for_the_personal_videos_of_a_library_that_asks_for_it() {
+        let mut library = melyxar_core::library::Library {
+            id: LibraryId::new(),
+            name: "Home".to_string(),
+            kind: LibraryKind::HomeMedia,
+            metadata_language: "en".to_string(),
+            options: melyxar_core::library::LibraryOptions::default(),
+            roots: Vec::new(),
+        };
+        assert!(
+            !UpkeepTask::Speech.applies_to(&library),
+            "the heaviest reading is asked for, never assumed"
+        );
+
+        library.options.generate_subtitles = true;
+        assert!(UpkeepTask::Speech.applies_to(&library));
+        assert!(
+            !UpkeepTask::Speech.follows_an_arrival_in(&library),
+            "it waits for its task unless the library reads its files as they arrive"
+        );
+        library.options.process_on_arrival = true;
+        assert!(UpkeepTask::Speech.follows_an_arrival_in(&library));
+
+        for kind in [LibraryKind::Movies, LibraryKind::Series, LibraryKind::Anime, LibraryKind::Music] {
+            library.kind = kind;
+            assert!(!UpkeepTask::Speech.applies_to(&library), "{kind:?}");
+        }
+        assert_eq!(UpkeepTask::parse("speech"), Some(UpkeepTask::Speech));
+        assert_eq!(UpkeepTask::Speech.job_kind(), JobKind::GenerateSpeechSubtitles);
+    }
+
+    #[test]
     fn a_library_answers_for_each_task_whether_it_is_done_and_when() {
         let mut library = melyxar_core::library::Library {
             id: LibraryId::new(),
@@ -776,7 +834,14 @@ mod tests {
             options: melyxar_core::library::LibraryOptions::default(),
             roots: Vec::new(),
         };
-        assert!(UpkeepTask::ALL.iter().all(|task| task.applies_to(&library)));
+        assert!(UpkeepTask::ALL
+            .iter()
+            .filter(|task| **task != UpkeepTask::Speech)
+            .all(|task| task.applies_to(&library)));
+        assert!(
+            !UpkeepTask::Speech.applies_to(&library),
+            "a series has its subtitles from where everybody gets theirs"
+        );
         assert!(UpkeepTask::KeyFrames.follows_an_arrival_in(&library));
         assert!(
             !UpkeepTask::Thumbnails.follows_an_arrival_in(&library),

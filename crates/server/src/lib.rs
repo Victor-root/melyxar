@@ -39,6 +39,7 @@ pub mod playlists;
 pub mod preferences;
 pub mod routes;
 pub mod security;
+pub mod speech;
 pub mod timing;
 pub mod uploads;
 

@@ -374,6 +374,9 @@ struct TrackView {
     channels: Option<i32>,
     /// Subtitles only: showing it means rebuilding the picture.
     burns_in: Option<bool>,
+    /// Subtitles only: written by the server from what it heard, so it can be
+    /// wrong, and the player says so.
+    is_generated: Option<bool>,
     /// Where to fetch the words. Absent for a soundtrack, and for a subtitle
     /// made of pictures: there is no text in one to hand over.
     url: Option<String>,
@@ -415,6 +418,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 is_default: track.is_default,
                 channels: Some(details.channels),
                 burns_in: None,
+                is_generated: None,
                 url: None,
             }),
             TrackKind::Subtitle(details) => subtitles.push(TrackView {
@@ -425,6 +429,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 is_default: track.is_default,
                 channels: None,
                 burns_in: Some(details.forces_full_transcode()),
+                is_generated: Some(details.is_generated),
                 url: (!details.forces_full_transcode()).then(|| {
                     format!(
                         "/api/v1/playback/{}/subtitles/{}.vtt",
@@ -1620,6 +1625,7 @@ mod tests {
                 codec: "subrip".into(),
                 layout: SubtitleLayout::Text,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: true,
                 external_relative_path: Some("Quiet.Harbour.2019.fr.srt".into()),
                 downloaded_file: None,

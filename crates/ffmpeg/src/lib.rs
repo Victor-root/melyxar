@@ -22,6 +22,7 @@ pub mod listening;
 pub mod probe;
 pub mod process;
 pub mod song_loudness;
+pub mod speech;
 pub mod sound;
 pub mod subtitles;
 pub mod thumbnails;

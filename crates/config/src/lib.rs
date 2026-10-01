@@ -135,6 +135,19 @@ impl Directories {
     pub fn tls(&self) -> PathBuf {
         self.data.join("tls")
     }
+
+    /// The models that listen, downloaded by the administrator. In the data
+    /// directory: the biggest is three gigabytes, and nothing here makes it
+    /// again but a download.
+    pub fn speech_models(&self) -> PathBuf {
+        self.data.join("speech-models")
+    }
+
+    /// Where a video is listened to: the recording of its sound is made here
+    /// for the length of the reading and removed with it.
+    pub fn speech_scratch(&self) -> PathBuf {
+        self.cache.join("speech")
+    }
 }
 
 /// Where the external processing tools are and how they behave.
@@ -146,6 +159,10 @@ pub struct MediaToolsConfig {
     /// Path of the analyser binary. Left empty to derive it from the encoder.
     #[serde(default)]
     pub ffprobe_path: Option<PathBuf>,
+    /// Path of the speech recognition tool. Left empty to search the usual
+    /// locations, which include where the installation script puts it.
+    #[serde(default)]
+    pub whisper_path: Option<PathBuf>,
 }
 
 /// Bounds on background work, so that a scan never makes browsing sluggish.

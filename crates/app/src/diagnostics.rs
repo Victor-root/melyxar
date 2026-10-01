@@ -1398,7 +1398,7 @@ mod tests {
         let state = state_with_root(directory.path(), media).await;
 
         let report = collect(&state).await.expect("report collected");
-        assert_eq!(report.upkeep.scheduled.len(), 7);
+        assert_eq!(report.upkeep.scheduled.len(), 8);
         assert!(
             report
                 .upkeep
@@ -1586,6 +1586,7 @@ mod tests {
                         codec: "hdmv_pgs_subtitle".into(),
                         layout: SubtitleLayout::Bitmap,
                         is_hearing_impaired: false,
+                        is_generated: false,
                         is_external: false,
                         external_relative_path: None,
                         downloaded_file: None,
