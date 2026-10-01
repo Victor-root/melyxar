@@ -59,6 +59,20 @@ NODE_MAJOR="24"
 # which every shell already looks in before /usr/bin.
 NODE_PREFIX="/opt/node"
 
+# The speech recognition tool (whisper.cpp), built from source.
+#
+# Pinned to a release and to the commit that release must be: a tag can be
+# moved after the fact, a commit cannot, so the build is refused when the tag
+# no longer points where it did. A newer release is a change of these two
+# values and nothing else. The server finds the tool at this fixed place; the
+# speech models are fetched by the server itself.
+WHISPER_URL="https://github.com/ggml-org/whisper.cpp.git"
+WHISPER_TAG="v1.9.4"
+WHISPER_COMMIT="927cfce34f31707e17f2bff35c349632fb9e2c3a"
+WHISPER_DIR="/opt/melyxar/whisper"
+# The deadline given to the download and, separately, to the build.
+WHISPER_MINUTES="30"
+
 # Whether every command shows its own output as it goes.
 #
 # On while Melyxar is being built, because "it did not work" with nothing to
@@ -269,6 +283,22 @@ en|rust_unreachable|Could not reach rustup. Check the container’s network conn
 fr|rust_unreachable|Impossible de joindre rustup. Vérifiez la connexion réseau du conteneur, puis réessayez.
 en|rust_too_long|Rust toolchain download timed out after %s minutes. Retry this action; the incomplete download will be discarded.
 fr|rust_too_long|Le téléchargement des outils Rust a dépassé le délai de %s minutes. Relancez cette action ; le téléchargement incomplet sera supprimé.
+en|section_speech|Speech recognition
+fr|section_speech|Reconnaissance vocale
+en|speech_notice|Speech recognition is built from source. The first build usually takes a few minutes.
+fr|speech_notice|La reconnaissance vocale est compilée depuis les sources. La première compilation prend généralement quelques minutes.
+en|step_speech|Building the speech recognition tool
+fr|step_speech|Compilation de l’outil de reconnaissance vocale
+en|speech_present|Speech recognition tool is up to date: %s
+fr|speech_present|L’outil de reconnaissance vocale est à jour : %s
+en|speech_installed|Speech recognition tool installed: %s
+fr|speech_installed|Outil de reconnaissance vocale installé : %s
+en|speech_bad_commit|The speech recognition source %s is not the expected commit (found %s, expected %s). It was not built.
+fr|speech_bad_commit|Les sources de la reconnaissance vocale %s ne correspondent pas au commit attendu (trouvé %s, attendu %s). Elles n’ont pas été compilées.
+en|speech_too_long|Building the speech recognition tool timed out after %s minutes.
+fr|speech_too_long|La compilation de l’outil de reconnaissance vocale a dépassé le délai de %s minutes.
+en|speech_failed|The speech recognition tool could not be installed. Automatic subtitles will be unavailable until it is. Everything else is installed, and the next update tries again.
+fr|speech_failed|L’outil de reconnaissance vocale n’a pas pu être installé. Les sous-titres automatiques seront indisponibles tant qu’il ne l’est pas. Tout le reste est installé, et la prochaine mise à jour réessaiera.
 en|section_account|Preparing the system account and folders
 fr|section_account|Préparation du compte système et des dossiers
 en|step_user|Creating the system account
@@ -797,7 +827,7 @@ install_packages() {
   step "$(tr_msg step_apt_update)" apt-get update -qq
 
   step "$(tr_msg step_apt_install)" apt-get install -y --no-install-recommends \
-    build-essential pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3
+    build-essential cmake pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3
 
   # Node comes from its own source rather than from the distribution, for the
   # reason written above install_node. It gives up only when this machine ends
@@ -981,6 +1011,81 @@ node_fetch() {
     --connect-timeout 20 --retry 3 --retry-delay 2 --retry-all-errors \
     --speed-limit 1024 --speed-time 60 \
     "$1" -o "$2"
+}
+
+# The speech recognition tool, which is optional.
+#
+# Without it the server works the same, minus automatic subtitles, so a
+# failure here is said and then left behind: it never stops an install or an
+# update. The next update finds the marker missing and tries again.
+install_speech() {
+  section "$(tr_msg section_speech)"
+
+  if speech_is_current; then
+    success "$(tr_fmt speech_present "$WHISPER_TAG")"
+    return 0
+  fi
+
+  info "$(tr_msg speech_notice)"
+  if step "$(tr_msg step_speech)" speech_from_source; then
+    success "$(tr_fmt speech_installed "$WHISPER_TAG")"
+  else
+    warn "$(tr_msg speech_failed)"
+  fi
+}
+
+# Whether the tool in place is the pinned one. The marker is written only
+# once the tool is in place, so a build that stopped halfway is redone.
+speech_is_current() {
+  local record="${INSTALLED_DIR}/whisper"
+  [[ -x "${WHISPER_DIR}/whisper-cli" && -f "$record" ]] || return 1
+  [[ "$(<"$record")" == "$WHISPER_COMMIT" ]]
+}
+
+# Built in a folder of its own, removed whatever happens to the build.
+speech_from_source() {
+  local work rc=0
+  work="$(mktemp -d)" || return 1
+  speech_build "${work}/whisper.cpp" || rc=$?
+  rm -rf "$work"
+  return "$rc"
+}
+
+# Static, so that the one executable is all the server needs. The tag is
+# fetched and then checked against the pinned commit before anything is built.
+speech_build() {
+  local src="$1"
+  local built="${src}/build/bin/whisper-cli"
+  local staged="${WHISPER_DIR}/.whisper-cli.new"
+  local found rc=0
+
+  timeout "${WHISPER_MINUTES}m" \
+    git clone --depth 1 --branch "$WHISPER_TAG" "$WHISPER_URL" "$src" || return 1
+
+  found="$(git -C "$src" rev-parse HEAD)" || return 1
+  if [[ "$found" != "$WHISPER_COMMIT" ]]; then
+    error "$(tr_fmt speech_bad_commit "$WHISPER_TAG" "$found" "$WHISPER_COMMIT")"
+    return 1
+  fi
+
+  cmake -S "$src" -B "${src}/build" -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF \
+    -DWHISPER_BUILD_SERVER=OFF -DWHISPER_BUILD_EXAMPLES=ON || return 1
+
+  timeout "${WHISPER_MINUTES}m" \
+    cmake --build "${src}/build" -j"$(nproc)" --target whisper-cli || rc=$?
+  if [[ "$rc" -eq 124 ]]; then
+    error "$(tr_fmt speech_too_long "$WHISPER_MINUTES")"
+  fi
+  [[ "$rc" -eq 0 ]] || return 1
+
+  # Put in place by a rename, so the path never holds half an executable.
+  mkdir -p "$WHISPER_DIR" "$INSTALLED_DIR" || return 1
+  if ! { install -m 0755 "$built" "$staged" && mv -f "$staged" "${WHISPER_DIR}/whisper-cli"; }; then
+    rm -f "$staged"
+    return 1
+  fi
+  printf '%s\n' "$WHISPER_COMMIT" > "${INSTALLED_DIR}/whisper"
 }
 
 create_account_and_folders() {
@@ -1302,6 +1407,7 @@ action_install() {
   create_account_and_folders
   fetch_source
   build_and_install
+  install_speech
   write_configuration "$port"
   install_service
   mark_installed engine
@@ -1368,6 +1474,7 @@ action_update() {
   show_update_diff "$before" "$after"
 
   build_and_install
+  install_speech
   # Only a new server needs a restart. A new interface alone is already being
   # served, and a film playing through the update is not cut.
   if [[ -f "$WRITES_FILE" ]]; then
@@ -1807,7 +1914,7 @@ action_uninstall() {
   fi
 
   rm -f "$BINARY_PATH"
-  rm -rf "$SOURCE_DIR" "$INSTALLED_DIR" "$(dirname "$INTERFACE_DIR")"
+  rm -rf "$SOURCE_DIR" "$INSTALLED_DIR" "$WHISPER_DIR" "$(dirname "$INTERFACE_DIR")"
 
   if confirm_default_no "$(tr_msg uninstall_keep_data)"; then
     rm -rf "$DATA_DIR" "$CACHE_DIR" "$CONFIG_DIR"
