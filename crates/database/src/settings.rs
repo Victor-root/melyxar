@@ -654,6 +654,26 @@ impl Database {
         Ok(())
     }
 
+    /// How much of the processor listening takes, by the word the layer
+    /// above knows it by.
+    pub async fn speech_effort(&self) -> Result<String> {
+        Ok(
+            sqlx::query_scalar("SELECT speech_effort FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?,
+        )
+    }
+
+    /// Chooses how much of the processor listening takes.
+    pub async fn set_speech_effort(&self, effort: &str) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET speech_effort = ?, updated_at = ? WHERE id = 1")
+            .bind(effort)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// How many wrong passwords in a row an account takes before it is
     /// held back.
     pub async fn sign_in_tries(&self) -> Result<i64> {
@@ -1222,6 +1242,18 @@ mod tests {
         assert_eq!(database.sign_in_tries().await.expect("read"), 10);
         database.set_sign_in_tries(5).await.expect("saved");
         assert_eq!(database.sign_in_tries().await.expect("read"), 5);
+    }
+
+    #[tokio::test]
+    async fn listening_is_quiet_until_another_effort_is_chosen_and_it_is_kept() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.speech_effort().await.expect("read"), "quiet");
+        database.set_speech_effort("maximum").await.expect("saved");
+        assert_eq!(database.speech_effort().await.expect("read"), "maximum");
+        assert!(
+            database.set_speech_effort("frantic").await.is_err(),
+            "a word the table does not know is refused by the table itself"
+        );
     }
 
     #[tokio::test]

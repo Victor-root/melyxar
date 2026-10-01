@@ -5,12 +5,15 @@
 
 import { useEffect } from "react";
 import { api } from "../../api";
-import type { SpeechModel, SpeechStatus } from "../../api";
+import type { SpeechEffort, SpeechModel, SpeechStatus } from "../../api";
 import { refusalAbout, useAsked, useTold } from "../../asking";
-import { Panel, Setting } from "../../components/panel";
+import { Panel, Picker, Setting } from "../../components/panel";
 import { DeleteIcon, SubtitlesIcon } from "../../icons";
 import { asSize } from "../../player/describe";
 import { useSettings } from "../../settings";
+
+/** Every effort listening may take, as it is kept. */
+const EFFORTS: SpeechEffort[] = ["quiet", "balanced", "maximum"];
 
 /** How often a download is looked at again while one is under way. */
 const WHILE_DOWNLOADING_MS = 3_000;
@@ -54,6 +57,20 @@ export function SpeechPanel() {
               tell={told.tell}
             />
           ))}
+          <Setting
+            label={t("admin.speech_effort")}
+            why={t("admin.speech_effort_why")}
+          >
+            <Picker
+              label={t("admin.speech_effort")}
+              value={shown.effort}
+              options={EFFORTS.map(
+                (effort) => [effort, t(`admin.speech_effort.${effort}`)] as const,
+              )}
+              disabled={told.busy}
+              onPick={(effort) => told.tell(() => api.setSpeechEffort(effort))}
+            />
+          </Setting>
           {shown.chosen === null && (
             <p className="panel-notice">{t("admin.speech_none_chosen_note")}</p>
           )}

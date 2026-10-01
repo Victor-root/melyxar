@@ -17,6 +17,7 @@ use crate::error::Result;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/system/speech", get(status).put(choose))
+        .route("/api/v1/system/speech/effort", axum::routing::put(set_effort))
         .route("/api/v1/system/speech/models/{id}", delete(forget))
         .route("/api/v1/system/speech/models/{id}/download", post(download))
 }
@@ -27,6 +28,8 @@ struct StatusView {
     tool_found: bool,
     /// The model in use, once one is chosen and on the disk.
     chosen: Option<&'static str>,
+    /// How much of the processor listening takes: quiet, balanced, maximum.
+    effort: &'static str,
     models: Vec<ModelView>,
 }
 
@@ -43,6 +46,7 @@ impl From<melyxar_app::speech::Status> for StatusView {
         Self {
             tool_found: status.tool_found,
             chosen: status.chosen,
+            effort: status.effort.as_str(),
             models: status
                 .models
                 .into_iter()
@@ -73,6 +77,20 @@ async fn choose(
     Json(chosen): Json<Chosen>,
 ) -> Result<Json<StatusView>> {
     melyxar_app::speech::choose(&state, chosen.model.as_deref()).await?;
+    Ok(Json(melyxar_app::speech::status(&state).await?.into()))
+}
+
+#[derive(Debug, Deserialize)]
+struct EffortAsked {
+    effort: String,
+}
+
+async fn set_effort(
+    _: Administrator,
+    State(state): State<AppState>,
+    Json(asked): Json<EffortAsked>,
+) -> Result<Json<StatusView>> {
+    melyxar_app::speech::set_effort(&state, &asked.effort).await?;
     Ok(Json(melyxar_app::speech::status(&state).await?.into()))
 }
 
