@@ -250,6 +250,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.extract_subtitles", "admin.extract_subtitles_why"],
       ["settings.make_thumbnails", "admin.make_thumbnails_why"],
       ["settings.detect_openings", "admin.detect_openings_why"],
+      ["settings.generate_subtitles", "admin.generate_subtitles_why"],
       ["settings.process_on_arrival", "admin.process_on_arrival_why"],
       ["settings.watch_in_real_time"],
       ["settings.keeps_resume_points", "admin.resume_points_why"],

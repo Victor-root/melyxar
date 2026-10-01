@@ -596,6 +596,20 @@ function LibraryChoicesFields({
               />
             </Setting>
           )}
+          {kind === "home_media" && (
+            <Setting
+              label={t("settings.generate_subtitles")}
+              why={t("admin.generate_subtitles_why")}
+            >
+              <Toggle
+                label={t("settings.generate_subtitles")}
+                checked={choices.generate_subtitles}
+                onChange={(generate_subtitles) =>
+                  onChange({ generate_subtitles })
+                }
+              />
+            </Setting>
+          )}
           <Setting
             label={t("settings.process_on_arrival")}
             why={t("admin.process_on_arrival_why")}
