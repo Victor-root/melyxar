@@ -251,6 +251,7 @@ pub async fn download(
             codec: "subrip".to_string(),
             layout: SubtitleLayout::Text,
             is_hearing_impaired: offer.hearing_impaired,
+            is_generated: false,
             is_external: true,
             external_relative_path: None,
             downloaded_file: Some(file),

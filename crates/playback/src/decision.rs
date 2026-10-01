@@ -740,6 +740,7 @@ mod tests {
                 codec: codec.to_string(),
                 layout,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: false,
                 external_relative_path: None,
                 downloaded_file: None,

@@ -1418,6 +1418,7 @@ async fn attach_subtitles(
                     codec: found.codec.to_string(),
                     layout: found.layout,
                     is_hearing_impaired: found.is_hearing_impaired,
+                    is_generated: false,
                     is_external: true,
                     external_relative_path: Some(path.clone()),
                     downloaded_file: None,
@@ -3270,12 +3271,18 @@ mod tests {
 
     /// The readings of the upkeep a library of films really has.
     ///
-    /// Three of the four. Listening to a season for the titles its episodes
-    /// share is the odd one out: a film has no season and no neighbours.
+    /// Three of the five. Listening to a season for the titles its episodes
+    /// share is the odd one out: a film has no season and no neighbours. And
+    /// listening to the sound is for what somebody filmed, which a film is not.
     fn readings_that_apply_to_films() -> Vec<crate::upkeep::UpkeepTask> {
         crate::upkeep::UpkeepTask::ALL
             .into_iter()
-            .filter(|task| *task != crate::upkeep::UpkeepTask::Openings)
+            .filter(|task| {
+                !matches!(
+                    task,
+                    crate::upkeep::UpkeepTask::Openings | crate::upkeep::UpkeepTask::Speech
+                )
+            })
             .collect()
     }
 

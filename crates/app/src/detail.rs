@@ -617,6 +617,7 @@ mod tests {
                 codec: "subrip".to_string(),
                 layout: SubtitleLayout::Text,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: true,
                 external_relative_path: None,
                 downloaded_file: None,

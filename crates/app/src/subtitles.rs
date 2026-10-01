@@ -505,6 +505,7 @@ mod tests {
                 codec: "subrip".into(),
                 layout,
                 is_hearing_impaired: false,
+                is_generated: false,
                 is_external: external.is_some(),
                 external_relative_path: external.map(PathBuf::from),
                 downloaded_file: None,

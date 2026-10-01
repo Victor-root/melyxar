@@ -73,6 +73,12 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
         if !job.state.is_worth_taking_up_again() {
             continue;
         }
+        // A download of a model is about a model, not a library, and a file
+        // that was half there is fetched again from the start: the page shows
+        // it is not on the disk, and the administrator asks again.
+        if job.kind == JobKind::DownloadSpeechModel {
+            continue;
+        }
         // Every job worth taking up again is about one library, and says which
         // by name. One that is about nothing, or about a library that has since
         // been taken out of the configuration, has nothing to be started on.
@@ -157,6 +163,14 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
             )
             .await
             .map(|_| ()),
+            JobKind::GenerateSpeechSubtitles => crate::upkeep::start(
+                state,
+                crate::upkeep::UpkeepTask::Speech,
+                library.clone(),
+                JobPriority::BACKGROUND,
+            )
+            .await
+            .map(|_| ()),
             JobKind::AnalyseLoudness => {
                 crate::music::loudness::start(state, library.clone(), JobPriority::BACKGROUND)
                     .await
@@ -217,6 +231,8 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
         &config.directories.thumbnails(),
         &config.directories.calibration(),
         &config.directories.backups(),
+        &config.directories.speech_models(),
+        &config.directories.speech_scratch(),
     ] {
         std::fs::create_dir_all(directory).map_err(AppError::Directory)?;
     }
@@ -625,6 +641,7 @@ mod tests {
             JobKind::GenerateThumbnails,
             JobKind::PullOutSubtitles,
             JobKind::ListenForOpenings,
+            JobKind::GenerateSpeechSubtitles,
             JobKind::AnalyseLoudness,
             JobKind::LookUpAlbumCovers,
         ];
@@ -919,6 +936,7 @@ mod tests {
             media_tools: melyxar_config::MediaToolsConfig {
                 ffmpeg_path: Some(PathBuf::from("/nowhere/ffmpeg")),
                 ffprobe_path: None,
+                whisper_path: None,
             },
             ..Config::default()
         };
