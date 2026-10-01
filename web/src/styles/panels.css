@@ -207,3 +207,51 @@
     opacity: 0.15;
   }
 }
+
+/* The new account, across the page: who it is on one line and what it may do
+   below it in columns, so the card fits the screen instead of running past
+   it. */
+.account-new-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--gap) 0;
+}
+
+.account-new-columns > .settings-lines:first-child {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 var(--gap-wide);
+}
+
+/* What it may do runs in columns of its own, a line never cut in two. */
+.settings-lines.account-new-rights {
+  display: block;
+  column-count: 2;
+  column-gap: var(--gap-wide);
+}
+
+.account-new-rights > * {
+  break-inside: avoid;
+}
+
+/* A column is narrow, so the words give way before the switch is pushed
+   under them. */
+.account-new-rights .setting-words {
+  flex-basis: 160px;
+}
+
+@media (min-width: 1400px) {
+  .settings-lines.account-new-rights {
+    column-count: 3;
+  }
+}
+
+@media (max-width: 1100px) {
+  .settings-lines.account-new-rights {
+    column-count: 1;
+  }
+
+  .account-new-columns > .settings-lines:first-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
