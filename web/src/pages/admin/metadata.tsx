@@ -18,6 +18,7 @@ import { useLibraryEditing } from "../../screens/declaring";
 import { useLibraryWork } from "../../screens/settings";
 import { useSettings } from "../../settings";
 import { OnlineSubtitlesPanel } from "./online-subtitles";
+import { SpeechPanel } from "./speech";
 import { RatingsPanel } from "./ratings";
 
 export function AdminMetadata() {
@@ -102,6 +103,8 @@ export function AdminMetadata() {
         <RatingsPanel />
 
         <OnlineSubtitlesPanel />
+
+        <SpeechPanel />
 
         <Panel
           icon={IdentifyIcon}

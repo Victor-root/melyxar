@@ -14,6 +14,7 @@ function library(id: string, name: string): Library {
     extract_subtitles: true,
     make_thumbnails: true,
     detect_openings: true,
+    generate_subtitles: false,
     process_on_arrival: false,
     watch_in_real_time: false,
     keeps_resume_points: true,

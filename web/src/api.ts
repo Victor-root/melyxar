@@ -325,6 +325,7 @@ export type LibraryChoices = Pick<
   | "extract_subtitles"
   | "make_thumbnails"
   | "detect_openings"
+  | "generate_subtitles"
   | "process_on_arrival"
   | "watch_in_real_time"
   | "keeps_resume_points"
@@ -342,6 +343,9 @@ export interface Library {
   extract_subtitles: boolean;
   make_thumbnails: boolean;
   detect_openings: boolean;
+  /** Whether the videos with no subtitle are listened to for one. Only
+      offered to a library of personal videos. */
+  generate_subtitles: boolean;
   /** Whether those are done as soon as a file arrives, rather than by their
       scheduled tasks. */
   process_on_arrival: boolean;
@@ -563,6 +567,22 @@ export interface SubtitleOffer {
 }
 
 /** Whether a key for OpenSubtitles was given, and an account with it. */
+/** A model that listens to personal videos, among the few the server offers. */
+export interface SpeechModel {
+  id: string;
+  bytes: number;
+  downloaded: boolean;
+  downloading: boolean;
+}
+
+/** What listens to personal videos: whether the tool is on the machine, the
+    model in use, and every model offered. */
+export interface SpeechStatus {
+  tool_found: boolean;
+  chosen: string | null;
+  models: SpeechModel[];
+}
+
 export interface OpenSubtitlesSettings {
   has_key: boolean;
   signed_in: boolean;
@@ -1924,6 +1944,7 @@ export const api = {
     extract_subtitles: boolean;
     make_thumbnails: boolean;
     detect_openings: boolean;
+    generate_subtitles: boolean;
     process_on_arrival: boolean;
     watch_in_real_time: boolean;
     keeps_resume_points: boolean;
@@ -1934,6 +1955,7 @@ export const api = {
       extract_subtitles: boolean;
       make_thumbnails: boolean;
       detect_openings: boolean;
+      generate_subtitles: boolean;
       process_on_arrival: boolean;
       watch_in_real_time: boolean;
       keeps_resume_points: boolean;
@@ -2014,6 +2036,13 @@ export const api = {
   /* Subtitles from OpenSubtitles, for an administrator: the key and
      account, the tracks of a copy, what is offered for it, and downloading
      or taking away one. */
+  speech: (signal?: AbortSignal) => get<SpeechStatus>("/api/v1/system/speech", signal),
+  chooseSpeechModel: (model: string | null) =>
+    put<SpeechStatus>("/api/v1/system/speech", { model }),
+  downloadSpeechModel: (id: string) =>
+    post<{ job_id: string }>(`/api/v1/system/speech/models/${id}/download`),
+  forgetSpeechModel: (id: string) =>
+    remove<SpeechStatus>(`/api/v1/system/speech/models/${id}`),
   openSubtitles: (signal?: AbortSignal) =>
     get<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles", signal),
   setOpenSubtitles: (key: string, username: string, password: string) =>
