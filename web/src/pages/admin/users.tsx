@@ -623,45 +623,50 @@ function NewAccount({
       title={t("users.new")}
       lead={t("users.new_why")}
       className="account-new"
+      wide
     >
-      <div className="settings-lines">
-        <Setting label={t("users.name")}>
-          <input
-            type="text"
-            className="field-line"
-            autoFocus
-            autoComplete="off"
-            aria-label={t("users.name")}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+      <div className="account-new-columns">
+        <div className="settings-lines">
+          <Setting label={t("users.name")}>
+            <input
+              type="text"
+              className="field-line"
+              autoFocus
+              autoComplete="off"
+              aria-label={t("users.name")}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </Setting>
+          <Setting label={t("users.password")}>
+            <input
+              type="password"
+              className="field-line"
+              autoComplete="new-password"
+              aria-label={t("users.password")}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Setting>
+          <Setting label={t("users.password_again")}>
+            <input
+              type="password"
+              className="field-line"
+              autoComplete="new-password"
+              aria-label={t("users.password_again")}
+              value={again}
+              onChange={(event) => setAgain(event.target.value)}
+            />
+          </Setting>
+        </div>
+        <div className="settings-lines account-new-rights">
+          <RightsLines
+            rights={rights}
+            libraries={libraries}
+            you={false}
+            onChange={setRights}
           />
-        </Setting>
-        <Setting label={t("users.password")}>
-          <input
-            type="password"
-            className="field-line"
-            autoComplete="new-password"
-            aria-label={t("users.password")}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </Setting>
-        <Setting label={t("users.password_again")}>
-          <input
-            type="password"
-            className="field-line"
-            autoComplete="new-password"
-            aria-label={t("users.password_again")}
-            value={again}
-            onChange={(event) => setAgain(event.target.value)}
-          />
-        </Setting>
-        <RightsLines
-          rights={rights}
-          libraries={libraries}
-          you={false}
-          onChange={setRights}
-        />
+        </div>
       </div>
 
       {refusal && (
