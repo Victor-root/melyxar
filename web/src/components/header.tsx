@@ -101,6 +101,14 @@ const QUICK_RESULTS = 6;
  *  word typed at speed is one question, not five. */
 const QUICK_DEBOUNCE_MS = 200;
 
+/** The heads of a page that rise into the band of the bar and keep clear of
+ *  its two pieces: the only things that read where those end. */
+const HEADS_CLEAR_OF_THE_BAR = ".page-head, .browse-head";
+
+/** How long the bar must stand still before the page as a whole is told where
+ *  its pieces end. */
+const SETTLES_AFTER_MS = 150;
+
 /** Where the full grid of results for these words lives, which is also what
  *  the enter key sends somebody to. */
 export function searchAddress(words: string, scope: string): string {
@@ -208,16 +216,31 @@ export function Header({
       return;
     }
     const root = document.documentElement;
-    const measure = () => {
-      root.style.setProperty("--header-start-end", `${left.getBoundingClientRect().right}px`);
-      root.style.setProperty("--header-side-width", `${right.getBoundingClientRect().width}px`);
+    const write = (target: HTMLElement, startEnd: string, sideWidth: string) => {
+      target.style.setProperty("--header-start-end", startEnd);
+      target.style.setProperty("--header-side-width", sideWidth);
     };
+    /* Said to the heads that read it as the bar moves, and to the page as a
+       whole only once it has stopped. Written on the page at every step of the
+       search opening, it had every element of the screen styled again on
+       every frame: four tenths of a second of a second's animation, measured,
+       on a screen where nothing read it. */
+    let settle = 0;
+    const measure = () => {
+      const startEnd = `${left.getBoundingClientRect().right}px`;
+      const sideWidth = `${right.getBoundingClientRect().width}px`;
+      document.querySelectorAll<HTMLElement>(HEADS_CLEAR_OF_THE_BAR).forEach((head) => write(head, startEnd, sideWidth));
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => write(root, startEnd, sideWidth), SETTLES_AFTER_MS);
+    };
+    write(root, `${left.getBoundingClientRect().right}px`, `${right.getBoundingClientRect().width}px`);
     measure();
     const watching = new ResizeObserver(measure);
     watching.observe(left);
     watching.observe(right);
     window.addEventListener("resize", measure);
     return () => {
+      window.clearTimeout(settle);
       watching.disconnect();
       window.removeEventListener("resize", measure);
       root.style.removeProperty("--header-start-end");
