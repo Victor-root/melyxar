@@ -1113,10 +1113,10 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.5fr);
-  /* The song stands in the middle row, with as much room above it as below.
-     The queue starts level with the top of the cover and runs down to the
-     foot; its tabs stand in the room above, over its first line. */
-  grid-template-rows: minmax(56px, 1fr) auto minmax(0, 1fr);
+  /* The tabs have a row of their own at the top, and the song stands right
+     under it, high on the page. The queue starts level with the top of the
+     cover and runs down to the foot. */
+  grid-template-rows: 56px auto minmax(0, 1fr);
   column-gap: var(--gap-section);
   width: 100%;
   padding: 0 var(--gutter) var(--gap) calc(var(--gutter) + 32px);
@@ -1140,7 +1140,7 @@
   --now-cover: min(
     100%,
     520px,
-    max(160px, calc(100dvh - var(--header-height) - var(--music-bar-height) - 240px))
+    max(160px, calc(100dvh - var(--header-height) - var(--music-bar-height) - 190px))
   );
 }
 
@@ -1353,7 +1353,9 @@
 @media (min-width: 761px) {
   .music-now {
     z-index: 17;
-    padding-top: calc(var(--header-height) + var(--gap));
+    /* The header's own height holds some air under its pieces: the page
+       starts under the pieces. */
+    padding-top: calc(var(--header-height) - var(--gap-wide));
     padding-bottom: var(--music-bar-height);
   }
 
