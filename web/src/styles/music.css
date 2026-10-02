@@ -1113,19 +1113,24 @@
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.5fr);
-  gap: var(--gap-section);
+  /* The song stands in the middle row, with as much room above it as below.
+     The queue starts level with the top of the cover and runs down to the
+     foot; its tabs stand in the room above, over its first line. */
+  grid-template-rows: minmax(56px, 1fr) auto minmax(0, 1fr);
+  column-gap: var(--gap-section);
   width: 100%;
-  padding: var(--gap) var(--gutter) var(--gap) calc(var(--gutter) + 32px);
+  padding: 0 var(--gutter) var(--gap) calc(var(--gutter) + 32px);
   overflow: hidden;
 }
 
-/* The song, pushed to the left and centred in the height there is, and kept
-   where it is while the queue beside it scrolls. */
+/* The song, pushed to the left, and kept where it is while the queue beside
+   it scrolls. */
 .music-now-playing {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  align-self: center;
   gap: var(--gap);
   min-width: 0;
   /* The width of the cover, which the words under it keep to and are
@@ -1133,17 +1138,22 @@
   --now-cover: min(100%, 520px, 52vh);
 }
 
-/* The queue and its tabs take the height of the page: the tabs stay, and
+.music-now-tabs {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  margin: 0 0 var(--gap);
+}
+
+/* The queue and the words take the height from the top of the cover down:
    only the lines scroll. */
 .music-now-queue {
+  grid-column: 2;
+  grid-row: 2 / 4;
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-}
-
-.music-now-queue .music-now-tabs {
-  flex: none;
 }
 
 .music-now-queue .music-lyrics {
@@ -1188,7 +1198,6 @@
 .music-now-tabs {
   display: flex;
   gap: 4px;
-  margin: 0 0 var(--gap);
 }
 
 /* The words of the song: the line being sung lit and large enough to read
@@ -1389,13 +1398,25 @@
 
   .music-now-body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     gap: var(--gap-wide);
+    padding: var(--gap) var(--gutter);
     overflow-y: auto;
+  }
+
+  .music-now-playing,
+  .music-now-tabs,
+  .music-now-queue {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .music-now-tabs {
+    margin: 0;
   }
 
   .music-now-playing {
     align-items: center;
-    align-self: start;
     text-align: center;
   }
 
