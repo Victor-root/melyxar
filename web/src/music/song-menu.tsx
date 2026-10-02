@@ -16,6 +16,7 @@ import { MusicIcon, PlayAllIcon, PlaylistIcon, ProfileIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { Song } from "./api";
 import { AddToPlaylist } from "./add-to-playlist";
+import { useSongDeletion } from "./delete-song";
 import { QueueIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 
@@ -31,14 +32,15 @@ export interface MenuLine {
 const OFF_THE_EDGE = 8;
 
 /** What can be done with songs beyond pressing them, in the order a menu and
- *  a line of a list both offer them, and the window that adding to a playlist
- *  opens, to be drawn wherever the actions are. */
-export function useSongActions(songs: Song[]): { actions: MenuLine[]; dialog: ReactNode } {
+ *  a line of a list both offer them, and the windows that adding to a
+ *  playlist and deleting open, to be drawn wherever the actions are. */
+export function useSongActions(songs: Song[], deletable = false): { actions: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const navigate = useNavigate();
   const player = useMusic();
   const [adding, setAdding] = useState(false);
   const one = songs.length === 1 ? songs[0] : null;
+  const deletion = useSongDeletion(deletable ? songs : []);
   const actions: MenuLine[] = [
     { key: "next", said: t("music.play_next"), mark: <PlayAllIcon size={17} />, act: () => player.playNext(songs) },
     { key: "last", said: t("music.play_last"), mark: <QueueIcon size={17} />, act: () => player.playLast(songs) },
@@ -49,8 +51,17 @@ export function useSongActions(songs: Song[]): { actions: MenuLine[]; dialog: Re
     ...(one && one.artists.length > 0
       ? [{ key: "artist", said: t("music.go_to_artist"), mark: <ProfileIcon size={17} />, act: () => navigate(`/music/artist/${one.artists[0].id}`) }]
       : []),
+    ...deletion.lines,
   ];
-  return { actions, dialog: adding ? <AddToPlaylist songs={songs} onClose={() => setAdding(false)} /> : null };
+  return {
+    actions,
+    dialog: (
+      <>
+        {adding && <AddToPlaylist songs={songs} onClose={() => setAdding(false)} />}
+        {deletion.dialog}
+      </>
+    ),
+  };
 }
 
 export function SongMenuButton({
@@ -59,6 +70,7 @@ export function SongMenuButton({
   extra = [],
   className = "",
   inline = 0,
+  deletable = false,
 }: {
   songs: Song[];
   label: string;
@@ -67,11 +79,14 @@ export function SongMenuButton({
   /** How many of the first actions a line already carries on itself, and
       that the menu therefore leaves out. */
   inline?: number;
+  /** Whether the menu of this one song offers to delete it: its line in a
+      list does, the menu of a whole album or playlist does not. */
+  deletable?: boolean;
 }) {
   const [from, setFrom] = useState<DOMRect | null>(null);
   const button = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setFrom(null), []);
-  const { actions, dialog } = useSongActions(songs);
+  const { actions, dialog } = useSongActions(songs, deletable);
   const lines = [...actions.slice(inline), ...extra];
   // A line that carries every action itself has nothing left for a menu.
   if (lines.length === 0) {
