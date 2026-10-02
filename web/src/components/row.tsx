@@ -12,7 +12,7 @@
  * worse than no button.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Children, isValidElement, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useDragToScroll } from "../dragging";
@@ -61,7 +61,15 @@ export function Row({
   const [canGoOn, setCanGoOn] = useState(false);
   // Held down and pulled, the way the player's own rows already worked.
   const drag = useDragToScroll(track);
-  const ahead = useFetchingAhead();
+  const ahead = useFetchingAhead(track);
+
+  /* Who is in the row, by name: the observers below are made again when the
+     cards change, not each time the row is drawn. Watching `children` itself
+     remade them, and read the layout for every one, on every drawing of a
+     page whose cards had not changed. */
+  const whoIsIn = Children.toArray(children)
+    .map((child) => (isValidElement(child) ? child.key : ""))
+    .join("|");
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -87,7 +95,7 @@ export function Row({
       watcher.observe(child);
     }
     return () => watcher.disconnect();
-  }, [measure, children]);
+  }, [measure, whoIsIn]);
 
   useEffect(() => {
     const element = track.current;

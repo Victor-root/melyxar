@@ -149,10 +149,16 @@ export function useAsked<T>(
     question
       .current(controller.signal)
       .then((came) => {
+        /* An answer that says what the kept one already said is the kept one,
+           so that what was drawn from it is not drawn again: a page walked
+           back to is asked again quietly, and nearly always gets the same
+           answer, which used to rebuild every card for nothing. */
+        const before = keptAs !== undefined ? recall<T>(keptAs)?.value : undefined;
+        const value = before !== undefined && JSON.stringify(before) === JSON.stringify(came) ? before : came;
         if (keptAs !== undefined) {
-          keep(keptAs, came);
+          keep(keptAs, value);
         }
-        setAnswer({ value: came, name: keptAs });
+        setAnswer({ value, name: keptAs });
         // An answer is the end of whatever was wrong before it, which is what
         // a screen looking again on its own beat is waiting to be told.
         setFailure(null);
