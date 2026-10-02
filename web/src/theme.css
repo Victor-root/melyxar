@@ -149,6 +149,13 @@
      than a few icons, so less of the painting behind comes through. */
   --panel-glass: color-mix(in srgb, var(--surface-raised) 74%, transparent);
 
+  /* The same surface for a panel that is drawn flat, without blurring what is
+     behind it: the blur of a panel was the whole cost of scrolling a settings
+     or administration page, measured on a laptop's integrated graphics, so
+     such a panel is a little more opaque instead, which is what keeps the
+     words readable over a picture. */
+  --panel-flat: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+
   /* How tall the banner of the home page is, and with it the grey block drawn
      in its place while the page loads, so the two can never drift apart and
      the page never jumps once the picture arrives.
@@ -210,6 +217,9 @@
   --card-width-wide: 186px;
 
   --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.35);
+  /* The shadow of a poster, of which a grid holds hundreds: tight, because a
+     soft one is painted over a wide area for every poster at once. */
+  --shadow-tile: 0 3px 8px rgba(0, 0, 0, 0.3);
   --shadow-raised: 0 14px 40px rgba(0, 0, 0, 0.45);
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -284,6 +294,7 @@
   --attention: #b86e00;
   --trouble: #cf2f35;
   --shadow-card: 0 4px 14px rgba(20, 22, 27, 0.14);
+  --shadow-tile: 0 3px 8px rgba(20, 22, 27, 0.14);
   --shadow-raised: 0 12px 32px rgba(20, 22, 27, 0.18);
   --scrim: linear-gradient(to top, #f4f5f7 8%, rgba(244, 245, 247, 0.7) 45%, rgba(244, 245, 247, 0) 100%);
   color-scheme: light;
