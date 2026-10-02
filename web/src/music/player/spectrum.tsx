@@ -34,7 +34,7 @@ function useSongSpectrum(song: string): SongSpectrum | null {
   return found?.song === song ? found.spectrum : null;
 }
 
-export function Spectrum({ song, playing }: { song: string; playing: boolean }) {
+export function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean; amplitude: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const spectrum = useSongSpectrum(song);
   const { position } = useMusicTime();
@@ -43,6 +43,10 @@ export function Spectrum({ song, playing }: { song: string; playing: boolean }) 
   useEffect(() => {
     said.current = { position, at: performance.now() };
   }, [position, playing]);
+  /* Read as it is drawn, so that moving the slider changes the wave at once
+     and does not start the drawing over. */
+  const amplitudeNow = useRef(amplitude);
+  amplitudeNow.current = amplitude;
   /* Kept across a pause and a change of song, so the wave glides rather than
      drops. */
   const kept = useRef<number[]>([]);
@@ -72,7 +76,7 @@ export function Spectrum({ song, playing }: { song: string; playing: boolean }) 
       }
       context.fillStyle = color;
       const step = width / (levels.length - 1);
-      const top = (band: number) => height - levels[band] * height;
+      const top = (band: number) => height - levels[band] * amplitudeNow.current * height;
       context.beginPath();
       context.moveTo(0, height);
       context.lineTo(0, top(0));

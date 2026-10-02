@@ -7,7 +7,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_core::music_preferences::{
-    FilmOnScreen, HiddenTabs, LONGEST_CROSSFADE_SECONDS, LONGEST_SKIP_SECONDS, MusicLibraryOptions,
+    FilmOnScreen, HiddenTabs, LONGEST_CROSSFADE_SECONDS, LONGEST_SKIP_SECONDS,
+    MOST_SPECTRUM_AMPLITUDE, MusicLibraryOptions,
     MusicPreferences, MusicTab, VolumeMode, bounded_skip,
     bounded_ceiling,
 };
@@ -43,6 +44,10 @@ struct MusicPreferencesView {
     /// Absent from what an older screen sends, which keeps the wave on.
     #[serde(default = "shown")]
     spectrum: bool,
+    /// How high that wave rises, from nought to a hundred. Absent from what an
+    /// older screen sends, which keeps it as high as it goes.
+    #[serde(default = "the_highest_wave")]
+    spectrum_amplitude: u32,
     /// How far the buttons that skip back and on move within a song.
     #[serde(default = "a_usual_skip")]
     skip_back_seconds: u32,
@@ -59,6 +64,10 @@ struct MusicPreferencesView {
 
 fn shown() -> bool {
     true
+}
+
+fn the_highest_wave() -> u32 {
+    MOST_SPECTRUM_AMPLITUDE
 }
 
 fn a_usual_skip() -> u32 {
@@ -78,6 +87,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         crossfade_seconds: chosen.crossfade_seconds,
         tag_preview: chosen.tag_preview,
         spectrum: chosen.spectrum,
+        spectrum_amplitude: chosen.spectrum_amplitude,
         skip_back_seconds: chosen.skip_back_seconds,
         skip_on_seconds: chosen.skip_on_seconds,
         hidden_tabs: chosen
@@ -123,6 +133,7 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         crossfade_seconds: body.crossfade_seconds.min(LONGEST_CROSSFADE_SECONDS),
         tag_preview: body.tag_preview,
         spectrum: body.spectrum,
+        spectrum_amplitude: body.spectrum_amplitude.min(MOST_SPECTRUM_AMPLITUDE),
         skip_back_seconds: bounded_skip(body.skip_back_seconds),
         skip_on_seconds: bounded_skip(body.skip_on_seconds),
         hidden_tabs: HiddenTabs::from_tabs(
@@ -201,6 +212,7 @@ mod tests {
             crossfade_seconds: 60,
             tag_preview: true,
             spectrum: false,
+            spectrum_amplitude: 400,
             skip_back_seconds: 0,
             skip_on_seconds: 500,
             hidden_tabs: vec!["songs".to_string(), "nonsense".to_string()],
@@ -214,6 +226,7 @@ mod tests {
         assert_eq!(chosen.volume_mode, VolumeMode::Album);
         assert_eq!(chosen.crossfade_seconds, LONGEST_CROSSFADE_SECONDS);
         assert!(!chosen.spectrum, "a wave turned off stays off");
+        assert_eq!(chosen.spectrum_amplitude, 100, "no wave rises higher than it goes");
         assert_eq!(chosen.skip_back_seconds, 1, "a skip is at least a second");
         assert_eq!(chosen.skip_on_seconds, LONGEST_SKIP_SECONDS);
         assert!(chosen.hidden_tabs.hides(MusicTab::Songs), "a name nobody knows is dropped");
@@ -227,6 +240,7 @@ mod tests {
                 crossfade_seconds: 0,
                 tag_preview: true,
                 spectrum: true,
+                spectrum_amplitude: 100,
                 skip_back_seconds: 10,
                 skip_on_seconds: 10,
                 hidden_tabs: Vec::new(),

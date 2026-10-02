@@ -4,7 +4,8 @@
  * visit comes back, and how heavy a song may be on its way. Changed at once in the player, and put back if the server refuses.
  */
 
-import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
+import { useEffect, useRef, useState } from "react";
+import { PageHead, Panel, Picker, Setting, Slider, Toggle } from "../components/panel";
 import { useAccount } from "../account";
 import { LengthPicker } from "../pages/settings/length";
 import { MusicIcon, NetworkIcon, PlaybackIcon, TagIcon } from "../icons";
@@ -30,6 +31,44 @@ export function ceilingOf(value: string): number | null {
   return value === "none" ? null : Number(value);
 }
 
+/** How long the hand rests on a slider before what it is set to is sent. */
+const HAND_STOPS_MS = 300;
+
+/**
+ * A number set by dragging along a line: shown as the hand moves it, and sent
+ * once the hand has rested, so a drag is one answer of the server and not a
+ * hundred. What is still waiting is sent when the screen is left.
+ */
+function useSetOnceTheHandStops(saved: number, save: (value: number) => void): [number, (value: number) => void] {
+  const [held, setHeld] = useState(saved);
+  const waiting = useRef<number | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveNow = useRef(save);
+  saveNow.current = save;
+
+  useEffect(() => setHeld(saved), [saved]);
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      if (waiting.current !== null) {
+        saveNow.current(waiting.current);
+      }
+    },
+    [],
+  );
+
+  const set = (value: number) => {
+    setHeld(value);
+    waiting.current = value;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      waiting.current = null;
+      saveNow.current(value);
+    }, HAND_STOPS_MS);
+  };
+  return [held, set];
+}
+
 export function MyMusic() {
   const { t } = useSettings();
   const { preferences, setPreferences } = useMusic();
@@ -37,6 +76,9 @@ export function MyMusic() {
   const change = (changes: Partial<MusicPreferences>) => {
     void setPreferences({ ...preferences, ...changes }).catch(() => {});
   };
+  const [amplitude, pickAmplitude] = useSetOnceTheHandStops(preferences.spectrum_amplitude, (spectrum_amplitude) =>
+    change({ spectrum_amplitude }),
+  );
 
   return (
     <>
@@ -91,6 +133,18 @@ export function MyMusic() {
             label={t("settings.music_spectrum")}
             checked={preferences.spectrum}
             onChange={(spectrum) => change({ spectrum })}
+          />
+        </Setting>
+        <Setting label={t("settings.music_spectrum_amplitude")}>
+          <Slider
+            label={t("settings.music_spectrum_amplitude")}
+            min={0}
+            max={100}
+            step={1}
+            value={amplitude}
+            shown={`${amplitude}`}
+            disabled={!preferences.spectrum}
+            onChange={pickAmplitude}
           />
         </Setting>
       </Panel>
