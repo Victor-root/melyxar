@@ -790,6 +790,14 @@ button.seen-mark:not(.seen-mark-on):hover {
   border-radius: 50%;
 }
 
+/* A length, so that the room the letters have can be transitioned and every
+   size drawn from it follows. */
+@property --letters-room {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 .letters {
   --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
   --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
@@ -808,7 +816,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   overflow-y: auto;
   scrollbar-width: none;
   box-shadow: var(--shadow-card);
-  transition: box-shadow var(--quick) var(--ease);
+  transition:
+    box-shadow var(--quick) var(--ease),
+    --letters-room var(--calm) var(--ease);
+}
+
+/* The bar of the player of music stands over the foot of the page: the
+   letters end above it, and rise to do so as it opens rather than being
+   covered. */
+:root[data-music-bar] .letters {
+  --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--music-bar-height));
 }
 
 .letters:hover,
