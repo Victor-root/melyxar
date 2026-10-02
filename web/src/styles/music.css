@@ -421,7 +421,7 @@
   content-visibility: visible;
 }
 
-/* The button of a song's menu, as quiet as its heart. */
+/* The button of a song's menu. */
 .music-more {
   display: inline-flex;
   align-items: center;
@@ -432,17 +432,17 @@
   border: 0;
   border-radius: 50%;
   background: none;
-  color: var(--text-faint);
+  color: var(--text);
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
+  transition: color var(--quick) var(--ease);
 }
 
 .music-more:hover,
 .music-more:focus-visible,
 .music-more-open {
-  color: var(--text);
-  background: var(--surface-hover);
+  color: var(--accent-bright);
 }
 
 .music-hero-heart {
@@ -559,6 +559,22 @@
   display: block;
 }
 
+/* The buttons at the end of a line are drawn as the icons of the bar at the
+   top are: full strength and a heavier line, since a thin grey one is
+   nobody's to find. A heart that is liked keeps the accent. */
+.music-song-actions svg {
+  stroke-width: 2.2;
+}
+
+.music-song-actions .music-heart:not(.music-heart-on) {
+  color: var(--text);
+}
+
+.music-song-actions .music-heart:not(.music-heart-on):hover,
+.music-song-actions .music-heart:not(.music-heart-on):focus-visible {
+  color: var(--accent-bright);
+}
+
 /* Bars in the accent, rising and falling out of step: the mark of the song
    playing, still and low while it is paused. */
 .equalizer {
@@ -620,13 +636,11 @@
   background: var(--surface-hover);
 }
 
-/* Under the pointer a line is lit as the pieces of the browse bar are: its
-   shadow, and the light of the accent about it. */
+/* Under the pointer a line is lit as the lines of the lists dropped from the
+   bar are: the accent, deeper, and rimmed with it. */
 .music-song-full:hover {
-  background: transparent;
-  box-shadow:
-    var(--shadow-card),
-    0 0 14px 2px var(--accent-glow);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 /* The bar down the side of the page ends where the player begins, or the
