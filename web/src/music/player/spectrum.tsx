@@ -27,7 +27,7 @@ const SETTLED = 0.004;
 function nextTargets(): number[] {
   return Array.from({ length: BANDS }, (_, band) => {
     const tilt = 1 - (band / BANDS) * 0.6;
-    return Math.random() * tilt;
+    return (0.3 + Math.random() * 0.7) * tilt;
   });
 }
 
