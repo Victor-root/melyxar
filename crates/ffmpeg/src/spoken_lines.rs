@@ -1,19 +1,21 @@
-//! The words the speech tool heard, put back into lines of subtitle.
+//! What the speech tool heard, cut into lines of subtitle.
 //!
 //! Left to itself the tool writes blocks of ten seconds or more that run
-//! several sentences together, whoever says them, and cuts them wherever its
-//! window ends. It cannot tell who is speaking, but a change of speaker nearly
-//! always comes with a full stop or a pause, so the lines are cut there from
-//! the time of each word instead.
+//! several sentences together, whoever says them. It cannot tell who is
+//! speaking, but a change of speaker nearly always comes with a full stop, so
+//! each block is cut there, and the time of the block shared out among its
+//! parts by their length. The block's own times are the only ones trusted: the
+//! tool's times for single words are stretched and squeezed around silence and
+//! noise, and a line placed by them lands nowhere near where it is said.
 
 use serde::Deserialize;
 
-/// Silence between two words that ends a line.
-const PAUSE_MS: u64 = 600;
 /// The most a line holds: two lines of the usual forty-two characters.
 const LONGEST_LINE: usize = 84;
-/// The longest a line stays on the screen.
+/// The longest a line stays on the screen, by the pace of the block it is in.
 const LONGEST_SHOWN_MS: u64 = 7_000;
+/// A line is never made shorter than this to fit the time.
+const SHORTEST_LINE: usize = 20;
 /// A line too long is cut at a comma when it has said at least this much by
 /// then, and where it stands otherwise.
 const SHORTEST_BEFORE_COMMA: usize = 30;
@@ -23,23 +25,17 @@ const SHORTEST_SHOWN_MS: u64 = 1_000;
 #[derive(Deserialize)]
 struct Report {
     #[serde(default)]
-    transcription: Vec<Entry>,
+    transcription: Vec<Block>,
 }
 
 #[derive(Deserialize)]
-struct Entry {
+struct Block {
     text: String,
     offsets: Offsets,
 }
 
 #[derive(Deserialize)]
 struct Offsets {
-    from: u64,
-    to: u64,
-}
-
-struct Word {
-    text: String,
     from: u64,
     to: u64,
 }
@@ -51,70 +47,58 @@ struct Line {
 }
 
 /// The subtitle file of what the report says was heard, or nothing when the
-/// report cannot be read. The tool is asked for one word to each entry.
+/// report cannot be read.
 pub fn subrip_of(report: &str) -> Option<String> {
     let report: Report = serde_json::from_str(report).ok()?;
-    let words = report.transcription.into_iter().filter_map(|entry| {
-        let text = entry.text.trim();
-        (!text.is_empty()).then(|| Word {
-            text: text.to_string(),
-            from: entry.offsets.from,
-            to: entry.offsets.to,
-        })
-    });
-    Some(render(&lines_of(words)))
-}
-
-fn lines_of(words: impl Iterator<Item = Word>) -> Vec<Line> {
     let mut lines = Vec::new();
-    let mut said: Vec<Word> = Vec::new();
-    for word in words {
-        if let Some(last) = said.last() {
-            if word.from.saturating_sub(last.to) > PAUSE_MS {
-                let all = said.len();
-                put_down(&mut said, all, &mut lines);
-            } else if said_with(&said, &word).len() > LONGEST_LINE || word.to - said[0].from > LONGEST_SHOWN_MS {
-                let cut = comma_to_cut_at(&said).unwrap_or(said.len());
-                put_down(&mut said, cut, &mut lines);
-            }
-        }
-        let ends_a_sentence = ends_a_sentence(&word.text);
-        said.push(word);
-        if ends_a_sentence {
-            let all = said.len();
-            put_down(&mut said, all, &mut lines);
-        }
+    for block in &report.transcription {
+        cut(block, &mut lines);
     }
-    let all = said.len();
-    put_down(&mut said, all, &mut lines);
-    lines
+    Some(render(&lines))
 }
 
-/// Takes the first `count` words off `said` and makes them a line.
-fn put_down(said: &mut Vec<Word>, count: usize, lines: &mut Vec<Line>) {
-    if count == 0 {
+/// Cuts one block into lines, each given the part of the block's time that its
+/// share of the words comes to.
+fn cut(block: &Block, lines: &mut Vec<Line>) {
+    let words: Vec<&str> = block.text.split_whitespace().collect();
+    let total: usize = words.iter().map(|word| word.len() + 1).sum();
+    if words.is_empty() || block.offsets.to < block.offsets.from {
         return;
     }
-    let taken: Vec<Word> = said.drain(..count).collect();
-    lines.push(Line {
-        from: taken[0].from,
-        to: taken[taken.len() - 1].to,
-        text: text_of(&taken),
-    });
+    let duration = block.offsets.to - block.offsets.from;
+    let longest = LONGEST_LINE.min(((total as u64 * LONGEST_SHOWN_MS / duration.max(1)) as usize).max(SHORTEST_LINE));
+
+    let mut start = 0;
+    let mut said = 0;
+    while start < words.len() {
+        let end = line_end(&words[start..], longest) + start;
+        let length: usize = words[start..end].iter().map(|word| word.len() + 1).sum();
+        let from = block.offsets.from + duration * said as u64 / total as u64;
+        said += length;
+        let to = block.offsets.from + duration * said as u64 / total as u64;
+        lines.push(Line { from, to, text: words[start..end].join(" ") });
+        start = end;
+    }
 }
 
-fn text_of(words: &[Word]) -> String {
-    words.iter().map(|word| word.text.as_str()).collect::<Vec<_>>().join(" ")
-}
-
-fn said_with(said: &[Word], word: &Word) -> String {
-    format!("{} {}", text_of(said), word.text)
-}
-
-/// How many words go before the last comma, when that leaves a line worth showing.
-fn comma_to_cut_at(said: &[Word]) -> Option<usize> {
-    let at = said.iter().rposition(|word| word.text.ends_with(','))?;
-    (text_of(&said[..=at]).len() >= SHORTEST_BEFORE_COMMA).then_some(at + 1)
+/// How many of these words make the first line: up to a full stop, and no
+/// further than `longest` characters, cut at a comma if there is one worth it.
+fn line_end(words: &[&str], longest: usize) -> usize {
+    let mut length = 0;
+    let mut comma = None;
+    for (position, word) in words.iter().enumerate() {
+        if length > 0 && length + 1 + word.len() > longest {
+            return comma.unwrap_or(position);
+        }
+        length += if length == 0 { word.len() } else { 1 + word.len() };
+        if ends_a_sentence(word) {
+            return position + 1;
+        }
+        if word.ends_with(',') && length >= SHORTEST_BEFORE_COMMA {
+            comma = Some(position + 1);
+        }
+    }
+    words.len()
 }
 
 /// Whether a word closes a sentence, whatever quote or bracket comes after the stop.
@@ -154,9 +138,9 @@ fn timestamp(milliseconds: u64) -> String {
 mod tests {
     use super::*;
 
-    /// A report of words, each given as its text and when it starts and ends.
-    fn report(words: &[(&str, u64, u64)]) -> String {
-        let entries: Vec<_> = words
+    /// A report of blocks, each given as its text and when it starts and ends.
+    fn report(blocks: &[(&str, u64, u64)]) -> String {
+        let entries: Vec<_> = blocks
             .iter()
             .map(|(text, from, to)| serde_json::json!({"text": format!(" {text}"), "offsets": {"from": from, "to": to}}))
             .collect();
@@ -164,39 +148,36 @@ mod tests {
     }
 
     fn texts(subrip: &str) -> Vec<&str> {
-        subrip.lines().filter(|line| !line.is_empty() && !line.contains(" --> ") && line.parse::<u32>().is_err()).collect()
+        subrip
+            .lines()
+            .filter(|line| !line.is_empty() && !line.contains(" --> ") && line.parse::<u32>().is_err())
+            .collect()
     }
 
     #[test]
-    fn two_sentences_said_one_after_the_other_are_two_lines() {
-        // The case of a dialogue: nothing between the two voices, only a full stop.
-        let written = subrip_of(&report(&[
-            ("Where", 0, 300),
-            ("were", 300, 500),
-            ("you?", 500, 900),
-            ("At", 900, 1100),
-            ("home.", 1100, 1700),
-        ]))
-        .expect("a report");
+    fn a_block_of_two_sentences_is_two_lines_sharing_its_time_by_length() {
+        // The case of a dialogue: nothing between the two voices but a full stop.
+        let written = subrip_of(&report(&[("Where were you? At home.", 10_000, 14_000)])).expect("a report");
         assert_eq!(texts(&written), ["Where were you?", "At home."]);
+        assert!(written.contains("00:00:10,000 --> 00:00:12,560"), "{written}");
+        assert!(written.contains("00:00:12,560 --> 00:00:14,000"), "{written}");
     }
 
     #[test]
-    fn a_pause_ends_a_line_even_without_a_full_stop() {
-        let written = subrip_of(&report(&[("Well", 0, 400), ("I", 2_000, 2_200), ("see", 2_200, 2_600)])).expect("a report");
-        assert_eq!(texts(&written), ["Well", "I see"]);
+    fn lines_never_leave_the_block_they_come_from() {
+        let blocks = [("One two three. Four five six. Seven eight nine.", 5_000, 12_000), ("Ten eleven.", 20_000, 23_000)];
+        let written = subrip_of(&report(&blocks)).expect("a report");
+        let times: Vec<&str> = written.lines().filter(|line| line.contains(" --> ")).collect();
+        assert_eq!(times.len(), 4);
+        assert!(times[0].starts_with("00:00:05,000"), "{times:?}");
+        assert!(times[2].starts_with("00:00:09,"), "{times:?}");
+        assert!(times[3].starts_with("00:00:20,000") && times[3].ends_with("00:00:23,000"), "{times:?}");
     }
 
     #[test]
     fn a_sentence_that_runs_on_is_cut_at_a_comma_rather_than_in_the_middle_of_a_phrase() {
-        let long = "this is a rather long beginning to the sentence,";
-        let mut words = Vec::new();
-        let mut at = 0;
-        for word in long.split(' ').chain("and then an equally long ending that keeps going on".split(' ')) {
-            words.push((word, at, at + 200));
-            at += 200;
-        }
-        let written = subrip_of(&report(&words)).expect("a report");
+        let text = "this is a rather long beginning to the sentence, and then an equally long ending that keeps going on";
+        let written = subrip_of(&report(&[(text, 0, 7_000)])).expect("a report");
         let lines = texts(&written);
         assert_eq!(lines.len(), 2);
         assert!(lines[0].ends_with("sentence,"), "{lines:?}");
@@ -204,10 +185,10 @@ mod tests {
     }
 
     #[test]
-    fn a_line_that_stays_on_too_long_is_cut() {
-        let words: Vec<(&str, u64, u64)> = (0..12).map(|index| ("slowly", index * 800, index * 800 + 800)).collect();
-        let written = subrip_of(&report(&words)).expect("a report");
-        assert!(texts(&written).len() >= 2);
+    fn a_slow_block_is_cut_so_that_no_line_stays_on_too_long() {
+        let text = "slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly";
+        let written = subrip_of(&report(&[(text, 0, 24_000)])).expect("a report");
+        assert!(texts(&written).len() >= 3, "{written}");
     }
 
     #[test]
@@ -220,14 +201,21 @@ mod tests {
 
     #[test]
     fn what_follows_a_full_stop_inside_a_quote_starts_a_new_line() {
-        let written = subrip_of(&report(&[("He", 0, 200), ("said", 200, 400), ("\"go.\"", 400, 800), ("Then", 800, 1_000), ("left.", 1_000, 1_400)])).expect("a report");
+        let written = subrip_of(&report(&[("He said \"go.\" Then left.", 0, 4_000)])).expect("a report");
         assert_eq!(texts(&written), ["He said \"go.\"", "Then left."]);
     }
 
     #[test]
-    fn empty_entries_are_ignored_and_nothing_heard_is_an_empty_file() {
+    fn blocks_with_nothing_said_or_backwards_times_are_left_out() {
         assert_eq!(subrip_of(&report(&[("", 0, 300)])).as_deref(), Some(""));
+        assert_eq!(subrip_of(&report(&[("Hello.", 900, 100)])).as_deref(), Some(""));
         assert_eq!(subrip_of(r#"{"result":{"language":"en"}}"#).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn a_block_that_takes_no_time_still_gives_its_words() {
+        let written = subrip_of(&report(&[("Hello there.", 4_000, 4_000)])).expect("a report");
+        assert_eq!(texts(&written), ["Hello there."]);
     }
 
     #[test]
