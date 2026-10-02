@@ -145,7 +145,7 @@ export const DEFAULT_PREFERENCES: MusicPreferences = {
   crossfade_seconds: 0,
   tag_preview: true,
   spectrum: true,
-  spectrum_amplitude: 100,
+  spectrum_amplitude: 75,
   skip_back_seconds: 10,
   skip_on_seconds: 10,
   hidden_tabs: [],

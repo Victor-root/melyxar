@@ -79,7 +79,7 @@ export function TagEditorPage() {
   const [album, setAlbum] = useState<AlbumFields>(albumFieldsOf(undefined));
   const [renaming, setRenaming] = useState(false);
   const [pattern, setPattern] = useState(FIRST_PATTERN);
-  const [keepACopy, setKeepACopy] = useState(true);
+  const [keepACopy, setKeepACopy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [planned, setPlanned] = useState<PlannedTags[] | null>(null);
   const [busy, setBusy] = useState(false);
