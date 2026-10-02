@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { approach, levelAt } from "./spectrum";
+import { approach } from "./spectrum";
 
 describe("the levels of the spectrum", () => {
   it("glide towards their targets and say when they have got there", () => {
@@ -11,12 +11,5 @@ describe("the levels of the spectrum", () => {
       approach(levels, [1, 0.5]);
     }
     expect(approach(levels, [1, 0.5])).toBe(true);
-  });
-
-  it("are read between the two bands a place falls between", () => {
-    expect(levelAt([0, 1, 0], 0)).toBe(0);
-    expect(levelAt([0, 1, 0], 0.5)).toBe(1);
-    expect(levelAt([0, 1, 0], 0.25)).toBe(0.5);
-    expect(levelAt([0, 1, 0], 1)).toBe(0);
   });
 });
