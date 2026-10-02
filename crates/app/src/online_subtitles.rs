@@ -290,17 +290,34 @@ pub async fn tracks_of(state: &AppState, who: &User, source_id: MediaSourceId) -
 }
 
 /// Takes away a subtitle downloaded for this copy, its file with it.
+///
+/// One that listening wrote takes the others listening wrote with it, and the
+/// file is listened to again at the next pass: listening only applies to a
+/// video with no subtitle, and a translation left beside a new reading would
+/// be one more track nobody asked for.
 pub async fn remove(state: &AppState, who: &User, source_id: MediaSourceId, track_id: TrackId) -> Result<()> {
     may_manage(who)?;
-    let file = state
-        .database()
+    let database = state.database();
+    let was_heard = database.tracks_of_source(source_id).await?.iter().any(|track| {
+        track.id == track_id && matches!(&track.kind, TrackKind::Subtitle(details) if details.is_generated)
+    });
+    let file = database
         .remove_downloaded_subtitle(source_id, track_id)
         .await?
         .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("downloaded subtitle")))?;
-    let directories = &state.config().directories;
-    let _ = tokio::fs::remove_file(directories.downloaded_subtitles().join(file)).await;
-    let _ = tokio::fs::remove_file(crate::subtitles::cached_at(state, track_id)).await;
+    delete_the_files(state, track_id, &file).await;
+    if was_heard {
+        for (other, file) in database.forget_listening(source_id).await? {
+            delete_the_files(state, other, &file).await;
+        }
+    }
     Ok(())
+}
+
+/// The file of a subtitle and the converted copy kept for the browser.
+async fn delete_the_files(state: &AppState, track_id: TrackId, file: &str) {
+    let _ = tokio::fs::remove_file(state.config().directories.downloaded_subtitles().join(file)).await;
+    let _ = tokio::fs::remove_file(crate::subtitles::cached_at(state, track_id)).await;
 }
 
 /// Deletes the files of downloaded subtitles no track holds any more: the

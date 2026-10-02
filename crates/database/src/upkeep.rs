@@ -4,7 +4,7 @@
 //! Each pass asks here for the files still waiting on it and writes down what
 //! it found, so a pass cut short picks up where it stopped.
 
-use melyxar_core::id::{LibraryId, MediaSourceId};
+use melyxar_core::id::{LibraryId, MediaSourceId, TrackId};
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::{now, Millis};
 use sqlx::Row;
@@ -631,6 +631,35 @@ impl Database {
             .execute(self.writer())
             .await?;
         Ok(())
+    }
+
+    /// Forgets that this file was listened to, so that it is listened to
+    /// again: the subtitles listening wrote for it, the translation with them,
+    /// are taken away and the mark that it was done is cleared. Answers each
+    /// track taken and the name of its file, for the caller to delete.
+    pub async fn forget_listening(&self, source_id: MediaSourceId) -> Result<Vec<(TrackId, String)>> {
+        let mut transaction = self.begin().await?;
+        let rows = sqlx::query(
+            "SELECT id, downloaded_file FROM tracks
+              WHERE source_id = ? AND is_generated = 1 AND downloaded_file IS NOT NULL",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_all(&mut *transaction)
+        .await?;
+        let mut taken = Vec::with_capacity(rows.len());
+        for row in &rows {
+            taken.push((parse_id(&row.try_get::<String, _>("id")?)?, row.try_get("downloaded_file")?));
+        }
+        sqlx::query("DELETE FROM tracks WHERE source_id = ? AND is_generated = 1 AND downloaded_file IS NOT NULL")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM media_source_speech WHERE source_id = ?")
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(taken)
     }
 }
 
@@ -1901,4 +1930,43 @@ mod tests {
         );
     }
 
+
+    #[tokio::test]
+    async fn forgetting_a_listening_takes_its_subtitles_and_puts_the_file_back_in_the_queue() {
+        let (database, library_id, root_id) = library().await;
+        let source = a_film_with_subtitles(&database, library_id, root_id, "Heard.mkv", |id| {
+            vec![video_track(id), a_sound_track(id)]
+        })
+        .await;
+        let other = a_film_with_subtitles(&database, library_id, root_id, "Other.mkv", |id| {
+            vec![video_track(id), a_sound_track(id)]
+        })
+        .await;
+        let english = heard_subtitle(source, "eng", "english.srt");
+        let french = heard_subtitle(source, "fre", "french.srt");
+        database.store_speech(source, 12).await.expect("kept");
+        database.add_downloaded_subtitle(source, &english).await.expect("added");
+        database.add_downloaded_subtitle(source, &french).await.expect("added");
+        database.store_translation(source).await.expect("kept");
+        database.store_speech(other, 3).await.expect("kept");
+        database.add_downloaded_subtitle(other, &heard_subtitle(other, "eng", "other.srt")).await.expect("added");
+        assert_eq!(database.count_awaiting_speech(library_id).await.expect("read"), 0);
+
+        let mut taken = database.forget_listening(source).await.expect("forgotten");
+        taken.sort_by(|a, b| a.1.cmp(&b.1));
+        assert_eq!(taken, vec![(english.id, "english.srt".to_string()), (french.id, "french.srt".to_string())]);
+
+        assert!(database.tracks_of_source(source).await.expect("read").iter().all(|track| track.id != english.id && track.id != french.id));
+        assert_eq!(
+            database.sources_awaiting_speech(library_id, 10).await.expect("read").len(),
+            1,
+            "the file is waiting to be listened to again"
+        );
+        assert_eq!(
+            database.count_awaiting_translation(library_id).await.expect("read"),
+            1,
+            "and what was done to another file is left alone"
+        );
+        assert!(database.forget_listening(source).await.expect("forgotten").is_empty(), "nothing is left to take");
+    }
 }
