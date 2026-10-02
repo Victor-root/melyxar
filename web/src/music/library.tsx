@@ -61,14 +61,16 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
       </div>
 
-      {tab === "for_you" && <ForYouTab library={library.id} />}
-      {tab === "albums" && <AlbumsTab library={library.id} tools={tools} />}
-      {tab === "album_artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly />}
-      {tab === "artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly={false} />}
-      {tab === "songs" && <SongsTab library={library.id} tools={tools} />}
-      {tab === "playlists" && <PlaylistsTab />}
-      {tab === "favourites" && <FavouritesTab library={library.id} />}
-      {tab === "genres" && <GenresTab library={library.id} />}
+      <div className="music-tab-content">
+        {tab === "for_you" && <ForYouTab library={library.id} />}
+        {tab === "albums" && <AlbumsTab library={library.id} tools={tools} />}
+        {tab === "album_artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly />}
+        {tab === "artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly={false} />}
+        {tab === "songs" && <SongsTab library={library.id} tools={tools} />}
+        {tab === "playlists" && <PlaylistsTab />}
+        {tab === "favourites" && <FavouritesTab library={library.id} />}
+        {tab === "genres" && <GenresTab library={library.id} />}
+      </div>
     </main>
   );
 }
@@ -410,7 +412,7 @@ function Lettered<T>({
       {paged.failed && <p className="notice">{t("error.unreachable")}</p>}
       {!paged.failed && paged.total === 0 && <p className="notice">{t(empty)}</p>}
       <div
-        className={`grid-with-letters${shownLetters ? " grid-with-letters-kept" : ""}`}
+        className="grid-with-letters"
         ref={holder}
       >
         <div className="music-list">
