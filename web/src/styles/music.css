@@ -934,6 +934,22 @@
   background: color-mix(in srgb, var(--text) 34%, transparent);
 }
 
+/* Behind everything the bar holds: the accent, blurred, and faded out
+   towards the top so it never competes with the buttons. */
+.music-bar-spectrum {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+  opacity: 0.45;
+  filter: blur(5px);
+  pointer-events: none;
+  mask-image: linear-gradient(to top, #000, transparent);
+  -webkit-mask-image: linear-gradient(to top, #000, transparent);
+}
+
 .music-bar-now .music-now-cover {
   width: 60px;
   box-shadow: var(--shadow-raised);
