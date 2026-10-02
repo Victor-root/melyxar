@@ -441,26 +441,20 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         }
     }
 
-    // Looked up by kind as well as by number. A subtitle sitting in a file of
-    // its own is stream zero of that file, which is also the number of the
-    // picture: matching on the number alone hands back the picture and leaves
-    // the viewer with subtitles that never appear.
-    let chosen = |index: Option<i32>, subtitle: bool| -> Option<String> {
-        let index = index?;
+    let chosen_audio = plan.decision.audio_stream_index.and_then(|index| {
         plan.tracks
             .iter()
             .find(|track| {
-                track.stream_index == index
-                    && matches!(track.kind, TrackKind::Subtitle(_)) == subtitle
+                track.stream_index == index && matches!(track.kind, TrackKind::Audio(_))
             })
             .map(|track| track.id.to_string())
-    };
+    });
 
     let film = film_view(plan);
     PlanView {
         url: format!("/api/v1/playback/{}/stream", plan.source_id),
-        chosen_audio_id: chosen(plan.decision.audio_stream_index, false),
-        chosen_subtitle_id: chosen(plan.decision.subtitle_stream_index, true),
+        chosen_audio_id: chosen_audio,
+        chosen_subtitle_id: plan.decision.subtitle_track_id.map(|id| id.to_string()),
         method: plan.decision.method.as_str(),
         expensive: plan.decision.method.is_expensive(),
         reasons: reasons_of(plan),
@@ -1649,6 +1643,7 @@ mod tests {
                 subtitles: melyxar_app::playback::SubtitleDelivery::External,
                 audio_stream_index: None,
                 subtitle_stream_index: Some(0),
+                subtitle_track_id: Some(words.id),
                 video_stream_index: Some(0),
                 scale_to_height: None,
                 bitrate_ceiling: None,
