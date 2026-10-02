@@ -21,6 +21,8 @@ const SHORTEST_LINE: usize = 20;
 const SHORTEST_BEFORE_COMMA: usize = 30;
 /// A line is shown at least this long when what follows leaves the room.
 const SHORTEST_SHOWN_MS: u64 = 1_000;
+/// How many blocks in a row repeating the ones before them make a loop.
+const SHORTEST_LOOP: usize = 6;
 
 #[derive(Deserialize)]
 struct Report {
@@ -55,6 +57,45 @@ pub fn subrip_of(report: &str) -> Option<String> {
         cut(block, &mut lines);
     }
     Some(render(&lines))
+}
+
+/// Where the tool got stuck repeating itself: a stretch of blocks each saying
+/// what the block two before it said, which is how a single phrase or a pair
+/// of them goes round and round until the end of the video.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Loop {
+    pub from_ms: u64,
+    pub to_ms: u64,
+    pub blocks: usize,
+    pub text: String,
+}
+
+/// The first loop in the report, or nothing when there is none or the report
+/// cannot be read.
+pub fn loop_in(report: &str) -> Option<Loop> {
+    let report: Report = serde_json::from_str(report).ok()?;
+    let blocks = &report.transcription;
+    let repeats = |at: usize| blocks[at].text.trim() == blocks[at - 2].text.trim();
+    let mut at = 2;
+    while at < blocks.len() {
+        if !repeats(at) {
+            at += 1;
+            continue;
+        }
+        let start = at - 2;
+        while at < blocks.len() && repeats(at) {
+            at += 1;
+        }
+        if at - start >= SHORTEST_LOOP {
+            return Some(Loop {
+                from_ms: blocks[start].offsets.from,
+                to_ms: blocks[at - 1].offsets.to,
+                blocks: at - start,
+                text: blocks[start].text.trim().to_string(),
+            });
+        }
+    }
+    None
 }
 
 /// Cuts one block into lines, each given the part of the block's time that its
@@ -216,6 +257,38 @@ mod tests {
     fn a_block_that_takes_no_time_still_gives_its_words() {
         let written = subrip_of(&report(&[("Hello there.", 4_000, 4_000)])).expect("a report");
         assert_eq!(texts(&written), ["Hello there."]);
+    }
+
+    #[test]
+    fn a_pair_of_phrases_going_round_is_a_loop_from_its_first_block() {
+        let mut blocks = vec![("Fine.", 0, 2_000), ("Then go.", 2_000, 4_000)];
+        for turn in 0..10u64 {
+            let text = if turn % 2 == 0 { "I am so awkwardly." } else { "You and I should get it." };
+            blocks.push((text, 5_000 + turn * 1_000, 6_000 + turn * 1_000));
+        }
+        let found = loop_in(&report(&blocks)).expect("a loop");
+        assert_eq!((found.from_ms, found.to_ms, found.blocks), (5_000, 15_000, 10));
+        assert_eq!(found.text, "I am so awkwardly.");
+    }
+
+    #[test]
+    fn one_phrase_said_again_and_again_is_a_loop_too() {
+        let blocks: Vec<_> = (0..8u64).map(|turn| ("Thank you.", turn * 1_000, turn * 1_000 + 900)).collect();
+        assert_eq!(loop_in(&report(&blocks)).map(|found| found.blocks), Some(8));
+    }
+
+    #[test]
+    fn a_phrase_said_a_few_times_in_a_dialogue_is_not_a_loop() {
+        let blocks = [
+            ("No.", 0, 500),
+            ("No.", 600, 1_100),
+            ("No.", 1_200, 1_700),
+            ("Yes.", 2_000, 2_500),
+            ("Why?", 3_000, 3_500),
+        ];
+        assert_eq!(loop_in(&report(&blocks)), None);
+        assert_eq!(loop_in(&report(&[])), None);
+        assert_eq!(loop_in("not a report"), None);
     }
 
     #[test]

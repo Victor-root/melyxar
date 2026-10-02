@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command as TokioCommand;
 
 use crate::process::{output_of, AskedToStop};
-use crate::spoken_lines::subrip_of;
+use crate::spoken_lines::{loop_in, subrip_of};
 use crate::{find_on_path, FfmpegError, Result};
 
 /// Where the installation script puts the tool, which is where it is looked
@@ -104,18 +104,39 @@ pub async fn listen(
     }
 
     let mut listening = low_priority(tool.path());
-    listening.args(listening_arguments(model, &recording, &written, threads));
+    let arguments = listening_arguments(model, &recording, &written, threads);
+    tracing::debug!(video = %video.display(), arguments = ?arguments, "the speech tool is being set going");
+    listening.args(arguments);
+    let started = std::time::Instant::now();
     let output = output_of(listening, asked_to_stop).await?;
     if !output.status.success() {
         return Err(FfmpegError::from_output("whisper-cli", &output));
     }
 
     let report = std::fs::read_to_string(written.with_extension("json"))?;
+    if let Some(stuck) = loop_in(&report) {
+        tracing::warn!(
+            video = %video.display(),
+            from_second = stuck.from_ms / 1_000,
+            to_second = stuck.to_ms / 1_000,
+            blocks = stuck.blocks,
+            text = stuck.text,
+            "the speech tool repeated itself over a stretch of the video"
+        );
+    }
     let subrip = subrip_of(&report)
         .ok_or_else(|| FfmpegError::MalformedReport("the report of what was heard".to_string()))?;
     let language = language_of(&report);
+    let lines = lines_in(&subrip);
+    tracing::debug!(
+        video = %video.display(),
+        lines,
+        language = language.as_deref(),
+        took_seconds = started.elapsed().as_secs(),
+        "the speech tool heard a video"
+    );
     Ok(Heard {
-        lines: lines_in(&subrip),
+        lines,
         subrip,
         language,
     })
@@ -158,11 +179,15 @@ pub fn recording_arguments(video: &Path, recording: &Path) -> Vec<OsString> {
 
 /// What the speech tool is told: the model, the recording, the language left
 /// for it to find, and the report it is to write: the lines are made from the
-/// blocks of that report, not by the tool.
+/// blocks of that report, not by the tool. It is told too to carry no text
+/// from one stretch of the recording to the next: left to do so, a single
+/// stretch where it repeats itself is read back as what is being said and
+/// goes on being repeated until the end of the video.
 pub fn listening_arguments(model: &Path, recording: &Path, written: &Path, threads: usize) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = vec!["-m".into(), model.as_os_str().to_os_string()];
     arguments.extend(["-f".into(), recording.as_os_str().to_os_string()]);
     arguments.extend(["-l".into(), "auto".into(), "-t".into(), threads.max(1).to_string().into()]);
+    arguments.extend(["-mc".into(), "0".into()]);
     arguments.extend(["-np".into(), "-oj".into()]);
     arguments.extend(["-of".into(), written.as_os_str().to_os_string()]);
     arguments
@@ -211,6 +236,7 @@ mod tests {
         let joined = arguments.join(" ");
         assert!(joined.contains("-m /data/model.bin"));
         assert!(joined.contains("-l auto"));
+        assert!(joined.contains("-mc 0"), "what was heard is not fed back to the model");
         assert!(joined.contains("-oj"), "the report carries what was heard");
         assert!(!joined.contains("-osrt"), "the lines are made from the report");
         assert!(!joined.contains("-ml"), "the times of single words are not trusted");
