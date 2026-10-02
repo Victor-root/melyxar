@@ -11,8 +11,10 @@ import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { MusicTab } from "./tabs";
 
-/** How much of the width one press of an arrow moves. */
-const ALMOST_A_SCREENFUL = 0.8;
+/** The room the arrow at the start takes once it is there, its width and the
+ *  gap beside it as the stylesheet draws them: it appears as the tabs move,
+ *  and pushes them along by as much. */
+const ARROW_ROOM = 32;
 
 export function TabsBar({
   tabs,
@@ -58,10 +60,26 @@ export function TabsBar({
       ?.scrollIntoView({ inline: "nearest", block: "nearest" });
   }, [open]);
 
+  /* One tab at a time: the next one cut off at the edge is brought in whole
+     and nothing else is asked of it. */
   const move = (direction: 1 | -1) => {
     const element = track.current;
-    if (element) {
-      element.scrollBy({ left: direction * element.clientWidth * ALMOST_A_SCREENFUL, behavior: "smooth" });
+    if (!element) {
+      return;
+    }
+    const edge = element.getBoundingClientRect();
+    const tabs = Array.from(element.children);
+    if (direction === 1) {
+      const next = tabs.find((tab) => tab.getBoundingClientRect().right > edge.right + 1);
+      if (next) {
+        const arrow = canGoBack ? 0 : ARROW_ROOM;
+        element.scrollBy({ left: next.getBoundingClientRect().right - edge.right + arrow, behavior: "smooth" });
+      }
+    } else {
+      const before = tabs.reverse().find((tab) => tab.getBoundingClientRect().left < edge.left - 1);
+      if (before) {
+        element.scrollBy({ left: before.getBoundingClientRect().left - edge.left, behavior: "smooth" });
+      }
     }
   };
 
