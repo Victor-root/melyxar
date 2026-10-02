@@ -32,6 +32,7 @@ import {
   current,
   forward,
   jumpTo,
+  moved,
   nextRepeat,
   playLast,
   playNext,
@@ -69,6 +70,8 @@ export interface Music {
   playNext: (songs: Song[]) => void;
   playLast: (songs: Song[]) => void;
   remove: (at: number) => void;
+  /** Puts the song at one place of the order at another. */
+  move: (from: number, to: number) => void;
   /** What this account chose for its music, the defaults until the server
       has said. */
   preferences: MusicPreferences;
@@ -734,6 +737,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         }
       },
       remove: (at: number) => setQueue((was) => without(was, at)),
+      move: (from: number, to: number) => setQueue((was) => moved(was, from, to)),
     };
   }, [live, load, stop, pause, resume]);
   commandsNow.current = commands;
@@ -767,6 +771,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       playNext: sent("playNext", commands.playNext),
       playLast: sent("playLast", commands.playLast),
       remove: sent("remove", commands.remove),
+      move: sent("move", commands.move),
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };

@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { music as server } from "../api";
 import type { SongSpectrum } from "../api";
-import { useMusicTime } from "./player";
+import { useMusic, useMusicTime } from "./player";
 import { approach, levelsAt, momentOf } from "./spectrum-data";
 
 const FRAME_EVERY_MS = 33;
@@ -34,7 +34,17 @@ function useSongSpectrum(song: string): SongSpectrum | null {
   return found?.song === song ? found.spectrum : null;
 }
 
-export function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean; amplitude: number }) {
+/** The wave behind a player, when this account wants one and the song is
+ *  there to draw it for. */
+export function BehindThePlayer() {
+  const { song, playing, preferences } = useMusic();
+  if (!song || !preferences.spectrum) {
+    return null;
+  }
+  return <Spectrum song={song.id} playing={playing} amplitude={preferences.spectrum_amplitude / 100} />;
+}
+
+function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean; amplitude: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const spectrum = useSongSpectrum(song);
   const { position } = useMusicTime();

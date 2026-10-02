@@ -1063,7 +1063,7 @@
 }
 
 .music-now-cover-large {
-  width: min(420px, 100%);
+  width: min(100%, 520px, 52vh);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-raised);
 }
@@ -1091,6 +1091,8 @@
 }
 
 .music-now .player-bottom {
+  position: relative;
+  isolation: isolate;
   padding-top: 24px;
 }
 
@@ -1110,22 +1112,42 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.5fr);
   gap: var(--gap-section);
   width: 100%;
-  max-width: 1300px;
-  margin: 0 auto;
   padding: var(--gap) var(--gutter) var(--gap);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
+/* The song, pushed to the left and centred in the height there is, and kept
+   where it is while the queue beside it scrolls. */
 .music-now-playing {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+  align-self: center;
   gap: var(--gap);
   min-width: 0;
-  text-align: center;
+  text-align: left;
+}
+
+/* The queue and its tabs take the height of the page: the tabs stay, and
+   only the lines scroll. */
+.music-now-queue {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.music-now-queue .music-now-tabs {
+  flex: none;
+}
+
+.music-now-queue .music-lyrics {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 .music-now-words {
@@ -1221,20 +1243,29 @@
 }
 
 .music-queue {
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
 }
 
+/* A line of the queue is a line of a list of songs: the button that plays
+   it, its place or the wave of the song playing, its cover, its name, its
+   length, the cross that takes it out and the grip that moves it. */
 .music-queue-line {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px 4ch 44px minmax(0, 1fr) auto 30px 28px;
   align-items: center;
   gap: var(--gap);
-  min-height: 54px;
+  min-height: 60px;
   padding: 0 var(--gap-tight);
   border-radius: var(--radius-control);
   content-visibility: auto;
-  contain-intrinsic-size: auto 54px;
+  contain-intrinsic-size: auto 60px;
 }
 
 .music-queue-line:hover {
@@ -1249,9 +1280,33 @@
   opacity: 0.55;
 }
 
+.music-queue-lifted {
+  opacity: 0.35;
+}
+
+/* Where a song being dragged would land, drawn on the line it lands next to. */
+.music-queue-drop-before::before,
+.music-queue-drop-after::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-bright);
+  pointer-events: none;
+}
+
+.music-queue-drop-before::before {
+  top: 0;
+}
+
+.music-queue-drop-after::after {
+  bottom: 0;
+}
+
 .music-queue-song {
   display: flex;
-  flex: 1;
   flex-direction: column;
   min-width: 0;
   padding: 6px 0;
@@ -1288,6 +1343,28 @@
 .music-queue-remove {
   width: 30px;
   height: 30px;
+}
+
+.music-queue-grip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.music-queue-grip:hover,
+.music-queue-grip:focus-visible {
+  color: var(--text);
+}
+
+.music-queue-grip:active {
+  cursor: grabbing;
 }
 
 /* --------------------------------------------------------------------------
@@ -1337,6 +1414,27 @@
   .music-now-body {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--gap-wide);
+    overflow-y: auto;
+  }
+
+  .music-now-playing {
+    align-items: center;
+    align-self: start;
+    text-align: center;
+  }
+
+  .music-queue {
+    flex: none;
+    overflow: visible;
+  }
+
+  .music-queue-line {
+    grid-template-columns: 36px 44px minmax(0, 1fr) auto 28px;
+  }
+
+  .music-queue-line .music-song-number,
+  .music-queue-line .music-queue-remove {
+    display: none;
   }
 
   /* Only what a thumb needs on the page of what is playing: the clocks and

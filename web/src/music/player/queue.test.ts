@@ -8,6 +8,7 @@ import {
   current,
   forward,
   jumpTo,
+  moved,
   nextRepeat,
   playLast,
   playNext,
@@ -95,6 +96,33 @@ describe("changing what is to come", () => {
     expect(titles(upNext(without(queue, 3)))).toEqual(["c"]);
     expect(without(queue, 1)).toBe(queue);
     expect(without(queue, 0)).toBe(queue);
+  });
+
+  it("moves a song to another place and the song playing keeps playing", () => {
+    const queue = playing(ABCD, 1, false, "off");
+    const order = (moves: ReturnType<typeof moved>) => moves.order.map((place) => moves.songs[place].title);
+
+    const toTheFront = moved(queue, 3, 0);
+    expect(order(toTheFront)).toEqual(["d", "a", "b", "c"]);
+    expect(current(toTheFront)?.title).toBe("b");
+
+    const toTheEnd = moved(queue, 0, 3);
+    expect(order(toTheEnd)).toEqual(["b", "c", "d", "a"]);
+    expect(current(toTheEnd)?.title).toBe("b");
+
+    const playingOne = moved(queue, 1, 3);
+    expect(order(playingOne)).toEqual(["a", "c", "d", "b"]);
+    expect(current(playingOne)?.title).toBe("b");
+
+    expect(order(moved(queue, 2, 3))).toEqual(["a", "b", "d", "c"]);
+    expect(current(moved(queue, 2, 3))?.title).toBe("b");
+  });
+
+  it("moves nothing from or to a place the queue has not got", () => {
+    const queue = playing(ABCD, 1, false, "off");
+    expect(moved(queue, 2, 2)).toBe(queue);
+    expect(moved(queue, 4, 0)).toBe(queue);
+    expect(moved(queue, 0, -1)).toBe(queue);
   });
 
   it("jumps to any song of the queue, and nowhere outside it", () => {

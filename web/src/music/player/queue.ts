@@ -162,6 +162,30 @@ export function without(queue: Queue, at: number): Queue {
   return { ...queue, order: queue.order.filter((_, index) => index !== at) };
 }
 
+/**
+ * A song of the queue put at another place in the order, whichever it is:
+ * to come, played or playing. The song playing keeps playing wherever the
+ * move leaves it.
+ */
+export function moved(queue: Queue, from: number, to: number): Queue {
+  const last = queue.order.length - 1;
+  if (from === to || from < 0 || to < 0 || from > last || to > last) {
+    return queue;
+  }
+  const order = [...queue.order];
+  const [place] = order.splice(from, 1);
+  order.splice(to, 0, place);
+  let at = queue.at;
+  if (from === queue.at) {
+    at = to;
+  } else if (from < queue.at && to >= queue.at) {
+    at -= 1;
+  } else if (from > queue.at && to <= queue.at) {
+    at += 1;
+  }
+  return { ...queue, order, at };
+}
+
 /** An order drawn at random, every one as likely as any other. */
 function shuffled(places: number[], draw: () => number): number[] {
   const drawn = [...places];

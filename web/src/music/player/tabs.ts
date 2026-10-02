@@ -39,7 +39,8 @@ export type Command =
   | "jump"
   | "playNext"
   | "playLast"
-  | "remove";
+  | "remove"
+  | "move";
 
 /** What changes as the music plays, and what every bar shows of it. */
 export interface Beat {
