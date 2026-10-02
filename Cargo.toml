@@ -108,6 +108,12 @@ lofty = "0.25"
 # drawn from it: a few hundred lines of pure Rust, for one small picture.
 png = "0.18"
 
+# Builds for development and tests keep the lines a backtrace points at and
+# nothing more: with the full detail every test program weighed hundreds of
+# megabytes, and the workspace's twenty gigabytes.
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.release]
 opt-level = 3
 lto = "thin"
