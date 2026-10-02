@@ -576,7 +576,7 @@
 }
 
 /* A filled wave in the accent, like the one behind the player, drifting and
-   swelling out of step: the mark of the song playing, low and still while it
+   swelling: the mark of the song playing, low and still while it
    is paused. Only the body moves, by transform, and only on the one line that
    is playing. */
 .playing-wave {
@@ -599,29 +599,16 @@
   transition: transform var(--calm) var(--ease);
 }
 
-.playing-wave-body-front {
+.playing-wave-body {
   fill: var(--accent-bright);
 }
 
-.playing-wave-body-back {
-  fill: var(--accent);
-  opacity: 0.55;
-}
-
-.playing-wave-on .playing-wave-swell-front {
+.playing-wave-on .playing-wave-swell {
   animation: playing-wave-swell 1700ms ease-in-out infinite alternate;
 }
 
-.playing-wave-on .playing-wave-swell-back {
-  animation: playing-wave-swell 2300ms ease-in-out -900ms infinite alternate;
-}
-
-.playing-wave-on .playing-wave-body-front {
+.playing-wave-on .playing-wave-body {
   animation: playing-wave-drift 2600ms linear infinite;
-}
-
-.playing-wave-on .playing-wave-body-back {
-  animation: playing-wave-drift 3800ms linear -1200ms infinite reverse;
 }
 
 @keyframes playing-wave-swell {
