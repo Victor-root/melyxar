@@ -467,7 +467,7 @@ export function CardMenu({
         allowed:
           account?.is_administrator === true &&
           card.source !== null &&
-          (card.kind === "movie" || card.kind === "episode"),
+          (card.kind === "movie" || card.kind === "episode" || card.kind === "video"),
         act: onEditSubtitles,
       },
     ],
