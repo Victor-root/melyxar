@@ -613,7 +613,7 @@
 
 @keyframes playing-wave-swell {
   from {
-    transform: scaleY(0.55);
+    transform: scaleY(0.15);
   }
   to {
     transform: scaleY(1);
