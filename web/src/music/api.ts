@@ -5,7 +5,7 @@
  * requests: what goes wrong with music stays with music.
  */
 
-import { get, post, put, remove } from "../api";
+import { get, getRaw, post, put, remove } from "../api";
 import type { Picture } from "../api";
 
 /** An artist named on an album or a song. */
@@ -101,6 +101,8 @@ export interface MusicPreferences {
   crossfade_seconds: number;
   /** Whether the tag manager shows what is about to change first. */
   tag_preview: boolean;
+  /** Whether a wave of the sound plays behind the bar of the player. */
+  spectrum: boolean;
   /** How far the buttons that skip back and on move within a song. */
   skip_back_seconds: number;
   skip_on_seconds: number;
@@ -113,6 +115,15 @@ export interface MusicPreferences {
 /** How songs are levelled: not at all, each to the same level, or each
  *  album to the same level with its songs kept apart. */
 export type VolumeMode = "off" | "track" | "album";
+
+/** How the sound of a song is spread: `bands` levels for each of the
+ *  `framesASecond` readings of every second, from nought for nothing to 255 for
+ *  as loud as the song gets. */
+export interface SongSpectrum {
+  bands: number;
+  framesASecond: number;
+  levels: Uint8Array;
+}
 
 /** One line sung at a known moment. */
 export interface LyricLine {
@@ -290,6 +301,18 @@ export const music = {
   recordListen: (song: string) => post<{ listened: boolean }>(`/api/v1/music/songs/${song}/listened`),
   lyrics: (song: string, signal?: AbortSignal) =>
     get<SongLyrics | null>(`/api/v1/music/songs/${song}/lyrics`, signal),
+  /** Nothing for a song whose sound was not read yet. */
+  spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
+    const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);
+    if (answer.status === 204) {
+      return null;
+    }
+    const bands = Number(answer.headers.get("x-spectrum-bands"));
+    const framesASecond = Number(answer.headers.get("x-spectrum-frames-a-second"));
+    const levels = new Uint8Array(await answer.arrayBuffer());
+    const whole = bands >= 2 && framesASecond > 0 && levels.length >= bands && levels.length % bands === 0;
+    return whole ? { bands, framesASecond, levels } : null;
+  },
   libraryOptions: (library: string, signal?: AbortSignal) =>
     get<MusicLibraryOptions>(`/api/v1/music/${library}/options`, signal),
   setLibraryOptions: (library: string, options: MusicLibraryOptions) =>

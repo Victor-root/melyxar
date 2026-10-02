@@ -164,6 +164,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.music_volume_mode", "settings.music_volume_mode_why"],
       ["settings.music_crossfade", "settings.music_crossfade_why"],
       ["settings.music_resume_queue", "settings.music_resume_queue_why"],
+      ["settings.music_spectrum", "settings.music_spectrum_why"],
       ["settings.music_network", "settings.music_network_why"],
       ["settings.music_max_bitrate", "settings.music_max_bitrate_why"],
       ["settings.music_tags", "settings.music_tags_why"],

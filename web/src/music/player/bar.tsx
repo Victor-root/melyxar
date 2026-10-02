@@ -51,7 +51,7 @@ export function MusicBar() {
 
   return (
     <div className="music-bar-dock" role="region" aria-label={t("music.player")}>
-      <Spectrum playing={music.playing} />
+      {music.preferences.spectrum && <Spectrum song={song.id} playing={music.playing} />}
       <Rail music={music} />
       <div className="music-bar-row">
         <button

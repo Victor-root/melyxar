@@ -40,6 +40,9 @@ struct MusicPreferencesView {
     /// Absent from what an older screen sends, which keeps the preview on.
     #[serde(default = "shown")]
     tag_preview: bool,
+    /// Absent from what an older screen sends, which keeps the wave on.
+    #[serde(default = "shown")]
+    spectrum: bool,
     /// How far the buttons that skip back and on move within a song.
     #[serde(default = "a_usual_skip")]
     skip_back_seconds: u32,
@@ -74,6 +77,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
         volume_mode: chosen.volume_mode.as_str().to_string(),
         crossfade_seconds: chosen.crossfade_seconds,
         tag_preview: chosen.tag_preview,
+        spectrum: chosen.spectrum,
         skip_back_seconds: chosen.skip_back_seconds,
         skip_on_seconds: chosen.skip_on_seconds,
         hidden_tabs: chosen
@@ -118,6 +122,7 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
         })?,
         crossfade_seconds: body.crossfade_seconds.min(LONGEST_CROSSFADE_SECONDS),
         tag_preview: body.tag_preview,
+        spectrum: body.spectrum,
         skip_back_seconds: bounded_skip(body.skip_back_seconds),
         skip_on_seconds: bounded_skip(body.skip_on_seconds),
         hidden_tabs: HiddenTabs::from_tabs(
@@ -195,6 +200,7 @@ mod tests {
             volume_mode: "album".to_string(),
             crossfade_seconds: 60,
             tag_preview: true,
+            spectrum: false,
             skip_back_seconds: 0,
             skip_on_seconds: 500,
             hidden_tabs: vec!["songs".to_string(), "nonsense".to_string()],
@@ -207,6 +213,7 @@ mod tests {
         assert_eq!(chosen.max_bitrate_kbps, Some(320));
         assert_eq!(chosen.volume_mode, VolumeMode::Album);
         assert_eq!(chosen.crossfade_seconds, LONGEST_CROSSFADE_SECONDS);
+        assert!(!chosen.spectrum, "a wave turned off stays off");
         assert_eq!(chosen.skip_back_seconds, 1, "a skip is at least a second");
         assert_eq!(chosen.skip_on_seconds, LONGEST_SKIP_SECONDS);
         assert!(chosen.hidden_tabs.hides(MusicTab::Songs), "a name nobody knows is dropped");
@@ -219,6 +226,7 @@ mod tests {
                 volume_mode: "track".to_string(),
                 crossfade_seconds: 0,
                 tag_preview: true,
+                spectrum: true,
                 skip_back_seconds: 10,
                 skip_on_seconds: 10,
                 hidden_tabs: Vec::new(),
