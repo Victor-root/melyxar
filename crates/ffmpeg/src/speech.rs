@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command as TokioCommand;
 
 use crate::process::{output_of, AskedToStop};
+use crate::spoken_lines::subrip_of;
 use crate::{find_on_path, FfmpegError, Result};
 
 /// Where the installation script puts the tool, which is where it is looked
@@ -109,10 +110,10 @@ pub async fn listen(
         return Err(FfmpegError::from_output("whisper-cli", &output));
     }
 
-    let subrip = std::fs::read_to_string(written.with_extension("srt"))?;
-    let language = std::fs::read_to_string(written.with_extension("json"))
-        .ok()
-        .and_then(|report| language_of(&report));
+    let report = std::fs::read_to_string(written.with_extension("json"))?;
+    let subrip = subrip_of(&report)
+        .ok_or_else(|| FfmpegError::MalformedReport("the report of what was heard".to_string()))?;
+    let language = language_of(&report);
     Ok(Heard {
         lines: lines_in(&subrip),
         subrip,
@@ -156,12 +157,13 @@ pub fn recording_arguments(video: &Path, recording: &Path) -> Vec<OsString> {
 }
 
 /// What the speech tool is told: the model, the recording, the language left
-/// for it to find, and the subtitle file and the report it is to write.
+/// for it to find, and the report it is to write, with one word to each entry
+/// and the time of each: the lines are made from those, not by the tool.
 pub fn listening_arguments(model: &Path, recording: &Path, written: &Path, threads: usize) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = vec!["-m".into(), model.as_os_str().to_os_string()];
     arguments.extend(["-f".into(), recording.as_os_str().to_os_string()]);
     arguments.extend(["-l".into(), "auto".into(), "-t".into(), threads.max(1).to_string().into()]);
-    arguments.extend(["-np".into(), "-osrt".into(), "-oj".into()]);
+    arguments.extend(["-np".into(), "-ojf".into(), "-ml".into(), "1".into(), "-sow".into()]);
     arguments.extend(["-of".into(), written.as_os_str().to_os_string()]);
     arguments
 }
@@ -209,7 +211,9 @@ mod tests {
         let joined = arguments.join(" ");
         assert!(joined.contains("-m /data/model.bin"));
         assert!(joined.contains("-l auto"));
-        assert!(joined.contains("-osrt") && joined.contains("-oj"));
+        assert!(joined.contains("-ojf"), "the report carries what was heard");
+        assert!(joined.contains("-ml 1 -sow"), "one word to each entry, with its time");
+        assert!(!joined.contains("-osrt"), "the lines are made from the words");
         assert!(joined.contains("-of /tmp/heard"));
         assert!(joined.contains("-t 1"), "at least one thread, whatever was asked");
     }
