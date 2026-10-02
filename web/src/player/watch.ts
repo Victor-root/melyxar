@@ -14,6 +14,7 @@
 
 import { api, type HowItMoved, type Reading } from "../api";
 import { followTheOpening } from "./opening";
+import { followTheSubtitles } from "./subtitleWatch";
 
 /** How still the clock has to be before the film counts as stopped. */
 const STOPPED_AFTER_MS = 1_000;
@@ -499,6 +500,10 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
     tell({ ...reading, saw: "the_opening_seconds", ...opening }),
   );
 
+  /* What the subtitles hold and what is on the screen, beside what the times
+     of the file give for the same moment. */
+  const stopFollowingTheSubtitles = followTheSubtitles(element, (fact) => tell({ ...reading, ...fact }));
+
   /* Where the film stands a little after the browser was handed it, said once
      whatever the answer. Everything above follows a film that is playing: a
      film the browser left paused, or set going without ever showing a
@@ -531,6 +536,7 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
         element.cancelVideoFrameCallback?.(weighing);
       }
       stopFollowingTheOpening();
+      stopFollowingTheSubtitles();
       window.clearTimeout(startedOrNot);
       window.clearTimeout(settling);
       if (waitingForThePicture?.pending != null) {
