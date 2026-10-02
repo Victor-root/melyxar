@@ -263,7 +263,7 @@ async fn what_follows_a_scan(
     // reading and the only one a library of music has.
     if library.kind == LibraryKind::Music
         && let Err(error) =
-            crate::music::loudness::start_when_needed(state, library.clone(), priority).await
+            crate::music::analysis::start_when_needed(state, library.clone(), priority).await
     {
         tracing::warn!(
             library = library.name,

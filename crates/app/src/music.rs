@@ -7,10 +7,10 @@
 //! libraries, which counts one in albums, and the routes of the server that
 //! read it.
 
+pub mod analysis;
 pub mod browse;
 pub mod covers;
 pub mod listen;
-pub mod loudness;
 pub mod lyrics;
 pub mod marks;
 pub mod playlists;

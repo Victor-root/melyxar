@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 use melyxar_core::id::WorkId;
+use melyxar_core::music::Spectrum;
 use melyxar_core::music::plays_as_it_is;
 use melyxar_core::music_preferences::under_the_ceiling;
 use melyxar_core::time::Millis;
@@ -25,6 +26,17 @@ pub enum Sound {
         song: ConvertedSong,
         into: Converted,
     },
+}
+
+/// How the sound of a song is spread, or nothing when it was not read yet or
+/// could not be.
+pub async fn spectrum_of_song(
+    state: &AppState,
+    who: &User,
+    song: WorkId,
+) -> Result<Option<Spectrum>> {
+    may_read_the_work(state, who, song).await?;
+    Ok(state.database().song_spectrum(song).await?)
 }
 
 /// The sound of a song, for a browser that plays the forms named in `plays`,

@@ -36,6 +36,16 @@ pub struct SongFiling {
     pub genres: Vec<String>,
 }
 
+/// How the sound of a song is spread: `bands` levels for each of the
+/// `frames_a_second` readings of every second, a byte each, nought for nothing
+/// and 255 for as loud as the song gets.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Spectrum {
+    pub bands: u8,
+    pub frames_a_second: u8,
+    pub levels: Vec<u8>,
+}
+
 /// The name a browser gives the form of a song, which is how it says what it
 /// plays: `mp3`, `aac`, `flac`, `opus`, `vorbis`, `alac`, `wav`. Nothing for a
 /// form no browser plays at all.

@@ -172,7 +172,7 @@ pub async fn take_up_again_what_a_restart_cut_short(state: &AppState, cut_short:
             .await
             .map(|_| ()),
             JobKind::AnalyseLoudness => {
-                crate::music::loudness::start(state, library.clone(), JobPriority::BACKGROUND)
+                crate::music::analysis::start(state, library.clone(), JobPriority::BACKGROUND)
                     .await
                     .map(|_| ())
             }

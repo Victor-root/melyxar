@@ -6,7 +6,7 @@
 
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, Query, State};
-use axum::http::{Request, header};
+use axum::http::{HeaderName, Request, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -15,6 +15,7 @@ use melyxar_app::music::browse::{
     AlbumCard, AlbumOrder, AlbumsWanted, ArtistCard, Credited, MusicFound, MusicGenre,
     MusicInitial, MusicPage, Paging, SongOrder, SongRow,
 };
+use melyxar_core::music::Spectrum;
 use serde::{Deserialize, Serialize};
 
 use melyxar_app::music::marks::Listened;
@@ -42,6 +43,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/artists/{id}", get(artist))
         .route("/api/v1/music/artists/{id}/songs", get(artist_songs))
         .route("/api/v1/music/songs/{id}/sound", get(sound))
+        .route("/api/v1/music/songs/{id}/spectrum", get(spectrum))
 }
 
 /// What a page holds when nothing is said: a few screens of a grid.
@@ -597,11 +599,61 @@ async fn sound(
     }
 }
 
+/// How the sound of one song is spread: its levels, a byte each, with how
+/// many bands each reading has and how many readings a second in the headers.
+/// Nothing for a song that has none, which is no fault: the interface draws
+/// no wave for it.
+async fn spectrum(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let spectrum =
+        melyxar_app::music::listen::spectrum_of_song(&state, &who, parse_work(&id)?).await?;
+    Ok(spectrum.map_or_else(|| StatusCode::NO_CONTENT.into_response(), spectrum_reply))
+}
+
+/// What does not change until the song's file does is kept an hour by the
+/// browser, which asks again for each song it plays.
+fn spectrum_reply(spectrum: Spectrum) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+            (header::CACHE_CONTROL, "private, max-age=3600".to_string()),
+            (
+                HeaderName::from_static("x-spectrum-bands"),
+                spectrum.bands.to_string(),
+            ),
+            (
+                HeaderName::from_static("x-spectrum-frames-a-second"),
+                spectrum.frames_a_second.to_string(),
+            ),
+        ],
+        spectrum.levels,
+    )
+        .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use melyxar_core::id::{LibraryId, WorkId};
 
     use super::*;
+
+    #[tokio::test]
+    async fn a_spectrum_goes_out_as_its_levels_with_its_shape_in_the_headers() {
+        let reply = spectrum_reply(Spectrum {
+            bands: 3,
+            frames_a_second: 4,
+            levels: vec![9, 8, 7, 6, 5, 4],
+        });
+        assert_eq!(reply.headers()["x-spectrum-bands"], "3");
+        assert_eq!(reply.headers()["x-spectrum-frames-a-second"], "4");
+        let body = axum::body::to_bytes(reply.into_body(), usize::MAX)
+            .await
+            .expect("a body");
+        assert_eq!(body.as_ref(), [9, 8, 7, 6, 5, 4]);
+    }
 
     #[test]
     fn the_page_of_an_album_says_how_many_songs_and_which_under_two_names() {
