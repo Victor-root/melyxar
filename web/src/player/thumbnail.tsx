@@ -32,6 +32,18 @@ export function spotOf(
   };
 }
 
+/** The sheets that hold the thumbnails of these moments, each once. */
+export function sheetUrls(thumbnails: PlaybackThumbnails, moments: number[]): string[] {
+  const urls = new Set<string>();
+  for (const moment of moments) {
+    const spot = spotOf(thumbnails, moment);
+    if (spot) {
+      urls.add(`${thumbnails.url}/${spot.sheet}.jpg`);
+    }
+  }
+  return [...urls];
+}
+
 /**
  * The thumbnail covering one moment, as a background filling a box of any
  * size: the sheet is stretched so one thumbnail fills the box, and moved so the
