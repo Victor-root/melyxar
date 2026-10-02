@@ -635,13 +635,13 @@
   }
 }
 
-/* One whole width to the side, which is where the wave looks the same again. */
+/* One whole width to the right, which is where the wave looks the same again. */
 @keyframes playing-wave-drift {
   from {
-    transform: translateX(0);
+    transform: translateX(-22px);
   }
   to {
-    transform: translateX(-22px);
+    transform: translateX(0);
   }
 }
 
