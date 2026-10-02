@@ -103,6 +103,8 @@ export interface MusicPreferences {
   tag_preview: boolean;
   /** Whether a wave of the sound plays behind the bar of the player. */
   spectrum: boolean;
+  /** How high the wave rises, from nought to a hundred. */
+  spectrum_amplitude: number;
   /** How far the buttons that skip back and on move within a song. */
   skip_back_seconds: number;
   skip_on_seconds: number;

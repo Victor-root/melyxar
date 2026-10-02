@@ -170,6 +170,8 @@ pub struct MusicPreferences {
     pub tag_preview: bool,
     /// Whether a wave of the sound plays behind the bar of the player.
     pub spectrum: bool,
+    /// How high that wave rises, from nought to `MOST_SPECTRUM_AMPLITUDE`.
+    pub spectrum_amplitude: u32,
     /// How far the buttons that skip back and on move within a song.
     pub skip_back_seconds: u32,
     pub skip_on_seconds: u32,
@@ -186,6 +188,7 @@ impl Default for MusicPreferences {
             crossfade_seconds: 0,
             tag_preview: true,
             spectrum: true,
+            spectrum_amplitude: MOST_SPECTRUM_AMPLITUDE,
             skip_back_seconds: 10,
             skip_on_seconds: 10,
             hidden_tabs: HiddenTabs::default(),
@@ -211,6 +214,10 @@ pub struct MusicLibraryOptions {
     /// Off until an administrator turns it on.
     pub artist_photos_online: bool,
 }
+
+/// The highest the wave behind the player can be asked to rise, which is also
+/// how high it rises until it is turned down.
+pub const MOST_SPECTRUM_AMPLITUDE: u32 = 100;
 
 /// The longest a crossfade can be asked to last, in seconds.
 pub const LONGEST_CROSSFADE_SECONDS: u32 = 12;
