@@ -575,9 +575,10 @@
   color: var(--accent-bright);
 }
 
-/* A wave in the accent, drifting and swelling out of step: the mark of the
-   song playing, low and still while it is paused. Only the line moves, by
-   transform, and only on the one line that is playing. */
+/* A filled wave in the accent, like the one behind the player, drifting and
+   swelling out of step: the mark of the song playing, low and still while it
+   is paused. Only the body moves, by transform, and only on the one line that
+   is playing. */
 .playing-wave {
   display: inline-flex;
   width: 22px;
@@ -591,23 +592,19 @@
   overflow: hidden;
 }
 
+/* The wave rises from the foot of the picture. */
 .playing-wave-swell {
-  transform: scaleY(0.3);
+  transform: scaleY(0.35);
+  transform-origin: 50% 100%;
   transition: transform var(--calm) var(--ease);
 }
 
-.playing-wave-line {
-  fill: none;
-  stroke-width: 1.6;
-  stroke-linecap: round;
+.playing-wave-body-front {
+  fill: var(--accent-bright);
 }
 
-.playing-wave-line-front {
-  stroke: var(--accent-bright);
-}
-
-.playing-wave-line-back {
-  stroke: var(--accent);
+.playing-wave-body-back {
+  fill: var(--accent);
   opacity: 0.55;
 }
 
@@ -619,41 +616,41 @@
   animation: playing-wave-swell 2300ms ease-in-out -900ms infinite alternate;
 }
 
-.playing-wave-on .playing-wave-line-front {
-  animation: playing-wave-drift 1400ms linear infinite;
+.playing-wave-on .playing-wave-body-front {
+  animation: playing-wave-drift 2600ms linear infinite;
 }
 
-.playing-wave-on .playing-wave-line-back {
-  animation: playing-wave-drift 2100ms linear -700ms infinite reverse;
+.playing-wave-on .playing-wave-body-back {
+  animation: playing-wave-drift 3800ms linear -1200ms infinite reverse;
 }
 
 @keyframes playing-wave-swell {
   from {
-    transform: scaleY(0.35);
+    transform: scaleY(0.55);
   }
   to {
     transform: scaleY(1);
   }
 }
 
-/* One whole wave to the side, which is where it looks the same again. */
+/* One whole width to the side, which is where the wave looks the same again. */
 @keyframes playing-wave-drift {
   from {
     transform: translateX(0);
   }
   to {
-    transform: translateX(-11px);
+    transform: translateX(-22px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .playing-wave-on .playing-wave-swell,
-  .playing-wave-on .playing-wave-line {
+  .playing-wave-on .playing-wave-body {
     animation: none;
   }
 
   .playing-wave-on .playing-wave-swell {
-    transform: scaleY(0.7);
+    transform: scaleY(0.8);
   }
 }
 
