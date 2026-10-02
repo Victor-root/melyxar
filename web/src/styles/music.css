@@ -604,19 +604,34 @@
 }
 
 .playing-wave-on .playing-wave-swell {
-  animation: playing-wave-swell 1700ms ease-in-out infinite alternate;
+  animation: playing-wave-swell 2200ms ease-in-out infinite;
 }
 
 .playing-wave-on .playing-wave-body {
   animation: playing-wave-drift 2600ms linear infinite;
 }
 
+/* High most of the time, with only a quick dip before it climbs back. */
 @keyframes playing-wave-swell {
-  from {
-    transform: scaleY(0.15);
+  0%,
+  100% {
+    transform: scaleY(0.25);
   }
-  to {
+
+  18% {
     transform: scaleY(1);
+  }
+
+  45% {
+    transform: scaleY(0.75);
+  }
+
+  70% {
+    transform: scaleY(1);
+  }
+
+  86% {
+    transform: scaleY(0.6);
   }
 }
 
