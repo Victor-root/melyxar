@@ -22,14 +22,19 @@ import { scrollerOf } from "./landing";
 /** How far ahead of the box, in heights of the window, they are asked for. */
 const AHEAD = "150% 0px";
 
-/** Whether the pictures are decoded and may be put on the page. Once they are,
- *  they stay so. */
-export function useDecodedAhead(box: RefObject<Element | null>, urls: string[]): boolean {
-  const [ready, setReady] = useState(false);
+/** How many are read at once. A connection carries a handful at a time, and
+ *  the pictures of the page in view must not wait behind a dozen sheets. */
+const AT_ONCE = 2;
+
+/** The pictures decoded so far, which may be put on the page, as they come:
+ *  asked for in the order given, a couple at a time, once the box is within
+ *  reach. Once one is, it stays so. */
+export function useDecodedAhead(box: RefObject<Element | null>, urls: string[]): ReadonlySet<string> {
+  const [ready, setReady] = useState<ReadonlySet<string>>(new Set());
   const wanted = urls.join("|");
 
   useEffect(() => {
-    setReady(false);
+    setReady(new Set());
     const element = box.current;
     if (!element || wanted === "") {
       return;
@@ -40,27 +45,33 @@ export function useDecodedAhead(box: RefObject<Element | null>, urls: string[]):
     let gone = false;
     // Kept while they are being decoded, so that nothing lets go of them early.
     const held = new Set<HTMLImageElement>();
+    const queue = wanted.split("|");
+
+    const work = async (): Promise<void> => {
+      for (let url = queue.shift(); url !== undefined && !gone; url = queue.shift()) {
+        const image = new Image();
+        image.decoding = "async";
+        // Asked for after what is already on the page: they are for what is
+        // coming, and the pictures in view are for now.
+        image.fetchPriority = "low";
+        image.src = url;
+        held.add(image);
+        await image.decode().catch(() => {});
+        if (!gone) {
+          const done = url;
+          setReady((were) => new Set(were).add(done));
+        }
+      }
+    };
+
     const watcher = new IntersectionObserver(
       ([entry]) => {
-        if (!entry.isIntersecting) {
-          return;
-        }
-        watcher.disconnect();
-        const decoding = wanted.split("|").map((url) => {
-          const image = new Image();
-          image.decoding = "async";
-          // Asked for after what is already on the page: they are for what
-          // is coming, and the pictures in view are for now.
-          image.fetchPriority = "low";
-          image.src = url;
-          held.add(image);
-          return image.decode().catch(() => {});
-        });
-        void Promise.all(decoding).then(() => {
-          if (!gone) {
-            setReady(true);
+        if (entry.isIntersecting) {
+          watcher.disconnect();
+          for (let worker = 0; worker < AT_ONCE; worker += 1) {
+            void work();
           }
-        });
+        }
       },
       { root: scroller, rootMargin: AHEAD },
     );

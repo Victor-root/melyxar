@@ -66,7 +66,7 @@ import { asClock } from "../clock";
 import { trackName } from "../player/describe";
 import { Player } from "../player/player";
 import { chaptersOf } from "../player/invented-chapters";
-import { cutOut, sheetUrls } from "../player/thumbnail";
+import { cutOut, sheetUrlOf, sheetUrls } from "../player/thumbnail";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
@@ -749,7 +749,8 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
   const chapters = chaptersOf(plan);
   const section = useRef<HTMLElement>(null);
   /* The sheets are asked for when the row is about to be seen, not as the
-     page opens: until then the cards are bare frames. */
+     page opens, a couple at a time in the order the cards need them: a card
+     is a bare frame until its sheet is there. */
   const decoded = useDecodedAhead(
     section,
     plan.thumbnails ? sheetUrls(plan.thumbnails, chapters.map((chapter) => chapter.at_second)) : [],
@@ -764,6 +765,8 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
         {chapters.map((chapter, index) => {
           const name = chapter.title ?? t("work.chapter", { number: index + 1 });
           const still = plan.thumbnails ? cutOut(plan.thumbnails, chapter.at_second) : null;
+          const sheet = plan.thumbnails ? sheetUrlOf(plan.thumbnails, chapter.at_second) : null;
+          const onItsSheet = sheet !== null && decoded.has(sheet);
           return (
             <article key={chapter.at_second} className="card card-lying" data-card>
               <div className="card-picture">
@@ -775,7 +778,7 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
                     <span
                       className="chapter-still"
                       style={{
-                        ...(decoded ? still : {}),
+                        ...(onItsSheet ? still : {}),
                         ["--film-shape" as string]:
                           plan.thumbnails.width / plan.thumbnails.height,
                       }}
