@@ -21,7 +21,7 @@ import { namesOf } from "../tiles";
 import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
 import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
-import { Spectrum } from "./spectrum";
+import { BehindThePlayer } from "./spectrum";
 
 export function MusicBar() {
   const { t } = useSettings();
@@ -51,9 +51,7 @@ export function MusicBar() {
 
   return (
     <div className="music-bar-dock" role="region" aria-label={t("music.player")}>
-      {music.preferences.spectrum && (
-        <Spectrum song={song.id} playing={music.playing} amplitude={music.preferences.spectrum_amplitude / 100} />
-      )}
+      <BehindThePlayer />
       <Rail music={music} />
       <div className="music-bar-row">
         <button

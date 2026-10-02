@@ -72,7 +72,7 @@ function useActionsThatFit(list: React.RefObject<HTMLOListElement | null>, showA
   return fit;
 }
 
-function Cover({ song }: { song: Song }) {
+export function Cover({ song }: { song: Song }) {
   const { picture, itDidNotLoad } = useShownPicture(song.cover);
   return (
     <span className="music-song-cover">

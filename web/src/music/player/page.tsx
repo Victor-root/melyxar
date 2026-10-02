@@ -7,8 +7,6 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { asClock } from "../../clock";
-import { CloseIcon } from "../../icons";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { BackIcon } from "../../player/icons";
 import { ICON } from "../../player/sound";
@@ -18,6 +16,8 @@ import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
 import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
+import { QueuePanel } from "./queue-panel";
+import { BehindThePlayer } from "./spectrum";
 
 export function MusicNowPlaying() {
   const { t } = useSettings();
@@ -51,7 +51,6 @@ export function MusicNowPlaying() {
   if (!shown || !song) {
     return null;
   }
-  const { queue } = music;
 
   return (
     <div className="music-now music-dark" role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
@@ -107,31 +106,13 @@ export function MusicNowPlaying() {
           {side === "lyrics" ? (
             <LyricsPanel song={song.id} />
           ) : (
-          <ol className="music-queue">
-            {queue.order.map((place, at) => {
-              const one = queue.songs[place];
-              const here = at === queue.at;
-              return (
-                <li key={`${place}-${at}`} className={`music-queue-line${here ? " music-queue-here" : ""}${at < queue.at ? " music-queue-played" : ""}`}>
-                  <button type="button" className="music-queue-song" onClick={() => music.jump(at)} aria-current={here ? "true" : undefined}>
-                    <span className="music-queue-title">{one.title}</span>
-                    <span className="music-queue-artists">{one.artists.map((artist) => artist.name).join(", ")}</span>
-                  </button>
-                  <span className="music-queue-length">{one.seconds === null ? "" : asClock(one.seconds)}</span>
-                  {at > queue.at && (
-                    <button type="button" className="player-button player-button-small music-queue-remove" onClick={() => music.remove(at)} aria-label={t("music.take_out", { title: one.title })}>
-                      <CloseIcon size={14} />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+          <QueuePanel />
           )}
         </section>
       </div>
 
       <div className="player-bottom">
+        <BehindThePlayer />
         <Rail music={music} />
         <div className="player-row">
           <div className="player-zone player-zone-bottom-left">
