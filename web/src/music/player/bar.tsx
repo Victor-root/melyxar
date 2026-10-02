@@ -19,11 +19,13 @@ import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
 import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
+import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
 
 export function MusicBar() {
   const { t } = useSettings();
   const music = useMusic();
+  const nowPlaying = useNowPlayingPage();
   const film = useIsAFilmOnScreen();
   const shown = music.song !== null && !film;
 
@@ -53,7 +55,7 @@ export function MusicBar() {
         <button
           type="button"
           className="music-bar-now"
-          onClick={() => music.setOpen(true)}
+          onClick={nowPlaying.open}
           title={t("music.open_player")}
         >
           <Cover pictures={song.cover} />
@@ -75,7 +77,7 @@ export function MusicBar() {
           <HeartButton id={song.id} />
           <Volume music={music} />
           <Ways music={music} />
-          <QueueButton music={music} />
+          <QueueButton />
         </div>
       </div>
     </div>
