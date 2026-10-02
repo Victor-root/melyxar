@@ -1243,6 +1243,12 @@
   pointer-events: none;
 }
 
+/* The same layer, with what it says at the top of the picture instead. */
+.player-notices-top {
+  justify-content: flex-start;
+  padding-top: var(--gap-wide);
+}
+
 .player-notice {
   margin: 0;
   padding: 12px 20px;
