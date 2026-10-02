@@ -654,6 +654,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_song_deleted_takes_its_emptied_album_and_stays_out_of_the_scans() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path().join("Music");
+        let tags = [
+            ("title", "Quiet Harbour"),
+            ("artist", "Amber Field"),
+            ("album", "Demo"),
+        ];
+        if !tagged(&root, "A/1.flac", "one-second.flac", &tags) {
+            eprintln!("no media tool here, the tags could not be written");
+            return;
+        }
+        let (state, library) = music_library(directory.path(), &root).await;
+        scan(&state, &library).await;
+        let song = song_of(&state, &library, "A/1.flac").await;
+        let owner = state
+            .database()
+            .create_user(
+                "Owner",
+                None,
+                &melyxar_core::user::Permissions::administrator(),
+            )
+            .await
+            .expect("account created");
+
+        crate::deletion::delete(&state, &owner, &[song.id], false)
+            .await
+            .expect("taken out");
+        assert!(root.join("A/1.flac").exists(), "the file stays on the disk");
+        assert!(works(&state, &library, WorkKind::Song).await.is_empty());
+        assert!(
+            works(&state, &library, WorkKind::Album).await.is_empty(),
+            "the album left empty is gone"
+        );
+        assert!(
+            works(&state, &library, WorkKind::Artist).await.is_empty(),
+            "so is the artist nobody is credited as"
+        );
+        assert_eq!(scan(&state, &library).await.added, 0, "it stays out");
+    }
+
+    #[tokio::test]
     async fn a_song_tagged_again_moves_to_its_new_album_and_the_old_one_goes() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let root = directory.path().join("Music");

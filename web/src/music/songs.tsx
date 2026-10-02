@@ -14,6 +14,7 @@ import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
+import { useGoneSongs } from "./marks";
 import { PlayingWave } from "./playing-wave";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
@@ -94,7 +95,7 @@ function Cover({ song }: { song: Song }) {
 /** What can be done with a song, on its line, as far as there is room. */
 function Actions({ song, inline, extra }: { song: Song; inline: number; extra?: MenuLine[] }) {
   const { t } = useSettings();
-  const { actions, dialog } = useSongActions([song]);
+  const { actions, dialog } = useSongActions([song], true);
   const carried = actions.slice(0, inline);
   return (
     <span className="music-song-actions">
@@ -114,6 +115,7 @@ function Actions({ song, inline, extra }: { song: Song; inline: number; extra?: 
       {dialog}
       <SongMenuButton
         songs={[song]}
+        deletable
         label={t("music.more_about", { title: song.title })}
         extra={extra}
         inline={carried.length}
@@ -149,9 +151,13 @@ export function SongList({
   const { song: playingNow, playing, toggle } = useMusic();
   const list = useRef<HTMLOListElement>(null);
   const inline = useActionsThatFit(list, showAlbum);
+  const gone = useGoneSongs();
   return (
     <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}`}>
       {songs.map((song, index) => {
+        if (gone.has(song.id)) {
+          return null;
+        }
         const artists =
           hideArtists !== undefined &&
           song.artists.map((artist) => artist.name).join(", ") === hideArtists

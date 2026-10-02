@@ -7,6 +7,9 @@
  * and goes back if the server refuses, so every heart and every list of
  * favourites showing that song agrees at once. Music's own, apart from the
  * marks of films (`../marks.tsx`), which it shares nothing with.
+ *
+ * The songs deleted are held here too, on a context of their own: the lists
+ * that leave them out do not have to be drawn again each time a heart moves.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -25,9 +28,17 @@ export interface MusicMarks {
       screen showing one to read it again. */
   playlistsAt: number;
   playlistsHaveMoved: () => void;
+  /** Said once songs are deleted, for every list showing them to drop them. */
+  setGone: (ids: string[]) => void;
 }
 
 const MarksContext = createContext<MusicMarks | null>(null);
+const GoneContext = createContext<ReadonlySet<string>>(new Set());
+
+/** The songs deleted since the page was opened. */
+export function useGoneSongs(): ReadonlySet<string> {
+  return useContext(GoneContext);
+}
 
 export function useMusicMarks(): MusicMarks {
   const marks = useContext(MarksContext);
@@ -41,6 +52,8 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   const [liked, setLikedHere] = useState<ReadonlySet<string>>(new Set());
   const [listenedAt, setListenedAt] = useState(0);
   const [playlistsAt, setPlaylistsAt] = useState(0);
+  const [gone, setGoneHere] = useState<ReadonlySet<string>>(new Set());
+  const setGone = useCallback((ids: string[]) => setGoneHere((was) => new Set([...was, ...ids])), []);
   const playlistsHaveMoved = useCallback(() => setPlaylistsAt(Date.now()), []);
 
   useEffect(() => {
@@ -75,8 +88,12 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const marks = useMemo<MusicMarks>(
-    () => ({ liked: (id) => liked.has(id), setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved }),
-    [liked, setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved],
+    () => ({ liked: (id) => liked.has(id), setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone }),
+    [liked, setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone],
   );
-  return <MarksContext.Provider value={marks}>{children}</MarksContext.Provider>;
+  return (
+    <MarksContext.Provider value={marks}>
+      <GoneContext.Provider value={gone}>{children}</GoneContext.Provider>
+    </MarksContext.Provider>
+  );
 }

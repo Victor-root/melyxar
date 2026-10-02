@@ -7,7 +7,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use melyxar_core::id::WorkId;
-use melyxar_core::library::RootAccess;
+use melyxar_core::library::{LibraryKind, RootAccess};
 use melyxar_core::user::User;
 use melyxar_database::libraries::Removed;
 
@@ -117,6 +117,15 @@ pub async fn delete(
 
     let database = state.database();
     let removed = database.delete_works(work_ids, !from_the_disk).await?;
+    // A song was the last of its album, or the last credit of an artist.
+    for library in database
+        .list_libraries()
+        .await?
+        .iter()
+        .filter(|library| library.kind == LibraryKind::Music && going.library_ids.contains(&library.id))
+    {
+        crate::music::scan::prune(state, library).await?;
+    }
     let sheets = crate::libraries::forget_the_thumbnails_of(state, &going.sources).await;
     let pictures = crate::images::forget_the_pictures(state, &removed.swept.picture_paths).await;
     crate::online_subtitles::forget_the_orphans(state).await;
