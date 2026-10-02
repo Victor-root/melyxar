@@ -3280,7 +3280,9 @@ mod tests {
             .filter(|task| {
                 !matches!(
                     task,
-                    crate::upkeep::UpkeepTask::Openings | crate::upkeep::UpkeepTask::Speech
+                    crate::upkeep::UpkeepTask::Openings
+                        | crate::upkeep::UpkeepTask::Speech
+                        | crate::upkeep::UpkeepTask::Translation
                 )
             })
             .collect()

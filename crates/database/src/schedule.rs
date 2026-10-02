@@ -141,7 +141,17 @@ mod tests {
         tasks.sort_unstable();
         assert_eq!(
             tasks,
-            ["identify", "key_frames", "openings", "ratings", "scan", "speech", "subtitles", "thumbnails"]
+            [
+                "identify",
+                "key_frames",
+                "openings",
+                "ratings",
+                "scan",
+                "speech",
+                "subtitles",
+                "thumbnails",
+                "translation"
+            ]
         );
         for row in &rows {
             assert!(row.runs_on_schedule, "{}", row.task);

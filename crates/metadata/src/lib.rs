@@ -20,6 +20,7 @@ pub mod opensubtitles;
 pub mod provider;
 pub mod speech_models;
 pub mod tmdb;
+pub mod translation_models;
 
 pub use provider::{
     Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,

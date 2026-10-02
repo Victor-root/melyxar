@@ -48,6 +48,8 @@ pub enum UpkeepTask {
     /// Listening to the sound of a personal video that has no subtitle, to
     /// write one from what is said.
     Speech,
+    /// Translating into French the subtitles that listening wrote in English.
+    Translation,
 }
 
 impl UpkeepTask {
@@ -70,12 +72,16 @@ impl UpkeepTask {
     /// Speech after all the others: it is by far the longest, it makes
     /// something new rather than reading what is there, and nothing else
     /// should wait behind a night of it.
-    pub const ALL: [Self; 5] = [
+    ///
+    /// Translation right after the listening it follows, so what a night of
+    /// listening wrote is translated by the same night.
+    pub const ALL: [Self; 6] = [
         Self::KeyFrames,
         Self::Subtitles,
         Self::Thumbnails,
         Self::Openings,
         Self::Speech,
+        Self::Translation,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -85,6 +91,7 @@ impl UpkeepTask {
             Self::Thumbnails => "thumbnails",
             Self::Openings => "openings",
             Self::Speech => "speech",
+            Self::Translation => "translation",
         }
     }
 
@@ -95,6 +102,7 @@ impl UpkeepTask {
             "thumbnails" => Some(Self::Thumbnails),
             "openings" => Some(Self::Openings),
             "speech" => Some(Self::Speech),
+            "translation" => Some(Self::Translation),
             _ => None,
         }
     }
@@ -107,6 +115,7 @@ impl UpkeepTask {
             Self::Thumbnails => JobKind::GenerateThumbnails,
             Self::Openings => JobKind::ListenForOpenings,
             Self::Speech => JobKind::GenerateSpeechSubtitles,
+            Self::Translation => JobKind::TranslateSubtitles,
         }
     }
 
@@ -130,7 +139,7 @@ impl UpkeepTask {
             // What somebody filmed has no subtitles from anywhere: a film or a
             // series already has its own from the same place everybody gets
             // theirs, and listening is the heaviest thing done to a file.
-            Self::Speech => {
+            Self::Speech | Self::Translation => {
                 library.kind == LibraryKind::HomeMedia && library.options.generate_subtitles
             }
         }
@@ -152,13 +161,16 @@ impl UpkeepTask {
     /// quick, and a film arriving without it is a film whose bar lands
     /// seconds early until the night.
     /// The heavy ones do when the library asked for its files to be read as
-    /// they arrive, and only the ones it wants at all.
+    /// they arrive, and only the ones it wants at all. The translation never
+    /// does: it waits for its task, so it is never done while somebody watches
+    /// and never competes with the listening it follows.
     pub fn follows_an_arrival_in(self, library: &Library) -> bool {
         match self {
             Self::KeyFrames => self.applies_to(library),
             Self::Subtitles | Self::Thumbnails | Self::Openings | Self::Speech => {
                 library.options.process_on_arrival && self.applies_to(library)
             }
+            Self::Translation => false,
         }
     }
 }
@@ -202,6 +214,11 @@ pub async fn what_is_waiting_for(
             Some(_) => database.count_awaiting_speech(library).await?,
             None => 0,
         },
+        // Nothing waits for a model that is not there, as for the listening.
+        UpkeepTask::Translation => match crate::translation::ready(state) {
+            Some(_) => database.count_awaiting_translation(library).await?,
+            None => 0,
+        },
     })
 }
 
@@ -242,6 +259,9 @@ pub async fn start(
                     }
                     UpkeepTask::Speech => {
                         crate::speech::listen_to_the_videos_of(&owned, &library, &handle).await
+                    }
+                    UpkeepTask::Translation => {
+                        crate::translation::translate_the_subtitles_of(&owned, &library, &handle).await
                     }
                 }
                 .map_err(|error| error.to_string())?;
@@ -825,6 +845,41 @@ mod tests {
     }
 
     #[test]
+    fn translating_is_for_the_libraries_that_listen_and_never_follows_an_arrival() {
+        let mut library = melyxar_core::library::Library {
+            id: LibraryId::new(),
+            name: "Home".to_string(),
+            kind: LibraryKind::HomeMedia,
+            metadata_language: "en".to_string(),
+            options: melyxar_core::library::LibraryOptions::default(),
+            roots: Vec::new(),
+        };
+        assert!(!UpkeepTask::Translation.applies_to(&library), "nothing is listened to, so nothing is translated");
+
+        library.options.generate_subtitles = true;
+        library.options.process_on_arrival = true;
+        assert!(UpkeepTask::Translation.applies_to(&library));
+        assert!(
+            UpkeepTask::Speech.follows_an_arrival_in(&library),
+            "listening may follow an arrival"
+        );
+        assert!(
+            !UpkeepTask::Translation.follows_an_arrival_in(&library),
+            "translating waits for its task, whatever the library asks of an arrival"
+        );
+
+        library.kind = LibraryKind::Movies;
+        assert!(!UpkeepTask::Translation.applies_to(&library));
+        assert_eq!(UpkeepTask::parse("translation"), Some(UpkeepTask::Translation));
+        assert_eq!(UpkeepTask::Translation.job_kind(), JobKind::TranslateSubtitles);
+        assert_eq!(
+            UpkeepTask::ALL.last(),
+            Some(&UpkeepTask::Translation),
+            "right after the listening it follows"
+        );
+    }
+
+    #[test]
     fn a_library_answers_for_each_task_whether_it_is_done_and_when() {
         let mut library = melyxar_core::library::Library {
             id: LibraryId::new(),
@@ -836,7 +891,7 @@ mod tests {
         };
         assert!(UpkeepTask::ALL
             .iter()
-            .filter(|task| **task != UpkeepTask::Speech)
+            .filter(|task| !matches!(task, UpkeepTask::Speech | UpkeepTask::Translation))
             .all(|task| task.applies_to(&library)));
         assert!(
             !UpkeepTask::Speech.applies_to(&library),

@@ -450,7 +450,9 @@ export type TaskName =
   | "key_frames"
   | "subtitles"
   | "thumbnails"
-  | "openings";
+  | "openings"
+  | "speech"
+  | "translation";
 
 /** Where one scheduled task stands. */
 export interface ScheduledTask {
@@ -579,8 +581,16 @@ export interface SpeechModel {
     model in use, and every model offered. */
 export type SpeechEffort = "quiet" | "balanced" | "maximum";
 
+/** The model that translates what listening wrote into French. */
+export interface TranslationModel {
+  bytes: number;
+  downloaded: boolean;
+  downloading: boolean;
+}
+
 export interface SpeechStatus {
   tool_found: boolean;
+  translation: TranslationModel;
   chosen: string | null;
   /** How much of the processor listening takes. */
   effort: SpeechEffort;
@@ -2043,6 +2053,9 @@ export const api = {
   speech: (signal?: AbortSignal) => get<SpeechStatus>("/api/v1/system/speech", signal),
   chooseSpeechModel: (model: string | null) =>
     put<SpeechStatus>("/api/v1/system/speech", { model }),
+  downloadTranslationModel: () =>
+    post<{ job_id: string }>("/api/v1/system/speech/translation/download"),
+  forgetTranslationModel: () => remove<SpeechStatus>("/api/v1/system/speech/translation"),
   setSpeechEffort: (effort: SpeechEffort) =>
     put<SpeechStatus>("/api/v1/system/speech/effort", { effort }),
   downloadSpeechModel: (id: string) =>

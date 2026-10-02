@@ -52,6 +52,28 @@ macro_rules! awaiting_speech {
     };
 }
 
+/// The files of one library whose subtitle written by listening is in English
+/// and has not been translated: a video that was listened to and gave words.
+///
+/// A macro for the same reason as the one above: the list and the count ask
+/// the same question.
+macro_rules! awaiting_translation {
+    () => {
+        "FROM media_source_speech
+         JOIN media_sources ON media_sources.id = media_source_speech.source_id
+         JOIN library_roots ON library_roots.id = media_sources.root_id
+         JOIN tracks ON tracks.source_id = media_sources.id
+                    AND tracks.kind = 'subtitle'
+                    AND tracks.is_generated = 1
+                    AND tracks.language = 'eng'
+                    AND tracks.downloaded_file IS NOT NULL
+         WHERE library_roots.library_id = ?
+           AND media_sources.missing_since IS NULL
+           AND media_source_speech.translated = 0
+           AND media_source_speech.lines > 0"
+    };
+}
+
 impl Database {
     /// Keeps where the picture of one file can be started.
     ///
@@ -566,6 +588,49 @@ impl Database {
         .fetch_one(self.reader())
         .await?;
         Ok(row.0)
+    }
+
+    /// The English subtitles written by listening that nobody has translated
+    /// yet, oldest first, a few at a time: the file each is kept in, with the
+    /// video it belongs to.
+    pub async fn subtitles_awaiting_translation(
+        &self,
+        library_id: LibraryId,
+        limit: i64,
+    ) -> Result<Vec<(MediaSourceId, String)>> {
+        let rows = sqlx::query(concat!(
+            "SELECT media_sources.id, tracks.downloaded_file ",
+            awaiting_translation!(),
+            " ORDER BY media_sources.added_at LIMIT ?"
+        ))
+        .bind(library_id.to_db_string())
+        .bind(limit)
+        .fetch_all(self.reader())
+        .await?;
+        rows.into_iter()
+            .map(|row| Ok((parse_id(&row.try_get::<String, _>("id")?)?, row.try_get("downloaded_file")?)))
+            .collect()
+    }
+
+    /// How many videos of one library are waiting to have their subtitle
+    /// translated.
+    pub async fn count_awaiting_translation(&self, library_id: LibraryId) -> Result<i64> {
+        let row: (i64,) =
+            sqlx::query_as(concat!("SELECT count(DISTINCT media_sources.id) ", awaiting_translation!()))
+                .bind(library_id.to_db_string())
+                .fetch_one(self.reader())
+                .await?;
+        Ok(row.0)
+    }
+
+    /// Keeps that the subtitle of one video has been translated, or that there
+    /// is nothing to translate in it: either way it is not asked again.
+    pub async fn store_translation(&self, source_id: MediaSourceId) -> Result<()> {
+        sqlx::query("UPDATE media_source_speech SET translated = 1 WHERE source_id = ?")
+            .bind(source_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
     }
 }
 
@@ -1767,6 +1832,73 @@ mod tests {
         // A file off the disk is neither waiting nor done.
         database.mark_source_missing(silent).await.expect("marked");
         assert_eq!(database.count_with_speech(library_id).await.expect("read"), 1);
+    }
+
+    /// A subtitle as listening keeps it: generated, in the language it heard,
+    /// in a file of its own.
+    fn heard_subtitle(source_id: MediaSourceId, language: &str, file: &str) -> Track {
+        Track {
+            language: Some(language.to_string()),
+            kind: TrackKind::Subtitle(SubtitleDetails {
+                is_generated: true,
+                is_external: true,
+                downloaded_file: Some(file.to_string()),
+                ..match subtitle_of(source_id, 0, "subrip", SubtitleLayout::Text, false).kind {
+                    TrackKind::Subtitle(details) => details,
+                    _ => unreachable!("a subtitle"),
+                }
+            }),
+            ..subtitle_of(source_id, 0, "subrip", SubtitleLayout::Text, false)
+        }
+    }
+
+    #[tokio::test]
+    async fn only_an_english_subtitle_that_listening_wrote_waits_to_be_translated() {
+        let (database, library_id, root_id) = library().await;
+        let mut sources = Vec::new();
+        for name in ["English.mkv", "Spanish.mkv", "Silent.mkv", "Written.mkv", "Gone.mkv"] {
+            let source = a_film_with_subtitles(&database, library_id, root_id, name, |id| {
+                vec![video_track(id), a_sound_track(id)]
+            })
+            .await;
+            sources.push(source);
+        }
+        let [english, spanish, silent, written, gone] = sources[..] else { unreachable!() };
+
+        database.store_speech(english, 12).await.expect("kept");
+        database.add_downloaded_subtitle(english, &heard_subtitle(english, "eng", "english.srt")).await.expect("added");
+        database.store_speech(spanish, 9).await.expect("kept");
+        database.add_downloaded_subtitle(spanish, &heard_subtitle(spanish, "spa", "spanish.srt")).await.expect("added");
+        database.store_speech(silent, 0).await.expect("kept");
+        // An English subtitle somebody wrote, not one that was heard.
+        database
+            .add_downloaded_subtitle(
+                written,
+                &Track { language: Some("eng".to_string()), ..subtitle_of(written, 0, "subrip", SubtitleLayout::Text, false) },
+            )
+            .await
+            .expect("added");
+        database.store_speech(gone, 5).await.expect("kept");
+        database.add_downloaded_subtitle(gone, &heard_subtitle(gone, "eng", "gone.srt")).await.expect("added");
+        database.mark_source_missing(gone).await.expect("marked");
+
+        assert_eq!(
+            database.subtitles_awaiting_translation(library_id, 10).await.expect("read"),
+            vec![(english, "english.srt".to_string())]
+        );
+        assert_eq!(database.count_awaiting_translation(library_id).await.expect("read"), 1);
+
+        database.store_translation(english).await.expect("kept");
+        assert_eq!(database.count_awaiting_translation(library_id).await.expect("read"), 0);
+        assert!(database.subtitles_awaiting_translation(library_id, 10).await.expect("read").is_empty());
+
+        // Listening to the same file again leaves the translation as it was.
+        database.store_speech(english, 14).await.expect("kept");
+        assert_eq!(
+            database.count_awaiting_translation(library_id).await.expect("read"),
+            0,
+            "a translation that was made is not undone by listening again"
+        );
     }
 
 }

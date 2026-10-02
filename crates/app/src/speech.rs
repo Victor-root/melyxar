@@ -404,6 +404,34 @@ pub(crate) async fn listen_to_the_videos_of(
     Ok(listened)
 }
 
+/// The track of a subtitle that nobody wrote, kept in a file of the server's
+/// own, so the player offers it like one downloaded and says where it came from.
+pub(crate) fn generated_track(
+    id: TrackId,
+    source_id: MediaSourceId,
+    language: Option<String>,
+    file: &str,
+) -> Track {
+    Track {
+        id,
+        source_id,
+        stream_index: 0,
+        language,
+        title: None,
+        is_default: false,
+        is_forced: false,
+        kind: TrackKind::Subtitle(SubtitleDetails {
+            codec: "subrip".to_string(),
+            layout: SubtitleLayout::Text,
+            is_hearing_impaired: false,
+            is_generated: true,
+            is_external: true,
+            external_relative_path: None,
+            downloaded_file: Some(file.to_string()),
+        }),
+    }
+}
+
 /// Listens to one video and keeps what it hears as one more subtitle of it.
 /// Answers how many lines there are, nought when nothing was said.
 async fn listen_to_one(
@@ -441,24 +469,7 @@ async fn listen_to_one(
     tokio::fs::create_dir_all(&folder).await?;
     tokio::fs::write(folder.join(&file), heard.subrip.as_bytes()).await?;
 
-    let track = Track {
-        id: track_id,
-        source_id,
-        stream_index: 0,
-        language: heard.language.as_deref().map(normalise_language),
-        title: None,
-        is_default: false,
-        is_forced: false,
-        kind: TrackKind::Subtitle(SubtitleDetails {
-            codec: "subrip".to_string(),
-            layout: SubtitleLayout::Text,
-            is_hearing_impaired: false,
-            is_generated: true,
-            is_external: true,
-            external_relative_path: None,
-            downloaded_file: Some(file.clone()),
-        }),
-    };
+    let track = generated_track(track_id, source_id, heard.language.as_deref().map(normalise_language), &file);
     let kept = async {
         database.add_downloaded_subtitle(source_id, &track).await?;
         database.store_speech(source_id, heard.lines).await
@@ -473,10 +484,10 @@ async fn listen_to_one(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    async fn a_server() -> (tempfile::TempDir, AppState) {
+    pub(crate) async fn a_server() -> (tempfile::TempDir, AppState) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let config = melyxar_config::Config {
             directories: melyxar_config::Directories {

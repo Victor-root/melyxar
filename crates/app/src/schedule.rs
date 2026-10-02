@@ -41,7 +41,7 @@ pub enum ScheduledTask {
 impl ScheduledTask {
     /// Every task, in the order they are shown and in the order several due
     /// together are run.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Scan,
         Self::Identify,
         Self::Ratings,
@@ -50,6 +50,7 @@ impl ScheduledTask {
         Self::Reading(UpkeepTask::Thumbnails),
         Self::Reading(UpkeepTask::Openings),
         Self::Reading(UpkeepTask::Speech),
+        Self::Reading(UpkeepTask::Translation),
     ];
 
     pub fn as_str(self) -> &'static str {
