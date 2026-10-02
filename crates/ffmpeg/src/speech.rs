@@ -157,13 +157,13 @@ pub fn recording_arguments(video: &Path, recording: &Path) -> Vec<OsString> {
 }
 
 /// What the speech tool is told: the model, the recording, the language left
-/// for it to find, and the report it is to write, with one word to each entry
-/// and the time of each: the lines are made from those, not by the tool.
+/// for it to find, and the report it is to write: the lines are made from the
+/// blocks of that report, not by the tool.
 pub fn listening_arguments(model: &Path, recording: &Path, written: &Path, threads: usize) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = vec!["-m".into(), model.as_os_str().to_os_string()];
     arguments.extend(["-f".into(), recording.as_os_str().to_os_string()]);
     arguments.extend(["-l".into(), "auto".into(), "-t".into(), threads.max(1).to_string().into()]);
-    arguments.extend(["-np".into(), "-ojf".into(), "-ml".into(), "1".into(), "-sow".into()]);
+    arguments.extend(["-np".into(), "-oj".into()]);
     arguments.extend(["-of".into(), written.as_os_str().to_os_string()]);
     arguments
 }
@@ -211,9 +211,9 @@ mod tests {
         let joined = arguments.join(" ");
         assert!(joined.contains("-m /data/model.bin"));
         assert!(joined.contains("-l auto"));
-        assert!(joined.contains("-ojf"), "the report carries what was heard");
-        assert!(joined.contains("-ml 1 -sow"), "one word to each entry, with its time");
-        assert!(!joined.contains("-osrt"), "the lines are made from the words");
+        assert!(joined.contains("-oj"), "the report carries what was heard");
+        assert!(!joined.contains("-osrt"), "the lines are made from the report");
+        assert!(!joined.contains("-ml"), "the times of single words are not trusted");
         assert!(joined.contains("-of /tmp/heard"));
         assert!(joined.contains("-t 1"), "at least one thread, whatever was asked");
     }
