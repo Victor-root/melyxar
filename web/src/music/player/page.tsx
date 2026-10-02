@@ -95,25 +95,22 @@ export function MusicNowPlaying() {
           </div>
         </section>
 
+        <nav className="music-now-tabs" aria-label={t("music.queue")}>
+          {(["queue", "lyrics"] as const).map((one) => (
+            <button
+              key={one}
+              type="button"
+              className={`music-tab${side === one ? " music-tab-on" : ""}`}
+              aria-current={side === one ? "true" : undefined}
+              onClick={() => setSide(one)}
+            >
+              {t(one === "queue" ? "music.queue" : "music.lyrics")}
+            </button>
+          ))}
+        </nav>
+
         <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
-          <nav className="music-now-tabs">
-            {(["queue", "lyrics"] as const).map((one) => (
-              <button
-                key={one}
-                type="button"
-                className={`music-tab${side === one ? " music-tab-on" : ""}`}
-                aria-current={side === one ? "true" : undefined}
-                onClick={() => setSide(one)}
-              >
-                {t(one === "queue" ? "music.queue" : "music.lyrics")}
-              </button>
-            ))}
-          </nav>
-          {side === "lyrics" ? (
-            <LyricsPanel song={song.id} />
-          ) : (
-          <QueuePanel />
-          )}
+          {side === "lyrics" ? <LyricsPanel song={song.id} /> : <QueuePanel />}
         </section>
       </div>
 
