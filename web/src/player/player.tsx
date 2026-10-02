@@ -343,16 +343,19 @@ function Film({
             </p>
           </div>
         )}
+      </div>
 
-        {/* The words take as long as reading the film takes, and until they
-            are there the picture plays with nothing on it, which is exactly
-            what a subtitle that does not work looks like. */}
-        {words && !failed && (
+      {/* The words take as long as reading the film takes, and until they
+          are there the picture plays with nothing on it, which is exactly
+          what a subtitle that does not work looks like. Said at the top, out
+          of the way of the picture it is playing over. */}
+      {words && !failed && (
+        <div className="player-notices player-notices-top">
           <p className="player-notice player-notice-faint">
             {t(words === "coming" ? "player.words_coming" : "player.words_refused")}
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Beside the controls and not inside them: they fade out when
           nobody touches anything, and this is wanted exactly then. */}
