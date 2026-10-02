@@ -1484,6 +1484,12 @@ export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await exchange(path, "application/json", undefined, undefined, signal)).json() as Promise<T>;
 }
 
+/** Reads one answer of the server as it came, for what is neither JSON nor
+ *  text. */
+export function getRaw(path: string, accept: string, signal?: AbortSignal): Promise<Response> {
+  return exchange(path, accept, undefined, undefined, signal);
+}
+
 /** Turns what a screen ticked into the query the server reads. */
 function journalQuery(query: JournalQuery): string {
   const parts = new URLSearchParams();

@@ -168,6 +168,8 @@ pub struct MusicPreferences {
     /// Whether the tag manager shows what is about to change before it
     /// writes it.
     pub tag_preview: bool,
+    /// Whether a wave of the sound plays behind the bar of the player.
+    pub spectrum: bool,
     /// How far the buttons that skip back and on move within a song.
     pub skip_back_seconds: u32,
     pub skip_on_seconds: u32,
@@ -183,6 +185,7 @@ impl Default for MusicPreferences {
             volume_mode: VolumeMode::default(),
             crossfade_seconds: 0,
             tag_preview: true,
+            spectrum: true,
             skip_back_seconds: 10,
             skip_on_seconds: 10,
             hidden_tabs: HiddenTabs::default(),

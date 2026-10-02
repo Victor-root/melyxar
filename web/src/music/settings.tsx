@@ -86,6 +86,13 @@ export function MyMusic() {
             onChange={(resume_queue) => change({ resume_queue })}
           />
         </Setting>
+        <Setting label={t("settings.music_spectrum")} why={t("settings.music_spectrum_why")}>
+          <Toggle
+            label={t("settings.music_spectrum")}
+            checked={preferences.spectrum}
+            onChange={(spectrum) => change({ spectrum })}
+          />
+        </Setting>
       </Panel>
       <Panel icon={PlaybackIcon} title={t("settings.music_skips")} lead={t("settings.music_skips_why")}>
         <Setting label={t("settings.music_skip_on")}>
