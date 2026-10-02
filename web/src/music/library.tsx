@@ -27,7 +27,7 @@ import { useMusic } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
-import { PlayTools } from "./play-tools";
+import { LibraryTools } from "./library-tools";
 import { TabsBar } from "./tabs-bar";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
@@ -43,6 +43,10 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const shown = shownTabs(preferences.hidden_tabs);
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
+  const tools = <LibraryTools library={library} />;
+  /* The tabs with a bar of their own carry the tools in it; the others keep
+     the way to put files in beside the tabs. */
+  const barred = tab === "albums" || tab === "album_artists" || tab === "artists" || tab === "songs";
 
   return (
     <main className="page music-page">
@@ -53,15 +57,15 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
         <div className="browse-bar">
           <TabsBar tabs={shown} open={tab} onOpen={open} />
-          <UploadButton library={library} bare className="browse-piece browse-alone" />
+          {!barred && <UploadButton library={library} bare className="browse-piece browse-alone" />}
         </div>
       </div>
 
       {tab === "for_you" && <ForYouTab library={library.id} />}
-      {tab === "albums" && <AlbumsTab library={library.id} />}
-      {tab === "album_artists" && <ArtistsTab library={library.id} albumArtistsOnly />}
-      {tab === "artists" && <ArtistsTab library={library.id} albumArtistsOnly={false} />}
-      {tab === "songs" && <SongsTab library={library.id} />}
+      {tab === "albums" && <AlbumsTab library={library.id} tools={tools} />}
+      {tab === "album_artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly />}
+      {tab === "artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly={false} />}
+      {tab === "songs" && <SongsTab library={library.id} tools={tools} />}
       {tab === "playlists" && <PlaylistsTab />}
       {tab === "favourites" && <FavouritesTab library={library.id} />}
       {tab === "genres" && <GenresTab library={library.id} />}
@@ -69,7 +73,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   );
 }
 
-function AlbumsTab({ library }: { library: string }) {
+function AlbumsTab({ library, tools }: { library: string; tools: ReactNode }) {
   const { t } = useSettings();
   const version = useLibraryVersion(library);
   const [params, setParams] = useSearchParams();
@@ -122,8 +126,8 @@ function AlbumsTab({ library }: { library: string }) {
               </button>
             </span>
           )}
+          {tools}
         </div>
-        <PlayTools library={library} />
         {albums.total !== null && (
           <span className="count">{howMany(albums.total, "music.albums_count", t)}</span>
         )}
@@ -149,7 +153,7 @@ function AlbumsTab({ library }: { library: string }) {
   );
 }
 
-function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtistsOnly: boolean }) {
+function ArtistsTab({ library, tools, albumArtistsOnly }: { library: string; tools: ReactNode; albumArtistsOnly: boolean }) {
   const { t } = useSettings();
   const version = useLibraryVersion(library);
   const artists = usePaged(
@@ -161,7 +165,7 @@ function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtis
   return (
     <>
       <div className="browse-bar music-bar">
-        <PlayTools library={library} />
+        <div className="browse-piece">{tools}</div>
         {artists.total !== null && (
           <span className="count">{howMany(artists.total, "music.artists_count", t)}</span>
         )}
@@ -187,7 +191,7 @@ function ArtistsTab({ library, albumArtistsOnly }: { library: string; albumArtis
   );
 }
 
-function SongsTab({ library }: { library: string }) {
+function SongsTab({ library, tools }: { library: string; tools: ReactNode }) {
   const { t } = useSettings();
   const version = useLibraryVersion(library);
   const [params, setParams] = useSearchParams();
@@ -221,8 +225,8 @@ function SongsTab({ library }: { library: string }) {
             />
             <Direction descending={descending} onFlip={() => choose("descending", descending ? null : "true")} />
           </span>
+          {tools}
         </div>
-        <PlayTools library={library} />
         {songs.total !== null && (
           <span className="count">{howMany(songs.total, "music.songs_count", t)}</span>
         )}

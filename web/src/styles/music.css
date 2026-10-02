@@ -74,9 +74,16 @@
   color: var(--accent-bright);
 }
 
-/* Play and shuffle: a piece of their own beside the tabs, pressed like them. */
-.browse-head .browse-piece.music-play-tools {
+/* Putting files in, playing all and shuffling: the last field of the piece the
+   sort is in, its buttons pressed like the tabs. Alone in a piece, it has no
+   field before it to be set apart from. */
+.music-library-tools {
   flex: none;
+  gap: 2px;
+}
+
+.music-library-tools:first-child {
+  padding-left: 0;
 }
 
 .music-play-tool {

@@ -1,10 +1,13 @@
 /*
- * Play and shuffle for a whole library, in the browse bar at the head of it.
- * The songs are asked for when pressed: most visits to a library never play
- * all of it.
+ * What is done with a library as a whole, in the piece of the browse bar the
+ * sort is in: putting files into it, for an account that may, then playing
+ * all of it and shuffling it. The songs are asked for when pressed: most
+ * visits to a library never play all of it.
  */
 
 import { useState } from "react";
+import type { Library } from "../api";
+import { UploadButton } from "../components/upload-button";
 import { PlayIcon } from "../icons";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -12,7 +15,7 @@ import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { shuffleOffset } from "./queueing";
 
-export function PlayTools({ library }: { library: string }) {
+export function LibraryTools({ library }: { library: Library }) {
   const { t } = useSettings();
   const player = useMusic();
   const [starting, setStarting] = useState(false);
@@ -22,10 +25,10 @@ export function PlayTools({ library }: { library: string }) {
     try {
       let offset = 0;
       if (shuffle) {
-        const held = await music.songs(library, "title", false, 0, 1);
+        const held = await music.songs(library.id, "title", false, 0, 1);
         offset = shuffleOffset(held.total, Math.random());
       }
-      const queue = await music.queue(library, offset);
+      const queue = await music.queue(library.id, offset);
       if (queue.items.length > 0) {
         player.play(queue.items, shuffle ? Math.floor(Math.random() * queue.items.length) : 0, shuffle);
       }
@@ -37,7 +40,8 @@ export function PlayTools({ library }: { library: string }) {
   };
 
   return (
-    <div className="browse-piece music-play-tools" role="group" aria-label={t("music.play_tools")}>
+    <span className="browse-field music-library-tools" role="group" aria-label={t("music.play_tools")}>
+      <UploadButton library={library} bare className="music-tab music-play-tool" />
       <button
         type="button"
         className="music-tab music-play-tool"
@@ -58,6 +62,6 @@ export function PlayTools({ library }: { library: string }) {
       >
         <ShuffleIcon size={18} />
       </button>
-    </div>
+    </span>
   );
 }
