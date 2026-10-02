@@ -585,26 +585,16 @@
   white-space: nowrap;
 }
 
+/* A steady dot, not a blinking one. The bar is glass blurred over the page
+   that scrolls under it, and anything animating inside it makes the browser
+   blur again on every frame, which a laptop's integrated graphics pay for in
+   lost frames while scrolling, for as long as work is running. The figure
+   beside it, which moves on its own, is what says it is going. */
 .header-busy-mark {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   background: var(--accent-bright);
-  animation: header-busy-pulse 1.4s var(--ease) infinite;
-}
-
-@keyframes header-busy-pulse {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-/* A viewer who asked for less movement gets a steady dot rather than none:
-   the point is that something is happening, not that it blinks. */
-@media (prefers-reduced-motion: reduce) {
-  .header-busy-mark {
-    animation: none;
-  }
 }
 
 /* The one piece at the right hand end, holding what the server is doing,
