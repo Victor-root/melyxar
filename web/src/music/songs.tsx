@@ -13,8 +13,8 @@ import { PlayIcon } from "../icons";
 import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
-import { Equalizer } from "./equalizer";
 import { Heart } from "./heart";
+import { PlayingWave } from "./playing-wave";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
 import { useMusic } from "./player/player";
@@ -180,7 +180,7 @@ export function SongList({
               )}
             </span>
             <span className="music-song-number">
-              {current ? <Equalizer playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
+              {current ? <PlayingWave playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
             </span>
             <Cover song={song} />
             <span className="music-song-words">

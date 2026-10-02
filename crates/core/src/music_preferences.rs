@@ -188,7 +188,7 @@ impl Default for MusicPreferences {
             crossfade_seconds: 0,
             tag_preview: true,
             spectrum: true,
-            spectrum_amplitude: MOST_SPECTRUM_AMPLITUDE,
+            spectrum_amplitude: USUAL_SPECTRUM_AMPLITUDE,
             skip_back_seconds: 10,
             skip_on_seconds: 10,
             hidden_tabs: HiddenTabs::default(),
@@ -215,9 +215,11 @@ pub struct MusicLibraryOptions {
     pub artist_photos_online: bool,
 }
 
-/// The highest the wave behind the player can be asked to rise, which is also
-/// how high it rises until it is turned down.
+/// The highest the wave behind the player can be asked to rise.
 pub const MOST_SPECTRUM_AMPLITUDE: u32 = 100;
+
+/// How high it rises until it is turned up or down.
+pub const USUAL_SPECTRUM_AMPLITUDE: u32 = 75;
 
 /// The longest a crossfade can be asked to last, in seconds.
 pub const LONGEST_CROSSFADE_SECONDS: u32 = 12;
