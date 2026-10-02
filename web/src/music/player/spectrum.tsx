@@ -57,7 +57,7 @@ export function Spectrum({ playing }: { playing: boolean }) {
       return;
     }
     const levels = kept.current;
-    const color = getComputedStyle(element).color;
+    let color = getComputedStyle(element).color;
     let targets = new Array<number>(BANDS).fill(0);
     let width = 0;
     let height = 0;
@@ -124,10 +124,17 @@ export function Spectrum({ playing }: { playing: boolean }) {
       draw();
     });
     watcher.observe(element);
+    // The accent and the theme are set on the root, and the wave follows them
+    // as they change rather than as it is next started.
+    const colours = new MutationObserver(() => {
+      color = getComputedStyle(element).color;
+    });
+    colours.observe(document.documentElement, { attributeFilter: ["style", "data-theme"] });
     document.addEventListener("visibilitychange", start);
     start();
     return () => {
       watcher.disconnect();
+      colours.disconnect();
       document.removeEventListener("visibilitychange", start);
       cancelAnimationFrame(frame);
     };
