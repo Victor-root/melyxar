@@ -10,7 +10,7 @@ const WIDTH = 22;
 const HEIGHT = 16;
 
 /** How high the wave stands at each point along one width of it. */
-const LEVELS = [6, 0, 5, 1, 7];
+const LEVELS = [11, 0, 9, 1, 13];
 
 /**
  * A wave laid over three widths, from one before the picture to one after
