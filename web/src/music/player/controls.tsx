@@ -22,6 +22,7 @@ import { ICON, SoundControl } from "../../player/sound";
 import { useSettings } from "../../settings";
 import { useMusicMarks } from "../marks";
 import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
+import { useNowPlayingPage } from "./opening";
 import { useMusicTime } from "./player";
 import type { Music } from "./player";
 import { canStepBack, canStepOn } from "./queue";
@@ -165,13 +166,14 @@ export function Ways({ music }: { music: Music }) {
   );
 }
 
-export function QueueButton({ music, lit = false }: { music: Music; lit?: boolean }) {
+export function QueueButton({ lit = false }: { lit?: boolean }) {
   const { t } = useSettings();
+  const nowPlaying = useNowPlayingPage();
   return (
     <button
       type="button"
       className={`player-button${lit ? " player-button-open" : ""}`}
-      onClick={() => music.setOpen(true)}
+      onClick={nowPlaying.open}
       aria-label={t("music.queue")}
     >
       <QueueIcon size={ICON} />

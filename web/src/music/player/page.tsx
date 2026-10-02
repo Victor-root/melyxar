@@ -16,33 +16,41 @@ import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
+import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
 
 export function MusicNowPlaying() {
   const { t } = useSettings();
   const music = useMusic();
   const film = useIsAFilmOnScreen();
-  const { song, open, setOpen } = music;
-  const shown = open && song !== null && !film;
+  const { song } = music;
+  const nowPlaying = useNowPlayingPage();
+  const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
 
+  const { marked, close, forget } = nowPlaying;
   useEffect(() => {
     if (!shown) {
       return;
     }
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        close();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [shown, setOpen]);
+  }, [shown, close]);
+
+  useEffect(() => {
+    if (marked && song === null) {
+      forget();
+    }
+  }, [marked, song, forget]);
 
   if (!shown || !song) {
     return null;
   }
-  const close = () => setOpen(false);
   const { queue } = music;
 
   return (

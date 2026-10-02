@@ -53,8 +53,6 @@ export interface Music {
   /** Waiting for the sound to arrive. */
   waiting: boolean;
   loudness: Loudness;
-  /** Whether the page of what is playing is open over the interface. */
-  open: boolean;
   /** Plays these songs from the one at `index`, replacing the queue. */
   play: (songs: Song[], index: number, shuffle?: boolean) => void;
   toggle: () => void;
@@ -71,7 +69,6 @@ export interface Music {
   playNext: (songs: Song[]) => void;
   playLast: (songs: Song[]) => void;
   remove: (at: number) => void;
-  setOpen: (open: boolean) => void;
   /** What this account chose for its music, the defaults until the server
       has said. */
   preferences: MusicPreferences;
@@ -189,7 +186,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [loudness, setLoudness] = useState<Loudness>(storedLoudness);
-  const [open, setOpen] = useState(false);
   const song = current(queue);
 
   /* A song converted on its way cannot be moved about in: a move is asked
@@ -567,7 +563,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     letGoOfTheSound();
     setPlaying(false);
     setWaiting(false);
-    setOpen(false);
     setQueue(EMPTY);
     time.set({ position: 0, length: 0 });
   }, [letGoOfTheSound]);
@@ -756,8 +751,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       playing,
       waiting,
       loudness,
-      open,
-      setOpen,
       play: sent("play", commands.play),
       toggle: sentBare("toggle", commands.toggle),
       stop: sentBare("stop", commands.stop),
@@ -775,7 +768,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [queue, song, playing, waiting, loudness, open, commands, run, preferences, setPreferences]);
+  }, [queue, song, playing, waiting, loudness, commands, run, preferences, setPreferences]);
 
   useMediaSession(music);
 
