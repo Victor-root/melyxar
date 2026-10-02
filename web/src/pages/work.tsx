@@ -64,6 +64,7 @@ import { useShownPicture } from "../components/picture";
 import { asClock } from "../clock";
 import { trackName } from "../player/describe";
 import { Player } from "../player/player";
+import { chaptersOf } from "../player/invented-chapters";
 import { cutOut } from "../player/thumbnail";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
@@ -737,20 +738,22 @@ function Credits({ work }: { work: Work }) {
 /**
  * The places the film changes scene, as a row of stills.
  *
- * Only the chapters the file names itself, each shown with the little picture
- * of its first moment, cut out of the sheets the bar of the player already
- * uses. A press starts the film there.
+ * The chapters the file names itself, or moments at an even distance when it
+ * names none, each shown with the little picture of its moment, cut out of
+ * the sheets the bar of the player already uses. A press starts the film
+ * there.
  */
 function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) => void }) {
   const { t } = useSettings();
-  if (plan.chapters.length === 0) {
+  const chapters = chaptersOf(plan);
+  if (chapters.length === 0) {
     return null;
   }
   return (
     <section className="section">
       <RowHead mark={<FilmIcon size={24} />} title={t("work.chapters_row")} />
       <Row>
-        {plan.chapters.map((chapter, index) => {
+        {chapters.map((chapter, index) => {
           const name = chapter.title ?? t("work.chapter", { number: index + 1 });
           const still = plan.thumbnails ? cutOut(plan.thumbnails, chapter.at_second) : null;
           return (
