@@ -972,6 +972,7 @@ mod tests {
                 subtitles: melyxar_playback::decision::SubtitleDelivery::None,
                 audio_stream_index: None,
                 subtitle_stream_index: None,
+                subtitle_track_id: None,
                 video_stream_index: None,
                 scale_to_height: None,
                 bitrate_ceiling: None,

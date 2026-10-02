@@ -2473,6 +2473,7 @@ mod tests {
             subtitles: SubtitleDelivery::None,
             audio_stream_index: None,
             subtitle_stream_index: None,
+            subtitle_track_id: None,
             video_stream_index: Some(0),
             scale_to_height: height_asked,
             bitrate_ceiling: rate,

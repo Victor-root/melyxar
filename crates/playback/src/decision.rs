@@ -9,6 +9,7 @@
 //! transcoding?" becomes a debugging session, so each one is a structured
 //! value a client can translate rather than a sentence baked into the server.
 
+use melyxar_core::id::TrackId;
 use melyxar_core::media::{
     AudioDetails, HdrFormat, MediaSource, SubtitleDetails, Track, TrackKind, VideoDetails,
 };
@@ -163,6 +164,9 @@ pub struct PlaybackDecision {
     /// Stream index of the chosen audio track inside the file.
     pub audio_stream_index: Option<i32>,
     pub subtitle_stream_index: Option<i32>,
+    /// The chosen subtitle track itself: subtitles kept in files of their own
+    /// all sit at stream zero, so the number alone cannot say which one.
+    pub subtitle_track_id: Option<TrackId>,
     pub video_stream_index: Option<i32>,
     /// Height to scale down to, when the client asked for a smaller picture.
     pub scale_to_height: Option<i32>,
@@ -324,6 +328,7 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         subtitles: delivery,
         audio_stream_index: audio.map(|(track, _)| track.stream_index),
         subtitle_stream_index: subtitle.map(|(track, _)| track.stream_index),
+        subtitle_track_id: subtitle.map(|(track, _)| track.id),
         video_stream_index: video.map(|(track, _)| track.stream_index),
         scale_to_height,
         bitrate_ceiling,
@@ -1312,6 +1317,35 @@ mod tests {
             !decision.reasons.contains(&Reason::EverythingSupported),
             "everything was not supported: the subtitle had to be sent apart"
         );
+    }
+
+    #[test]
+    fn the_subtitle_asked_for_is_named_even_when_others_share_its_stream_number() {
+        // Subtitles kept in files of their own are all stream zero of their
+        // file: the translation beside the English one is told apart by its
+        // track, never by its number.
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        let source = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 1080, None),
+                audio_track(1, "aac", 2, true),
+                subtitle_track(0, "subrip", SubtitleLayout::Text),
+                subtitle_track(0, "subrip", SubtitleLayout::Text),
+            ],
+        );
+        let second = source.tracks[3].clone();
+
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                subtitle_track: Some(&second),
+                ..request(&profile)
+            },
+        );
+
+        assert_eq!(decision.subtitle_track_id, Some(second.id));
     }
 
     #[test]
