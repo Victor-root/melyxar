@@ -1120,6 +1120,30 @@
   }
 }
 
+/* Closed, it leaves the way it came: the content sinks a few points as it
+   fades, then the page. It is already on its way out, so it takes no clicks. */
+.music-now-leaving {
+  animation: music-now-fade-out 180ms var(--ease) forwards;
+  pointer-events: none;
+}
+
+.music-now-leaving .music-now-body {
+  animation: music-now-sink 180ms var(--ease) forwards;
+}
+
+@keyframes music-now-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes music-now-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .music-now,
   .music-now-body {

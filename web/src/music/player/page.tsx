@@ -17,10 +17,14 @@ import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
+import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
 import { QueuePanel } from "./queue-panel";
 import { BehindThePlayer } from "./spectrum";
+
+/** How long the page takes to leave, which is what its way out lasts. */
+const LEAVE_MS = 180;
 
 export function MusicNowPlaying() {
   const { t } = useSettings();
@@ -31,6 +35,8 @@ export function MusicNowPlaying() {
   const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
   const onAPhone = useMediaQuery("(max-width: 760px)");
+  const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const leaving = useLeaving(shown, song !== null && !film, reduced ? 0 : LEAVE_MS);
 
   const { marked, close, forget } = nowPlaying;
   useEffect(() => {
@@ -52,12 +58,12 @@ export function MusicNowPlaying() {
     }
   }, [marked, song, forget]);
 
-  if (!shown || !song) {
+  if ((!shown && !leaving) || !song) {
     return null;
   }
 
   return (
-    <div className="music-now music-dark" role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
+    <div className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <div className="music-now-glow" aria-hidden="true" />
       {onAPhone && (
         <div className="player-top">
