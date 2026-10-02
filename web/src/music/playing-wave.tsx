@@ -10,8 +10,7 @@ const WIDTH = 22;
 const HEIGHT = 16;
 
 /** How high the wave stands at each point along one width of it. */
-const FRONT = [6, 0, 5, 1, 7];
-const BACK = [3, 8, 1, 7, 2, 6];
+const LEVELS = [6, 0, 5, 1, 7];
 
 /**
  * A wave laid over three widths, from one before the picture to one after
@@ -36,18 +35,14 @@ function wave(levels: number[]): string {
   return `M${points[0].x} ${HEIGHT} L${points[0].x} ${points[0].y} ${curves} L${last.x} ${last.y} L${last.x} ${HEIGHT}Z`;
 }
 
-const FRONT_WAVE = wave(FRONT);
-const BACK_WAVE = wave(BACK);
+const WAVE = wave(LEVELS);
 
 export function PlayingWave({ playing }: { playing: boolean }) {
   return (
     <span className={`playing-wave${playing ? " playing-wave-on" : ""}`} aria-hidden="true">
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`}>
-        <g className="playing-wave-swell playing-wave-swell-back">
-          <path className="playing-wave-body playing-wave-body-back" d={BACK_WAVE} />
-        </g>
-        <g className="playing-wave-swell playing-wave-swell-front">
-          <path className="playing-wave-body playing-wave-body-front" d={FRONT_WAVE} />
+        <g className="playing-wave-swell">
+          <path className="playing-wave-body" d={WAVE} />
         </g>
       </svg>
     </span>
