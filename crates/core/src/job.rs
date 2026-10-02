@@ -65,6 +65,12 @@ pub enum JobKind {
     /// Downloads one of the models that listen. Kept as a job so the page
     /// shows how far it has got, and the person who started it can stop it.
     DownloadSpeechModel,
+    /// Translates into French the subtitles that listening wrote in English.
+    /// A task of its own, after the listening and never during it.
+    TranslateSubtitles,
+    /// Downloads the model that translates. Kept as a job for the same reason
+    /// as the ones that listen.
+    DownloadTranslationModel,
 }
 
 impl JobKind {
@@ -74,7 +80,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 17] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -90,6 +96,8 @@ impl JobKind {
         Self::LookUpAlbumCovers,
         Self::GenerateSpeechSubtitles,
         Self::DownloadSpeechModel,
+        Self::TranslateSubtitles,
+        Self::DownloadTranslationModel,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -109,6 +117,8 @@ impl JobKind {
             Self::LookUpAlbumCovers => "look_up_album_covers",
             Self::GenerateSpeechSubtitles => "generate_speech_subtitles",
             Self::DownloadSpeechModel => "download_speech_model",
+            Self::TranslateSubtitles => "translate_subtitles",
+            Self::DownloadTranslationModel => "download_translation_model",
         }
     }
 
@@ -129,6 +139,8 @@ impl JobKind {
             "look_up_album_covers" => Some(Self::LookUpAlbumCovers),
             "generate_speech_subtitles" => Some(Self::GenerateSpeechSubtitles),
             "download_speech_model" => Some(Self::DownloadSpeechModel),
+            "translate_subtitles" => Some(Self::TranslateSubtitles),
+            "download_translation_model" => Some(Self::DownloadTranslationModel),
             _ => None,
         }
     }
@@ -184,11 +196,15 @@ pub enum JobStep {
     ListeningToSpeech,
     /// Downloading a model that listens.
     DownloadingSpeechModel,
+    /// Translating the subtitle of each video into French.
+    TranslatingSubtitles,
+    /// Downloading the model that translates.
+    DownloadingTranslationModel,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 18] = [
+    pub const ALL: [Self; 20] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -207,6 +223,8 @@ impl JobStep {
         Self::LookingUpArtistPhotos,
         Self::ListeningToSpeech,
         Self::DownloadingSpeechModel,
+        Self::TranslatingSubtitles,
+        Self::DownloadingTranslationModel,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -229,6 +247,8 @@ impl JobStep {
             Self::LookingUpArtistPhotos => "looking_up_artist_photos",
             Self::ListeningToSpeech => "listening_to_speech",
             Self::DownloadingSpeechModel => "downloading_speech_model",
+            Self::TranslatingSubtitles => "translating_subtitles",
+            Self::DownloadingTranslationModel => "downloading_translation_model",
         }
     }
 
@@ -252,6 +272,8 @@ impl JobStep {
             "looking_up_artist_photos" => Some(Self::LookingUpArtistPhotos),
             "listening_to_speech" => Some(Self::ListeningToSpeech),
             "downloading_speech_model" => Some(Self::DownloadingSpeechModel),
+            "translating_subtitles" => Some(Self::TranslatingSubtitles),
+            "downloading_translation_model" => Some(Self::DownloadingTranslationModel),
             _ => None,
         }
     }

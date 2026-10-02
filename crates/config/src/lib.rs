@@ -143,6 +143,13 @@ impl Directories {
         self.data.join("speech-models")
     }
 
+    /// The model that translates English into French, downloaded by the
+    /// administrator: a hundred and fifty megabytes the server does not make
+    /// again.
+    pub fn translation_model(&self) -> PathBuf {
+        self.data.join("translation-models").join("en-fr")
+    }
+
     /// Where a video is listened to: the recording of its sound is made here
     /// for the length of the reading and removed with it.
     pub fn speech_scratch(&self) -> PathBuf {

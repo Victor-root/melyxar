@@ -5,7 +5,7 @@
 
 import { useEffect } from "react";
 import { api } from "../../api";
-import type { SpeechEffort, SpeechModel, SpeechStatus } from "../../api";
+import type { SpeechEffort, SpeechModel, SpeechStatus, TranslationModel } from "../../api";
 import { refusalAbout, useAsked, useTold } from "../../asking";
 import { Panel, Picker, Setting } from "../../components/panel";
 import { DeleteIcon, SubtitlesIcon } from "../../icons";
@@ -22,7 +22,9 @@ export function SpeechPanel() {
   const { t } = useSettings();
   const asked = useAsked((signal) => api.speech(signal), []);
   const shown = asked.answer;
-  const downloading = shown?.models.some((model) => model.downloading) ?? false;
+  const downloading =
+    (shown?.models.some((model) => model.downloading) ?? false) ||
+    (shown?.translation.downloading ?? false);
 
   useEffect(() => {
     if (!downloading) return;
@@ -75,6 +77,13 @@ export function SpeechPanel() {
             <p className="panel-notice">{t("admin.speech_none_chosen_note")}</p>
           )}
         </>
+      )}
+      {shown && (
+        <TranslationLine
+          model={shown.translation}
+          busy={told.busy}
+          tell={told.tell}
+        />
       )}
       {told.failure && (
         <p className="panel-notice panel-notice-trouble">
@@ -153,6 +162,61 @@ function ModelLine({
             className="button button-small button-quiet"
             disabled={busy}
             onClick={() => tell(() => api.forgetSpeechModel(model.id))}
+          >
+            <DeleteIcon size={15} />
+            {t("admin.speech_forget")}
+          </button>
+        )}
+      </span>
+    </Setting>
+  );
+}
+
+/** The model that translates what listening wrote, which is the choice to
+    have it translated: the task does nothing while the model is not there. */
+function TranslationLine({
+  model,
+  busy,
+  tell,
+}: {
+  model: TranslationModel;
+  busy: boolean;
+  tell: (act: () => Promise<unknown>) => Promise<void>;
+}) {
+  const { t } = useSettings();
+  const state = model.downloaded
+    ? "admin.speech_ready"
+    : model.downloading
+      ? "admin.speech_downloading"
+      : "admin.speech_absent";
+  return (
+    <Setting
+      label={`${t("admin.translation")} (${asSize(model.bytes)})`}
+      why={t("admin.translation_why")}
+    >
+      <span className="opensubtitles-actions">
+        <span
+          className={`state-pill ${model.downloaded ? "state-ok" : "state-attention"}`}
+        >
+          <span className="state-dot" aria-hidden="true" />
+          {t(state)}
+        </span>
+        {!model.downloaded && !model.downloading && (
+          <button
+            type="button"
+            className="button button-small button-accent"
+            disabled={busy}
+            onClick={() => tell(() => api.downloadTranslationModel())}
+          >
+            {t("admin.speech_download")}
+          </button>
+        )}
+        {model.downloaded && (
+          <button
+            type="button"
+            className="button button-small button-quiet"
+            disabled={busy}
+            onClick={() => tell(() => api.forgetTranslationModel())}
           >
             <DeleteIcon size={15} />
             {t("admin.speech_forget")}

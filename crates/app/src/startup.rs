@@ -232,6 +232,7 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
         &config.directories.calibration(),
         &config.directories.backups(),
         &config.directories.speech_models(),
+        &config.directories.translation_model(),
         &config.directories.speech_scratch(),
     ] {
         std::fs::create_dir_all(directory).map_err(AppError::Directory)?;

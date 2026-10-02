@@ -109,6 +109,19 @@ async fn download_from(
     url: &str,
     model: &Model,
     to: &Path,
+    progress: impl FnMut(u64),
+    stop: impl Fn() -> bool,
+) -> Result<(), DownloadError> {
+    fetch(url, model.bytes, model.sha256, to, progress, stop).await
+}
+
+/// Fetches one file of a known size and checksum to `to`, whole and checked
+/// or not at all. What `download` does for a model, for any file written down.
+pub(crate) async fn fetch(
+    url: &str,
+    bytes: u64,
+    sha256: &str,
+    to: &Path,
     mut progress: impl FnMut(u64),
     stop: impl Fn() -> bool,
 ) -> Result<(), DownloadError> {
@@ -140,7 +153,7 @@ async fn download_from(
             size += chunk.len() as u64;
             // More than the model weighs is not the model, and is refused
             // before it fills the disk.
-            if size > model.bytes {
+            if size > bytes {
                 return Err(DownloadError::NotTheModel);
             }
             hash.update(&chunk);
@@ -154,7 +167,7 @@ async fn download_from(
 
     let checked = outcome.and_then(|()| {
         let digest = as_hexadecimal(&hash.finalize());
-        if size == model.bytes && digest == model.sha256 {
+        if size == bytes && digest == sha256 {
             Ok(())
         } else {
             Err(DownloadError::NotTheModel)

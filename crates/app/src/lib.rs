@@ -50,6 +50,7 @@ pub mod state;
 pub mod speech;
 pub mod subtitles;
 pub mod thumbnails;
+pub mod translation;
 pub mod uploads;
 pub mod upkeep;
 pub mod watching;

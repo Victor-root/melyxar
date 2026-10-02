@@ -20,6 +20,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/system/speech/effort", axum::routing::put(set_effort))
         .route("/api/v1/system/speech/models/{id}", delete(forget))
         .route("/api/v1/system/speech/models/{id}/download", post(download))
+        .route("/api/v1/system/speech/translation", delete(forget_translation))
+        .route("/api/v1/system/speech/translation/download", post(download_translation))
 }
 
 #[derive(Debug, Serialize)]
@@ -31,6 +33,15 @@ struct StatusView {
     /// How much of the processor listening takes: quiet, balanced, maximum.
     effort: &'static str,
     models: Vec<ModelView>,
+    /// The model that translates the subtitles written by listening.
+    translation: TranslationView,
+}
+
+#[derive(Debug, Serialize)]
+struct TranslationView {
+    bytes: u64,
+    downloaded: bool,
+    downloading: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -41,8 +52,11 @@ struct ModelView {
     downloading: bool,
 }
 
-impl From<melyxar_app::speech::Status> for StatusView {
-    fn from(status: melyxar_app::speech::Status) -> Self {
+impl StatusView {
+    fn new(
+        status: melyxar_app::speech::Status,
+        translation: melyxar_app::translation::Status,
+    ) -> Self {
         Self {
             tool_found: status.tool_found,
             chosen: status.chosen,
@@ -57,12 +71,25 @@ impl From<melyxar_app::speech::Status> for StatusView {
                     downloading: model.downloading,
                 })
                 .collect(),
+            translation: TranslationView {
+                bytes: translation.bytes,
+                downloaded: translation.downloaded,
+                downloading: translation.downloading,
+            },
         }
     }
 }
 
+/// What the page shows: listening, and the translation of what it writes.
+async fn shown(state: &AppState) -> Result<Json<StatusView>> {
+    Ok(Json(StatusView::new(
+        melyxar_app::speech::status(state).await?,
+        melyxar_app::translation::status(state).await?,
+    )))
+}
+
 async fn status(_: Administrator, State(state): State<AppState>) -> Result<Json<StatusView>> {
-    Ok(Json(melyxar_app::speech::status(&state).await?.into()))
+    shown(&state).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,7 +104,7 @@ async fn choose(
     Json(chosen): Json<Chosen>,
 ) -> Result<Json<StatusView>> {
     melyxar_app::speech::choose(&state, chosen.model.as_deref()).await?;
-    Ok(Json(melyxar_app::speech::status(&state).await?.into()))
+    shown(&state).await
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,7 +118,7 @@ async fn set_effort(
     Json(asked): Json<EffortAsked>,
 ) -> Result<Json<StatusView>> {
     melyxar_app::speech::set_effort(&state, &asked.effort).await?;
-    Ok(Json(melyxar_app::speech::status(&state).await?.into()))
+    shown(&state).await
 }
 
 async fn forget(
@@ -100,7 +127,7 @@ async fn forget(
     Path(id): Path<String>,
 ) -> Result<Json<StatusView>> {
     melyxar_app::speech::forget(&state, &id).await?;
-    Ok(Json(melyxar_app::speech::status(&state).await?.into()))
+    shown(&state).await
 }
 
 #[derive(Debug, Serialize)]
@@ -117,4 +144,16 @@ async fn download(
     Ok(Json(StartedView {
         job_id: job.id.to_string(),
     }))
+}
+
+async fn download_translation(_: Administrator, State(state): State<AppState>) -> Result<Json<StartedView>> {
+    let job = melyxar_app::translation::download(&state).await?;
+    Ok(Json(StartedView {
+        job_id: job.id.to_string(),
+    }))
+}
+
+async fn forget_translation(_: Administrator, State(state): State<AppState>) -> Result<Json<StatusView>> {
+    melyxar_app::translation::forget(&state).await?;
+    shown(&state).await
 }

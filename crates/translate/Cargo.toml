@@ -1,0 +1,14 @@
+[package]
+name = "melyxar-translate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Turns the subtitles of a video from English into French, on this machine."
+
+[dependencies]
+# Kept in here and nowhere else: the rest of the server hands over lines of
+# text and gets lines back, and never learns which engine did the translating.
+ct2rs = { workspace = true }
+thiserror = { workspace = true }
