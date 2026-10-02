@@ -20,8 +20,11 @@ use melyxar_core::media::{SubtitleDetails, TrackKind};
 use melyxar_core::refresh::RefreshMode;
 use melyxar_database::Database;
 
-/// What the stand-in tool says it heard.
-const HEARD: &str = "1\n00:00:00,000 --> 00:00:02,000\n Hello there.\n\n";
+/// What the stand-in tool says it heard: a report of two words, as the real one writes it.
+const REPORT: &str = r#"{"result":{"language":"en"},"transcription":[{"text":" Hello","offsets":{"from":0,"to":1000}},{"text":" there.","offsets":{"from":1000,"to":2000}}]}"#;
+
+/// The subtitle file those two words become.
+const HEARD: &str = "1\n00:00:00,000 --> 00:00:02,000\nHello there.\n\n";
 
 /// A stand-in for the speech tool: it finds where it is told to write, and
 /// writes what the real one writes there.
@@ -35,9 +38,8 @@ fn a_tool_that_hears(folder: &Path) -> PathBuf {
                case \"$1\" in -of) out=\"$2\"; shift;; esac\n\
                shift\n\
              done\n\
-             printf '{}' > \"$out.srt\"\n\
-             printf '{{\"result\":{{\"language\":\"en\"}}}}' > \"$out.json\"\n",
-            HEARD.replace('\n', "\\n")
+             printf '%s' '{}' > \"$out.json\"\n",
+            REPORT
         ),
     )
     .expect("the stand-in is written");

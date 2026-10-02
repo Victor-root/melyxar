@@ -23,6 +23,7 @@ pub mod probe;
 pub mod process;
 pub mod song_loudness;
 pub mod speech;
+pub mod spoken_lines;
 pub mod sound;
 pub mod subtitles;
 pub mod thumbnails;
