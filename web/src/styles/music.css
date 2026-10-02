@@ -103,6 +103,19 @@
   color: var(--accent-contrast);
 }
 
+/* The room the letters stand in beside a list is kept on every tab, those
+   without letters and those whose letters are still on their way included, so
+   going from one to another never moves what is on the page. */
+.music-tab-content {
+  padding-right: calc(28px + 10px + var(--gap-wide));
+}
+
+@media (max-width: 700px) {
+  .music-tab-content {
+    padding-right: 0;
+  }
+}
+
 /* The count follows the sort rather than standing at the far end, where
    the rail of letters stands over it. */
 .music-bar {
