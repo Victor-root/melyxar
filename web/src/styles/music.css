@@ -1096,6 +1096,37 @@
   padding-top: 24px;
 }
 
+/* Opened, the page fades in and its content settles a few points up into
+   place: opacity and transform only, once, on two boxes, so it costs the
+   compositor nothing and never touches the layout. Closing is instant. */
+.music-now {
+  animation: music-now-fade 180ms var(--ease) backwards;
+}
+
+.music-now-body {
+  animation: music-now-rise 260ms var(--ease) backwards;
+}
+
+@keyframes music-now-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes music-now-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-now,
+  .music-now-body {
+    animation: none;
+  }
+}
+
 .music-now-glow {
   position: fixed;
   inset: 0;
