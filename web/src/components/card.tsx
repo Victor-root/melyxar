@@ -18,7 +18,8 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { createContext, startTransition, useContext, useEffect, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -68,18 +69,34 @@ export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
  * the middle of it: the stutter of a first scroll through a library that was
  * gone the second time.
  */
-export const PicturesAhead = createContext(false);
+export interface FetchingAhead {
+  now: boolean;
+}
+
+export const PicturesAhead = createContext<FetchingAhead>({ now: false });
 
 /**
  * Whether the cards a grid or a row holds fetch their pictures ahead yet:
  * as soon as the browser has a moment, which is once what is on screen has
  * been drawn and asked for. Those were asked for first, so they still come
  * first.
+ *
+ * Said to the pictures themselves rather than to the cards. It was a state
+ * the cards read, so each row drew every one of its cards again when the
+ * moment came, one row after another, as the page was opening: measured on a
+ * home page slowed four times, four or five frames of a hundred milliseconds
+ * each right after it was drawn. A picture's own setting is changed in place,
+ * and the cards drawn later read the box.
  */
-export function useFetchingAhead(): boolean {
-  const [ahead, setAhead] = useState(false);
+export function useFetchingAhead(holder: RefObject<HTMLElement | null>): FetchingAhead {
+  const ahead = useRef<FetchingAhead>({ now: false }).current;
   useEffect(() => {
-    const fetchAhead = () => startTransition(() => setAhead(true));
+    const fetchAhead = () => {
+      ahead.now = true;
+      holder.current?.querySelectorAll<HTMLImageElement>("img[loading=lazy]").forEach((picture) => {
+        picture.loading = "eager";
+      });
+    };
     // Safari has no idle moments to offer, so it is given a second instead.
     if (typeof window.requestIdleCallback === "function") {
       const asked = window.requestIdleCallback(fetchAhead, { timeout: 2000 });
@@ -87,11 +104,11 @@ export function useFetchingAhead(): boolean {
     }
     const asked = setTimeout(fetchAhead, 1000);
     return () => clearTimeout(asked);
-  }, []);
+  }, [ahead, holder]);
   return ahead;
 }
 
-export function Card({
+export const Card = memo(function Card({
   card,
   shape = "standing",
   /** How far in, between nought and one, when a row knows and the card does
@@ -130,7 +147,7 @@ export function Card({
   const { t } = useSettings();
   const navigate = useNavigate();
   const marks = useMarks();
-  const ahead = useContext(PicturesAhead);
+  const ahead = useContext(PicturesAhead).now;
   /* A lying card is nearly twice as wide as it is tall and a poster is two
      thirds as wide as it is tall: filling one with the other cuts a band out
      of the middle of the picture. So such a row is given something wide, and
@@ -323,4 +340,4 @@ export function Card({
       {menu.drawn}
     </article>
   );
-}
+});

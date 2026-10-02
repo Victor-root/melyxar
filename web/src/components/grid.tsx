@@ -27,7 +27,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
   const grid = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
-  const ahead = useFetchingAhead();
+  const ahead = useFetchingAhead(grid);
 
   // The next page is fetched when the end comes into view rather than when the
   // viewer hits the bottom, so the grid grows before it runs out.

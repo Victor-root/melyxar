@@ -106,7 +106,7 @@ function Tile({
   const player = useMusic();
   const marks = useMusicMarks();
   const { picture, itDidNotLoad } = useShownPicture(pictures);
-  const ahead = useContext(PicturesAhead);
+  const ahead = useContext(PicturesAhead).now;
   /* Made the first time the tile is reached, like the card of a film: a
      grid of thousands does not hold thousands of hidden buttons. */
   const [reached, setReached] = useState(false);
