@@ -25,6 +25,7 @@ import { PersonCard } from "../components/person";
 import { ElsewhereRatings } from "../components/ratings";
 import { TrailerDialog } from "../components/trailer";
 import { Row, RowHead } from "../components/row";
+import { useDecodedAhead } from "../decoded-ahead";
 import { useFittedText } from "../fitting";
 import {
   CollectionIcon,
@@ -65,7 +66,7 @@ import { asClock } from "../clock";
 import { trackName } from "../player/describe";
 import { Player } from "../player/player";
 import { chaptersOf } from "../player/invented-chapters";
-import { cutOut } from "../player/thumbnail";
+import { cutOut, sheetUrls } from "../player/thumbnail";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
@@ -746,11 +747,16 @@ function Credits({ work }: { work: Work }) {
 function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) => void }) {
   const { t } = useSettings();
   const chapters = chaptersOf(plan);
+  const section = useRef<HTMLElement>(null);
+  useDecodedAhead(
+    section,
+    plan.thumbnails ? sheetUrls(plan.thumbnails, chapters.map((chapter) => chapter.at_second)) : [],
+  );
   if (chapters.length === 0) {
     return null;
   }
   return (
-    <section className="section">
+    <section className="section" ref={section}>
       <RowHead mark={<FilmIcon size={24} />} title={t("work.chapters_row")} />
       <Row>
         {chapters.map((chapter, index) => {
