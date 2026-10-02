@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlaybackThumbnails } from "../api";
-import { cutOut, sheetUrls, turnedBox } from "./thumbnail";
+import { cutOut, sheetUrlOf, sheetUrls, turnedBox } from "./thumbnail";
 
 const sheets: PlaybackThumbnails = {
   url: "/sheets",
@@ -31,6 +31,13 @@ describe("cutOut", () => {
   it("never moves a sheet of one column, and stops at the last thumbnail", () => {
     const narrow = { ...sheets, columns: 1, rows: 4, counted: 4 };
     expect(cutOut(narrow, 9999)?.backgroundPosition).toBe("0% 100%");
+  });
+});
+
+describe("sheetUrlOf", () => {
+  it("names the sheet a moment is on, and none for a film without pictures", () => {
+    expect(sheetUrlOf(sheets, 1500)).toBe("/sheets/1.jpg");
+    expect(sheetUrlOf({ ...sheets, counted: 0 }, 10)).toBeNull();
   });
 });
 

@@ -32,13 +32,20 @@ export function spotOf(
   };
 }
 
-/** The sheets that hold the thumbnails of these moments, each once. */
+/** The sheet that holds the thumbnail of a moment, if the film has one. */
+export function sheetUrlOf(thumbnails: PlaybackThumbnails, seconds: number): string | null {
+  const spot = spotOf(thumbnails, seconds);
+  return spot ? `${thumbnails.url}/${spot.sheet}.jpg` : null;
+}
+
+/** The sheets that hold the thumbnails of these moments, each once, in the
+ *  order the moments need them. */
 export function sheetUrls(thumbnails: PlaybackThumbnails, moments: number[]): string[] {
   const urls = new Set<string>();
   for (const moment of moments) {
-    const spot = spotOf(thumbnails, moment);
-    if (spot) {
-      urls.add(`${thumbnails.url}/${spot.sheet}.jpg`);
+    const url = sheetUrlOf(thumbnails, moment);
+    if (url) {
+      urls.add(url);
     }
   }
   return [...urls];
