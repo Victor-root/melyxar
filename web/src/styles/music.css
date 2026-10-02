@@ -1134,8 +1134,14 @@
   gap: var(--gap);
   min-width: 0;
   /* The width of the cover, which the words under it keep to and are
-     centred within, a second line as much as the first. */
-  --now-cover: min(100%, 520px, 52vh);
+     centred within, a second line as much as the first. It leaves, out of the
+     height between the header and the bar, the room of the tabs above it and
+     of the words under it, so nothing is cut off by the bar. */
+  --now-cover: min(
+    100%,
+    520px,
+    max(160px, calc(100dvh - var(--header-height) - var(--music-bar-height) - 240px))
+  );
 }
 
 .music-now-tabs {
@@ -1349,6 +1355,12 @@
     z-index: 17;
     padding-top: calc(var(--header-height) + var(--gap));
     padding-bottom: var(--music-bar-height);
+  }
+
+  /* What scrolls gives way to the bar as any page does, with the same fade. */
+  .music-now-queue {
+    mask-image: var(--music-bar-fade);
+    -webkit-mask-image: var(--music-bar-fade);
   }
 }
 
