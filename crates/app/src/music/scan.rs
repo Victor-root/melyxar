@@ -453,6 +453,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_scan_has_every_song_read_for_how_loud_it_is_and_how_its_sound_is_spread() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path().join("Music");
+        put(
+            &root,
+            "Amber Field/Northern Lights/01 - Quiet Harbour.flac",
+            "one-second.flac",
+        );
+        let (state, library) = music_library(directory.path(), &root).await;
+        if state.tools().is_none() {
+            eprintln!("no media tool here, nothing was read");
+            return;
+        }
+        crate::scan::scan_and_what_follows(
+            &state,
+            library.clone(),
+            JobPriority::REQUESTED,
+            RefreshMode::default(),
+        )
+        .await
+        .expect("scanned");
+
+        // The reading is a job of its own that the scan starts and does not wait for.
+        let mut left = i64::MAX;
+        for _ in 0..100 {
+            left = state
+                .database()
+                .count_songs_to_analyse(library.id)
+                .await
+                .expect("read");
+            if left == 0 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(left, 0, "nothing was left to read");
+
+        let song = song_of(
+            &state,
+            &library,
+            "Amber Field/Northern Lights/01 - Quiet Harbour.flac",
+        )
+        .await;
+        let spectrum = state
+            .database()
+            .song_spectrum(song.id)
+            .await
+            .expect("read")
+            .expect("its sound was written down");
+        assert_eq!(usize::from(spectrum.bands), melyxar_sound::SPECTRUM_BANDS);
+        assert_eq!(
+            spectrum.levels.len(),
+            usize::from(spectrum.bands) * usize::from(spectrum.frames_a_second),
+            "a second of sound, one reading a quarter of a second"
+        );
+        let songs = state
+            .database()
+            .music_songs(
+                library.id,
+                melyxar_database::music_browse::SongOrder::Title,
+                false,
+                0,
+                10,
+            )
+            .await
+            .expect("read")
+            .items;
+        assert!(songs[0].lufs.is_some(), "and how loud it is");
+    }
+
+    #[tokio::test]
     async fn songs_that_say_nothing_are_filed_by_their_folders_and_read_in_place() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let root = directory.path().join("Music");

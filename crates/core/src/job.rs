@@ -25,6 +25,8 @@ pub enum JobKind {
     /// to reach the ones it has already described, and this is it.
     ReadCopyAgain,
     FetchImages,
+    /// Reads every song of a library of music for how loud it is and how its
+    /// sound is spread.
     AnalyseLoudness,
     /// Reads every film of a library for where its picture can be started.
     ///

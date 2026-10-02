@@ -1,9 +1,13 @@
-//! How loud a song is, measured by reading it through.
+//! What a song is read through for: how loud it is, and how its sound is
+//! spread.
 //!
-//! The measure every player levels songs by (EBU R128): how loud the whole
-//! song sounds, and the highest its sound truly reaches, which says how much
-//! it can be raised before it clips. Only the sound is read and nothing is
-//! written; what is measured is kept by whoever asked.
+//! Both are asked of one pass of the tool. The measure every player levels
+//! songs by (EBU R128) says how loud the whole song sounds and the highest its
+//! sound truly reaches, which says how much it can be raised before it clips;
+//! the second output is the sound itself as plain single channel samples, for
+//! whoever writes its spectrum down. A song is decoded once for both, and for
+//! only the one still wanted when the other is already known. Nothing is
+//! written anywhere; what is read is kept by whoever asked.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -14,40 +18,100 @@ use tokio::process::Command as TokioCommand;
 use crate::process::{AskedToStop, output_of};
 use crate::{FfmpegError, Result};
 
-/// Reads a song through for how loud it is.
-pub async fn measure(tool: &Path, song: &Path, asked_to_stop: AskedToStop) -> Result<Loudness> {
+/// How many samples of one second come back for the spectrum.
+///
+/// The same number the crate that writes the spectrum down reads in, written
+/// twice because neither of those crates has any business knowing about the
+/// other: one launches tools and the other does arithmetic. A test where both
+/// are in view, in the crate that uses them, holds the two together.
+pub const SPECTRUM_SAMPLES_A_SECOND: u32 = 16_000;
+
+/// What is asked of a song.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wanted {
+    pub loudness: bool,
+    pub spectrum: bool,
+}
+
+/// What came back: the loudness when it was asked for, and the samples of the
+/// sound when they were.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Analysis {
+    pub loudness: Option<Loudness>,
+    pub samples: Vec<i16>,
+}
+
+/// Reads a song through once for what is wanted of it.
+pub async fn analyse(
+    tool: &Path,
+    song: &Path,
+    wanted: Wanted,
+    asked_to_stop: AskedToStop,
+) -> Result<Analysis> {
     let mut builder = TokioCommand::new(tool);
-    builder.args(arguments(song));
+    builder.args(arguments(song, wanted));
     let output = output_of(builder, asked_to_stop).await?;
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
     }
-    let loudness = summary_of(&String::from_utf8_lossy(&output.stderr));
-    if !loudness.is_measured() {
-        return Err(FfmpegError::from_output("ffmpeg", &output));
-    }
-    Ok(loudness)
+    let loudness = if wanted.loudness {
+        let loudness = summary_of(&String::from_utf8_lossy(&output.stderr));
+        if !loudness.is_measured() {
+            return Err(FfmpegError::from_output("ffmpeg", &output));
+        }
+        Some(loudness)
+    } else {
+        None
+    };
+    let samples = output
+        .stdout
+        .chunks_exact(2)
+        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+        .collect();
+    Ok(Analysis { loudness, samples })
 }
 
 /// What the tool is told: the first sound of the song through the measure,
-/// and nothing written anywhere.
-pub fn arguments(song: &Path) -> Vec<OsString> {
+/// and through a single channel at the rate of the spectrum, whichever is
+/// wanted, and nothing written anywhere.
+pub fn arguments(song: &Path, wanted: Wanted) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = ["-hide_banner", "-nostats", "-nostdin", "-i"]
         .map(OsString::from)
         .to_vec();
     arguments.push(song.as_os_str().to_os_string());
-    arguments.extend(
-        [
-            "-map",
-            "0:a:0",
-            "-af",
-            "ebur128=peak=true:framelog=quiet",
-            "-f",
-            "null",
-            "-",
-        ]
-        .map(OsString::from),
-    );
+    if wanted.loudness {
+        arguments.extend(
+            [
+                "-map",
+                "0:a:0",
+                "-af",
+                "ebur128=peak=true:framelog=quiet",
+                "-f",
+                "null",
+                "-",
+            ]
+            .map(OsString::from),
+        );
+    }
+    if wanted.spectrum {
+        arguments.extend(
+            [
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-sn",
+                "-dn",
+                "-ac",
+                "1",
+                "-ar",
+                &SPECTRUM_SAMPLES_A_SECOND.to_string(),
+                "-f",
+                "s16le",
+                "pipe:1",
+            ]
+            .map(OsString::from),
+        );
+    }
     arguments
 }
 
@@ -113,17 +177,82 @@ mod tests {
         assert!(!summary_of("no summary here").is_measured());
     }
 
+    const BOTH: Wanted = Wanted {
+        loudness: true,
+        spectrum: true,
+    };
+
+    fn the_words(arguments: &[OsString]) -> Vec<String> {
+        arguments
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect()
+    }
+
+    #[test]
+    fn what_is_wanted_is_what_the_tool_is_asked_for() {
+        let song = Path::new("/music/a.flac");
+        let both = the_words(&arguments(song, BOTH));
+        assert!(both.contains(&"ebur128=peak=true:framelog=quiet".to_string()));
+        assert!(both.contains(&"s16le".to_string()));
+        assert_eq!(both.iter().filter(|word| *word == "-i").count(), 1);
+
+        let only_loudness = the_words(&arguments(
+            song,
+            Wanted {
+                loudness: true,
+                spectrum: false,
+            },
+        ));
+        assert!(!only_loudness.contains(&"s16le".to_string()));
+
+        let only_spectrum = the_words(&arguments(
+            song,
+            Wanted {
+                loudness: false,
+                spectrum: true,
+            },
+        ));
+        assert!(!only_spectrum.iter().any(|word| word.starts_with("ebur128")));
+        assert!(only_spectrum.contains(&SPECTRUM_SAMPLES_A_SECOND.to_string()));
+    }
+
     #[tokio::test]
-    async fn a_real_song_is_measured() {
+    async fn a_real_song_is_read_once_for_both() {
         let Ok(tools) = crate::ToolPaths::discover(None, None) else {
             eprintln!("no media tool here, nothing was measured");
             return;
         };
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
-        let loudness = measure(&tools.ffmpeg, &song, AskedToStop::never())
+        let analysis = analyse(&tools.ffmpeg, &song, BOTH, AskedToStop::never())
             .await
-            .expect("measured");
+            .expect("read");
+        let loudness = analysis.loudness.expect("measured");
         assert!(loudness.is_measured(), "{loudness:?}");
+        let seconds = analysis.samples.len() as f64 / f64::from(SPECTRUM_SAMPLES_A_SECOND);
+        assert!(
+            (0.9..1.1).contains(&seconds),
+            "{seconds} seconds of samples"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_song_whose_loudness_is_known_is_only_read_for_its_sound() {
+        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
+            eprintln!("no media tool here, nothing was read");
+            return;
+        };
+        let song =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
+        let wanted = Wanted {
+            loudness: false,
+            spectrum: true,
+        };
+        let analysis = analyse(&tools.ffmpeg, &song, wanted, AskedToStop::never())
+            .await
+            .expect("read");
+        assert_eq!(analysis.loudness, None);
+        assert!(!analysis.samples.is_empty());
     }
 }
