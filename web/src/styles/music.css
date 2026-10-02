@@ -116,6 +116,12 @@
   }
 }
 
+/* The bar of the tab stands a little nearer the tabs than a grid's bar does
+   its name. */
+.music-page .browse-head {
+  margin-bottom: var(--gap);
+}
+
 /* The count follows the sort rather than standing at the far end, where
    the rail of letters stands over it. */
 .music-bar {
