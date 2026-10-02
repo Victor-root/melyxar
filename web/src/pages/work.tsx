@@ -748,7 +748,9 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
   const { t } = useSettings();
   const chapters = chaptersOf(plan);
   const section = useRef<HTMLElement>(null);
-  useDecodedAhead(
+  /* The sheets are asked for when the row is about to be seen, not as the
+     page opens: until then the cards are bare frames. */
+  const decoded = useDecodedAhead(
     section,
     plan.thumbnails ? sheetUrls(plan.thumbnails, chapters.map((chapter) => chapter.at_second)) : [],
   );
@@ -765,7 +767,7 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
           return (
             <article key={chapter.at_second} className="card card-lying" data-card>
               <div className="card-picture">
-                {still && plan.thumbnails ? (
+                {plan.thumbnails && still ? (
                   /* The film's own shape inside the card's, with bands
                      where they differ, as a screen shows a film. Stretched
                      to the card, a wide film came out squeezed thin. */
@@ -773,7 +775,7 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
                     <span
                       className="chapter-still"
                       style={{
-                        ...still,
+                        ...(decoded ? still : {}),
                         ["--film-shape" as string]:
                           plan.thumbnails.width / plan.thumbnails.height,
                       }}
