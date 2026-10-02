@@ -942,12 +942,11 @@
   z-index: -1;
   width: 100%;
   height: 100%;
-  color: var(--accent-bright);
-  opacity: 0.85;
-  filter: blur(3px);
+  color: var(--accent);
+  filter: blur(2px);
   pointer-events: none;
-  mask-image: linear-gradient(to top, #000 45%, rgb(0 0 0 / 0.2));
-  -webkit-mask-image: linear-gradient(to top, #000 45%, rgb(0 0 0 / 0.2));
+  mask-image: linear-gradient(to top, #000 50%, rgb(0 0 0 / 0.3));
+  -webkit-mask-image: linear-gradient(to top, #000 50%, rgb(0 0 0 / 0.3));
 }
 
 .music-bar-now .music-now-cover {

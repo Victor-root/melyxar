@@ -14,8 +14,10 @@ import { useEffect, useRef } from "react";
 
 /** How many bands the levels are given in, stretched over the whole width. */
 const BANDS = 32;
-/** The width one bar is drawn at, in pixels, whatever the width of the bar. */
-const BAR_WIDTH = 6;
+/** The width one bar is drawn at, in pixels, and the gap left after it,
+ *  whatever the width of the bar. */
+const BAR_WIDTH = 8;
+const BAR_GAP = 2;
 const NEW_TARGETS_EVERY_MS = 140;
 const FRAME_EVERY_MS = 33;
 /** How much of the way to its target a bar goes in a frame. */
@@ -27,7 +29,7 @@ const SETTLED = 0.004;
 function nextTargets(): number[] {
   return Array.from({ length: BANDS }, (_, band) => {
     const tilt = 1 - (band / BANDS) * 0.6;
-    return (0.3 + Math.random() * 0.7) * tilt;
+    return (0.4 + Math.random() * 0.6) * tilt;
   });
 }
 
@@ -74,11 +76,11 @@ export function Spectrum({ playing }: { playing: boolean }) {
     const draw = () => {
       context.clearRect(0, 0, width, height);
       context.fillStyle = "currentcolor";
-      const bars = Math.max(1, Math.floor(width / (BAR_WIDTH * 2)));
+      const bars = Math.max(1, Math.floor(width / (BAR_WIDTH + BAR_GAP)));
       for (let bar = 0; bar < bars; bar++) {
         const level = levelAt(levels, bars === 1 ? 0 : bar / (bars - 1));
         const tall = level * height;
-        context.fillRect(bar * BAR_WIDTH * 2, height - tall, BAR_WIDTH, tall);
+        context.fillRect(bar * (BAR_WIDTH + BAR_GAP), height - tall, BAR_WIDTH, tall);
       }
     };
 
