@@ -1256,7 +1256,35 @@ export type PageFact =
         | "done";
       /** How long the stage before this one took, in milliseconds. */
       after_ms: number;
+    }
+  | {
+      saw: "subtitles_read";
+      cues: number;
+      first_start_second: number | null;
+      last_end_second: number | null;
+      /** Cues that begin before the one ahead of them. */
+      out_of_order: number;
+      /** Cues that end before they begin or the moment they do. */
+      empty_or_backwards: number;
+      hidden: boolean;
+    }
+  | {
+      saw: "subtitles_on_screen";
+      why: "changed" | "jumped";
+      at_second: number;
+      /** How many cues the browser holds in all. */
+      cues: number;
+      /** What the browser shows, and what the times of the file give for this moment. */
+      shown: SubtitleCue[];
+      expected: SubtitleCue[];
     };
+
+/** One subtitle as the journal is told of it: its times and the start of its words. */
+export interface SubtitleCue {
+  start_second: number;
+  end_second: number;
+  text: string;
+}
 
 /** The reading a fact is about: the session a rebuilt film is fed from, or the
  *  source of one handed over as it is, for which no session is ever opened. */

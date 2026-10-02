@@ -364,6 +364,97 @@ enum Seen {
         /// How long the stage before this one lasted, in milliseconds.
         after_ms: u32,
     },
+    /// What the subtitles of the film hold, once the browser has read them.
+    ///
+    /// Said once for each set of subtitles the film is given. Nought cues
+    /// after the browser has had time to read them is a track that is there
+    /// and says nothing, which looks like subtitles that never come. Cues out
+    /// of order or ending before they begin are what a subtitle file written
+    /// by something other than a person can hold, and what a browser then
+    /// shows at the wrong moment or not at all.
+    SubtitlesRead {
+        cues: u32,
+        first_start_second: Option<f64>,
+        last_end_second: Option<f64>,
+        /// Cues that begin before the one ahead of them.
+        out_of_order: u32,
+        /// Cues that end before they begin or at the very moment they do.
+        empty_or_backwards: u32,
+        /// Whether the browser keeps the track hidden, as this page draws the
+        /// words itself.
+        hidden: bool,
+    },
+    /// The subtitles on the screen at one instant, beside what the file says
+    /// ought to be there.
+    ///
+    /// Said whenever the browser changes what is shown, and after every jump.
+    /// The two lists are the whole question: the browser showing something
+    /// other than what the times of the file give for that moment is subtitles
+    /// that do not follow where the film is. The words are cut short and are
+    /// the one place a subtitle's own text reaches the journal, which only the
+    /// maintainer reads.
+    SubtitlesOnScreen {
+        why: SubtitleMoment,
+        at_second: f64,
+        /// How many cues the browser holds in all.
+        cues: u32,
+        shown: Vec<ShownCue>,
+        expected: Vec<ShownCue>,
+    },
+}
+
+/// Why the subtitles were looked at.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum SubtitleMoment {
+    /// The browser changed what it shows.
+    Changed,
+    /// The viewer jumped, and the browser has finished landing.
+    Jumped,
+}
+
+impl SubtitleMoment {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::Changed => "changed",
+            Self::Jumped => "after a jump",
+        }
+    }
+}
+
+/// One subtitle: when it begins and ends, and the start of what it says.
+#[derive(Debug, Deserialize)]
+struct ShownCue {
+    start_second: f64,
+    end_second: f64,
+    text: String,
+}
+
+/// How many cues are written one by one, whatever a page sends.
+const CUES_WRITTEN: usize = 6;
+
+/// How much of one cue's words is kept.
+const ENOUGH_OF_A_CUE: usize = 40;
+
+/// Cues on one line, the first few only, each with its times and the start of
+/// its words.
+fn cues_in_a_line(cues: &[ShownCue]) -> String {
+    if cues.is_empty() {
+        return "none".to_string();
+    }
+    cues.iter()
+        .take(CUES_WRITTEN)
+        .map(|cue| {
+            format!(
+                "{:.2}-{:.2}s \"{}\"",
+                cue.start_second,
+                cue.end_second,
+                cut_to(&cue.text, ENOUGH_OF_A_CUE)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// One of the real moments a page passes through on the way to a film
@@ -641,7 +732,12 @@ struct Written {
 
 /// Keeps what is worth reading of a refusal, on a boundary between characters.
 fn cut_short(words: &str) -> &str {
-    match words.char_indices().nth(ENOUGH_OF_A_REFUSAL) {
+    cut_to(words, ENOUGH_OF_A_REFUSAL)
+}
+
+/// The first `most` characters of some words, never cutting one in two.
+fn cut_to(words: &str, most: usize) -> &str {
+    match words.char_indices().nth(most) {
         Some((at, _)) => &words[..at],
         None => words,
     }
@@ -924,6 +1020,40 @@ async fn what_the_page_saw(
             stage = stage.as_word(),
             after_ms,
             "the page reached a loading stage"
+        ),
+        Seen::SubtitlesRead {
+            cues,
+            first_start_second,
+            last_end_second,
+            out_of_order,
+            empty_or_backwards,
+            hidden,
+        } => tracing::debug!(
+            session,
+            source,
+            cues,
+            first_start_second,
+            last_end_second,
+            out_of_order,
+            empty_or_backwards,
+            hidden,
+            "subtitles: the browser read them"
+        ),
+        Seen::SubtitlesOnScreen {
+            why,
+            at_second,
+            cues,
+            shown,
+            expected,
+        } => tracing::debug!(
+            session,
+            source,
+            why = why.as_word(),
+            at_second,
+            cues,
+            shown = cues_in_a_line(&shown),
+            expected = cues_in_a_line(&expected),
+            "subtitles: on the screen"
         ),
     }
 
@@ -1272,5 +1402,42 @@ mod tests {
                 "read as a fact: {tried}"
             );
         }
+    }
+
+    #[test]
+    fn the_subtitles_the_browser_reads_and_shows_are_facts_with_a_name() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"subtitles_read","cues":29,"first_start_second":0.32,
+                "last_end_second":188.4,"out_of_order":0,"empty_or_backwards":1,"hidden":true}"#,
+        )
+        .expect("read");
+        assert!(matches!(said.seen, Seen::SubtitlesRead { cues: 29, empty_or_backwards: 1, .. }));
+
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"subtitles_on_screen","why":"jumped","at_second":95.7,"cues":29,
+                "shown":[{"start_second":91.9,"end_second":97.9,"text":"what your country"}],
+                "expected":[]}"#,
+        )
+        .expect("read");
+        match said.seen {
+            Seen::SubtitlesOnScreen { why, shown, expected, .. } => {
+                assert_eq!(why.as_word(), "after a jump");
+                assert_eq!(cues_in_a_line(&shown), "91.90-97.90s \"what your country\"");
+                assert_eq!(cues_in_a_line(&expected), "none");
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+
+        assert!(serde_json::from_str::<FromThePage>(
+            r#"{"session":"x","saw":"subtitles_on_screen","why":"whenever","at_second":0,"cues":0,
+                "shown":[],"expected":[]}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn the_words_of_a_cue_are_cut_short_without_cutting_a_letter_in_two() {
+        let long = ShownCue { start_second: 0.0, end_second: 1.0, text: "é".repeat(100) };
+        assert_eq!(cues_in_a_line(&[long]).matches('é').count(), ENOUGH_OF_A_CUE);
     }
 }
