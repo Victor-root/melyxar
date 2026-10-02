@@ -66,6 +66,7 @@ export function Spectrum({ playing }: { playing: boolean }) {
       return;
     }
     const levels = kept.current;
+    const color = getComputedStyle(element).color;
     let targets = new Array<number>(BANDS).fill(0);
     let width = 0;
     let height = 0;
@@ -75,7 +76,7 @@ export function Spectrum({ playing }: { playing: boolean }) {
 
     const draw = () => {
       context.clearRect(0, 0, width, height);
-      context.fillStyle = "currentcolor";
+      context.fillStyle = color;
       const bars = Math.max(1, Math.floor(width / (BAR_WIDTH + BAR_GAP)));
       for (let bar = 0; bar < bars; bar++) {
         const level = levelAt(levels, bars === 1 ? 0 : bar / (bars - 1));
