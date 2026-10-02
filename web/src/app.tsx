@@ -20,6 +20,7 @@ import { Header } from "./components/header";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./components/toasts";
 import { DebugJournal } from "./components/debug-journal";
+import { Tooltips } from "./components/tooltips";
 import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { MusicAlbumPage } from "./music/album";
@@ -175,6 +176,7 @@ function TheLibrary() {
             it out of the page. */}
         {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
         <DebugJournal />
+        <Tooltips />
         {/* The player of music stands outside every page, so that going
             from one to the next never stops a song. */}
         <MusicMarksProvider>
