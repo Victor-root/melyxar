@@ -1,12 +1,15 @@
 /*
- * The page of what is playing, opened over the interface from the bar,
- * from wherever one is: the cover large, every control, and beside them the
- * queue or the words of the song.
+ * The page of what is playing, opened over the page one is on from the bar:
+ * the cover large and beside it the queue or the words of the song, between
+ * the header and the bar, which stay where they are and are the same ones
+ * whether the page is open or not. On a phone the page takes the whole
+ * screen, controls included.
  * Closed, it gives back the page it was opened over, just as it was.
  */
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { BackIcon } from "../../player/icons";
 import { ICON } from "../../player/sound";
@@ -27,6 +30,7 @@ export function MusicNowPlaying() {
   const nowPlaying = useNowPlayingPage();
   const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
+  const onAPhone = useMediaQuery("(max-width: 760px)");
 
   const { marked, close, forget } = nowPlaying;
   useEffect(() => {
@@ -55,14 +59,16 @@ export function MusicNowPlaying() {
   return (
     <div className="music-now music-dark" role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <div className="music-now-glow" aria-hidden="true" />
-      <div className="player-top">
-        <div className="player-zone player-zone-top-left">
-          <button type="button" className="player-button" onClick={close} aria-label={t("music.close_player")}>
-            <BackIcon size={ICON} />
-          </button>
-          <span className="player-title">{song.title}</span>
+      {onAPhone && (
+        <div className="player-top">
+          <div className="player-zone player-zone-top-left">
+            <button type="button" className="player-button" onClick={close} aria-label={t("music.close_player")}>
+              <BackIcon size={ICON} />
+            </button>
+            <span className="player-title">{song.title}</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="music-now-body">
         <section className="music-now-playing">
@@ -111,20 +117,22 @@ export function MusicNowPlaying() {
         </section>
       </div>
 
-      <div className="player-bottom">
-        <BehindThePlayer />
-        <Rail music={music} />
-        <div className="player-row">
-          <div className="player-zone player-zone-bottom-left">
-            <Transport music={music} />
-          </div>
-          <div className="player-zone player-zone-bottom-right">
-            <HeartButton id={song.id} />
-            <Volume music={music} />
-            <Ways music={music} />
+      {onAPhone && (
+        <div className="player-bottom">
+          <BehindThePlayer />
+          <Rail music={music} />
+          <div className="player-row">
+            <div className="player-zone player-zone-bottom-left">
+              <Transport music={music} />
+            </div>
+            <div className="player-zone player-zone-bottom-right">
+              <HeartButton id={song.id} />
+              <Volume music={music} />
+              <Ways music={music} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

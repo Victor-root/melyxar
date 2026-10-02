@@ -57,8 +57,8 @@ export function MusicBar() {
         <button
           type="button"
           className="music-bar-now"
-          onClick={nowPlaying.open}
-          title={t("music.open_player")}
+          onClick={nowPlaying.marked ? nowPlaying.close : nowPlaying.open}
+          title={t(nowPlaying.marked ? "music.close_player" : "music.open_player")}
         >
           <Cover pictures={song.cover} />
           <span className="music-bar-words">
