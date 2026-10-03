@@ -695,8 +695,9 @@ fn subtitle_to_paint_on(decision: &PlaybackDecision, tracks: &[Track]) -> Option
 /// sound. At this height the same film ran faster than real time, and a smooth
 /// picture beats a larger one nobody can watch.
 ///
-/// Only ever true of a rebuild done in software. A card does this without
-/// noticing, and the ceiling is not applied to one.
+/// A limit of the processor, which a card does not have. The one time a card
+/// is held to it is when it stands in for the processor, for a client that
+/// accepts nothing else: it then writes the picture the processor would have.
 const TALLEST_SOFTWARE_REBUILD: i32 = 1080;
 
 /// The codecs a rebuilt picture is offered in, best first.
@@ -852,7 +853,7 @@ fn how_to_rebuild(
         // cannot follow it, and a smaller picture is a picture. A card that
         // cannot scale has nothing to offer here, and the answer is found
         // below.
-        BEST_FIRST
+        let made_smaller = BEST_FIRST
             .iter()
             .filter(allowed)
             .filter(|_| card.can_scale)
@@ -862,7 +863,19 @@ fn how_to_rebuild(
                 profile
                     .tallest_rebuilt(codec)
                     .map(|tallest| (card, (*codec).to_string(), Some(tallest)))
-            })
+            });
+        if made_smaller.is_some() {
+            return made_smaller;
+        }
+
+        // The client accepts nothing above, and the processor would then
+        // write the codec every client reads, at its own ceiling. The card
+        // writes the same picture, several times faster: the client gets
+        // exactly what it would have got, sooner.
+        let always_read = melyxar_playback::profile::ALWAYS_READ;
+        let writes_it = card.encoder_for(always_read).is_some();
+        (card.can_scale && writes_it && is_enabled(enabled_codecs, always_read))
+            .then(|| (card, always_read.to_string(), Some(TALLEST_SOFTWARE_REBUILD)))
     });
 
     let Some((card, codec, hold_to)) = on_a_card else {
@@ -3009,6 +3022,30 @@ mod tests {
         )
         .expect("this picture is rebuilt");
         assert!(without.on_a_card());
+    }
+
+    #[test]
+    fn a_client_that_accepts_nothing_the_card_writes_still_gets_it_from_the_card() {
+        // The processor would write the codec every client reads anyway; the
+        // card writes the same picture faster.
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let profile = ClientProfile {
+            rebuilt_video: vec![RebuiltCapability::any("vp9")],
+            ..ClientProfile::conservative_browser()
+        };
+        let rebuild = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &profile,
+            Some(&capabilities_with(Some(a_card(&["h264", "hevc"], true)))),
+            false,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(rebuild.on_a_card());
+        assert_eq!(rebuild.codec, melyxar_playback::profile::ALWAYS_READ);
+        assert_eq!(rebuild.height, Some(TALLEST_SOFTWARE_REBUILD));
     }
 
     #[test]
