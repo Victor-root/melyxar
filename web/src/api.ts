@@ -2475,51 +2475,67 @@ export const api = {
       position_seconds: seconds,
       leaving: true,
     }),
-  /* Opens a session against the reference film, rebuilt into one codec at one
-     height, for a calibration to watch and measure. Nameless: the same
-     question for whoever asks it. */
-  openCalibrationSession: (codec: string, height: number) =>
-    /* The height and the rate come back because they are the server's answer
-       and not the question: a film is never asked to be taller than it is,
-       and keeping up is counted against the rate it really runs at. */
-    post<{ id: string; playlist_url: string; height: number; frame_rate: number }>(
-      "/api/v1/calibration/session",
-      { codec, height },
-    ),
-  /* Records what this device measured for one codec, under its own
-     identifier and nothing else. */
-  recordCalibration: (body: {
-    client_id: string;
-    codec: string;
-    calibration_version: number;
-    usable: boolean;
-    tested_height: number;
-    dropped_share: number;
-    shown_share: number;
-    found_by: "test" | "watching";
-  }) => post<{ recorded: boolean }>("/api/v1/calibration/verdict", body),
-  /* Everything measured for this device so far, one entry per codec. */
-  calibrationProfile: (clientId: string) =>
-    get<CalibrationEntry[]>(`/api/v1/calibration/${clientId}`),
-  /* Forgets everything measured for this device, all codecs at once. */
+  /* Where the clips a device is measured on stand on the server, and what
+     they are once they are ready. */
+  calibrationClips: () => get<CalibrationClips>("/api/v1/calibration/clips"),
+  /* Asks the server to make whatever clips are missing. */
+  prepareCalibrationClips: () =>
+    post<{ preparing: boolean }>("/api/v1/calibration/clips"),
+  /* One clip, whole, to be played from memory. */
+  calibrationClip: async (url: string) => (await getRaw(url, "video/mp4")).blob(),
+  /* Keeps this device's whole calibration. The server refuses one that does
+     not answer for every codec it offered. */
+  recordCalibration: (
+    clientId: string,
+    body: { calibration_version: number; codecs: CodecResult[] },
+  ) => post<{ recorded: boolean }>(`/api/v1/calibration/${clientId}`, body),
+  /* This device's calibration, or null when it has no whole one. */
+  deviceCalibration: (clientId: string) =>
+    get<DeviceCalibration | null>(`/api/v1/calibration/${clientId}`),
+  /* Forgets this device's calibration. */
   forgetCalibration: (clientId: string) =>
     remove<{ forgotten: boolean }>(`/api/v1/calibration/${clientId}`),
 };
 
-/** What was measured for one codec, on this device. */
-export interface CalibrationEntry {
+/** One clip a device is measured on. */
+export interface CalibrationClip {
   codec: string;
+  height: number;
+  frame_rate: number;
+  url: string;
+}
+
+/** Where the clips stand on the server. */
+export interface CalibrationClips {
   calibration_version: number;
-  usable: boolean;
-  tested_height: number;
+  state: "not_prepared" | "preparing" | "failed" | "ready";
+  done: number;
+  total: number;
+  reason: string | null;
+  clips: CalibrationClip[];
+}
+
+/** One clip of one codec at one height, as this device played it. */
+export interface Measurement {
+  height: number;
+  passed: boolean;
   dropped_share: number;
-  /* The share of the pictures the film asked for that ever appeared at all:
-     the half of the answer a dropped share alone never catches, since a
-     decoder too slow to make pictures throws none of them away. */
   shown_share: number;
-  /* Whether this came out of the test or out of watching a real film. A real
-     film is the stronger of the two, and the one a test never overrules. */
-  found_by: "test" | "watching";
+}
+
+/** What this device was found to do with one codec. */
+export interface CodecResult {
+  codec: string;
+  /** The tallest picture it played cleanly, or null for none. */
+  smooth_height: number | null;
+  measurements: Measurement[];
+}
+
+/** One whole calibration of this device. */
+export interface DeviceCalibration {
+  calibration_version: number;
+  measured_at: string;
+  codecs: CodecResult[];
 }
 
 /**

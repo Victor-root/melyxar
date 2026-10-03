@@ -15,9 +15,9 @@
 import { useEffect, useState } from "react";
 
 import { api } from "../api";
-import type { CalibrationEntry, PlaybackPlan, Producing } from "../api";
+import type { CodecResult, PlaybackPlan, Producing } from "../api";
 import { containerName } from "../readable";
-import { storedCalibration } from "./calibration";
+import { storedCalibration } from "../calibration/run";
 import {
   asRate,
   asSize,
@@ -100,14 +100,14 @@ interface Props {
 export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
   const [says, setSays] = useState<WhatTheBrowserSays | null>(null);
   const [working, setWorking] = useState<Producing | null>(null);
-  const [calibration, setCalibration] = useState<CalibrationEntry[]>([]);
+  const [calibration, setCalibration] = useState<CodecResult[]>([]);
 
   /* Read once, on opening: this device's own calibration does not change
-     while a film plays. Empty for a device nobody has optimized, which is
+     while a film plays. Empty for a device never calibrated, which is
      silently left off the panel rather than shown as a row of nothing. */
   useEffect(() => {
     storedCalibration()
-      .then(setCalibration)
+      .then((kept) => setCalibration(kept?.codecs ?? []))
       .catch(() => setCalibration([]));
   }, []);
 
@@ -245,23 +245,19 @@ export function PlaybackFacts({ plan, video, session, t, onClose }: Props) {
               <Line
                 key={entry.codec}
                 name={entry.codec.toUpperCase()}
-                /* What was concluded, and then the two numbers it was
-                   concluded from: a codec turned down for showing an eighth
-                   of the film and one turned down for throwing a quarter of
-                   it away are different machines, and the verdict alone
-                   never says which this was. */
+                /* What was concluded, then the clip it was concluded from:
+                   the tallest that played cleanly, or the shortest that did
+                   not when none did. */
                 is={[
-                  entry.usable
-                    ? t("facts.calibration_at", { height: entry.tested_height })
+                  entry.smooth_height !== null
+                    ? t("facts.calibration_at", { height: entry.smooth_height })
                     : t("facts.calibration_unusable"),
-                  t("facts.calibration_measured", {
-                    shown: Math.round(entry.shown_share * 100),
-                    dropped: Math.round(entry.dropped_share * 100),
-                  }),
-                  t(
-                    entry.found_by === "watching"
-                      ? "facts.calibration_from_watching"
-                      : "facts.calibration_from_test",
+                  ...entry.measurements.slice(-1).map((measured) =>
+                    t("facts.calibration_measured", {
+                      height: measured.height,
+                      shown: Math.round(measured.shown_share * 100),
+                      dropped: Math.round(measured.dropped_share * 100),
+                    }),
                   ),
                 ].join(" · ")}
               />
