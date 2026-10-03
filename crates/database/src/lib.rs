@@ -28,6 +28,7 @@ pub mod libraries;
 pub mod measures;
 pub mod metadata;
 pub mod moved;
+pub mod notifications;
 pub mod music;
 pub mod music_browse;
 pub mod music_covers;

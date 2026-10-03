@@ -174,41 +174,6 @@ impl Database {
             .await?;
         Ok(done.rows_affected())
     }
-
-    /// How far each point to look at had got when this administrator marked
-    /// it as seen.
-    pub async fn attention_seen(&self, user_id: UserId) -> Result<Vec<(String, i64)>> {
-        Ok(
-            sqlx::query_as("SELECT item, mark FROM attention_seen WHERE user_id = ?")
-                .bind(user_id.to_db_string())
-                .fetch_all(self.reader())
-                .await?,
-        )
-    }
-
-    /// Forgets that this administrator saw a point.
-    pub async fn forget_attention_seen(&self, user_id: UserId, item: &str) -> Result<()> {
-        sqlx::query("DELETE FROM attention_seen WHERE user_id = ? AND item = ?")
-            .bind(user_id.to_db_string())
-            .bind(item)
-            .execute(self.writer())
-            .await?;
-        Ok(())
-    }
-
-    /// Writes down that this administrator saw a point as far as this mark.
-    pub async fn mark_attention_seen(&self, user_id: UserId, item: &str, mark: i64) -> Result<()> {
-        sqlx::query(
-            "INSERT INTO attention_seen (user_id, item, mark) VALUES (?, ?, ?)
-             ON CONFLICT (user_id, item) DO UPDATE SET mark = excluded.mark",
-        )
-        .bind(user_id.to_db_string())
-        .bind(item)
-        .bind(mark)
-        .execute(self.writer())
-        .await?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -394,37 +359,6 @@ mod tests {
                 .await
                 .expect("counted"),
             1
-        );
-    }
-
-    #[tokio::test]
-    async fn what_an_administrator_saw_is_kept_for_them_alone_and_moves_on() {
-        let database = Database::open_in_memory().await.expect("database opens");
-        let one = database
-            .create_user("one", Some("a stored form"), &Permissions::administrator())
-            .await
-            .expect("account created");
-        let other = database
-            .create_user("other", Some("a stored form"), &Permissions::administrator())
-            .await
-            .expect("account created");
-
-        database.mark_attention_seen(one.id, "unidentified", 12).await.expect("marked");
-        database.mark_attention_seen(one.id, "unidentified", 15).await.expect("marked again");
-        database.mark_attention_seen(one.id, "failed_tasks", 99).await.expect("marked");
-
-        let mut seen = database.attention_seen(one.id).await.expect("read");
-        seen.sort();
-        assert_eq!(
-            seen,
-            vec![("failed_tasks".to_string(), 99), ("unidentified".to_string(), 15)]
-        );
-        assert!(database.attention_seen(other.id).await.expect("read").is_empty());
-
-        database.forget_attention_seen(one.id, "failed_tasks").await.expect("forgotten");
-        assert_eq!(
-            database.attention_seen(one.id).await.expect("read"),
-            vec![("unidentified".to_string(), 15)]
         );
     }
 }
