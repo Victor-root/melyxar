@@ -796,14 +796,10 @@ pub async fn set_rights(
     })
 }
 
-/// Whether this account is still an administrator, asked again by what stays
-/// open for one: a live line outlives the request that opened it.
-pub async fn still_an_administrator(state: &AppState, id: UserId) -> Result<bool> {
-    Ok(state
-        .database()
-        .user(id)
-        .await?
-        .is_some_and(|user| user.permissions.is_administrator))
+/// The account as it stands now, if it still exists, asked again by what
+/// stays open for it: a live line outlives the request that opened it.
+pub async fn as_it_stands(state: &AppState, id: UserId) -> Result<Option<User>> {
+    Ok(state.database().user(id).await?)
 }
 
 /// Gives another account the name the administration typed for it.

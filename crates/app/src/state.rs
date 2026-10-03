@@ -61,6 +61,8 @@ struct Inner {
     journal: crate::activity::Journal,
     /// The scheduled tasks running right now.
     schedule: crate::schedule::Running,
+    /// Where what changes in each account's notifications is told from.
+    notifications: crate::notifications::live::Outbox,
 }
 
 impl AppState {
@@ -123,6 +125,7 @@ impl AppState {
                 watching: crate::watching::Watching::default(),
                 folder_watch: crate::folder_watch::FolderWatch::default(),
                 schedule: crate::schedule::Running::default(),
+                notifications: crate::notifications::live::Outbox::default(),
             }),
         }
     }
@@ -141,6 +144,10 @@ impl AppState {
 
     pub(crate) fn measuring(&self) -> &crate::measures::Measuring {
         &self.inner.measuring
+    }
+
+    pub(crate) fn notifications(&self) -> &crate::notifications::live::Outbox {
+        &self.inner.notifications
     }
 
     pub(crate) fn journal(&self) -> &crate::activity::Journal {

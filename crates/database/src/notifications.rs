@@ -123,6 +123,8 @@ pub struct Arrival {
     pub identification: String,
     /// Whether the work that names it wears a poster.
     pub has_poster: bool,
+    /// The age rating of the work that names it, when it has one.
+    pub age_rating: Option<i32>,
 }
 
 const WHAT_A_NOTIFICATION_IS: &str = "id, user_id, kind, level, data, work_id, priority, \
@@ -561,6 +563,7 @@ impl Database {
             "SELECT w.id, w.kind, w.title, w.added_at,
                     s.id AS series_id, s.title AS series_title,
                     COALESCE(s.identification, w.identification) AS identification,
+                    CASE WHEN s.id IS NULL THEN w.age_rating ELSE s.age_rating END AS age_rating,
                     EXISTS (SELECT 1 FROM images i
                              WHERE i.owner_kind = 'work' AND i.image_kind = 'poster'
                                AND i.owner_id = COALESCE(s.id, w.id)) AS has_poster
@@ -589,6 +592,7 @@ impl Database {
                     series,
                     identification: row.try_get("identification")?,
                     has_poster: int_to_bool(row.try_get("has_poster")?),
+                    age_rating: row.try_get("age_rating")?,
                 })
             })
             .collect()
@@ -968,6 +972,7 @@ mod tests {
         assert_eq!(in_films[0].series, None);
         assert_eq!(in_films[0].identification, "unidentified");
         assert!(!in_films[0].has_poster);
+        assert_eq!(in_films[0].age_rating, None);
 
         let in_shows = database.arrivals_since(shows, long_ago).await.expect("read");
         assert_eq!(in_shows.len(), 1, "a series and its season are not arrivals");

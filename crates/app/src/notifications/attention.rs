@@ -236,26 +236,15 @@ mod tests {
     use super::*;
     use crate::activity::{record, Event};
     use melyxar_core::user::Permissions;
-    use melyxar_database::Database;
 
     async fn a_server() -> (tempfile::TempDir, AppState, UserId) {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let config = melyxar_config::Config {
-            directories: melyxar_config::Directories {
-                data: directory.path().join("data"),
-                cache: directory.path().join("cache"),
-                transcodes: directory.path().join("cache/transcodes"),
-                ..Default::default()
-            },
-            ..melyxar_config::Config::default()
-        };
-        crate::startup::prepare_directories(&config).expect("directories prepared");
-        let database = Database::open_in_memory().await.expect("database opens");
-        let user = database
+        let (directory, state) = crate::notifications::testing::a_server().await;
+        let user = state
+            .database()
             .create_user("somebody", None, &Permissions::administrator())
             .await
             .expect("account created");
-        (directory, AppState::new(config, database, None, None), user.id)
+        (directory, state, user.id)
     }
 
     fn refused() -> Event {
