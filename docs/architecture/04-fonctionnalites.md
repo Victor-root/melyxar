@@ -687,6 +687,12 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - **Une seule notification groupée** pour les ajouts rapprochés (« 40 nouveaux épisodes de X »), envoyée **après 15 minutes** sans nouvel ajout, pour laisser le scan finir.
 - Activée **par bibliothèque** par l'administrateur, et **chaque compte choisit** pour lui-même, bibliothèque par bibliothèque.
 
+*Deux sortes de notifications, un seul code.*
+
+- **Les notifications gardées** sont des enregistrements du serveur, rangés par compte (type, date, lu ou non lu). Elles se montrent par un message dans le coin de l'écran quand elles arrivent pendant que l'application est ouverte, puis restent dans l'historique de la cloche. Entrent dans cette sorte : le résultat d'une action qui compte (suppression vérifiée, échec), la fin d'une tâche longue, le nouveau contenu, les messages de l'administrateur et les points à surveiller.
+- **Les confirmations immédiates** (« réglage enregistré », « ajouté aux favoris ») restent des **messages du moment seulement** : rien n'est enregistré, rien n'entre dans l'historique, pour que la cloche ne soit pas noyée.
+- **Les deux sortes passent par le même code d'interface** : un seul composant dessine le message du coin de l'écran, avec les mêmes états (réussi, à surveiller, en panne), la même durée, les mêmes règles de lecture en cours et la même fermeture. Une notification gardée n'a pas son propre affichage : elle est envoyée à ce composant, comme une confirmation l'est déjà. Toute modification de l'apparence ou du comportement des messages se fait à cet endroit-là seulement.
+
 *Historique et contrôle.*
 
 - La cloche est ouverte à tous les comptes et garde un **historique**. Chaque notification est **lue ou non lue**, par compte, et le compte peut la marquer lue ou non lue, **la faire disparaître ou la laisser**.
