@@ -794,10 +794,9 @@ fn how_to_rebuild(
 
     let card = capabilities
         .and_then(melyxar_ffmpeg::Capabilities::card)
-        // Painting words into a picture is done where the words are, which is
-        // on the processor. Getting them onto a card is a different piece of
-        // work, and this is not it.
-        .filter(|_| !painting_subtitles)
+        // The painting itself is done on the processor, on a picture no taller
+        // than a screen, so it must be one the card can shrink.
+        .filter(|card| !painting_subtitles || card.can_scale)
         // A card that cannot convert wide gamut colour would hand back a film
         // that is grey, which is worse than one that is merely smaller.
         .filter(|card| !decision.tone_map || card.can_tone_map);
@@ -805,7 +804,13 @@ fn how_to_rebuild(
     // The height the picture will really be, which is what the client answered
     // about. A card rebuilds at the film's own size unless the viewer asked for
     // less, so a codec is offered only where it was measured to keep up.
-    let rebuilt_height = decision.scale_to_height.or(source_height);
+    let rebuilt_height = decision
+        .scale_to_height
+        .or(source_height)
+        .map(|height| match painting_subtitles {
+            true => height.min(TALLEST_SOFTWARE_REBUILD),
+            false => height,
+        });
 
     let allowed = |codec: &&&str| is_enabled(enabled_codecs, codec);
 
@@ -867,21 +872,35 @@ fn how_to_rebuild(
         Some(tallest) => Some(asked.unwrap_or(tallest).min(tallest)),
         None => asked,
     };
+    // A picture painted on is brought down to the processor to be painted, and
+    // a picture the size of a cinema screen is not one it can do that to in
+    // real time.
+    let height = match (painting_subtitles, height.or(source_height)) {
+        (true, Some(tall)) if tall > TALLEST_SOFTWARE_REBUILD => Some(TALLEST_SOFTWARE_REBUILD),
+        _ => height,
+    };
+    // A film that says its picture sits inside a larger frame is read by the
+    // processor, whatever the card can do with its codec. A card hands its
+    // pictures on as whole frames and nothing in the chain that follows knows
+    // how to cut the edges off one, so the film would be rebuilt frame and
+    // all: a wide picture stretched to fill a shape it never had. The
+    // processor cuts them as it reads, which is what every still image pulled
+    // out of these files has always shown.
+    let reads_the_film = !says_it_is_cut(tracks)
+        && codec_of(tracks).is_some_and(|codec| card.reads(&codec));
+    // Handing a picture up to a card only to bring it down again to be painted
+    // is work for nothing: a card that does not read this film leaves all of
+    // it to the processor.
+    if painting_subtitles && !reads_the_film {
+        return Some(read_by_the_processor(source_height, decision));
+    }
     Some(PictureRebuild {
         bitrate: Some(
             decision
                 .bitrate_ceiling
                 .unwrap_or_else(|| rate_for(height.or(source_height), &codec)),
         ),
-        // A film that says its picture sits inside a larger frame is read by
-        // the processor, whatever the card can do with its codec. A card hands
-        // its pictures on as whole frames and nothing in the chain that
-        // follows knows how to cut the edges off one, so the film would be
-        // rebuilt frame and all: a wide picture stretched to fill a shape it
-        // never had. The processor cuts them as it reads, which is what every
-        // still image pulled out of these files has always shown.
-        reads_the_film: !says_it_is_cut(tracks)
-            && codec_of(tracks).is_some_and(|codec| card.reads(&codec)),
+        reads_the_film,
         codec,
         card: Some(card.clone()),
         height,
@@ -2942,6 +2961,77 @@ mod tests {
         assert!(
             !rebuild.reads_the_film,
             "the card was proved to read this codec, and still must not read this film"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_picture_painted_on_is_read_and_converted_by_the_card_at_no_more_than_a_screen() {
+        // Painting is done on the processor, but reading a film of four
+        // thousand pixels and converting its colours is what no processor does
+        // in real time, so the card keeps that, and the processor is only
+        // given a picture it can paint on.
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![
+                    video(id, "hevc", 2160),
+                    audio(id, "eac3", 6, true),
+                    picture_subtitle(id),
+                ]
+            })
+            .await;
+        let tracks = state.database().tracks_of_source(source_id).await.expect("read");
+        let words = tracks
+            .iter()
+            .find(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+            .expect("the film carries one");
+        let plan = plan(
+            &state,
+            &crate::an_ordinary_account(user_id),
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle: SubtitleAsked::Track(words.id),
+                preferred_video_codec: None,
+                wide_gamut: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.decision.subtitles, SubtitleDelivery::BurnIn);
+
+        let reads_hevc = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let rebuild = how_to_rebuild(
+            &plan.decision,
+            &plan.tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&reads_hevc),
+            true,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(rebuild.on_a_card(), "the card does the heavy part");
+        assert!(rebuild.reads_the_film);
+        assert_eq!(rebuild.height, Some(TALLEST_SOFTWARE_REBUILD));
+
+        let reads_nothing = capabilities_with(Some(melyxar_ffmpeg::Card {
+            decoders: Default::default(),
+            ..a_card(&["h264", "hevc"], true)
+        }));
+        let left_to_the_processor = how_to_rebuild(
+            &plan.decision,
+            &plan.tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&reads_nothing),
+            true,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(
+            !left_to_the_processor.on_a_card(),
+            "handing a picture up to a card only to bring it down again is work for nothing"
         );
     }
 
