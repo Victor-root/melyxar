@@ -535,6 +535,28 @@ impl Database {
         Ok(())
     }
 
+    /// Whether a film the chosen card cannot take goes to another card that
+    /// can, rather than to the processor.
+    pub async fn transcoding_card_fallback(&self) -> Result<bool> {
+        let value: i64 =
+            sqlx::query_scalar("SELECT transcode_card_fallback FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?;
+        Ok(int_to_bool(value))
+    }
+
+    /// Turns that on or off.
+    pub async fn set_transcoding_card_fallback(&self, on: bool) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET transcode_card_fallback = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(bool_to_int(on))
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     /// What the server is called, on its own for the same reason as the
     /// switch above.
     pub async fn set_server_name(&self, name: &str) -> Result<()> {
@@ -1180,6 +1202,16 @@ mod tests {
 
         database.set_transcoding_card(None).await.expect("left");
         assert_eq!(database.transcoding_card().await.expect("read"), None);
+    }
+
+    #[tokio::test]
+    async fn another_card_takes_a_refused_film_only_once_turned_on() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert!(!database.transcoding_card_fallback().await.expect("read"));
+        database.set_transcoding_card_fallback(true).await.expect("on");
+        assert!(database.transcoding_card_fallback().await.expect("read"));
+        database.set_transcoding_card_fallback(false).await.expect("off");
+        assert!(!database.transcoding_card_fallback().await.expect("read"));
     }
 
     #[tokio::test]
