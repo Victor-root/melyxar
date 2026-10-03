@@ -57,10 +57,23 @@ export function useToast(): (toast: Toast) => void {
   return useContext(ToastContext);
 }
 
+/** What is shown full screen, if anything: the browser draws nothing else,
+ *  so the words are put inside it. */
+function useFullscreenHolder(): Element | null {
+  const [holder, setHolder] = useState<Element | null>(() => document.fullscreenElement);
+  useEffect(() => {
+    const follow = () => setHolder(document.fullscreenElement);
+    document.addEventListener("fullscreenchange", follow);
+    return () => document.removeEventListener("fullscreenchange", follow);
+  }, []);
+  return holder;
+}
+
 export function Toasts({ children }: { children: ReactNode }) {
   const { t } = useSettings();
   const [shown, setShown] = useState<Shown[]>([]);
   const next = useRef(0);
+  const fullscreen = useFullscreenHolder();
 
   const dismiss = useCallback((id: number) => {
     setShown((all) => all.filter((toast) => toast.id !== id));
@@ -83,7 +96,7 @@ export function Toasts({ children }: { children: ReactNode }) {
           ))}
           {waiting > 0 && <span className="toasts-more">{t("toast.more", { count: waiting })}</span>}
         </div>,
-        document.body,
+        fullscreen ?? document.body,
       )}
     </ToastContext.Provider>
   );

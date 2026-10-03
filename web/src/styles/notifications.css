@@ -7,13 +7,14 @@
  * A word in the corner about what an action did
  * ----------------------------------------------------------------------- */
 
-/* Stacked from the bottom right, over everything, panels included: a word
-   said as a panel closes has to outlive it. */
+/* Stacked from the bottom right, over everything, panels and the player
+   included: a word said as a panel closes has to outlive it, and an urgent
+   one has to be read over a film. */
 .toasts {
   position: fixed;
   right: var(--gutter);
   bottom: var(--gutter);
-  z-index: 40;
+  z-index: 110;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -199,7 +200,7 @@
 /* Points are sentences, and a sentence cut short is a point half said. Over
    the words of the corner while it is open: it is what is being read. */
 .bell-list {
-  z-index: 41;
+  z-index: 111;
   width: min(340px, calc(100vw - 24px));
 }
 
@@ -474,4 +475,10 @@
   display: flex;
   justify-content: flex-end;
   padding-top: var(--gap);
+}
+
+/* Over a film, above its controls rather than on them. */
+body:has(.player) .toasts,
+.player-stage .toasts {
+  bottom: 96px;
 }
