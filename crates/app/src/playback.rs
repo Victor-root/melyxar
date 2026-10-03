@@ -551,6 +551,9 @@ pub async fn open_session(
     let capabilities = state.capabilities().ok_or_else(no_tools)?;
 
     let mut recipe = recipe_for(plan, capabilities)?;
+    if !state.database().transcoding_processor_fallback().await? {
+        keep_to_the_card(&mut recipe);
+    }
 
     // What the client says, and what the server remembers of this viewer when
     // it says nothing. Either way the first segment produced is the one about
@@ -978,6 +981,15 @@ fn channels_of_the_chosen_track(plan: &PlayPlan) -> Option<i32> {
         TrackKind::Audio(details) if track.stream_index == chosen => Some(details.channels),
         _ => None,
     })
+}
+
+/// Takes the processor off the ladder of what to try when the card refuses:
+/// the card may still be asked for less, and a film it refuses after that
+/// stops rather than going to the processor.
+fn keep_to_the_card(recipe: &mut Recipe) {
+    recipe.if_the_card_refuses.retain(|rung| {
+        matches!(rung, melyxar_ffmpeg::command::VideoOutput::Encode(encode) if encode.card().is_some())
+    });
 }
 
 /// Turns a decision into what the tool is asked to do.
@@ -2953,6 +2965,16 @@ mod tests {
         plan.rebuild = Some(handed_up);
         let handed = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
         assert_eq!(handed.if_the_card_refuses.len(), 1);
+
+        // With the processor left off the ladder, a card that reads the film
+        // may still be asked to rebuild only, and one that already only
+        // rebuilds has nothing left to be asked for.
+        let mut kept = reading;
+        keep_to_the_card(&mut kept);
+        assert_eq!(kept.if_the_card_refuses.len(), 1);
+        let mut kept = handed;
+        keep_to_the_card(&mut kept);
+        assert!(kept.if_the_card_refuses.is_empty());
     }
 
     #[tokio::test]

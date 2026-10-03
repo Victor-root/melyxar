@@ -390,6 +390,9 @@ struct CardAsked {
     /// Whether a film that card cannot take goes to another card that can.
     #[serde(default)]
     other_card_when_refused: bool,
+    /// Whether a film the card refuses while playing goes to the processor.
+    #[serde(default)]
+    processor_when_refused: bool,
 }
 
 /// The cards there are to choose from, and which one converts films.
@@ -413,6 +416,7 @@ async fn choose_card(
             &state,
             asked.chosen.as_deref(),
             asked.other_card_when_refused,
+            asked.processor_when_refused,
         )
         .await?,
     )))

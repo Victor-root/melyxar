@@ -647,6 +647,9 @@ export interface CardChoice {
   chosen_missing: boolean;
   /** Whether a film that card cannot take goes to another card that can. */
   other_card_when_refused: boolean;
+  /** Whether a film the card refuses while playing goes to the processor,
+      rather than stopping. */
+  processor_when_refused: boolean;
 }
 
 export interface PlaybackSettings {
@@ -2154,6 +2157,7 @@ export const api = {
     put<CardChoice>("/api/v1/settings/card", {
       chosen: choice.chosen,
       other_card_when_refused: choice.other_card_when_refused,
+      processor_when_refused: choice.processor_when_refused,
     }),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
