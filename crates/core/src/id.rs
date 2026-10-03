@@ -156,6 +156,12 @@ define_id!(
     ActivityId
 );
 
+define_id!(
+    /// Identifies one notification kept for one account. Ordered by when it
+    /// arrived, which is the order an account's history is read in.
+    NotificationId
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

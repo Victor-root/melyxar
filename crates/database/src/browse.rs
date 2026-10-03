@@ -799,7 +799,7 @@ impl Database {
     /// Every size of the poster of each of these works, largest first.
     ///
     /// One query for the whole page rather than one per card.
-    pub(crate) async fn posters_of(
+    pub async fn posters_of(
         &self,
         works: &[WorkId],
     ) -> Result<std::collections::HashMap<WorkId, Vec<crate::images::StoredImage>>> {
