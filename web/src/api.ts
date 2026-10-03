@@ -645,6 +645,8 @@ export interface CardChoice {
   in_use: string | null;
   /** Whether the card that was chosen did not pass its trials this time. */
   chosen_missing: boolean;
+  /** Whether a film that card cannot take goes to another card that can. */
+  other_card_when_refused: boolean;
 }
 
 export interface PlaybackSettings {
@@ -2149,7 +2151,10 @@ export const api = {
   cardChoice: (signal?: AbortSignal) =>
     get<CardChoice>("/api/v1/settings/card", signal),
   chooseCard: (choice: CardChoice) =>
-    put<CardChoice>("/api/v1/settings/card", { chosen: choice.chosen }),
+    put<CardChoice>("/api/v1/settings/card", {
+      chosen: choice.chosen,
+      other_card_when_refused: choice.other_card_when_refused,
+    }),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
   /* For the films the rules could not name: what a person could have meant,

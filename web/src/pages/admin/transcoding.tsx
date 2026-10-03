@@ -347,6 +347,18 @@ export function CardPanel() {
               }
             />
           </Setting>
+          <Setting
+            label={t("admin.card_fallback")}
+            why={t("admin.card_fallback_why")}
+          >
+            <Toggle
+              label={t("admin.card_fallback")}
+              checked={kept.other_card_when_refused}
+              onChange={(other_card_when_refused) =>
+                choice.setTo({ other_card_when_refused })
+              }
+            />
+          </Setting>
           {kept.chosen_missing && (
             <p className="panel-notice">{t("admin.card_chosen_missing")}</p>
           )}
