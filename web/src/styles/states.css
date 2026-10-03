@@ -76,6 +76,10 @@
   color: var(--trouble);
 }
 
+.state-news {
+  color: var(--news);
+}
+
 .state-dot {
   flex: none;
   width: 8px;

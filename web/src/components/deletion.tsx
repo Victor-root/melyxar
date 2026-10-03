@@ -40,24 +40,13 @@ export function DeleteDialog({
   const going = useAsked((signal) => api.whatDeletingTakes(ids, signal), [ids.join()]);
   const [fromDisk, setFromDisk] = useState(false);
   const toast = useToast();
-  // What came of it is said in the corner once the panel has closed, the
-  // files looked for on the disk afterwards rather than taken on trust.
+  // What came of it arrives as a notification once the panel has closed,
+  // the files looked for on the disk afterwards rather than taken on trust:
+  // the server keeps it in the bell and says it in the corner.
   const told = useTold(async () => {
     try {
-      const done = await api.deleteWorks(ids, fromDisk);
+      await api.deleteWorks(ids, fromDisk);
       marks.setGone(ids);
-      toast(
-        done.off_the_disk === null
-          ? { state: "ok", title: t("delete.done_library"), detail: t("delete.done_library_why") }
-          : {
-              state: "ok",
-              title: t("delete.done_disk"),
-              detail:
-                done.off_the_disk === 0
-                  ? t("delete.done_disk_none")
-                  : howMany(done.off_the_disk, "delete.done_disk_checked", t),
-            },
-      );
       onDeleted();
     } catch (error) {
       toast({

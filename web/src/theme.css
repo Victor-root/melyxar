@@ -92,13 +92,16 @@
 
   /* What a state is, apart from the accent: the accent says "active, press
      here" and each account picks its own, so a failure must never borrow it.
-     Three words, each with the wash it is laid on. */
+     Three words, each with the wash it is laid on, and a fourth for what is
+     new, which is neither good nor bad news and never the accent either. */
   --ok: #34c77b;
   --attention: #f2a93b;
   --trouble: #f0555a;
+  --news: #4c9ffe;
   --ok-wash: color-mix(in srgb, var(--ok) 14%, transparent);
   --attention-wash: color-mix(in srgb, var(--attention) 14%, transparent);
   --trouble-wash: color-mix(in srgb, var(--trouble) 14%, transparent);
+  --news-wash: color-mix(in srgb, var(--news) 14%, transparent);
 
   --radius-panel: 14px;
   --radius-card: 10px;
@@ -295,6 +298,7 @@
   --ok: #17904f;
   --attention: #b86e00;
   --trouble: #cf2f35;
+  --news: #1f6fd1;
   --shadow-card: 0 4px 14px rgba(20, 22, 27, 0.14);
   --shadow-tile: 0 1px 3px rgba(20, 22, 27, 0.2);
   --shadow-raised: 0 12px 32px rgba(20, 22, 27, 0.18);

@@ -1888,20 +1888,6 @@ export interface ActivityPage {
     ins and held back accounts, for the page of security. */
 export type ActivityFamily = "access" | "playback" | "library" | "server" | "refused";
 
-/** One thing deserving a look. `point` says which; the rest depends on it,
- *  a worry of the summary carrying its own `kind` and what it names. */
-export interface AttentionPoint {
-  point: "worry" | "refused_sign_ins" | "failed_tasks" | "falling_behind" | "unidentified";
-  state: "attention" | "trouble";
-  /** Whether marking it as seen quiets it. */
-  may_be_seen: boolean;
-  count?: number;
-  kind?: string;
-  label?: string;
-  mount?: string;
-  used?: number;
-}
-
 /** One film playing on one device, as the administration follows it. */
 export interface Watched {
   /** What a stop is asked of. */
@@ -2322,16 +2308,11 @@ export const api = {
   setDoorSlogan: (door_slogan: string) =>
     put<ServerSettings>("/api/v1/settings/server/door/slogan", { door_slogan }),
   removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),
-  /* What deserves a look, for the administrator asking. */
-  attention: (signal?: AbortSignal) =>
-    get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),
-  /* Quiets every point that can be, and answers what is left. */
-  markAttentionSeen: () =>
-    post<{ points: AttentionPoint[] }>("/api/v1/system/attention/seen"),
-  /* The administration's live line: "activity" whenever a line of the
-     journal is written and, when asked for, "playing" with what is being
+  /* The live line of every page: what changes in this account's
+     notifications and, for an administrator, "activity" whenever a line of
+     the journal is written and, when asked for, "playing" with what is being
      watched whenever it changes, and "failed" when it could not be read. */
-  administrationLine: (playing: boolean) =>
+  liveLine: (playing: boolean) =>
     new EventSource(`/api/v1/system/live${playing ? "?playing=true" : ""}`),
   /* The player is told on its next word, and the server closes the
      conversion itself if it never obeys. */

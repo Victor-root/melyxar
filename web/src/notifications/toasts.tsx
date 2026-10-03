@@ -1,30 +1,49 @@
 /*
- * A word in the corner of the screen about what an action did.
+ * A word in the corner of the screen: the one place every message of the
+ * interface is drawn, whether it confirms an action a moment ago or carries
+ * a notification the server kept.
  *
- * For what happens after somebody said yes and the panel they said it in has
- * closed: that it went through, checked, or that it did not and why. Each
- * word leaves on its own after a while, a failure later than a success since
- * it has more to be read, and any of them can be sent away sooner.
+ * Each word leaves on its own after a while, a failure later than a success
+ * since it has more to be read, unless it was asked to stay; any of them can
+ * be sent away sooner. Three are shown at most, the others waiting their turn
+ * with a word saying how many there are.
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { CloseIcon, TickIcon, WarningIcon } from "../icons";
+import { Link } from "react-router-dom";
+import type { Picture } from "../api";
+import { useShownPicture } from "../components/picture";
+import { CloseIcon, InfoIcon, TickIcon, WarningIcon } from "../icons";
 import { useSettings } from "../settings";
-import type { State } from "../components/panel";
+import type { Level } from "./api";
 
 /** How long a word stays, by what it says. */
-const STAYS_FOR_MS: Record<State, number> = {
+const STAYS_FOR_MS: Record<Level, number> = {
   ok: 6_000,
   attention: 9_000,
   trouble: 10_000,
+  news: 8_000,
 };
 
+/** How many words are shown at once. */
+const SHOWN_AT_MOST = 3;
+
 export interface Toast {
-  state: State;
+  state: Level;
   title: string;
-  detail?: string;
+  detail?: string | null;
+  /** Every size of a poster to wear, largest first. */
+  poster?: Picture[];
+  /** Where pressing it leads. */
+  to?: string | null;
+  /** Stays until it is closed. */
+  sticky?: boolean;
+  /** How long it stays; absent, its level decides. */
+  shownForMs?: number | null;
+  /** Told when it is pressed, before it leads anywhere. */
+  onOpen?: () => void;
 }
 
 interface Shown extends Toast {
@@ -39,6 +58,7 @@ export function useToast(): (toast: Toast) => void {
 }
 
 export function Toasts({ children }: { children: ReactNode }) {
+  const { t } = useSettings();
   const [shown, setShown] = useState<Shown[]>([]);
   const next = useRef(0);
 
@@ -52,14 +72,16 @@ export function Toasts({ children }: { children: ReactNode }) {
     setShown((all) => [...all, { ...toast, id }]);
   }, []);
 
+  const waiting = shown.length - SHOWN_AT_MOST;
   return (
     <ToastContext.Provider value={say}>
       {children}
       {createPortal(
         <div className="toasts" role="status" aria-live="polite">
-          {shown.map((toast) => (
+          {shown.slice(0, SHOWN_AT_MOST).map((toast) => (
             <ToastCard key={toast.id} toast={toast} onGone={dismiss} />
           ))}
+          {waiting > 0 && <span className="toasts-more">{t("toast.more", { count: waiting })}</span>}
         </div>,
         document.body,
       )}
@@ -67,25 +89,55 @@ export function Toasts({ children }: { children: ReactNode }) {
   );
 }
 
+const MARKS = { ok: TickIcon, attention: WarningIcon, trouble: WarningIcon, news: InfoIcon };
+
 function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => void }) {
   const { t } = useSettings();
-  const { id, state } = toast;
+  const { id, state, sticky, shownForMs } = toast;
+  const poster = useShownPicture(toast.poster ?? []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => onGone(id), STAYS_FOR_MS[state]);
+    if (sticky) {
+      return;
+    }
+    const timer = window.setTimeout(() => onGone(id), shownForMs ?? STAYS_FOR_MS[state]);
     return () => window.clearTimeout(timer);
-  }, [id, state, onGone]);
+  }, [id, state, sticky, shownForMs, onGone]);
 
-  const Mark = state === "ok" ? TickIcon : WarningIcon;
+  const Mark = MARKS[state];
+  const words = (
+    <>
+      <strong>{toast.title}</strong>
+      {toast.detail && <span>{toast.detail}</span>}
+    </>
+  );
+  const open = () => {
+    toast.onOpen?.();
+    onGone(id);
+  };
   return (
     <div className={`toast toast-${state}`}>
-      <span className="toast-mark" aria-hidden="true">
-        <Mark size={18} />
-      </span>
-      <span className="toast-words">
-        <strong>{toast.title}</strong>
-        {toast.detail && <span>{toast.detail}</span>}
-      </span>
+      {poster.picture ? (
+        <img
+          className="toast-poster"
+          src={poster.picture.src}
+          srcSet={poster.picture.srcSet}
+          sizes="44px"
+          alt=""
+          onError={poster.itDidNotLoad}
+        />
+      ) : (
+        <span className="toast-mark" aria-hidden="true">
+          <Mark size={18} />
+        </span>
+      )}
+      {toast.to ? (
+        <Link className="toast-words toast-link" to={toast.to} onClick={open}>
+          {words}
+        </Link>
+      ) : (
+        <span className="toast-words">{words}</span>
+      )}
       <button
         type="button"
         className="toast-close"

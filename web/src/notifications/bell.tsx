@@ -3,102 +3,118 @@ import { BellIcon, TickIcon } from "../icons";
 import { Dropdown } from "../components/dropdown";
 import { sayPoint } from "../pages/admin/activity";
 import { useSettings } from "../settings";
+import type { Level } from "./api";
 import { useAttention } from "./attention";
+import { NoteList } from "./list";
+import { useNotes } from "./store";
+
+/** The order of the colours, the gravest last. */
+const GRAVITY: Level[] = ["ok", "news", "attention", "trouble"];
 
 /**
- * What deserves a look, for an administrator: how many points, the worst of
- * them in its colour, and the list itself on a press.
- *
- * For anybody else there is nothing behind it yet, and it stays greyed and
- * saying so rather than left out: a function nobody can see is a function
- * nobody knows is coming.
+ * How many things wait, and the gravest colour among them: the unread
+ * notifications, and for an administrator the points deserving a look.
+ */
+function useWaiting(administrator: boolean): { count: number; worst: Level } {
+  const { notes, unread } = useNotes();
+  const { points } = useAttention();
+  const looked = administrator ? (points ?? []) : [];
+  const levels: Level[] = [
+    ...notes.filter((note) => !note.read).map((note) => note.level),
+    ...looked.map((point) => point.state),
+  ];
+  const worst = levels.reduce<Level>(
+    (gravest, level) => (GRAVITY.indexOf(level) > GRAVITY.indexOf(gravest) ? level : gravest),
+    "ok",
+  );
+  return { count: unread + looked.length, worst };
+}
+
+/**
+ * The bell of the bar: how many things wait, in the colour of the gravest,
+ * and on a press the points deserving an administrator's look, then this
+ * account's notifications.
  */
 export function Bell({ administrator }: { administrator: boolean }) {
   const { t, language } = useSettings();
   const { points, markSeen } = useAttention();
+  const { unread, markRead } = useNotes();
+  const { count, worst } = useWaiting(administrator);
+  const looked = administrator ? (points ?? []) : [];
 
-  if (!administrator) {
-    return (
-      <button
-        type="button"
-        className="header-icon"
-        disabled
-        title={t("nav.later")}
-        aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
-      >
-        <BellIcon size={24} />
-      </button>
-    );
-  }
-
-  const shown = points ?? [];
-  const worst = shown.some((point) => point.state === "trouble") ? "trouble" : "attention";
   return (
     <Dropdown
       className="header-bell"
-      icon={t("admin.watch")}
+      icon={t("nav.notifications")}
       listClassName="bell-list"
       reachable
       label={
         <>
           <BellIcon size={24} />
-          {shown.length > 0 && (
-            <span className={`bell-count bell-count-${worst}`}>{shown.length}</span>
-          )}
+          {count > 0 && <span className={`bell-count bell-count-${worst}`}>{count}</span>}
         </>
       }
     >
-      {/* Marking them seen sits with the title rather than under the last
-          point, where a long list would push it out of reach. */}
+      {looked.length > 0 && (
+        <>
+          {/* Marking them seen sits with the title rather than under the
+              last point, where a long list would push it out of reach. */}
+          <span className="bell-head">
+            <span className="bell-title">{t("admin.watch")}</span>
+            {looked.some((point) => point.may_be_seen) && (
+              <button type="button" className="bell-seen" onClick={() => void markSeen()}>
+                <TickIcon size={14} />
+                {t("attention.mark_seen")}
+              </button>
+            )}
+          </span>
+          {looked.map((point, index) => {
+            const said = sayPoint(point, t, language);
+            return (
+              <Link key={index} to={said.to} className="header-menu-line bell-point">
+                <span className={`state-dot state-${point.state}`} aria-hidden="true" />
+                <span>{said.title}</span>
+              </Link>
+            );
+          })}
+        </>
+      )}
       <span className="bell-head">
-        <span className="bell-title">{t("admin.watch")}</span>
-        {shown.some((point) => point.may_be_seen) && (
-          <button type="button" className="bell-seen" onClick={() => void markSeen()}>
+        <span className="bell-title">{t("nav.notifications")}</span>
+        {unread > 0 && (
+          <button
+            type="button"
+            className="bell-seen"
+            onClick={(event) => {
+              event.stopPropagation();
+              markRead();
+            }}
+          >
             <TickIcon size={14} />
-            {t("attention.mark_seen")}
+            {t("notes.mark_all_read")}
           </button>
         )}
       </span>
-      {shown.length === 0 && <span className="bell-none">{t("attention.none")}</span>}
-      {shown.map((point, index) => {
-        const said = sayPoint(point, t, language);
-        return (
-          <Link key={index} to={said.to} className="header-menu-line bell-point">
-            <span className={`state-dot state-${point.state}`} aria-hidden="true" />
-            <span>{said.title}</span>
-          </Link>
-        );
-      })}
+      <NoteList />
+      <Link to="/notifications" className="bell-all">
+        {t("notes.see_all")}
+      </Link>
     </Dropdown>
   );
 }
 
 /**
- * The bell moved into the account's menu: for an administrator, the page
- * where the points are listed, with how many there are; greyed for anybody
- * else, as the bell is.
+ * The bell moved into the account's menu: the page of the history, with how
+ * many things wait.
  */
 export function BellLine({ administrator }: { administrator: boolean }) {
   const { t } = useSettings();
-  const { points } = useAttention();
-
-  if (!administrator) {
-    return (
-      <span className="header-menu-line header-menu-later" aria-disabled="true" title={t("nav.later")}>
-        <BellIcon size={16} />
-        {t("nav.notifications")}
-      </span>
-    );
-  }
-  const shown = points ?? [];
-  const worst = shown.some((point) => point.state === "trouble") ? "trouble" : "attention";
+  const { count, worst } = useWaiting(administrator);
   return (
-    <NavLink to="/admin" end className="header-menu-line">
+    <NavLink to="/notifications" className="header-menu-line">
       <BellIcon size={16} />
-      {t("admin.watch")}
-      {shown.length > 0 && (
-        <span className={`bell-count bell-count-${worst} bell-count-line`}>{shown.length}</span>
-      )}
+      {t("nav.notifications")}
+      {count > 0 && <span className={`bell-count bell-count-${worst} bell-count-line`}>{count}</span>}
     </NavLink>
   );
 }
