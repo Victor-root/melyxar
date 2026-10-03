@@ -212,7 +212,7 @@ function ServerPanel({
             overview &&
             (overview.media_tools.card
               ? overview.media_tools.card_opens
-                ? overview.media_tools.card.toUpperCase()
+                ? overview.media_tools.card
                 : t("admin.card_closed")
               : t("admin.card_unused"))
           }

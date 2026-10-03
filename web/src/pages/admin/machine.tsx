@@ -339,7 +339,7 @@ function Gauges({
         icon={GraphicsCardIcon}
         label={t("admin.card")}
         value={card ? share(now?.card) : t("admin.card_unused")}
-        note={card ? card.toUpperCase() : t("admin.card_unused_why")}
+        note={card ?? t("admin.card_unused_why")}
         curve={
           card ? (
             <Sparkline

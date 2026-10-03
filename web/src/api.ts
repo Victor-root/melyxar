@@ -621,6 +621,32 @@ export interface RatingsSettings {
   tried: "kept" | "refused" | "unreachable" | null;
 }
 
+/** One graphics card that passed its trials, as it is offered to convert
+    films. */
+export interface CardOffered {
+  /** What it is chosen by. */
+  key: string;
+  name: string;
+  /** The path it is driven by: vaapi, cuda. */
+  way: string;
+  /** The codecs it was proved to write, and to read. */
+  writes: VideoCodec[];
+  reads: string[];
+  converts_wide_gamut: boolean;
+  paints_picture_subtitles: boolean;
+}
+
+/** The cards there are to choose from, and which one converts films. */
+export interface CardChoice {
+  cards: CardOffered[];
+  /** The key that was chosen, or null when the server picks. */
+  chosen: string | null;
+  /** The key of the card converting films now. */
+  in_use: string | null;
+  /** Whether the card that was chosen did not pass its trials this time. */
+  chosen_missing: boolean;
+}
+
 export interface PlaybackSettings {
   /** Never convert such colour, even where a client cannot show it correctly.
       Off by default. Dolby Vision without a compatible base layer is
@@ -1302,7 +1328,8 @@ export interface Overview {
   media_tools: {
     found: boolean;
     version: string | null;
-    /** How the graphics card is reached, when one was proven to work. */
+    /** What the graphics card converting films is called, when one was
+        proven to work. */
     card: string | null;
     /** Whether that card still opens. */
     card_opens: boolean;
@@ -1911,8 +1938,8 @@ export interface WatchedDecision {
   reasons: { code: string; [key: string]: unknown }[];
   film: FilmHolds;
   rebuild: PictureRebuild | null;
-  /** How the card is driven when one rebuilds the picture: vaapi, qsv... */
-  card_way: string | null;
+  /** What the card is called when one rebuilds the picture. */
+  card: string | null;
   /** Whether that card reads the film as well as writing it. */
   card_reads_the_film: boolean;
   sound: "copy" | "transcode" | "drop";
@@ -2119,6 +2146,10 @@ export const api = {
     get<PlaybackSettings>("/api/v1/settings/playback", signal),
   setPlaybackSettings: (settings: PlaybackSettings) =>
     put<PlaybackSettings>("/api/v1/settings/playback", settings),
+  cardChoice: (signal?: AbortSignal) =>
+    get<CardChoice>("/api/v1/settings/card", signal),
+  chooseCard: (choice: CardChoice) =>
+    put<CardChoice>("/api/v1/settings/card", { chosen: choice.chosen }),
   cancelJob: (id: string) => post<{ stopped: boolean }>(`/api/v1/jobs/${id}/cancel`),
   forgetFinishedJobs: () => remove<{ forgotten: number }>("/api/v1/jobs/finished"),
   /* For the films the rules could not name: what a person could have meant,
