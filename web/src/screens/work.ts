@@ -58,6 +58,24 @@ export function elsewhere(provider: string, id: string, kind: string): string {
   }
 }
 
+/** The sites a work is linked to, in the order they are shown: the one most
+    of what the page says comes from first. */
+const LINK_ORDER = ["tmdb", "imdb"];
+
+/**
+ * The places a work is described elsewhere that can be linked to, in the
+ * order they are shown.
+ */
+export function linksOf<T extends { provider: string; id: string }>(ids: T[], kind: string): T[] {
+  const rank = (provider: string) => {
+    const at = LINK_ORDER.indexOf(provider);
+    return at < 0 ? LINK_ORDER.length : at;
+  };
+  return ids
+    .filter((entry) => elsewhere(entry.provider, entry.id, kind))
+    .sort((left, right) => rank(left.provider) - rank(right.provider));
+}
+
 /**
  * The order the parts a film was made by are looked for in: whoever made the
  * film first, and the people a page mentions out of completeness last.
