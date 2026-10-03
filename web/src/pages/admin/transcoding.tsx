@@ -5,13 +5,16 @@
  * the codecs they come out in.
  */
 
-import type { VideoCodec } from "../../api";
+import { api } from "../../api";
+import type { CardChoice, CardOffered, VideoCodec } from "../../api";
 import {
   NumberField,
   PageHead,
   Panel,
+  Picker,
   Setting,
   Stat,
+  StatePill,
   Toggle,
 } from "../../components/panel";
 import {
@@ -20,7 +23,11 @@ import {
   ImageIcon,
   PlaybackIcon,
 } from "../../icons";
-import { useLibraryWork, usePlaybackSettings } from "../../screens/settings";
+import {
+  useKept,
+  useLibraryWork,
+  usePlaybackSettings,
+} from "../../screens/settings";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
@@ -258,10 +265,26 @@ export function AdminTranscoding() {
   );
 }
 
-/** What converts the films: the media tool and the graphics card it found. */
+/** What the picker offers for letting the server choose the card. Never a
+    card's key, which always names its path before a colon. */
+const AUTOMATIC = "automatic";
+
+/** What converts the films: the media tool and the graphics card it found,
+    and the choice of that card when the machine carries several. */
 export function CardPanel() {
   const { t } = useSettings();
-  const overview = useOverview().answer;
+  const asked = useOverview();
+  const overview = asked.answer;
+  const lookAgain = asked.look;
+  /* The summary names the card converting films, so it is read again once the
+     server has taken a new choice. */
+  const choice = useKept(api.cardChoice, (wanted: CardChoice) =>
+    api.chooseCard(wanted).then((kept) => {
+      lookAgain();
+      return kept;
+    }),
+  );
+  const kept = choice.kept;
   return (
     <Panel
       icon={GraphicsCardIcon}
@@ -292,7 +315,7 @@ export function CardPanel() {
           value={
             overview
               ? overview.media_tools.card
-                ? overview.media_tools.card.toUpperCase()
+                ? overview.media_tools.card
                 : t("admin.card_unused")
               : "–"
           }
@@ -305,6 +328,70 @@ export function CardPanel() {
           }
         />
       </div>
+
+      {kept && kept.cards.length > 1 && (
+        <>
+          <Setting
+            label={t("admin.card_choice")}
+            why={t("admin.card_choice_why")}
+          >
+            <Picker
+              label={t("admin.card_choice")}
+              value={kept.chosen ?? AUTOMATIC}
+              options={[
+                [AUTOMATIC, t("admin.card_automatic")] as const,
+                ...kept.cards.map((card) => [card.key, card.name] as const),
+              ]}
+              onPick={(picked) =>
+                choice.setTo({ chosen: picked === AUTOMATIC ? null : picked })
+              }
+            />
+          </Setting>
+          {kept.chosen_missing && (
+            <p className="panel-notice">{t("admin.card_chosen_missing")}</p>
+          )}
+          {choice.failed && (
+            <p className="panel-notice panel-notice-trouble">
+              {t(
+                choice.failed === "not_kept"
+                  ? "settings.not_kept"
+                  : "error.unreachable",
+              )}
+            </p>
+          )}
+          {kept.cards.map((card) => (
+            <Setting
+              key={card.key}
+              label={card.name}
+              why={whatItDoes(card, t)}
+            >
+              {card.key === kept.in_use && (
+                <StatePill state="ok">{t("admin.card_in_use")}</StatePill>
+              )}
+            </Setting>
+          ))}
+        </>
+      )}
     </Panel>
   );
+}
+
+/** What one card was proved to do, in a line. */
+function whatItDoes(
+  card: CardOffered,
+  t: ReturnType<typeof useSettings>["t"],
+): string {
+  return [
+    t("admin.card_encodes", {
+      codecs: card.writes.map((codec) => codec.toUpperCase()).join(", "),
+    }),
+    t(
+      card.converts_wide_gamut
+        ? "admin.card_converts_hdr"
+        : "admin.card_hdr_on_cpu",
+    ),
+    ...(card.paints_picture_subtitles
+      ? [t("admin.card_paints_subtitles")]
+      : []),
+  ].join(" · ");
 }

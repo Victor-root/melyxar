@@ -36,7 +36,7 @@ function decided(method: string, expensive: boolean): WatchedDecision {
     reasons: [],
     film: { container: null, size_bytes: 1, overall_bitrate: null, picture: null, sound: null },
     rebuild: null,
-    card_way: null,
+    card: null,
     card_reads_the_film: false,
     sound: "copy",
     subtitles: "none",

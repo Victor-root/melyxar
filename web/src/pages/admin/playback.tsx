@@ -440,8 +440,8 @@ function WatchDetails({ watched, t }: { watched: Watched; t: Wording }) {
             <Fact
               name={t("admin.card")}
               is={
-                decision.card_way
-                  ? `${decision.card_way.toUpperCase()} · ${t(
+                decision.card
+                  ? `${decision.card} · ${t(
                       decision.card_reads_the_film
                         ? "admin.card_reads"
                         : "admin.card_writes",
