@@ -744,13 +744,11 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - L'administrateur pose des **valeurs par défaut** pour les nouveaux comptes.
 - Une notification peut être **rendue obligatoire** par l'administrateur (les maintenances) : aucun compte ne peut la couper.
 
-**Points à régler au moment de coder** (à écrire dans le README des décisions) :
+**Réglé au moment de coder** : voir les lignes « Notifications » du README des décisions (une ligne par destinataire, conservation, ligne en direct ouverte à tous, notifications du système page ouverte seulement, choix de chaque compte, nouveau contenu, formulaire d'envoi).
 
-- Les notifications du navigateur quand l'onglet est fermé passent par le service de poussée du navigateur lui-même (Google pour Chrome, Mozilla pour Firefox, et Brave le coupe par défaut) : à décider si on s'en contente ou si on ne notifie dans le navigateur que page ouverte.
-- Le détail de la connexion permanente avec l'application Android (économie de batterie, reconnexion).
-- Un message de l'administrateur : ses destinataires (tous, ou des comptes choisis), sa durée de vie, et comment il se retire.
+**Reste à décider** : la connexion permanente avec l'application Android (économie de batterie, reconnexion), avec l'application ; la fin des tâches longues.
 
-**Quand.** Pas planifié. À préparer en même temps que l'application Android.
+**Quand.** En cours pour le navigateur. Le canal de l'appareil viendra avec l'application Android.
 
 ## 35. Demandes de titres
 
