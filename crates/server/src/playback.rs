@@ -980,7 +980,17 @@ async fn segment(
 ) -> Response {
     match live_session(state, who, id).await {
         Ok(session) => match session.segment(index).await {
-            Ok(path) => serve(path, request, "video/iso.segment").await,
+            Ok(path) => {
+                if let Ok(written) = tokio::fs::metadata(&path).await {
+                    tracing::debug!(
+                        session = id,
+                        index,
+                        bytes = written.len(),
+                        "a segment is being sent to the browser"
+                    );
+                }
+                serve(path, request, "video/iso.segment").await
+            }
             Err(error) => ServerError::from(error).into_response(),
         },
         Err(error) => error.into_response(),
