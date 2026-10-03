@@ -129,6 +129,20 @@ const WRITES_THE_SCREEN: &str = "libx265";
 /// and reading eight proves nothing about reading ten.
 const WIDE_GAMUT_CODEC: &str = "hevc";
 
+/// The software encoder that writes the witness of each codec, and the speed
+/// it is asked to write it at.
+///
+/// A file written by one of these has the shape a real film arrives in. One
+/// written by a card need not: Nvidia's H.264 does not say how many pictures a
+/// reader has to keep, the tool then provides for more than Nvidia's reader
+/// accepts, and a card that reads every real film was found unable to read its
+/// own. A card that cannot write a codec also proves it reads it this way.
+const SOFTWARE_WITNESSES: &[(&str, &str, &str)] = &[
+    ("h264", "libx264", "ultrafast"),
+    ("hevc", "libx265", "ultrafast"),
+    ("av1", "libsvtav1", "12"),
+];
+
 /// What a trial reads.
 enum TrialInput<'a> {
     /// A picture made on the spot, which costs nothing and suits every trial
@@ -618,7 +632,7 @@ impl CardSearch {
         card.picture_subtitle_layout = self.which_layout_it_paints_in(ffmpeg, &card, &floor).await;
 
         card.decoders = self
-            .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut, &named)
+            .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut, &named, built_with)
             .await;
 
         Some(card)
@@ -708,9 +722,10 @@ impl CardSearch {
     ///
     /// Reading is asked separately from writing because they are separate
     /// abilities, and the only honest way to ask is to hand the card a film in
-    /// that codec and see. Each sample is written first, by the card itself
-    /// where it can, so the question does not become "is this build carrying a
-    /// software encoder for that codec".
+    /// that codec and see. Each sample is written first, by a software encoder
+    /// of the build where it carries one, since that is the shape a real film
+    /// arrives in, and by the card itself otherwise, so the question does not
+    /// become "is this build carrying a software encoder for that codec".
     async fn which_codecs_it_reads(
         &mut self,
         ffmpeg: &Path,
@@ -718,6 +733,7 @@ impl CardSearch {
         floor: &str,
         wide_gamut: Option<&Sample>,
         named: &str,
+        built_with: &BTreeSet<String>,
     ) -> BTreeSet<String> {
         let mut reads = BTreeSet::new();
 
@@ -727,8 +743,8 @@ impl CardSearch {
             // about reading ten. Where one exists it is the better witness.
             let sample = match (*codec == WIDE_GAMUT_CODEC, wide_gamut) {
                 (true, Some(sample)) => Some(Kept::Borrowed(sample)),
-                _ => match card.encoder_for(codec) {
-                    Some(encoder) => match sample_in(ffmpeg, card, encoder).await {
+                _ => match witness_writer(codec, card, built_with) {
+                    Some(writer) => match sample_in(ffmpeg, card, &writer).await {
                         Ok(made) => Some(Kept::Owned(made)),
                         Err(said) => {
                             self.trials.push(Trial {
@@ -1077,40 +1093,78 @@ async fn run_briefly(
     }
 }
 
-/// Writes a fraction of a second of film in one codec, on the card itself.
-///
-/// Made by the card rather than by a software encoder so the question stays
-/// the one being asked. A build lacking a software encoder for a codec would
-/// otherwise come out as a card that cannot read it.
+/// What writes the witness of one codec.
+#[derive(Debug, PartialEq, Eq)]
+enum WitnessWriter {
+    /// A software encoder of the build, at a given speed.
+    Software { encoder: String, speed: String },
+    /// The card's own encoder.
+    Card(String),
+}
+
+/// Who writes the witness of one codec: a software encoder of the build where
+/// it carries one, otherwise the card, otherwise nobody.
+fn witness_writer(
+    codec: &str,
+    card: &Card,
+    built_with: &BTreeSet<String>,
+) -> Option<WitnessWriter> {
+    SOFTWARE_WITNESSES
+        .iter()
+        .find(|(witnessed, encoder, _)| *witnessed == codec && built_with.contains(*encoder))
+        .map(|(_, encoder, speed)| WitnessWriter::Software {
+            encoder: (*encoder).to_string(),
+            speed: (*speed).to_string(),
+        })
+        .or_else(|| {
+            card.encoder_for(codec)
+                .map(|encoder| WitnessWriter::Card(encoder.to_string()))
+        })
+}
+
+/// Writes a fraction of a second of film in one codec.
 async fn sample_in(
     ffmpeg: &Path,
     card: &Card,
-    encoder: &str,
+    writer: &WitnessWriter,
 ) -> std::result::Result<Sample, String> {
+    let (opening, encoding) = match writer {
+        WitnessWriter::Software { encoder, speed } => (
+            Vec::new(),
+            vec![
+                "-pix_fmt".to_string(),
+                "yuv420p".to_string(),
+                "-c:v".to_string(),
+                encoder.clone(),
+                "-preset".to_string(),
+                speed.clone(),
+            ],
+        ),
+        WitnessWriter::Card(encoder) => (
+            card.opening_arguments(false),
+            vec![
+                "-vf".to_string(),
+                "format=nv12,hwupload".to_string(),
+                "-c:v".to_string(),
+                encoder.clone(),
+            ],
+        ),
+    };
+    let named = match writer {
+        WitnessWriter::Software { encoder, .. } | WitnessWriter::Card(encoder) => encoder,
+    };
     let sample = Sample(std::env::temp_dir().join(format!(
-        "melyxar-card-reads-{encoder}-{}.mp4",
+        "melyxar-card-reads-{named}-{}.mp4",
         std::process::id()
     )));
 
     let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error", "-y"]
         .map(str::to_string)
         .into_iter()
-        .chain(card.opening_arguments(false))
-        .chain(
-            [
-                "-f",
-                "lavfi",
-                "-i",
-                A_GENERATED_PICTURE,
-                "-an",
-                "-vf",
-                "format=nv12,hwupload",
-                "-c:v",
-                encoder,
-                &sample.path().display().to_string(),
-            ]
-            .map(str::to_string),
-        );
+        .chain(opening)
+        .chain(["-f", "lavfi", "-i", A_GENERATED_PICTURE, "-an"].map(str::to_string))
+        .chain(encoding)
+        .chain([sample.path().display().to_string()]);
 
     match run_briefly(ffmpeg, arguments).await {
         Ok((true, _)) => Ok(sample),
@@ -1509,6 +1563,60 @@ mod tests {
         let kept = shortened(&long);
         assert_eq!(kept.chars().count(), ENOUGH_TO_READ + 3);
         assert!(kept.ends_with("..."));
+    }
+
+    #[test]
+    fn a_witness_is_written_in_software_where_the_build_can_and_by_the_card_otherwise() {
+        let built_with: BTreeSet<String> = ["libx264", "libsvtav1", "h264_nvenc"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let card = nvidia_card();
+
+        // The shape a real film arrives in, which Nvidia's own H.264 is not.
+        assert_eq!(
+            witness_writer("h264", &card, &built_with),
+            Some(WitnessWriter::Software {
+                encoder: "libx264".to_string(),
+                speed: "ultrafast".to_string(),
+            })
+        );
+        // A card that cannot write a codec still proves it reads it.
+        assert!(matches!(
+            witness_writer("av1", &card, &built_with),
+            Some(WitnessWriter::Software { encoder, .. }) if encoder == "libsvtav1"
+        ));
+        // A build without the software encoder: the card writes it.
+        assert_eq!(
+            witness_writer("hevc", &card, &built_with),
+            Some(WitnessWriter::Card("hevc_nvenc".to_string()))
+        );
+        // Nobody can write it: nothing is asked.
+        assert_eq!(witness_writer("av1", &card, &BTreeSet::new()), None);
+    }
+
+    #[tokio::test]
+    async fn a_witness_written_in_software_is_a_film_in_its_codec() {
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        for (codec, encoder, speed) in SOFTWARE_WITNESSES {
+            let writer = WitnessWriter::Software {
+                encoder: (*encoder).to_string(),
+                speed: (*speed).to_string(),
+            };
+            let sample = match sample_in(&tools.ffmpeg, &nvidia_card(), &writer).await {
+                Ok(sample) => sample,
+                // A build without this encoder never asks for it.
+                Err(said) if said.contains("Unknown encoder") => continue,
+                Err(said) => panic!("{encoder} wrote nothing: {said}"),
+            };
+            let read = tokio::process::Command::new(&tools.ffprobe)
+                .args(["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0"])
+                .arg(sample.path())
+                .output()
+                .await
+                .expect("the analyser runs");
+            assert_eq!(String::from_utf8_lossy(&read.stdout).trim(), *codec);
+        }
     }
 
     #[test]
