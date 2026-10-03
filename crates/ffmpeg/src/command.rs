@@ -417,6 +417,19 @@ impl Command {
         self.painted_subtitle().is_some()
     }
 
+    /// Whether the sound is read from a second opening of the same file.
+    ///
+    /// Only while a subtitle made of pictures is painted on. The tool reads a
+    /// file in order, and the picture then waits for its next subtitle, which
+    /// can lie minutes further on, while the sound keeps being read for an
+    /// output that will not take it before the picture: the two hold each
+    /// other up and everything read meanwhile piles up. Measured on a real 4K
+    /// film: gigabytes in seconds and not one picture out, where the same
+    /// command with the sound read on its own ran at seven times real time.
+    pub(crate) fn reads_the_sound_apart(&self) -> bool {
+        self.painted_subtitle().is_some() && !matches!(self.audio, AudioOutput::None)
+    }
+
     /// The filter graph that paints a subtitle onto every frame, when one is
     /// being drawn in.
     ///
@@ -528,6 +541,19 @@ impl Command {
         // must never be read as an option.
         args.push(self.input.path.clone().into_os_string());
 
+        let sound_input = match self.reads_the_sound_apart() {
+            true => {
+                if let Some(start) = self.input.start_at {
+                    push!("-ss");
+                    push!(&format_seconds(start));
+                }
+                push!("-i");
+                args.push(self.input.path.clone().into_os_string());
+                1
+            }
+            false => 0,
+        };
+
         // A picture being rebuilt starts where it was asked to, but a sound
         // copied as it is does not: it starts at the key frame the reading
         // rewound to, seconds early. The player then places the whole piece by
@@ -587,12 +613,12 @@ impl Command {
         match (self.streams.audio_index, &self.audio) {
             (Some(index), _) => {
                 push!("-map");
-                push!(&format!("0:{index}"));
+                push!(&format!("{sound_input}:{index}"));
             }
             (None, AudioOutput::None) => push!("-an"),
             (None, _) if needs_explicit_mapping => {
                 push!("-map");
-                push!("0:a:0?");
+                push!(&format!("{sound_input}:a:0?"));
             }
             (None, _) => {}
         }
@@ -1117,6 +1143,61 @@ mod tests {
             position(&args, "-pix_fmt").is_none(),
             "a picture on a card is not held in a layout the processor names"
         );
+    }
+
+    #[test]
+    fn the_sound_of_a_film_being_painted_on_is_read_from_a_second_opening() {
+        // Read with the picture, the sound and a picture waiting for its next
+        // subtitle hold each other up while memory fills.
+        let mut encode = VideoEncode::software_h264();
+        encode.burn_in_subtitle = Some(3);
+        let command = Command::new(
+            Input::new("/media/film.mkv").starting_at(Millis::new(65_000)),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode))
+        .with_streams(StreamSelection {
+                video_index: Some(0),
+                audio_index: Some(1),
+                subtitle_index: None,
+            })
+            .with_audio(AudioOutput::Copy);
+        let args = arguments(&command);
+
+        let inputs: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, value)| *value == "-i")
+            .map(|(at, _)| at)
+            .collect();
+        assert_eq!(inputs.len(), 2, "{args:?}");
+        assert_eq!(args[inputs[1] + 1], "/media/film.mkv");
+        assert_eq!(
+            args[inputs[1] - 2..inputs[1]],
+            ["-ss".to_string(), "65.000".to_string()],
+            "the second opening starts where the first does"
+        );
+        assert!(args.iter().any(|value| value == "1:1"), "{args:?}");
+        assert!(!args.iter().any(|value| value == "0:1"), "{args:?}");
+    }
+
+    #[test]
+    fn a_film_with_nothing_painted_on_is_opened_once() {
+        let mut encode = VideoEncode::software_h264();
+        encode.scale_to_height = Some(720);
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode))
+        .with_streams(StreamSelection {
+            video_index: Some(0),
+            audio_index: Some(1),
+            subtitle_index: None,
+        });
+        let args = arguments(&command);
+        assert_eq!(args.iter().filter(|value| *value == "-i").count(), 1);
+        assert!(args.iter().any(|value| value == "0:1"));
     }
 
     #[test]

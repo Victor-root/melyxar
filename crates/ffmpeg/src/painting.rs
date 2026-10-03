@@ -129,6 +129,7 @@ pub fn announce(session: &str, index: u32, command: &Command) {
         canvas = CANVAS,
         scale_to_height = encode.scale_to_height,
         tone_map = encode.tone_map,
+        sound_read_apart = command.reads_the_sound_apart(),
         graph = command.picture_painted_with_subtitles(),
         "a subtitle made of pictures is painted onto the picture"
     );
