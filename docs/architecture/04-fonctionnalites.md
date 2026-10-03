@@ -693,6 +693,18 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - **Les confirmations immédiates** (« réglage enregistré », « ajouté aux favoris ») restent des **messages du moment seulement** : rien n'est enregistré, rien n'entre dans l'historique, pour que la cloche ne soit pas noyée.
 - **Les deux sortes passent par le même code d'interface** : un seul composant dessine le message du coin de l'écran, avec les mêmes états (réussi, à surveiller, en panne), la même durée, les mêmes règles de lecture en cours et la même fermeture. Une notification gardée n'a pas son propre affichage : elle est envoyée à ce composant, comme une confirmation l'est déjà. Toute modification de l'apparence ou du comportement des messages se fait à cet endroit-là seulement.
 
+*Niveaux et couleurs.*
+
+- Chaque notification porte un **niveau**, qui fixe sa couleur : **vert** pour réussi, **rouge** pour erreur ou panne, **orange** pour ce qui est à surveiller sans être grave, **bleu** pour les nouveautés. Le niveau classe la notification, dans le message comme dans la cloche.
+- Les couleurs passent par des **jetons nommés** de `web/src/theme.css`, jamais écrites en dur. Le bleu des nouveautés est un jeton d'état à part, qui ne suit pas la couleur d'accentuation choisie par chaque compte.
+- Le **niveau de priorité** (afficher même pendant une lecture) est **distinct de la couleur** : une notification de n'importe quel niveau peut être prioritaire.
+- Chaque notification a aussi une **durée d'affichage** et peut être **fixe**, c'est-à-dire qu'elle reste à l'écran jusqu'à ce qu'on la ferme.
+
+*Commande de test en ligne de commande.*
+
+- Une commande `melyxar` à lancer dans le LXC envoie une notification de test, avec ses réglages : niveau (donc couleur), durée d'affichage, fixe ou non, prioritaire ou non, titre et texte, et destinataires (par défaut les administrateurs seulement, pour qu'un essai ne dérange personne d'autre).
+- Elle sert à voir chaque niveau à l'écran sans attendre qu'un vrai événement le produise.
+
 *Historique et contrôle.*
 
 - La cloche est ouverte à tous les comptes et garde un **historique**. Chaque notification est **lue ou non lue**, par compte, et le compte peut la marquer lue ou non lue, **la faire disparaître ou la laisser**.
