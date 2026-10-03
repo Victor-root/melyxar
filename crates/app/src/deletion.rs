@@ -143,6 +143,21 @@ pub async fn delete(
         thumbnail_sheets_deleted = sheets,
         "works were deleted"
     );
+    // What came of it is kept in the bell of whoever asked, the files looked
+    // for on the disk afterwards rather than taken on trust.
+    let said = crate::notifications::Said::Deletion {
+        titles: titles.clone(),
+        works: removed.works,
+        checked_gone: off_the_disk,
+    };
+    let told = crate::notifications::Outgoing::new(
+        said,
+        crate::notifications::Level::Ok,
+        crate::notifications::Audience::Accounts(vec![who.id]),
+    );
+    if let Err(error) = crate::notifications::send(state, told).await {
+        tracing::warn!(%error, "what a deletion did could not be told");
+    }
     crate::activity::record(
         state,
         crate::activity::Event::WorksDeleted {
