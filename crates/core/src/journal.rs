@@ -76,6 +76,11 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_server", "http"),
         ("melyxar_streaming", "streaming"),
         ("melyxar_ffmpeg::hardware", "card"),
+        // A subtitle made of pictures laid onto the picture: apart from
+        // `ffmpeg` because it is the one piece of work whose speed and memory
+        // could only be seen on the maintainer's machine, and everything
+        // about it is wanted together.
+        ("melyxar_ffmpeg::painting", "painting"),
         ("melyxar_ffmpeg::subtitles", "subtitles"),
         // Reading the sound of an episode belongs with what it was read for,
         // the same way pulling a subtitle out belongs with subtitles.
@@ -263,6 +268,7 @@ mod tests {
         );
         assert_eq!(tag_of("melyxar_ffmpeg::hardware"), "card");
         assert_eq!(tag_of("melyxar_ffmpeg::command"), "ffmpeg");
+        assert_eq!(tag_of("melyxar_ffmpeg::painting"), "painting");
         assert_eq!(tag_of("melyxar_server::playback"), "playback");
         assert_eq!(tag_of("melyxar_server::works"), "http");
     }

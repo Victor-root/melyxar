@@ -312,6 +312,7 @@ fn report_the_card(capabilities: &Capabilities) {
             reads = ?card.decoders.iter().collect::<Vec<_>>(),
             can_scale = card.can_scale,
             can_tone_map = card.can_tone_map,
+            paints_picture_subtitles_in = card.picture_subtitle_layout(),
             "a card is rebuilding pictures"
         ),
         None if search.devices.is_empty() => tracing::warn!(

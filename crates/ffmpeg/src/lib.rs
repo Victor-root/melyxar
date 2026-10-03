@@ -19,6 +19,7 @@ pub mod command;
 pub mod hardware;
 pub mod images;
 pub mod listening;
+pub mod painting;
 pub mod probe;
 pub mod process;
 pub mod song_analysis;
