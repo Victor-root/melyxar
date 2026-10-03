@@ -34,9 +34,8 @@ use std::time::{Duration, Instant};
 
 use melyxar_core::time::Millis;
 
-use crate::capabilities::HardwareAcceleration;
 use crate::command::{Command, VideoEncode};
-use crate::hardware::{Card, A_GENERATED_PICTURE_SIZE, TRIAL_HEIGHT};
+use crate::hardware::{Card, CardPath, A_GENERATED_PICTURE_SIZE, TRIAL_HEIGHT};
 
 /// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
 /// authors them for.
@@ -44,34 +43,6 @@ pub(crate) const CANVAS: (i32, i32) = (1920, 1080);
 
 /// What the painted picture is called inside the filter graph.
 pub(crate) const PAINTED: &str = "[painted]";
-
-/// The layouts a card is offered the subtitle in, in the order they are tried.
-///
-/// On the open interface, the first is the one the tool itself draws a
-/// subtitle in, so it costs no conversion, and the second is there for a
-/// driver that does not take it: which one a card accepts is a thing to
-/// establish, not to presume. Nvidia's filter takes transparency in one layout
-/// only.
-pub(crate) fn layouts(way: HardwareAcceleration) -> &'static [&'static str] {
-    match way {
-        HardwareAcceleration::Cuda => &["yuva420p"],
-        _ => &["bgra", "rgba"],
-    }
-}
-
-/// The layout Nvidia's filter needs the picture in to lay a transparent
-/// subtitle on it, which is not the one its encoders are usually handed.
-const UNDER_A_TRANSPARENT_SUBTITLE: &str = "yuv420p";
-
-/// Where the subtitle lies on the picture.
-///
-/// As wide as the picture lets it be without changing shape, and never taller
-/// than the picture either: the first bound meets a subtitle drawn for a frame
-/// as wide as the picture, the second one drawn for a taller frame. Centred
-/// across, at the foot.
-const PLACEMENT: &str = "w='min(main_w,main_h*overlay_iw/overlay_ih)'\
-    :h='min(main_h,main_w*overlay_ih/overlay_iw)'\
-    :x='(main_w-w)/2':y='main_h-h'";
 
 /// Where the picture is when the subtitle is laid on it.
 pub(crate) enum Place<'a> {
@@ -81,7 +52,7 @@ pub(crate) enum Place<'a> {
         sized: Option<(i32, i32)>,
     },
     Card {
-        way: HardwareAcceleration,
+        way: CardPath,
         layout: &'a str,
         /// The size the subtitle is brought to before it is handed up, for a
         /// card whose filter cannot size what it lays. Nothing for one that
@@ -134,7 +105,7 @@ fn sized_for(
     scale_to_height: Option<i32>,
     canvas: (i32, i32),
 ) -> Option<(i32, i32)> {
-    (card.way == HardwareAcceleration::Cuda).then(|| {
+    (!card.way.driver().sizes_what_it_lays()).then(|| {
         fitted(
             canvas,
             rebuilt_size(picture, scale_to_height.filter(|_| card.can_scale)),
@@ -176,9 +147,9 @@ fn even(value: i64) -> i32 {
     i32::try_from((value / 2 * 2).max(2)).unwrap_or(i32::MAX - 1)
 }
 
-/// Where Nvidia's filter puts a subtitle that arrives at its size: centred
-/// across, at the foot.
-const AT_THE_FOOT: &str = "x='(main_w-overlay_w)/2':y='main_h-overlay_h'";
+/// Where a subtitle that arrives at its size is put: centred across, at the
+/// foot.
+pub(crate) const AT_THE_FOOT: &str = "x='(main_w-overlay_w)/2':y='main_h-overlay_h'";
 
 /// The filter graph that lays a subtitle onto the picture.
 ///
@@ -201,36 +172,11 @@ pub(crate) fn graph(picture: &str, before: Option<&str>, subtitle: i32, place: &
                 None => format!("{picture}[0:{subtitle}]overlay=shortest=0{PAINTED}"),
             }
         }
-        // The subtitle arrives at its size, in the layout that carries
-        // transparency, onto a picture put in the one layout that accepts
-        // that. The filter is told only where to put it.
-        Place::Card {
-            way: HardwareAcceleration::Cuda,
-            layout,
-            sized,
-        } => {
-            let before = before
-                .map(|filters| format!("{filters},"))
-                .unwrap_or_default();
-            let size = sized
-                .map(|(width, height)| format!("scale={width}:{height},"))
-                .unwrap_or_default();
-            format!(
-                "{picture}{before}scale_cuda=format={UNDER_A_TRANSPARENT_SUBTITLE}[picture];\
-                 [0:{subtitle}]{size}format={layout},hwupload[words];\
-                 [picture][words]overlay_cuda={AT_THE_FOOT}{PAINTED}"
-            )
+        // How a card lays it is its path's business.
+        Place::Card { way, layout, sized } => {
+            way.driver()
+                .paint(picture, before, subtitle, layout, *sized)
         }
-        // The subtitle is handed up to the card in a layout with an alpha
-        // channel, which is what lets the card see through what is not
-        // lettering. The picture is already up there.
-        Place::Card { way, layout, .. } => format!(
-            "{picture}{}[picture];\
-             [0:{subtitle}]format={layout},hwupload[words];\
-             [picture][words]overlay_{}={PLACEMENT}{PAINTED}",
-            before.unwrap_or("null"),
-            way.as_str()
-        ),
     }
 }
 
@@ -453,7 +399,7 @@ mod tests {
     #[test]
     fn on_a_card_the_picture_stays_there_and_only_the_subtitle_is_handed_up() {
         let place = Place::Card {
-            way: HardwareAcceleration::Vaapi,
+            way: CardPath::Vaapi,
             layout: "bgra",
             sized: None,
         };
@@ -476,7 +422,7 @@ mod tests {
     #[test]
     fn the_subtitle_is_fitted_to_the_picture_and_set_at_its_foot() {
         let place = Place::Card {
-            way: HardwareAcceleration::Vaapi,
+            way: CardPath::Vaapi,
             layout: "bgra",
             sized: None,
         };
@@ -492,7 +438,7 @@ mod tests {
     #[test]
     fn a_card_with_nothing_to_do_to_the_picture_still_names_it() {
         let place = Place::Card {
-            way: HardwareAcceleration::Vaapi,
+            way: CardPath::Vaapi,
             layout: "bgra",
             sized: None,
         };
@@ -526,7 +472,7 @@ mod tests {
         // The open interface fits it with a formula, so nothing is measured
         // for it, and a wrong measure could not put the words out of place.
         let card = Card::unproved(
-            HardwareAcceleration::Vaapi,
+            CardPath::Vaapi,
             "vaapi:0000:03:00.0".to_string(),
             "Intel".to_string(),
             std::path::PathBuf::from("/dev/dri/renderD128"),
@@ -535,7 +481,7 @@ mod tests {
         assert_eq!(sized_for(&card, (3840, 2160), Some(1080), CANVAS), None);
 
         let nvidia = Card {
-            way: HardwareAcceleration::Cuda,
+            way: CardPath::Cuda,
             ..card
         };
         assert_eq!(
@@ -557,7 +503,7 @@ mod tests {
     #[test]
     fn on_an_nvidia_card_the_picture_is_put_in_the_layout_that_takes_a_transparent_subtitle() {
         let place = Place::Card {
-            way: HardwareAcceleration::Cuda,
+            way: CardPath::Cuda,
             layout: "yuva420p",
             sized: Some((1440, 800)),
         };
@@ -567,7 +513,7 @@ mod tests {
              [0:3]scale=1440:800,format=yuva420p,hwupload[words];\
              [picture][words]overlay_cuda=x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
         );
-        assert_eq!(layouts(HardwareAcceleration::Cuda), &["yuva420p"]);
+        assert_eq!(CardPath::Cuda.driver().subtitle_layouts(), &["yuva420p"]);
     }
 
     #[test]

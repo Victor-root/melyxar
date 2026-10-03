@@ -2528,7 +2528,7 @@ mod tests {
     /// codec it writes here; the tests that care say otherwise themselves.
     fn a_card(codecs: &[&str], can_tone_map: bool) -> melyxar_ffmpeg::Card {
         melyxar_ffmpeg::Card {
-            way: melyxar_ffmpeg::HardwareAcceleration::Vaapi,
+            way: melyxar_ffmpeg::CardPath::Vaapi,
             key: "vaapi:0000:03:00.0".to_string(),
             name: "Intel DG2 [Arc A380]".to_string(),
             device: PathBuf::from("/dev/dri/renderD128"),
@@ -2550,6 +2550,7 @@ mod tests {
         // proved to on a wide gamut film in one codec. Nvidia's own reader
         // knowing another codec says nothing about Vulkan reading it.
         let card = melyxar_ffmpeg::Card {
+            way: melyxar_ffmpeg::CardPath::Cuda,
             tone_mapping: Some(melyxar_ffmpeg::ToneMapping::ThroughVulkan { reads: true }),
             ..a_card(&["h264", "hevc", "av1"], false)
         };
