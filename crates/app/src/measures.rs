@@ -144,8 +144,9 @@ fn read_the_machine(sources: &Sources) -> Counters {
     }
 }
 
-/// One point, from two readings a beat apart.
-fn point_between(before: &Counters, after: &Counters, has_a_card: bool, at: Timestamp) -> Point {
+/// One point, from two readings a beat apart. The card's share is read only
+/// when the card converting films keeps the tally it is read from.
+fn point_between(before: &Counters, after: &Counters, card_tallied: bool, at: Timestamp) -> Point {
     let seconds = after.taken.duration_since(before.taken).as_secs_f64();
     let (received, sent) =
         melyxar_system::traffic_rate(before.traffic, after.traffic, seconds).unwrap_or_default();
@@ -164,7 +165,7 @@ fn point_between(before: &Counters, after: &Counters, has_a_card: bool, at: Time
         load: after.load,
         received,
         sent,
-        card: has_a_card.then(|| melyxar_system::card::busy_share(&before.card, &after.card, seconds)),
+        card: card_tallied.then(|| melyxar_system::card::busy_share(&before.card, &after.card, seconds)),
         temperature: after.temperature,
     }
 }
@@ -301,10 +302,6 @@ pub fn keep_measuring(state: &AppState) -> tokio::task::JoinHandle<()> {
     let state = state.clone();
     tokio::spawn(async move {
         let sources = Sources::default();
-        let has_a_card = state
-            .capabilities()
-            .and_then(melyxar_ffmpeg::Capabilities::card)
-            .is_some();
         let read = {
             let sources = sources.clone();
             move || {
@@ -327,7 +324,15 @@ pub fn keep_measuring(state: &AppState) -> tokio::task::JoinHandle<()> {
                 continue;
             };
             let now = melyxar_core::time::now();
-            let point = point_between(&before, &after, has_a_card, now);
+            // Asked each time, since the card that converts can be changed
+            // while the server runs, and only some drivers keep the tally
+            // this reads.
+            let card_tallied = crate::cards::in_use(&state)
+                .await
+                .ok()
+                .flatten()
+                .is_some_and(|card| card.tallies_its_work());
+            let point = point_between(&before, &after, card_tallied, now);
             before = after;
             state.measuring().remember(point.clone());
 

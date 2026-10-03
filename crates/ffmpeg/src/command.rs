@@ -87,7 +87,9 @@ pub enum Rebuilding {
     /// three different things across the three codecs a card produces. A rate
     /// means the same thing to all of them.
     OnACard {
-        card: Card,
+        /// Held apart, since a card says a great deal more about itself than
+        /// anything else a command carries.
+        card: Box<Card>,
         /// Whether the card reads the film for itself as well.
         ///
         /// Only ever true of a codec it was proved to read. It changes the
@@ -131,6 +133,12 @@ pub struct VideoEncode {
     /// changes what the expression means. It stays alongside the picture,
     /// which is also the only form a viewer can switch off.
     pub burn_in_subtitle: Option<i32>,
+    /// How large the picture is as it is read, margins off, when it is known.
+    ///
+    /// Only a card whose filter cannot size what it lays needs it: the
+    /// subtitle is then brought to its size from this, before it is handed
+    /// up.
+    pub picture_size: Option<(i32, i32)>,
 }
 
 /// How often the tool is asked to say where it has got to, in seconds.
@@ -167,6 +175,7 @@ impl VideoEncode {
             tone_map: false,
             keyframe_interval: None,
             burn_in_subtitle: None,
+            picture_size: None,
         }
     }
 
@@ -180,7 +189,7 @@ impl VideoEncode {
         Some(Self {
             encoder,
             how: Rebuilding::OnACard {
-                card: card.clone(),
+                card: Box::new(card.clone()),
                 reads_the_film,
             },
             max_bitrate: None,
@@ -188,6 +197,7 @@ impl VideoEncode {
             tone_map: false,
             keyframe_interval: None,
             burn_in_subtitle: None,
+            picture_size: None,
         })
     }
 
@@ -197,7 +207,7 @@ impl VideoEncode {
             Rebuilding::OnACard {
                 card,
                 reads_the_film,
-            } => Some((card, *reads_the_film)),
+            } => Some((card.as_ref(), *reads_the_film)),
             Rebuilding::InSoftware { .. } => None,
         }
     }
@@ -532,8 +542,9 @@ impl Command {
         // before it knows every size: that wait is how a film seemed to hang
         // at its start. Saying how large the canvas is lets it begin at once.
         if self.painted_subtitle().is_some() {
+            let (width, height) = painting::CANVAS;
             push!("-canvas_size");
-            push!(painting::CANVAS);
+            push!(&format!("{width}x{height}"));
         }
 
         push!("-i");
@@ -684,6 +695,11 @@ impl Command {
                         "expr:gte(t,n_forced*{})",
                         format_seconds(interval)
                     ));
+                    if let Some((card, _)) = encode.card() {
+                        for argument in card.key_frame_arguments() {
+                            push!(argument);
+                        }
+                    }
                 }
                 // Wide compatibility beats a marginally smaller file here.
                 // Only ever in software: a picture sitting on a card is not
@@ -1287,8 +1303,6 @@ mod tests {
     /// it, which is what the maintainer's card is.
     fn a_card() -> Card {
         Card {
-            way: crate::capabilities::HardwareAcceleration::Vaapi,
-            device: PathBuf::from("/dev/dri/renderD128"),
             encoders: [
                 ("h264", "h264_vaapi"),
                 ("hevc", "hevc_vaapi"),
@@ -1301,10 +1315,78 @@ mod tests {
                 .into_iter()
                 .map(str::to_string)
                 .collect(),
-            can_scale: true,
-            can_tone_map: true,
+            tone_mapping: Some(crate::hardware::ToneMapping::OwnFilter),
             picture_subtitle_layout: Some("bgra".to_string()),
+            ..Card::unproved(
+                crate::capabilities::HardwareAcceleration::Vaapi,
+                "vaapi:0000:03:00.0".to_string(),
+                "Intel DG2 [Arc A380]".to_string(),
+                PathBuf::from("/dev/dri/renderD128"),
+                "/dev/dri/renderD128".to_string(),
+            )
         }
+    }
+
+    fn an_nvidia_card() -> Card {
+        Card {
+            encoders: [("h264", "h264_nvenc"), ("hevc", "hevc_nvenc")]
+                .into_iter()
+                .map(|(codec, encoder)| (codec.to_string(), encoder.to_string()))
+                .collect(),
+            decoders: ["h264", "hevc", "av1"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            picture_subtitle_layout: Some("yuva420p".to_string()),
+            ..Card::unproved(
+                crate::capabilities::HardwareAcceleration::Cuda,
+                "cuda:0000:0c:00.0".to_string(),
+                "NVIDIA GeForce RTX 3060".to_string(),
+                PathBuf::from("/dev/nvidia0"),
+                "0".to_string(),
+            )
+        }
+    }
+
+    #[test]
+    fn an_nvidia_card_starts_every_segment_on_a_picture_a_player_can_begin_with() {
+        let mut encode = VideoEncode::on_a_card(&an_nvidia_card(), "hevc", true).expect("proved");
+        encode.keyframe_interval = Some(Millis::new(4000));
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+
+        assert_eq!(args[position(&args, "-init_hw_device").expect("opened") + 1], "cuda=card:0");
+        assert!(args.contains(&"hevc_nvenc".to_string()));
+        let forced = position(&args, "-forced-idr").expect("forced key frames start a segment");
+        assert_eq!(args[forced + 1], "1");
+        assert!(forced > position(&args, "-force_key_frames").expect("key frames are forced"));
+    }
+
+    #[test]
+    fn an_nvidia_card_lays_a_subtitle_brought_to_its_size_at_the_foot_of_the_picture() {
+        // A 4K film cut to its picture, made 1080 lines tall: 2592 across,
+        // and a subtitle drawn for 1920 by 1080 fits it at its own size.
+        let mut encode = VideoEncode::on_a_card(&an_nvidia_card(), "h264", true).expect("proved");
+        encode.scale_to_height = Some(1080);
+        encode.burn_in_subtitle = Some(3);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        assert_eq!(
+            command.picture_painted_with_subtitles().expect("painted"),
+            "[0:v:0]scale_cuda=w=-2:h=1080:format=nv12,scale_cuda=format=yuv420p[picture];\
+             [0:3]scale=1920:1080,format=yuva420p,hwupload[words];\
+             [picture][words]overlay_cuda=x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
+        );
     }
 
     #[test]

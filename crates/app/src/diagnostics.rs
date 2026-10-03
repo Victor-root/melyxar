@@ -216,8 +216,9 @@ pub struct MediaToolsReport {
     /// Whether the graphics device is visible, which is what an unprivileged
     /// container most often gets wrong.
     pub graphics_device_present: bool,
-    /// The card that was proved to rebuild a picture, when there is one.
-    pub card: Option<CardReport>,
+    /// Every card proved to rebuild a picture, the one converting films
+    /// marked as such.
+    pub cards: Vec<CardReport>,
     /// Whether a graphics device was there and this server could open it.
     ///
     /// What separates the two ways a card goes unused. A device that will not
@@ -237,9 +238,14 @@ pub struct MediaToolsReport {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct CardReport {
+    pub name: String,
+    /// What it is chosen by in the administration.
+    pub key: String,
     pub device: String,
-    /// vaapi, qsv and so on.
+    /// vaapi, cuda and so on.
     pub way: &'static str,
+    /// Whether it is the one converting films.
+    pub in_use: bool,
     /// The codecs it was proved to produce.
     pub codecs: Vec<String>,
     /// The codecs it was proved to read for itself. A film in any other codec
@@ -383,6 +389,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
     ];
 
     let capabilities = state.capabilities();
+    let in_use = crate::cards::in_use(state).await?.map(|card| card.key);
 
     Ok(Diagnostics {
         version: melyxar_core::BUILD,
@@ -408,18 +415,26 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                 .is_some_and(melyxar_ffmpeg::Capabilities::supports_minimum_targets),
             can_convert_wide_gamut: capabilities
                 .is_some_and(melyxar_ffmpeg::Capabilities::can_tone_map_in_software),
-            graphics_device_present: std::path::Path::new(GRAPHICS_DEVICE).exists(),
-            card: capabilities
-                .and_then(melyxar_ffmpeg::Capabilities::card)
+            graphics_device_present: std::path::Path::new(GRAPHICS_DEVICE).exists()
+                || capabilities
+                    .is_some_and(|capabilities| !capabilities.card_search.devices.is_empty()),
+            cards: capabilities
+                .map(melyxar_ffmpeg::Capabilities::cards)
+                .unwrap_or_default()
+                .iter()
                 .map(|card| CardReport {
+                    name: card.name.clone(),
+                    key: card.key.clone(),
                     device: card.device.display().to_string(),
                     way: card.way.as_str(),
+                    in_use: in_use.as_ref() == Some(&card.key),
                     codecs: card.encoders.keys().cloned().collect(),
                     reads: card.decoders.iter().cloned().collect(),
                     can_scale: card.can_scale,
-                    can_tone_map: card.can_tone_map,
+                    can_tone_map: card.can_tone_map(),
                     can_paint_picture_subtitles: card.picture_subtitle_layout().is_some(),
-                }),
+                })
+                .collect(),
             card_device_opened: capabilities
                 .is_some_and(|capabilities| capabilities.card_search.a_device_opened()),
             card_trials: capabilities
@@ -824,19 +839,25 @@ pub fn render_text(report: &Diagnostics) -> String {
             ),
         );
 
-        // What was actually tried on the card, and what the tool said when it
+        // What was actually tried on each card, and what the tool said when it
         // refused. A card that is present and unused is the commonest thing to
         // go wrong here, and it is indistinguishable from no card at all
         // without these lines.
-        match &report.media_tools.card {
-            Some(card) => line!(
+        for card in &report.media_tools.cards {
+            line!(
                 "+",
                 format!(
-                    "a card is rebuilding pictures: {} ({}), writes {}, reads {}, can make a \
-                     picture smaller: {}, can convert wide gamut colour: {}, can paint a subtitle \
-                     made of pictures onto a picture: {}",
+                    "{}: {} ({}, {}, chosen by {}), writes {}, reads {}, can make a picture \
+                     smaller: {}, can convert wide gamut colour: {}, can paint a subtitle made of \
+                     pictures onto a picture: {}",
+                    match card.in_use {
+                        true => "a card is rebuilding pictures",
+                        false => "a card stands by",
+                    },
+                    card.name,
                     card.device,
                     card.way,
+                    card.key,
                     card.codecs.join(", "),
                     match card.reads.is_empty() {
                         true => "nothing, so the processor reads every film".to_string(),
@@ -846,33 +867,33 @@ pub fn render_text(report: &Diagnostics) -> String {
                     yes_no(card.can_tone_map),
                     yes_no(card.can_paint_picture_subtitles)
                 ),
-            ),
-            None => {
-                line!(
-                    "!",
-                    "no card is rebuilding pictures, so every one of them is rebuilt on the \
-                     processor"
-                        .to_string(),
-                );
-                // Which of the three it is, because they are fixed in three
-                // different places and the media tool words all three the same
-                // way: no display found.
-                line!(
-                    "!",
-                    if !report.media_tools.graphics_device_present {
-                        "and the graphics device is not visible here at all: an unprivileged \
-                         container has to be given /dev/dri explicitly"
-                    } else if report.media_tools.card_device_opened {
-                        "the device opens, and no video acceleration driver answers for it: that \
-                         driver is a package of its own, apart from the media tools"
-                    } else {
-                        "the device is there and this server is not allowed to open it: the \
-                         account it runs as has to belong to the group owning the device inside \
-                         the container"
-                    }
+            );
+        }
+        if report.media_tools.cards.is_empty() {
+            line!(
+                "!",
+                "no card is rebuilding pictures, so every one of them is rebuilt on the \
+                 processor"
                     .to_string(),
-                );
-            }
+            );
+            // Which of the three it is, because they are fixed in three
+            // different places and the media tool words all three the same
+            // way: no display found.
+            line!(
+                "!",
+                if !report.media_tools.graphics_device_present {
+                    "and the graphics device is not visible here at all: an unprivileged \
+                     container has to be given /dev/dri explicitly"
+                } else if report.media_tools.card_device_opened {
+                    "the device opens, and no video acceleration driver answers for it: that \
+                     driver is a package of its own, apart from the media tools"
+                } else {
+                    "the device is there and this server is not allowed to open it: the \
+                     account it runs as has to belong to the group owning the device inside \
+                     the container"
+                }
+                .to_string(),
+            );
         }
         for trial in &report.media_tools.card_trials {
             line!(

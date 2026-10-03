@@ -47,9 +47,9 @@ pub struct MediaTools {
     /// Whether both tools are still there and may be run.
     pub found: bool,
     pub version: Option<String>,
-    /// How the graphics card is reached when one was proven to work, by the
-    /// name of its way in (`vaapi`, `qsv`).
-    pub card: Option<&'static str>,
+    /// What the graphics card that converts films is called, when one was
+    /// proven to work.
+    pub card: Option<String>,
     /// Whether that card still opens.
     pub card_opens: bool,
 }
@@ -96,13 +96,13 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
         .device_counts(melyxar_core::time::now() - A_DAY)
         .await?;
     let capabilities = state.capabilities();
-    let card = capabilities.and_then(melyxar_ffmpeg::Capabilities::card);
+    let card = crate::cards::in_use(state).await?;
 
     let tools: Vec<PathBuf> = state
         .tools()
         .map(|tools| vec![tools.ffmpeg.clone(), tools.ffprobe.clone()])
         .unwrap_or_default();
-    let device = card.map(|card| card.device.clone());
+    let device = card.as_ref().map(|card| card.device.clone());
     let (tools_found, card_reachable) = tokio::task::spawn_blocking(move || {
         (
             !tools.is_empty() && tools.iter().all(|tool| may_run(tool)),
@@ -151,7 +151,7 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
         media_tools: MediaTools {
             found: tools_found,
             version: capabilities.map(|capabilities| capabilities.version.clone()),
-            card: card.map(|card| card.way.as_str()),
+            card: card.map(|card| card.name),
             card_opens: card_reachable,
         },
         accounts: database.user_count().await?,

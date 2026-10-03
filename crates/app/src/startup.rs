@@ -34,7 +34,9 @@ pub async fn bring_up(config: Config) -> Result<AppState> {
     // report asked for while a scan is under way would close that scan's row
     // under a server that is very much alive and still working. See
     // `close_what_a_previous_run_left`, which the server alone calls.
-    Ok(AppState::new(config, database, tools, capabilities))
+    let state = AppState::new(config, database, tools, capabilities);
+    report_the_card_in_use(&state).await;
+    Ok(state)
 }
 
 /// Closes the jobs a previous run left hanging, and says what they were.
@@ -304,36 +306,76 @@ fn report_the_card(capabilities: &Capabilities) {
         }
     }
 
-    match &search.card {
-        Some(card) => tracing::info!(
+    for card in &search.cards {
+        tracing::info!(
+            name = card.name,
+            key = card.key,
             device = %card.device.display(),
             way = card.way.as_str(),
             writes = ?card.encoders.keys().collect::<Vec<_>>(),
             reads = ?card.decoders.iter().collect::<Vec<_>>(),
             can_scale = card.can_scale,
-            can_tone_map = card.can_tone_map,
+            converts_wide_gamut_by = ?card.tone_mapping,
             paints_picture_subtitles_in = card.picture_subtitle_layout(),
-            "a card is rebuilding pictures"
-        ),
-        None if search.devices.is_empty() => tracing::warn!(
+            "a card passed its trials"
+        );
+    }
+
+    if !search.cards.is_empty() {
+        return;
+    }
+    if search.devices.is_empty() {
+        tracing::warn!(
             "no graphics device is visible here, so every picture is rebuilt on the processor; \
              an unprivileged container has to be given /dev/dri explicitly"
-        ),
-        // The device opened and then answered nothing. That is a driver, not a
-        // permission and not the card: the video acceleration driver is a
+        );
+    } else if search.a_device_opened() {
+        // The device opened and then answered nothing. That is a driver, not
+        // a permission and not the card: the video acceleration driver is a
         // package of its own, separate from the media tools, and a machine can
         // carry the card and the tools and still have no driver between them.
-        None if search.a_device_opened() => tracing::warn!(
+        tracing::warn!(
             devices = ?search.devices,
             "the graphics device opens but no video acceleration driver answers for it, so the \
              processor rebuilds every picture; that driver is a package of its own, apart from \
              the media tools"
-        ),
-        None => tracing::warn!(
+        );
+    } else {
+        tracing::warn!(
             devices = ?search.devices,
             "the graphics device is there and this server is not allowed to open it, so the \
              processor rebuilds every picture"
-        ),
+        );
+    }
+}
+
+/// Says which card converts films, which is a choice kept in the database,
+/// and when a card that was chosen did not pass its trials this time.
+async fn report_the_card_in_use(state: &AppState) {
+    let choice = match crate::cards::choice(state).await {
+        Ok(choice) => choice,
+        Err(error) => {
+            tracing::warn!(%error, "which card converts films could not be read");
+            return;
+        }
+    };
+    let Some(in_use) = choice.in_use.as_deref() else {
+        return;
+    };
+    if choice.chosen_is_missing() {
+        tracing::warn!(
+            chosen = choice.chosen.as_deref(),
+            in_use,
+            "the card chosen to convert films did not pass its trials this time, so the one \
+             that does the most converts them instead"
+        );
+    } else {
+        tracing::info!(
+            in_use,
+            chosen_by_hand = choice.chosen.is_some(),
+            cards = choice.cards.len(),
+            "this card converts films"
+        );
     }
 }
 

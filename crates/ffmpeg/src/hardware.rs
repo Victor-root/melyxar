@@ -12,6 +12,11 @@
 //! refused is kept word for word, because that sentence is the whole
 //! difference between "the card is not being used" and knowing why.
 //!
+//! Every card of the machine is tried, each through the path it is driven by:
+//! the open interface for Intel and AMD cards, Nvidia's own for Nvidia's. A
+//! machine can carry one of each, and which of them does the work is a choice
+//! made afterwards, among the cards that passed.
+//!
 //! One trial needs more than pixels. Converting wide gamut colour starts from
 //! the numbers describing the screen a film was graded on, so a picture made on
 //! the spot is no witness at all: it carries none, the filter refuses it, and
@@ -37,6 +42,31 @@ const GRAPHICS_DEVICES: &str = "/dev/dri";
 
 /// The devices that do the work, as opposed to the ones that drive a screen.
 const WORKING_DEVICE: &str = "renderD";
+
+/// Where the kernel describes each graphics device: who made it and where it
+/// sits on the machine.
+const DEVICE_DESCRIPTIONS: &str = "/sys/class/drm";
+
+/// Where Nvidia's driver lists its cards, one folder each, named after where
+/// the card sits on the machine.
+const NVIDIA_CARDS: &str = "/proc/driver/nvidia/gpus";
+
+/// Where Nvidia's device files are, numbered after the cards.
+const NVIDIA_DEVICES: &str = "/dev";
+
+/// The maker number of Nvidia's cards.
+///
+/// Their files under `/dev/dri` are never tried through the open interface:
+/// it is not how Nvidia's cards encode, and trying would only add refusals to
+/// the report.
+const NVIDIA: &str = "0x10de";
+
+/// Where the machine keeps the names of the hardware it may carry, when it
+/// keeps them at all. The first one found is read.
+const HARDWARE_NAMES: &[&str] = &["/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids"];
+
+/// The paths a card can be driven by, in the order their cards are tried.
+const WAYS: &[HardwareAcceleration] = &[HardwareAcceleration::Vaapi, HardwareAcceleration::Cuda];
 
 /// The codecs a card is asked about, cheapest for a viewer to decode last.
 ///
@@ -75,6 +105,9 @@ pub(crate) const TRIAL_HEIGHT: i32 = 180;
 /// The picture every trial is run on, made on the spot.
 const A_GENERATED_PICTURE: &str = "testsrc2=size=640x360:rate=25:duration=0.4";
 
+/// The size of that picture.
+pub(crate) const A_GENERATED_PICTURE_SIZE: (i32, i32) = (640, 360);
+
 /// The screen a wide gamut sample says it was graded on.
 ///
 /// The conversion filter does not ask for a picture labelled wide gamut: it
@@ -106,11 +139,56 @@ enum TrialInput<'a> {
     File(&'a Path),
 }
 
+/// How a card converts wide gamut colour to standard range.
+///
+/// A recipe rather than a yes or a no, because the paths differ in more than
+/// the name of a filter. The official tool converts on Intel and AMD cards with
+/// the card's own filter, and carries nothing of the kind for Nvidia's, where
+/// the conversion has to go through another interface opened on the same card.
+/// Each path offers its recipes best first, and the first one the card is
+/// proved to run is the one it keeps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToneMapping {
+    /// The card's own conversion filter.
+    OwnFilter,
+}
+
+impl ToneMapping {
+    /// The recipes one path offers, best first.
+    fn offered_on(way: HardwareAcceleration) -> &'static [Self] {
+        match way {
+            HardwareAcceleration::Vaapi => &[Self::OwnFilter],
+            // The official tool has no conversion of its own for these cards.
+            _ => &[],
+        }
+    }
+
+    /// The filter that converts, leaving the picture in the layout the
+    /// encoder takes.
+    fn filter(self, way: HardwareAcceleration) -> String {
+        match self {
+            Self::OwnFilter => format!("tonemap_{}=format=nv12", way.as_str()),
+        }
+    }
+}
+
 /// A card this machine can really rebuild a picture on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Card {
     pub way: HardwareAcceleration,
+    /// What the card is kept under when it is chosen: its path and where it
+    /// sits on the machine. The name of its device file can change from one
+    /// start to the next, where it sits does not.
+    pub key: String,
+    /// What a person calls it.
+    pub name: String,
+    /// The file opened to reach it, which is also what is checked to say it is
+    /// still there.
     pub device: PathBuf,
+    /// How the tool is told which card it is: its device file on the open
+    /// interface, its number on Nvidia's.
+    pub address: String,
     /// Codecs proven to come out of this card, each with the encoder that
     /// produced it. Proven one by one: a build carrying an encoder is not a
     /// driver that accepts it, and this generation of cards differs from the
@@ -128,12 +206,13 @@ pub struct Card {
     /// can; a card that cannot is used at the size of the film rather than not
     /// used at all.
     pub can_scale: bool,
-    /// Whether the card can convert wide gamut colour to standard range.
+    /// How the card converts wide gamut colour to standard range, when one way
+    /// was proved to work on it.
     ///
-    /// This is the expensive part of a wide gamut film, so a card that cannot
-    /// do it is left out of those films entirely and they are rebuilt in
-    /// software, where the ceiling on the picture size applies.
-    pub can_tone_map: bool,
+    /// This is the expensive part of a wide gamut film, so a card without one
+    /// is left out of those films entirely and they are rebuilt in software,
+    /// where the ceiling on the picture size applies.
+    pub tone_mapping: Option<ToneMapping>,
     /// The layout a subtitle made of pictures is handed up to the card in,
     /// when the card was proved to lay one onto a picture.
     ///
@@ -145,10 +224,37 @@ pub struct Card {
 }
 
 impl Card {
+    /// A card found on the machine and not yet asked anything.
+    pub(crate) fn unproved(
+        way: HardwareAcceleration,
+        key: String,
+        name: String,
+        device: PathBuf,
+        address: String,
+    ) -> Self {
+        Self {
+            way,
+            key,
+            name,
+            device,
+            address,
+            encoders: BTreeMap::new(),
+            decoders: BTreeSet::new(),
+            can_scale: true,
+            tone_mapping: None,
+            picture_subtitle_layout: None,
+        }
+    }
+
     /// The layout a subtitle made of pictures is handed up in, when this card
     /// was proved to paint one onto a picture.
     pub fn picture_subtitle_layout(&self) -> Option<&str> {
         self.picture_subtitle_layout.as_deref()
+    }
+
+    /// Whether the card was proved to convert wide gamut colour.
+    pub fn can_tone_map(&self) -> bool {
+        self.tone_mapping.is_some()
     }
 
     /// The encoder that produces one codec here, when this card produces it.
@@ -161,6 +267,42 @@ impl Card {
         self.decoders.contains(codec)
     }
 
+    /// Whether the driver keeps a tally of the card's work for each program
+    /// that has it open, which is how the server reads how busy it is.
+    ///
+    /// Nvidia's does not for the work done through its compute interface, and
+    /// a card read as idle while it converts is worse than one read as
+    /// nothing.
+    pub fn tallies_its_work(&self) -> bool {
+        self.way != HardwareAcceleration::Cuda
+    }
+
+    /// What the encoder is told so that a forced key frame starts a segment
+    /// a player can read on its own.
+    ///
+    /// Nvidia's encoders make a forced key frame a mere complete picture, and
+    /// a segment starting on one is a segment nothing can begin with.
+    pub fn key_frame_arguments(&self) -> &'static [&'static str] {
+        match self.way {
+            HardwareAcceleration::Cuda => &["-forced-idr", "1"],
+            _ => &[],
+        }
+    }
+
+    /// How much this card keeps away from the processor, compared between
+    /// cards when nobody chose one: converting colour first, since a film
+    /// that needs it and is refused goes to the processor whole, then painting
+    /// subtitles for the same reason, then how many codecs it writes and
+    /// reads.
+    fn reach(&self) -> (bool, bool, usize, usize) {
+        (
+            self.can_tone_map(),
+            self.picture_subtitle_layout.is_some(),
+            self.encoders.len(),
+            self.decoders.len(),
+        )
+    }
+
     /// What to put before the input so the tool opens the card.
     ///
     /// When the card reads the film too, that is said here rather than
@@ -170,7 +312,7 @@ impl Card {
         let way = self.way.as_str();
         let mut arguments = vec![
             "-init_hw_device".to_string(),
-            format!("{way}={DEVICE_NAME}:{}", self.device.display()),
+            format!("{way}={DEVICE_NAME}:{}", self.address),
             "-filter_hw_device".to_string(),
             DEVICE_NAME.to_string(),
         ];
@@ -202,7 +344,23 @@ impl Card {
         tone_map: bool,
         reads_the_film: bool,
     ) -> Vec<String> {
+        self.chain(
+            scale_to_height,
+            self.tone_mapping.filter(|_| tone_map),
+            reads_the_film,
+        )
+    }
+
+    /// The same chain, converting colour by one given recipe, which is how a
+    /// recipe is tried before the card keeps it.
+    fn chain(
+        &self,
+        scale_to_height: Option<i32>,
+        tone_mapping: Option<ToneMapping>,
+        reads_the_film: bool,
+    ) -> Vec<String> {
         let way = self.way.as_str();
+        let tone_map = tone_mapping.is_some();
         let mut filters = Vec::new();
 
         if !reads_the_film {
@@ -238,8 +396,8 @@ impl Card {
             (None, false) if reads_the_film => filters.push(format!("scale_{way}=format=nv12")),
             (None, _) => {}
         }
-        if tone_map {
-            filters.push(format!("tonemap_{way}=format=nv12"));
+        if let Some(recipe) = tone_mapping {
+            filters.push(recipe.filter(self.way));
         }
 
         filters
@@ -267,7 +425,8 @@ pub struct CardSearch {
     /// never given them.
     pub devices: Vec<String>,
     pub trials: Vec<Trial>,
-    pub card: Option<Card>,
+    /// Every card that passed, in the order they were found.
+    pub cards: Vec<Card>,
 }
 
 /// The trial that tells a forbidden device from a driverless one.
@@ -285,53 +444,100 @@ impl CardSearch {
             .any(|trial| trial.what == OPENING && trial.worked)
     }
 
-    /// Looks for a card and proves what it can do, or explains itself.
+    /// The card that rebuilds pictures: the one chosen, when it passed here,
+    /// otherwise the one that keeps the most away from the processor, the
+    /// first found among equals.
+    pub fn card(&self, chosen: Option<&str>) -> Option<&Card> {
+        chosen
+            .and_then(|key| self.cards.iter().find(|card| card.key == key))
+            .or_else(|| self.cards.iter().rev().max_by_key(|card| card.reach()))
+    }
+
+    /// Looks for every card and proves what each can do, or explains itself.
     ///
     /// `encoders` is what the tool was built with: there is no point trying a
     /// path the binary does not carry, and saying so is a clearer answer than
     /// a driver failure.
     pub async fn run(ffmpeg: &Path, encoders: &BTreeSet<String>) -> Self {
-        let devices = working_devices();
-        let mut search = Self {
-            devices: devices
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect(),
-            ..Self::default()
-        };
+        let mut search = Self::default();
+        let mut found = Vec::new();
 
-        let way = HardwareAcceleration::Vaapi;
-        let floor = encoder_name(THE_FLOOR, way);
-        if !encoders.contains(&floor) {
-            search.trials.push(Trial {
-                what: "built_with_the_path".to_string(),
-                device: String::new(),
-                worked: false,
-                said: format!("this build carries no {floor} encoder"),
-            });
+        for way in WAYS {
+            let cards = cards_on(*way);
+            tracing::debug!(
+                way = way.as_str(),
+                found = ?cards.iter().map(|card| (&card.key, &card.name, &card.address)).collect::<Vec<_>>(),
+                "looked for the cards this path drives"
+            );
+            search
+                .devices
+                .extend(cards.iter().map(|card| card.device.display().to_string()));
+            found.extend(search.what_this_build_drives(*way, cards, encoders));
+        }
+        if found.is_empty() {
             return search;
         }
 
-        for device in devices {
-            if let Some(card) = search.try_this_device(ffmpeg, way, device, encoders).await {
-                search.card = Some(card);
-                return search;
+        // Made once for every card: it stands in for a real wide gamut film
+        // and nothing about it depends on the card it is shown to.
+        let wide_gamut = wide_gamut_sample(ffmpeg).await;
+        if let Err(said) = &wide_gamut {
+            search.trials.push(Trial {
+                what: "make_a_wide_gamut_sample".to_string(),
+                device: String::new(),
+                worked: false,
+                said: said.clone(),
+            });
+        }
+        let wide_gamut = wide_gamut.ok();
+
+        for card in found {
+            if let Some(card) = search
+                .try_this_card(ffmpeg, card, encoders, wide_gamut.as_ref())
+                .await
+            {
+                search.cards.push(card);
             }
         }
 
         search
     }
 
-    /// Establishes what one device can do, or nothing when it cannot encode at
+    /// The cards of one path, when the tool was built to drive that path.
+    ///
+    /// Said only of a machine that has such a card: a build without Nvidia's
+    /// encoders is no news on a machine without an Nvidia card.
+    fn what_this_build_drives(
+        &mut self,
+        way: HardwareAcceleration,
+        cards: Vec<Card>,
+        encoders: &BTreeSet<String>,
+    ) -> Vec<Card> {
+        let floor = encoder_name(THE_FLOOR, way);
+        if cards.is_empty() || encoders.contains(&floor) {
+            return cards;
+        }
+        for card in &cards {
+            self.trials.push(Trial {
+                what: "built_with_the_path".to_string(),
+                device: card.device.display().to_string(),
+                worked: false,
+                said: format!("this build carries no {floor} encoder"),
+            });
+        }
+        Vec::new()
+    }
+
+    /// Establishes what one card can do, or nothing when it cannot encode at
     /// all.
-    async fn try_this_device(
+    async fn try_this_card(
         &mut self,
         ffmpeg: &Path,
-        way: HardwareAcceleration,
-        device: PathBuf,
+        mut card: Card,
         built_with: &BTreeSet<String>,
+        wide_gamut: Option<&Sample>,
     ) -> Option<Card> {
-        let named = device.display().to_string();
+        let named = card.device.display().to_string();
 
         // Asked first, because it is what tells the two failures apart. A
         // device that will not open is an account that is not allowed to use
@@ -342,7 +548,7 @@ impl CardSearch {
         if let Err(error) = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(&device)
+            .open(&card.device)
         {
             self.trials.push(Trial {
                 what: OPENING.to_string(),
@@ -363,16 +569,14 @@ impl CardSearch {
             said: String::new(),
         });
 
-        let mut encoders = BTreeMap::new();
         for codec in WORTH_TRYING {
-            let encoder = encoder_name(codec, way);
+            let encoder = encoder_name(codec, card.way);
             if !built_with.contains(&encoder) {
                 continue;
             }
             let (worked, said) = try_it(
                 ffmpeg,
-                way,
-                &device,
+                &card,
                 &encoder,
                 TrialInput::Generated,
                 "format=nv12,hwupload",
@@ -385,41 +589,20 @@ impl CardSearch {
                 said,
             });
             if worked {
-                encoders.insert((*codec).to_string(), encoder);
+                card.encoders.insert((*codec).to_string(), encoder);
             }
         }
 
         // Without the codec every client reads there would be clients this
         // card could serve nothing to, which is worse than no card at all.
-        if !encoders.contains_key(THE_FLOOR) {
-            return None;
-        }
-        let floor = encoders[THE_FLOOR].clone();
+        let floor = card.encoder_for(THE_FLOOR)?.to_string();
 
-        // The two remaining trials run the chain a real film will run, rather
-        // than something that resembles it: a filter that works on its own and
+        // The remaining trials run the chain a real film will run, rather than
+        // something that resembles it: a filter that works on its own and
         // refuses what comes out of the one before it is exactly the failure
         // that only shows up in the middle of somebody's film.
-        let mut card = Card {
-            way,
-            device,
-            encoders,
-            decoders: BTreeSet::new(),
-            can_scale: true,
-            can_tone_map: false,
-            picture_subtitle_layout: None,
-        };
-
-        let chain = card.filters_for(Some(TRIAL_HEIGHT), false, false).join(",");
-        let (can_scale, said) = try_it(
-            ffmpeg,
-            way,
-            &card.device,
-            &floor,
-            TrialInput::Generated,
-            &chain,
-        )
-        .await;
+        let chain = card.chain(Some(TRIAL_HEIGHT), None, false).join(",");
+        let (can_scale, said) = try_it(ffmpeg, &card, &floor, TrialInput::Generated, &chain).await;
         self.trials.push(Trial {
             what: "make_it_smaller".to_string(),
             device: named.clone(),
@@ -428,45 +611,65 @@ impl CardSearch {
         });
         card.can_scale = can_scale;
 
-        // The one trial that cannot be run on a picture made on the spot. It
-        // also stands in for a real wide gamut film everywhere below: it is
-        // one, down to the ten bits and the screen it says it was graded on.
-        let wide_gamut = wide_gamut_sample(ffmpeg).await;
-        match &wide_gamut {
-            Err(said) => self.trials.push(Trial {
-                what: "make_a_wide_gamut_sample".to_string(),
-                device: String::new(),
-                worked: false,
-                said: said.clone(),
-            }),
-            Ok(sample) => {
-                let chain = card.filters_for(Some(TRIAL_HEIGHT), true, false).join(",");
-                let (can_tone_map, said) = try_it(
-                    ffmpeg,
-                    way,
-                    &card.device,
-                    &floor,
-                    TrialInput::File(sample.path()),
-                    &chain,
-                )
-                .await;
-                self.trials.push(Trial {
-                    what: "convert_wide_gamut".to_string(),
-                    device: named.clone(),
-                    worked: can_tone_map,
-                    said,
-                });
-                card.can_tone_map = can_tone_map;
-            }
-        }
+        card.tone_mapping = self
+            .how_it_converts_colour(ffmpeg, &card, &floor, wide_gamut)
+            .await;
 
         card.picture_subtitle_layout = self.which_layout_it_paints_in(ffmpeg, &card, &floor).await;
 
         card.decoders = self
-            .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut.ok(), &named)
+            .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut, &named)
             .await;
 
         Some(card)
+    }
+
+    /// Establishes how the card converts wide gamut colour, trying what its
+    /// path offers best first and keeping the first that works.
+    ///
+    /// The one trial that cannot be run on a picture made on the spot: it is
+    /// run on the sample, which is a real wide gamut film down to the ten bits
+    /// and the screen it says it was graded on.
+    async fn how_it_converts_colour(
+        &mut self,
+        ffmpeg: &Path,
+        card: &Card,
+        floor: &str,
+        wide_gamut: Option<&Sample>,
+    ) -> Option<ToneMapping> {
+        let device = card.device.display().to_string();
+        let offered = ToneMapping::offered_on(card.way);
+        if offered.is_empty() {
+            self.trials.push(Trial {
+                what: "convert_wide_gamut".to_string(),
+                device,
+                worked: false,
+                said: format!(
+                    "the official media tool carries no way to convert wide gamut colour on a \
+                     card driven by {}",
+                    card.way.as_str()
+                ),
+            });
+            return None;
+        }
+        // Said once already, when the sample could not be made.
+        let sample = wide_gamut?;
+
+        for recipe in offered {
+            let chain = card.chain(Some(TRIAL_HEIGHT), Some(*recipe), false).join(",");
+            let (worked, said) =
+                try_it(ffmpeg, card, floor, TrialInput::File(sample.path()), &chain).await;
+            self.trials.push(Trial {
+                what: "convert_wide_gamut".to_string(),
+                device: device.clone(),
+                worked,
+                said,
+            });
+            if worked {
+                return Some(*recipe);
+            }
+        }
+        None
     }
 
     /// Establishes whether the card lays a subtitle made of pictures onto a
@@ -482,7 +685,7 @@ impl CardSearch {
         card: &Card,
         floor: &str,
     ) -> Option<String> {
-        for layout in painting::LAYOUTS {
+        for layout in painting::layouts(card.way) {
             let (worked, said) =
                 match run_briefly(ffmpeg, painting::trial_arguments(card, floor, layout)).await {
                     Ok(outcome) => outcome,
@@ -513,7 +716,7 @@ impl CardSearch {
         ffmpeg: &Path,
         card: &Card,
         floor: &str,
-        wide_gamut: Option<Sample>,
+        wide_gamut: Option<&Sample>,
         named: &str,
     ) -> BTreeSet<String> {
         let mut reads = BTreeSet::new();
@@ -522,7 +725,7 @@ impl CardSearch {
             // A wide gamut sample carries ten bits to a channel, which is what
             // every film worth the card is, and reading eight proves nothing
             // about reading ten. Where one exists it is the better witness.
-            let sample = match (*codec == WIDE_GAMUT_CODEC, &wide_gamut) {
+            let sample = match (*codec == WIDE_GAMUT_CODEC, wide_gamut) {
                 (true, Some(sample)) => Some(Kept::Borrowed(sample)),
                 _ => match card.encoder_for(codec) {
                     Some(encoder) => match sample_in(ffmpeg, card, encoder).await {
@@ -552,7 +755,7 @@ impl CardSearch {
             // encoder refuses has not read it, as far as a viewer is
             // concerned, and that refusal comes at the end of the chain.
             let chain = card
-                .filters_for(None, *codec == WIDE_GAMUT_CODEC && card.can_tone_map, true)
+                .filters_for(None, *codec == WIDE_GAMUT_CODEC, true)
                 .join(",");
             let (worked, said) = try_reading(ffmpeg, card, floor, sample.path(), &chain).await;
             self.trials.push(Trial {
@@ -587,11 +790,21 @@ impl Kept<'_> {
 
 /// What the encoder of one codec is called on one hardware path.
 fn encoder_name(codec: &str, way: HardwareAcceleration) -> String {
-    format!("{codec}_{}", way.as_str())
+    format!("{codec}_{}", way.encoders_are_called())
 }
 
-/// The devices that do the work, in the order the machine lists them.
-fn working_devices() -> Vec<PathBuf> {
+/// The cards one path can drive, in the order the machine lists them.
+fn cards_on(way: HardwareAcceleration) -> Vec<Card> {
+    match way {
+        HardwareAcceleration::Vaapi => open_interface_cards(),
+        HardwareAcceleration::Cuda => nvidia_cards(),
+        _ => Vec::new(),
+    }
+}
+
+/// The cards driven by the open interface: every working device under
+/// `/dev/dri` that is not Nvidia's.
+fn open_interface_cards() -> Vec<Card> {
     let Ok(entries) = std::fs::read_dir(GRAPHICS_DEVICES) else {
         return Vec::new();
     };
@@ -606,7 +819,157 @@ fn working_devices() -> Vec<PathBuf> {
         .map(|entry| entry.path())
         .collect();
     devices.sort();
+
     devices
+        .into_iter()
+        .filter_map(|device| {
+            let file = device.file_name()?.to_string_lossy().into_owned();
+            let described = Path::new(DEVICE_DESCRIPTIONS).join(&file).join("device");
+            let read = |field: &str| {
+                std::fs::read_to_string(described.join(field))
+                    .map(|value| value.trim().to_lowercase())
+                    .ok()
+            };
+            let vendor = read("vendor");
+            if vendor.as_deref() == Some(NVIDIA) {
+                tracing::debug!(
+                    device = %device.display(),
+                    "an Nvidia card's device is left to the path Nvidia's cards are driven by"
+                );
+                return None;
+            }
+            // Where it sits on the machine, read from where its description
+            // leads. A machine that does not say keeps the device file, which
+            // is the best name left.
+            let slot = std::fs::canonicalize(&described)
+                .ok()
+                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()));
+            let name = match (&vendor, read("device")) {
+                // Two cards of the same maker would otherwise read the same.
+                (Some(vendor), Some(model)) => model_named(vendor, &model)
+                    .unwrap_or_else(|| format!("{} ({file})", maker_of(vendor))),
+                (Some(vendor), None) => format!("{} ({file})", maker_of(vendor)),
+                _ => file.clone(),
+            };
+            let address = device.display().to_string();
+            Some(Card::unproved(
+                HardwareAcceleration::Vaapi,
+                format!("vaapi:{}", slot.unwrap_or_else(|| address.clone())),
+                name,
+                device,
+                address,
+            ))
+        })
+        .collect()
+}
+
+/// The cards Nvidia's driver lists, numbered in the order of where they sit
+/// on the machine.
+///
+/// The tool names one of them by that number. The server is started with the
+/// compute interface asked to count in that same order, which makes the two
+/// agree whatever card the driver would put first on its own.
+fn nvidia_cards() -> Vec<Card> {
+    let Ok(entries) = std::fs::read_dir(NVIDIA_CARDS) else {
+        return Vec::new();
+    };
+    let mut slots: Vec<String> = entries
+        .filter_map(std::result::Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    slots.sort();
+
+    slots
+        .into_iter()
+        .enumerate()
+        .filter_map(|(number, slot)| {
+            let information =
+                std::fs::read_to_string(Path::new(NVIDIA_CARDS).join(&slot).join("information"))
+                    .ok()?;
+            let described = nvidia_information(&information);
+            Some(Card::unproved(
+                HardwareAcceleration::Cuda,
+                format!("cuda:{slot}"),
+                described.model.unwrap_or_else(|| "NVIDIA".to_string()),
+                Path::new(NVIDIA_DEVICES).join(format!("nvidia{}", described.minor.unwrap_or(number))),
+                number.to_string(),
+            ))
+        })
+        .collect()
+}
+
+/// What Nvidia's driver says of one card.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct NvidiaInformation {
+    model: Option<String>,
+    /// The number of its device file.
+    minor: Option<usize>,
+}
+
+fn nvidia_information(text: &str) -> NvidiaInformation {
+    let mut described = NvidiaInformation::default();
+    for (field, value) in text.lines().filter_map(|line| line.split_once(':')) {
+        let value = value.trim();
+        match field.trim() {
+            "Model" if !value.is_empty() => described.model = Some(value.to_string()),
+            "Device Minor" => described.minor = value.parse().ok(),
+            _ => {}
+        }
+    }
+    described
+}
+
+/// Who made a card, from its maker number.
+fn maker_of(vendor: &str) -> String {
+    match vendor {
+        "0x8086" => "Intel".to_string(),
+        "0x1002" => "AMD".to_string(),
+        NVIDIA => "NVIDIA".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// What the machine's list of hardware names calls one card, when it keeps
+/// that list.
+fn model_named(vendor: &str, model: &str) -> Option<String> {
+    let list = HARDWARE_NAMES
+        .iter()
+        .find_map(|path| std::fs::read_to_string(path).ok())?;
+    model_in(&list, vendor, model).map(|model| format!("{} {model}", maker_of(vendor)))
+}
+
+/// Finds a card's model in the list of hardware names.
+///
+/// The list names each maker on a line of its own, by number, and its models
+/// on the lines under it, each set in by one tab. Numbers are written there
+/// without the `0x` the kernel puts in front of them.
+fn model_in(list: &str, vendor: &str, model: &str) -> Option<String> {
+    let vendor = vendor.trim_start_matches("0x");
+    let model = model.trim_start_matches("0x");
+    let mut under_the_maker = false;
+    for line in list.lines() {
+        if line.starts_with('#') || line.trim().is_empty() {
+            continue;
+        }
+        match line.strip_prefix('\t') {
+            None => {
+                if under_the_maker {
+                    return None;
+                }
+                under_the_maker = line.split_whitespace().next() == Some(vendor);
+            }
+            // A line set in twice is a variant of the model above it.
+            Some(entry) if under_the_maker && !entry.starts_with('\t') => {
+                if let Some((number, name)) = entry.split_once(char::is_whitespace)
+                    && number == model
+                {
+                    return Some(name.trim().to_string());
+                }
+            }
+            Some(_) => {}
+        }
+    }
+    None
 }
 
 /// A wide gamut sample on disk, removed when the trial is done with it.
@@ -802,8 +1165,7 @@ async fn try_reading(
 /// film on the disk.
 async fn try_it(
     ffmpeg: &Path,
-    way: HardwareAcceleration,
-    device: &Path,
+    card: &Card,
     encoder: &str,
     input: TrialInput<'_>,
     filters: &str,
@@ -818,20 +1180,12 @@ async fn try_it(
         TrialInput::File(path) => vec!["-i".to_string(), path.display().to_string()],
     };
 
-    let arguments = [
-        "-hide_banner",
-        "-nostdin",
-        "-loglevel",
-        "error",
-        "-init_hw_device",
-        &format!("{}={DEVICE_NAME}:{}", way.as_str(), device.display()),
-        "-filter_hw_device",
-        DEVICE_NAME,
-    ]
-    .map(str::to_string)
-    .into_iter()
-    .chain(read)
-    .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
+    let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
+        .map(str::to_string)
+        .into_iter()
+        .chain(card.opening_arguments(false))
+        .chain(read)
+        .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
 
     match run_briefly(ffmpeg, arguments).await {
         Ok(outcome) => outcome,
@@ -856,8 +1210,6 @@ mod tests {
 
     fn card(can_scale: bool, can_tone_map: bool) -> Card {
         Card {
-            way: HardwareAcceleration::Vaapi,
-            device: PathBuf::from("/dev/dri/renderD128"),
             encoders: [
                 ("h264".to_string(), "h264_vaapi".to_string()),
                 ("av1".to_string(), "av1_vaapi".to_string()),
@@ -866,9 +1218,178 @@ mod tests {
             .collect(),
             decoders: ["hevc".to_string()].into_iter().collect(),
             can_scale,
-            can_tone_map,
-            picture_subtitle_layout: None,
+            tone_mapping: can_tone_map.then_some(ToneMapping::OwnFilter),
+            ..Card::unproved(
+                HardwareAcceleration::Vaapi,
+                "vaapi:0000:03:00.0".to_string(),
+                "Intel DG2 [Arc A380]".to_string(),
+                PathBuf::from("/dev/dri/renderD128"),
+                "/dev/dri/renderD128".to_string(),
+            )
         }
+    }
+
+    fn nvidia_card() -> Card {
+        Card {
+            encoders: [
+                ("h264".to_string(), "h264_nvenc".to_string()),
+                ("hevc".to_string(), "hevc_nvenc".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+            decoders: ["h264".to_string(), "hevc".to_string(), "av1".to_string()]
+                .into_iter()
+                .collect(),
+            ..Card::unproved(
+                HardwareAcceleration::Cuda,
+                "cuda:0000:0c:00.0".to_string(),
+                "NVIDIA GeForce RTX 3060".to_string(),
+                PathBuf::from("/dev/nvidia0"),
+                "0".to_string(),
+            )
+        }
+    }
+
+    #[test]
+    fn an_nvidia_card_is_named_by_its_number_and_written_by_its_own_encoders() {
+        // The tool names one of these cards by its number, never by a file,
+        // and calls its encoders after Nvidia's encoder rather than after the
+        // path.
+        let card = nvidia_card();
+        assert_eq!(
+            card.opening_arguments(true),
+            vec![
+                "-init_hw_device".to_string(),
+                "cuda=card:0".to_string(),
+                "-filter_hw_device".to_string(),
+                "card".to_string(),
+                "-hwaccel".to_string(),
+                "cuda".to_string(),
+                "-hwaccel_output_format".to_string(),
+                "cuda".to_string(),
+                "-hwaccel_device".to_string(),
+                "card".to_string(),
+            ]
+        );
+        assert_eq!(encoder_name("hevc", HardwareAcceleration::Cuda), "hevc_nvenc");
+        assert_eq!(encoder_name("hevc", HardwareAcceleration::Vaapi), "hevc_vaapi");
+    }
+
+    #[test]
+    fn an_nvidia_card_makes_a_picture_smaller_with_its_own_filter() {
+        assert_eq!(
+            nvidia_card().filters_for(Some(1080), false, true),
+            vec!["scale_cuda=w=-2:h=1080:format=nv12".to_string()]
+        );
+        assert_eq!(
+            nvidia_card().filters_for(None, false, false),
+            vec!["format=nv12".to_string(), "hwupload".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_card_with_no_way_to_convert_colour_is_never_asked_to() {
+        // The official tool carries no conversion for Nvidia's cards, and a
+        // chain asking for one would be refused in the middle of a film.
+        let filters = nvidia_card().filters_for(Some(1080), true, true);
+        assert!(!filters.iter().any(|value| value.contains("tonemap")), "{filters:?}");
+        assert!(ToneMapping::offered_on(HardwareAcceleration::Cuda).is_empty());
+        assert!(!nvidia_card().can_tone_map());
+    }
+
+    #[test]
+    fn a_forced_key_frame_on_an_nvidia_card_starts_a_segment_a_player_can_begin_with() {
+        assert_eq!(nvidia_card().key_frame_arguments(), &["-forced-idr", "1"]);
+        assert!(card(true, true).key_frame_arguments().is_empty());
+    }
+
+    #[test]
+    fn the_work_of_an_nvidia_card_is_said_to_be_unknown_rather_than_idle() {
+        assert!(!nvidia_card().tallies_its_work());
+        assert!(card(true, true).tallies_its_work());
+    }
+
+    #[test]
+    fn the_chosen_card_does_the_work_when_it_passed_here() {
+        let search = CardSearch {
+            cards: vec![card(true, true), nvidia_card()],
+            ..CardSearch::default()
+        };
+        assert_eq!(
+            search.card(Some("cuda:0000:0c:00.0")).map(|card| card.way),
+            Some(HardwareAcceleration::Cuda)
+        );
+        // A choice kept for a card that is gone is no reason to use none.
+        assert_eq!(
+            search.card(Some("cuda:0000:01:00.0")).map(|card| card.way),
+            Some(HardwareAcceleration::Vaapi)
+        );
+    }
+
+    #[test]
+    fn without_a_choice_the_card_that_keeps_the_most_off_the_processor_works() {
+        // Converting colour first: a film that needs it and is refused goes
+        // to the processor whole, whatever else the other card does better.
+        let search = CardSearch {
+            cards: vec![nvidia_card(), card(true, true)],
+            ..CardSearch::default()
+        };
+        assert_eq!(
+            search.card(None).map(|card| card.way),
+            Some(HardwareAcceleration::Vaapi)
+        );
+
+        // Among equals, the first one found.
+        let twins = CardSearch {
+            cards: vec![
+                card(true, false),
+                Card {
+                    key: "vaapi:0000:04:00.0".to_string(),
+                    ..card(true, false)
+                },
+            ],
+            ..CardSearch::default()
+        };
+        assert_eq!(
+            twins.card(None).map(|card| card.key.as_str()),
+            Some("vaapi:0000:03:00.0")
+        );
+        assert!(CardSearch::default().card(None).is_none());
+    }
+
+    #[test]
+    fn what_nvidias_driver_says_of_a_card_is_read() {
+        let information = "Model: \t\t NVIDIA GeForce RTX 3060\n\
+             IRQ:   \t\t 140\n\
+             Bus Location: \t 0000:0c:00.0\n\
+             Device Minor: \t 0\n\
+             GPU Excluded:\t No\n";
+        assert_eq!(
+            nvidia_information(information),
+            NvidiaInformation {
+                model: Some("NVIDIA GeForce RTX 3060".to_string()),
+                minor: Some(0),
+            }
+        );
+        assert_eq!(nvidia_information(""), NvidiaInformation::default());
+    }
+
+    #[test]
+    fn a_cards_model_is_found_under_its_maker_in_the_list_of_names() {
+        let list = "# a comment\n\
+             1002  Advanced Micro Devices, Inc. [AMD/ATI]\n\
+             \t56a5  Something else\n\
+             8086  Intel Corporation\n\
+             \t5690  DG2 [Arc A770M]\n\
+             \t56a5  DG2 [Arc A380]\n\
+             \t\t1234 5678  A variant\n\
+             10de  NVIDIA Corporation\n";
+        assert_eq!(
+            model_in(list, "0x8086", "0x56a5"),
+            Some("DG2 [Arc A380]".to_string())
+        );
+        assert_eq!(model_in(list, "0x8086", "0xffff"), None);
+        assert_eq!(model_in(list, "0x1234", "0x56a5"), None);
     }
 
     #[test]
@@ -990,15 +1511,37 @@ mod tests {
         assert!(kept.ends_with("..."));
     }
 
-    #[tokio::test]
-    async fn a_path_this_build_does_not_carry_is_said_plainly_rather_than_tried() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let search = CardSearch::run(&tools.ffmpeg, &BTreeSet::new()).await;
+    #[test]
+    fn a_path_this_build_does_not_carry_is_said_plainly_rather_than_tried() {
+        let mut search = CardSearch::default();
+        let kept = search.what_this_build_drives(
+            HardwareAcceleration::Cuda,
+            vec![nvidia_card()],
+            &["h264_vaapi".to_string()].into_iter().collect(),
+        );
 
-        assert!(search.card.is_none());
+        assert!(kept.is_empty());
         assert_eq!(search.trials.len(), 1);
         assert_eq!(search.trials[0].what, "built_with_the_path");
-        assert!(search.trials[0].said.contains("h264_vaapi"));
+        assert_eq!(search.trials[0].device, "/dev/nvidia0");
+        assert!(search.trials[0].said.contains("h264_nvenc"));
+    }
+
+    #[test]
+    fn a_build_without_a_path_is_no_news_on_a_machine_without_its_cards() {
+        let mut search = CardSearch::default();
+        let kept =
+            search.what_this_build_drives(HardwareAcceleration::Cuda, Vec::new(), &BTreeSet::new());
+        assert!(kept.is_empty());
+        assert!(search.trials.is_empty(), "{:?}", search.trials);
+
+        let carried = search.what_this_build_drives(
+            HardwareAcceleration::Cuda,
+            vec![nvidia_card()],
+            &["h264_nvenc".to_string()].into_iter().collect(),
+        );
+        assert_eq!(carried.len(), 1);
+        assert!(search.trials.is_empty());
     }
 
     #[tokio::test]
@@ -1078,11 +1621,13 @@ mod tests {
         // What a container that was never given the graphics device looks
         // like, and what this working environment is.
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let encoders = ["h264_vaapi".to_string()].into_iter().collect();
+        let encoders = ["h264_vaapi".to_string(), "h264_nvenc".to_string()]
+            .into_iter()
+            .collect();
         let search = CardSearch::run(&tools.ffmpeg, &encoders).await;
 
         if search.devices.is_empty() {
-            assert!(search.card.is_none(), "there is no device to have used");
+            assert!(search.cards.is_empty(), "there is no device to have used");
             assert!(
                 search.trials.is_empty(),
                 "nothing to try, and nothing is claimed: {:?}",

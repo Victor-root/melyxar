@@ -218,7 +218,7 @@ fn video_encode_for(
         // A card that cannot convert wide gamut colour would hand back a
         // picture that is grey, which is not what anybody would be measuring.
         // The same rule a real playback of this film goes by.
-        .filter(|card| !against.wide_gamut || card.can_tone_map);
+        .filter(|card| !against.wide_gamut || card.can_tone_map());
 
     let mut encode = match usable_card {
         Some(card) => {
@@ -297,7 +297,7 @@ fn codecs_offered(
         .filter(|codec| allowed.iter().any(|one| one.eq_ignore_ascii_case(codec)))
         .filter(|codec| {
             let on_the_card = card
-                .filter(|card| !wide_gamut || card.can_tone_map)
+                .filter(|card| !wide_gamut || card.can_tone_map())
                 .is_some_and(|card| card.encoder_for(codec).is_some());
             on_the_card || codec.eq_ignore_ascii_case(melyxar_playback::profile::ALWAYS_READ)
         })
@@ -306,10 +306,11 @@ fn codecs_offered(
 }
 
 async fn plan(state: &AppState, who: &melyxar_core::user::User) -> Result<Plan> {
-    let capabilities = state.capabilities().ok_or_else(no_tools)?;
-    let against = what_to_measure_against(state, who, capabilities.card()).await?;
+    state.capabilities().ok_or_else(no_tools)?;
+    let card = crate::cards::in_use(state).await?;
+    let against = what_to_measure_against(state, who, card.as_ref()).await?;
     let allowed = state.database().transcoding_limits().await?.video_codecs;
-    let codecs = codecs_offered(&allowed, capabilities.card(), against.wide_gamut);
+    let codecs = codecs_offered(&allowed, card.as_ref(), against.wide_gamut);
     let heights = heights_for(against.native_height);
     let clips = codecs
         .iter()
@@ -372,10 +373,7 @@ pub async fn prepare(state: &AppState, who: &melyxar_core::user::User) -> Result
         );
     }
     let tools = state.tools().ok_or_else(no_tools)?.clone();
-    let card = state
-        .capabilities()
-        .and_then(melyxar_ffmpeg::Capabilities::card)
-        .cloned();
+    let card = crate::cards::in_use(state).await?;
     tracing::info!(
         film = %plan.against.named,
         clips = missing.len(),

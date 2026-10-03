@@ -163,9 +163,7 @@ impl PictureRebuild {
 
     /// What the card is called, for a log line and for a page.
     pub fn card_name(&self) -> Option<String> {
-        self.card
-            .as_ref()
-            .map(|card| card.device.display().to_string())
+        self.card.as_ref().map(|card| card.name.clone())
     }
 }
 
@@ -317,11 +315,12 @@ pub async fn plan(
         },
     );
 
+    let card = crate::cards::in_use(state).await?;
     let rebuild = how_to_rebuild(
         &decision,
         &tracks,
         &profile,
-        state.capabilities(),
+        card.as_ref(),
         subtitle_to_paint_on(&decision, &tracks).is_some(),
         &state.database().transcoding_limits().await?.video_codecs,
         request.preferred_video_codec.as_deref(),
@@ -353,9 +352,8 @@ pub async fn plan(
         subtitles = ?decision.subtitles,
         tone_map = decision.tone_map,
         picture_subtitle_painted = subtitle_to_paint_on(&decision, &tracks).is_some(),
-        card_paints_picture_subtitles = state
-            .capabilities()
-            .and_then(melyxar_ffmpeg::Capabilities::card)
+        card_paints_picture_subtitles = card
+            .as_ref()
             .map(|card| card.picture_subtitle_layout().is_some()),
         rebuilt_by = rebuild.as_ref().map(|rebuild| match rebuild.on_a_card() {
             true => "card",
@@ -713,6 +711,16 @@ const TALLEST_SOFTWARE_REBUILD: i32 = 1080;
 /// it answered is a picture that never appears.
 const BEST_FIRST: &[&str] = &["av1", "hevc", melyxar_playback::profile::ALWAYS_READ];
 
+/// How large the picture of a film is, margins off, when it holds one.
+fn size_of(tracks: &[Track]) -> Option<(i32, i32)> {
+    tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => {
+            Some((details.visible_width(), details.visible_height()))
+        }
+        _ => None,
+    })
+}
+
 /// How tall the picture of a film is, when it holds one.
 fn height_of(tracks: &[Track]) -> Option<i32> {
     tracks.iter().find_map(|track| match &track.kind {
@@ -793,7 +801,7 @@ fn how_to_rebuild(
     decision: &PlaybackDecision,
     tracks: &[Track],
     profile: &ClientProfile,
-    capabilities: Option<&melyxar_ffmpeg::Capabilities>,
+    card: Option<&melyxar_ffmpeg::Card>,
     painting_subtitles: bool,
     enabled_codecs: &[String],
     requested_codec: Option<&str>,
@@ -803,15 +811,14 @@ fn how_to_rebuild(
     }
     let source_height = height_of(tracks);
 
-    let card = capabilities
-        .and_then(melyxar_ffmpeg::Capabilities::card)
+    let card = card
         // A subtitle made of pictures is laid on the picture where the picture
         // is, which is only the card once it has proved it can. Until then it
         // is the processor, which has nothing to prove.
         .filter(|card| !painting_subtitles || card.picture_subtitle_layout().is_some())
         // A card that cannot convert wide gamut colour would hand back a film
         // that is grey, which is worse than one that is merely smaller.
-        .filter(|card| !decision.tone_map || card.can_tone_map);
+        .filter(|card| !decision.tone_map || card.can_tone_map());
 
     // The height the picture will really be, which is what the client answered
     // about. A card rebuilds at the film's own size unless the viewer asked for
@@ -1084,6 +1091,7 @@ fn encode_for(
     encode.max_bitrate = rebuild.bitrate;
     encode.tone_map = plan.decision.tone_map;
     encode.burn_in_subtitle = painted_on;
+    encode.picture_size = size_of(&plan.tracks);
     // Key frames on the segment boundaries, which is what lets any segment be
     // produced on its own rather than only after the one before it.
     encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
@@ -2218,6 +2226,10 @@ mod tests {
             panic!("painting a subtitle on means rebuilding the picture");
         };
         assert_eq!(encode.burn_in_subtitle, Some(words.stream_index));
+        assert!(
+            encode.picture_size.is_some(),
+            "a card that cannot size what it lays has the subtitle sized from this"
+        );
     }
 
     #[tokio::test]
@@ -2517,25 +2529,18 @@ mod tests {
     fn a_card(codecs: &[&str], can_tone_map: bool) -> melyxar_ffmpeg::Card {
         melyxar_ffmpeg::Card {
             way: melyxar_ffmpeg::HardwareAcceleration::Vaapi,
+            key: "vaapi:0000:03:00.0".to_string(),
+            name: "Intel DG2 [Arc A380]".to_string(),
             device: PathBuf::from("/dev/dri/renderD128"),
+            address: "/dev/dri/renderD128".to_string(),
             encoders: codecs
                 .iter()
                 .map(|codec| ((*codec).to_string(), format!("{codec}_vaapi")))
                 .collect(),
             decoders: codecs.iter().map(|codec| (*codec).to_string()).collect(),
             can_scale: true,
-            can_tone_map,
+            tone_mapping: can_tone_map.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
             picture_subtitle_layout: Some("bgra".to_string()),
-        }
-    }
-
-    fn capabilities_with(card: Option<melyxar_ffmpeg::Card>) -> melyxar_ffmpeg::Capabilities {
-        melyxar_ffmpeg::Capabilities {
-            card_search: melyxar_ffmpeg::CardSearch {
-                card,
-                ..Default::default()
-            },
-            ..capabilities_of_a_usual_tool()
         }
     }
 
@@ -2545,7 +2550,7 @@ mod tests {
         // cost nothing here. What settles which one a viewer gets is how far
         // the client said it decodes each of them, never a rule written here.
         let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
-        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+        let card = a_card(&["h264", "hevc", "av1"], true);
 
         let keeps_up_with_everything = ClientProfile {
             rebuilt_video: vec![
@@ -2666,7 +2671,7 @@ mod tests {
     #[test]
     fn a_rate_a_viewer_asked_for_is_the_rate_the_card_is_given() {
         let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
-        let card = capabilities_with(Some(a_card(&["h264", "av1"], true)));
+        let card = a_card(&["h264", "av1"], true);
         let profile = ClientProfile {
             rebuilt_video: vec![
                 RebuiltCapability::any("h264"),
@@ -2718,7 +2723,7 @@ mod tests {
         // asks for h264 gets h264 even though the client here keeps up with
         // everything and would ordinarily be given the newer codec.
         let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
-        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+        let card = a_card(&["h264", "hevc", "av1"], true);
         let keeps_up_with_everything = ClientProfile {
             rebuilt_video: vec![
                 RebuiltCapability::any("h264"),
@@ -2759,7 +2764,7 @@ mod tests {
 
         // Asked for a codec the card was never proved to write: the request
         // cannot be honoured, so the usual negotiation decides instead.
-        let card_without_av1 = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let card_without_av1 = a_card(&["h264", "hevc"], true);
         let cannot_write_it = how_to_rebuild(
             &rebuilding(None, true, None),
             &tracks,
@@ -2781,7 +2786,7 @@ mod tests {
         // real decoder on the same machine and is chosen instead, without
         // anybody having to force it by hand.
         let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
-        let card = capabilities_with(Some(a_card(&["h264", "hevc", "av1"], true)));
+        let card = a_card(&["h264", "hevc", "av1"], true);
         let av1_only_in_software = ClientProfile {
             rebuilt_video: vec![
                 RebuiltCapability::any("h264"),
@@ -2858,11 +2863,11 @@ mod tests {
 
         let tracks = plan.tracks.clone();
         let profile = ClientProfile::conservative_browser();
-        let reads_hevc = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
-        let reads_nothing_useful = capabilities_with(Some(melyxar_ffmpeg::Card {
+        let reads_hevc = a_card(&["h264", "hevc"], true);
+        let reads_nothing_useful = melyxar_ffmpeg::Card {
             decoders: Default::default(),
             ..a_card(&["h264", "hevc"], true)
-        }));
+        };
 
         let on_the_card = how_to_rebuild(
             &plan.decision,
@@ -2947,7 +2952,7 @@ mod tests {
         .await
         .expect("a plan");
 
-        let reads_hevc = capabilities_with(Some(a_card(&["h264", "hevc"], true)));
+        let reads_hevc = a_card(&["h264", "hevc"], true);
         let rebuild = how_to_rebuild(
             &plan.decision,
             &plan.tracks,
@@ -2976,7 +2981,7 @@ mod tests {
             &rebuilding(None, false, None),
             &tracks,
             &ClientProfile::conservative_browser(),
-            Some(&capabilities_with(Some(a_card(&["h264"], true)))),
+            Some(&a_card(&["h264"], true)),
             true,
             &all_codecs(),
             None,
@@ -2999,7 +3004,7 @@ mod tests {
             &rebuilding(None, false, None),
             &tracks,
             &ClientProfile::conservative_browser(),
-            Some(&capabilities_with(Some(unproved.clone()))),
+            Some(&unproved.clone()),
             true,
             &all_codecs(),
             None,
@@ -3015,7 +3020,7 @@ mod tests {
             &rebuilding(None, false, None),
             &tracks,
             &ClientProfile::conservative_browser(),
-            Some(&capabilities_with(Some(unproved))),
+            Some(&unproved),
             false,
             &all_codecs(),
             None,
@@ -3037,7 +3042,7 @@ mod tests {
             &rebuilding(None, false, None),
             &tracks,
             &profile,
-            Some(&capabilities_with(Some(a_card(&["h264", "hevc"], true)))),
+            Some(&a_card(&["h264", "hevc"], true)),
             false,
             &all_codecs(),
             None,
@@ -3057,7 +3062,7 @@ mod tests {
             &untouched,
             &tracks,
             &ClientProfile::conservative_browser(),
-            Some(&capabilities_with(Some(a_card(&["h264"], true)))),
+            Some(&a_card(&["h264"], true)),
             false,
             &all_codecs(),
             None,
