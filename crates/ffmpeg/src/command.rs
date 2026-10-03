@@ -418,21 +418,12 @@ impl Command {
             Some(index) => format!("[0:{index}]"),
             None => "[0:v:0]".to_string(),
         };
-        // On a card the picture is read, shrunk and converted up there, which
-        // is nearly all the work. Only the painting is done down here, on a
-        // picture no taller than a screen, and the result goes back up to be
-        // written.
-        let on_a_card = encode.card().is_some();
-        let before = match (picture_filter_chain(encode), on_a_card) {
-            (Some(filters), true) => {
-                format!("{picture}{filters},{BROUGHT_DOWN}[picture];[picture]")
-            }
-            (Some(filters), false) => format!("{picture}{filters}[picture];[picture]"),
-            (None, _) => picture,
+        let before = match picture_filter_chain(encode) {
+            Some(filters) => format!("{picture}{filters}[picture];[picture]"),
+            None => picture,
         };
-        let after = if on_a_card { SENT_BACK_UP } else { "" };
         Some(format!(
-            "{before}[0:{subtitle}]overlay=shortest=0{after}{PAINTED_PICTURE}"
+            "{before}[0:{subtitle}]overlay=shortest=0{PAINTED_PICTURE}"
         ))
     }
 
@@ -507,11 +498,9 @@ impl Command {
         }
 
         // A subtitle made of pictures has no size of its own until the first
-        // one has been read. The tool does not start the picture's journey
-        // before it knows every size, so it sets everything it reads aside in
-        // memory until the first line of dialogue: minutes of a film of four
-        // thousand pixels, which fills a machine. Saying how large the canvas
-        // is lets it start at once.
+        // one has been read, and the tool does not set the picture going
+        // before it knows every size: that wait is how a film seemed to hang
+        // at its start. Saying how large the canvas is lets it begin at once.
         if let VideoOutput::Encode(encode) = &self.video
             && encode.burn_in_subtitle.is_some()
         {
@@ -815,13 +804,6 @@ const PICTURE_SUBTITLE_CANVAS: &str = "1920x1080";
 /// What the painted picture is called inside the filter graph.
 const PAINTED_PICTURE: &str = "[painted]";
 
-/// What brings a picture down from a card to be worked on by the processor,
-/// in the layout the painting expects.
-const BROUGHT_DOWN: &str = "hwdownload,format=nv12";
-
-/// What sends a painted picture back up to the card that writes it.
-const SENT_BACK_UP: &str = ",format=nv12,hwupload";
-
 /// Builds what happens to the picture before it is encoded.
 ///
 /// Two shapes, because the two paths have nothing in common beyond the order:
@@ -1051,34 +1033,9 @@ mod tests {
     }
 
     #[test]
-    fn on_a_card_the_picture_comes_down_to_be_painted_and_goes_back_up_to_be_written() {
-        // The card reads the film and converts it, which is nearly all the
-        // work. The processor only paints, and the card writes the result.
-        let card = a_card();
-        let mut encode = VideoEncode::on_a_card(&card, "h264", true).expect("a card that writes h264");
-        encode.burn_in_subtitle = Some(3);
-        encode.scale_to_height = Some(1080);
-        encode.tone_map = true;
-        let command = Command::new(
-            Input::new("/media/film.mkv"),
-            Output::File(PathBuf::from("/tmp/out.mp4")),
-        )
-        .with_video(VideoOutput::Encode(encode));
-
-        let args = arguments(&command);
-        let graph = position(&args, "-filter_complex").expect("a graph is built");
-        assert_eq!(
-            args[graph + 1],
-            "[0:v:0]scale_vaapi=w=-2:h=1080,tonemap_vaapi=format=nv12,hwdownload,format=nv12[picture];\
-             [picture][0:3]overlay=shortest=0,format=nv12,hwupload[painted]"
-        );
-        assert!(args.iter().any(|value| value == "-hwaccel"), "the card still reads the film");
-    }
-
-    #[test]
     fn the_canvas_of_a_picture_subtitle_is_named_before_the_film_is_read() {
-        // Left unsaid, the tool holds everything it reads in memory until the
-        // first subtitle shows it how large to draw.
+        // Left unsaid, the tool waits for the first subtitle to learn how
+        // large to draw before it starts.
         let args = arguments(&painting(3));
         let canvas = position(&args, "-canvas_size").expect("a canvas is named");
         let input = position(&args, "-i").expect("an input is present");
