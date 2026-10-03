@@ -754,8 +754,36 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 
 ## 35. Demandes de titres
 
-**Intention du mainteneur.** Une grosse fonction à part entière : un compte peut **demander un titre** qui n'est pas sur le serveur, l'administrateur la voit et la traite, et le compte est prévenu quand le titre est disponible. Elle alimente le système de notifications de la section 34 (titre demandé disponible, titre de « À voir plus tard » arrivé, nouvel épisode d'une série suivie).
+**Intention du mainteneur.** Un compte peut **demander un titre** qui n'est pas sur le serveur. L'administrateur voit la demande et la traite, et le compte est prévenu quand le titre est disponible. Elle alimente le système de notifications de la section 34 (titre demandé disponible, titre de « À voir plus tard » arrivé, nouvel épisode d'une série suivie).
 
-**À discuter** avant toute décision : qui peut demander, comment on trouve le titre à demander (recherche chez le fournisseur de métadonnées), ce que voit l'administrateur et comment il répond (accepter, refuser avec un mot, marquer comme ajouté), doublons entre comptes, limite de demandes par compte, état d'une demande, et lien avec les titres déjà présents.
+**Décisions prises.**
 
-**Quand.** Pas planifié.
+*Activation et droits.*
+
+- **La fonction est facultative et s'active depuis le tableau de bord.** Désactivée, elle n'apparaît nulle part dans l'interface.
+- **Demander est un droit de compte**, comme les autres droits (supprimer du disque, etc.), donné compte par compte.
+- **Pas de limite du nombre de demandes par compte.**
+- **Melyxar ne télécharge rien** et n'a aucun lien avec un outil de téléchargement automatique : une demande est une liste que l'administrateur lit.
+
+*Recherche.*
+
+- **Une section dédiée**, ouverte aux comptes qui ont le droit. Elle cherche **uniquement chez TMDB**, comme la recherche d'identification, et accepte aussi un **identifiant ou un lien** collé (TMDB, ou IMDb que TMDB sait retrouver).
+- Les résultats sont des cartes (affiche, titre, année, courte description). **Chaque résultat dit son état** : déjà sur le serveur (avec un lien vers la fiche), déjà demandé par quelqu'un, ou demandable.
+- **Un titre déjà dans une bibliothèque ne peut pas être demandé.** Il est reconnu par son **identifiant TMDB**, stocké pour les titres identifiés. Un titre présent mais mal identifié n'est pas reconnu.
+
+*Côté demandeur.*
+
+- Un bouton « Demander » avec un **champ facultatif** pour préciser (« la version longue », « en VF »).
+- Une page **« Mes demandes »** : chaque demande avec son état (en attente, acceptée, refusée avec le mot de l'administrateur, ajoutée), et la possibilité de **l'annuler tant qu'elle est en attente**.
+- **Une série** se demande en entier, ou par saisons précises.
+- Le compte est **prévenu par notification** quand son titre est ajouté.
+
+*Côté administrateur.*
+
+- Une page **« Demandes »** : les demandes en attente, qui a demandé quoi et depuis quand, et **combien de comptes ont demandé le même titre**.
+- Il **accepte, refuse (avec un mot) ou marque comme ajouté.** Quand un titre demandé arrive sur le serveur et est identifié, la demande peut passer à « ajouté » toute seule et le demandeur est prévenu.
+- Les administrateurs reçoivent une **notification** pour les nouvelles demandes, avec les mêmes réglages que les autres.
+
+**À régler au moment de coder.** Le détail de la demande d'une série (saisons demandées, saisons déjà présentes), ce qui arrive à une demande quand le titre apparaît sans que l'administrateur l'ait traitée, et comment plusieurs comptes qui demandent le même titre sont regroupés.
+
+**Quand.** Pas planifié. Dépend du système de notifications (section 34).
