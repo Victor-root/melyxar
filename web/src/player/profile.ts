@@ -9,8 +9,9 @@
  */
 
 import type { Quality } from "./quality";
-import { currentOnes, storedCalibration } from "./calibration";
-import type { CalibrationEntry } from "../api";
+import { storedCalibration } from "../calibration/run";
+import { whatToTellTheServer } from "../calibration/judge";
+import type { DeviceCalibration } from "../api";
 
 /** One thing the server will ask about. */
 interface Probe {
@@ -221,60 +222,25 @@ function takesInPieces(type: string): boolean {
 }
 
 /**
- * What was really measured on this exact device, codec by codec.
+ * This device's whole calibration, when it has one.
  *
  * Asked once and kept, for the same reason as the prediction above: a
- * calibration does not change between two films either. Empty for a device
- * nobody has measured, and short of a codec whenever that codec was never
- * answered for: a server that cannot produce AV1 at all leaves no row for
- * AV1, and a row made by a recipe this build no longer uses answers for a
- * measurement that no longer exists.
+ * calibration does not change between two films. Null for a device never
+ * calibrated, and for one whose run never finished, which the server never
+ * kept.
  */
-let calibrated: Promise<CalibrationEntry[]> | null = null;
+let calibrated: Promise<DeviceCalibration | null> | null = null;
 
-function whatWasReallyMeasured(): Promise<CalibrationEntry[]> {
-  calibrated ??= storedCalibration()
-    .then(currentOnes)
-    .catch(() => []);
+function whatWasReallyMeasured(): Promise<DeviceCalibration | null> {
+  calibrated ??= storedCalibration().catch(() => null);
   return calibrated;
 }
 
-/**
- * What the browser predicts about itself, corrected wherever this device was
- * really measured.
- *
- * Codec by codec, and that is the whole of it. A measurement is the better
- * answer where there is one: it watched this machine play a real film rather
- * than asking the machine to guess about itself. Where there is none, the
- * prediction stands, because the alternative is to offer a codec nothing ever
- * looked at or to withhold one nothing ever faulted.
- *
- * A codec the browser says it cannot take at all is never offered whatever a
- * measurement says: that answer is about this build of this browser, and no
- * measurement overrules it.
- */
-function whatToTellTheServer(
-  predicted: RebuiltCapability[],
-  measurements: CalibrationEntry[],
-): RebuiltCapability[] {
-  return predicted.flatMap((prediction) => {
-    const measurement = measurements.find((entry) =>
-      entry.codec.toLowerCase() === prediction.codec.toLowerCase(),
-    );
-    if (!measurement) {
-      return [prediction];
-    }
-    if (!measurement.usable) {
-      return [];
-    }
-    return [
-      {
-        codec: prediction.codec,
-        max_height: measurement.tested_height,
-        power_efficient: true,
-      },
-    ];
-  });
+/** Whether this browser takes a codec fed to it piece by piece, by the name
+ *  the server gives it. */
+function takesCodecInPieces(codec: string): boolean {
+  const probe = VIDEO.find((entry) => entry.name === codec.toLowerCase());
+  return probe !== undefined && takesInPieces(probe.type);
 }
 
 /**
@@ -399,11 +365,12 @@ export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
   // string is a no, and a browser says "maybe" when it will not commit.
   const plays = (type: string) => probe.canPlayType(type) !== "";
 
-  // What was really measured on this device beats what the browser predicts
-  // about itself, codec by codec.
+  // A whole calibration of this device replaces what the browser predicts
+  // about itself; without one, the prediction stands as it always has.
   const rebuilt = whatToTellTheServer(
     await whatItTakesInPieces(),
     await whatWasReallyMeasured(),
+    takesCodecInPieces,
   );
 
   return {

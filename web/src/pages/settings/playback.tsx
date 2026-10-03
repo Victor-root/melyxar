@@ -21,7 +21,7 @@ import {
 } from "../../icons";
 import { languagesAmong } from "../../languages";
 import { kindsOnTheHomePage, nameOfKind, useLibraries } from "../../libraries";
-import { DeviceOptimization } from "../../player/DeviceOptimization";
+import { DeviceOptimization } from "../../calibration/DeviceOptimization";
 import { rulesOf, withRulesOf } from "../../resuming";
 import { usePreferences } from "../../screens/settings";
 import type { Preferences } from "../../screens/settings";
