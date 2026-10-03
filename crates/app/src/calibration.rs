@@ -1,45 +1,80 @@
-//! Finding out what one client really decodes, rather than what it guesses.
+//! Finding out what one device really decodes, rather than what it guesses.
 //!
-//! A session here rebuilds one film into one codec, at one height, so a real
-//! browser can be pointed at it and watched. What that browser actually saw
-//! is measured on its own side and only ever handed back here to be kept.
+//! The server's half: it cuts short clips out of a real film, in every codec
+//! it writes and at every height up to the film's own, rebuilt exactly as a
+//! real playback would rebuild them, and keeps them. A browser downloads each
+//! clip whole before playing it, so what it measures is its own decoding and
+//! nothing else: not how fast this server can produce a picture, and not the
+//! network. The earlier calibration produced its film live, and a slow server
+//! made a capable browser look incapable.
 //!
-//! Which film is the part that took three goes to get right. It was a picture
-//! this server generates for itself (see [`melyxar_ffmpeg::calibration`]),
-//! made as hard as a generated picture can be made, and it was still not
-//! hard enough: measured on real hardware, the same codec at the same size
-//! and the same rate lost under one picture in a hundred of it and a third of
-//! a real film. What a decoder spends its time on is the coding tools a
-//! filmed scene forces an encoder to reach for, not the number of bits, and
-//! no fractal asks for those. So the film measured against is the most
-//! demanding one the library actually holds, and the generated one is what is
-//! left for a library nobody has scanned yet.
+//! Which film is the most demanding one the library holds. A picture this
+//! server generates for itself (see [`melyxar_ffmpeg::calibration`]) was
+//! measured to cost a decoder a hundredth of what a real film costs at the
+//! same size and rate; it is only what is left for a library nobody has
+//! scanned yet.
 //!
-//! This module decides nothing about whether a codec was any good: that
-//! judgement is made where the picture was watched, against the same
-//! dropped-picture signal the rest of playback already reports. What lives
-//! here is the part only the server can do: choosing and producing the film,
-//! and keeping what came of it.
+//! The judgement of each clip is made where it was watched. What is kept here
+//! is the result, whole or not at all: a calibration missing a codec the
+//! server offered is refused, so a run stopped halfway changes nothing.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{LazyLock, Mutex};
 
 use melyxar_core::id::PlaybackClientId;
 use melyxar_core::time::Millis;
-use melyxar_ffmpeg::command::{AudioOutput, StreamSelection, VideoOutput};
-use melyxar_streaming::session::{Recipe, Session};
+use melyxar_ffmpeg::RunningProcess;
 
-pub use melyxar_database::calibration::{CodecCalibration, FoundBy};
+pub use melyxar_database::calibration::{CodecResult, DeviceCalibration, Measurement};
 
 use crate::{AppError, AppState, Result};
 
-/// The only codecs a calibration is ever asked about.
+/// Which recipe the clips and the measurement of them are made by.
 ///
-/// Kept apart from the server's own allow-list on purpose: a codec added to
-/// that list later must still be refused here until this module is taught
-/// about it, rather than calibrated on a guess about what a fourth codec
-/// would even mean for the height ladder below.
+/// Carried by every clip folder and every stored calibration, and checked by
+/// this server alone: a calibration made by another recipe measured something
+/// else and reads as none. The earlier calibration ended at 4.
+pub const CALIBRATION_VERSION: i32 = 5;
+
+/// The only codecs a calibration is ever asked about: the ones a picture is
+/// ever rebuilt into.
 const CALIBRATED_CODECS: &[&str] = &["h264", "hevc", "av1"];
+
+/// The heights a clip is cut at, tallest first, never taller than the film.
+const CLIP_HEIGHTS: &[i32] = &[2160, 1440, 1080, 720];
+
+/// One clip a device is to play.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Clip {
+    pub codec: String,
+    pub height: i32,
+    /// What keeping up is counted against.
+    pub frame_rate: f64,
+}
+
+/// Where the clips stand.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Readiness {
+    /// Nothing has been asked for yet.
+    NotPrepared,
+    Preparing { done: usize, total: usize },
+    /// The last preparation stopped, and why, in the tool's words.
+    Failed(String),
+    Ready(Vec<Clip>),
+}
+
+/// Preparations under way, by the folder they write into.
+///
+/// Kept in memory: a preparation lives as long as this process, and a clip
+/// only counts once it is whole on the disk, so a restart in the middle loses
+/// nothing but the clip it was working on.
+static PREPARING: LazyLock<Mutex<HashMap<PathBuf, Readiness>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn preparing() -> std::sync::MutexGuard<'static, HashMap<PathBuf, Readiness>> {
+    PREPARING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
 
 /// Where the reference film lives, once it has been made.
 ///
@@ -87,9 +122,10 @@ const FRAME_RATE_WHEN_UNREAD: f64 = 24.0;
 
 /// The film a calibration is measured against, once the server has chosen.
 struct MeasuredAgainst {
+    /// What the clips cut from this film are kept under: another film chosen
+    /// later, or another recipe, is another set of clips.
+    key: String,
     source: PathBuf,
-    /// How long the film runs, which is what its playlist is written from.
-    duration: Millis,
     /// The picture's stream inside the file.
     video_index: i32,
     /// Where the measurement begins.
@@ -138,11 +174,11 @@ async fn what_to_measure_against(
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
         return Ok(MeasuredAgainst {
+            key: film.source_id.clone(),
             // Its middle rather than its opening: a film opens on logos, on
             // black and on a fade, which is the one passage every machine
             // decodes without trying.
             starts_at: Millis::new(film.duration.get() / 2),
-            duration: film.duration,
             video_index: film.video_index,
             native_height: film.height,
             frame_rate: film.frame_rate.unwrap_or(FRAME_RATE_WHEN_UNREAD),
@@ -156,8 +192,8 @@ async fn what_to_measure_against(
     let generated = reference_film_path(state);
     ensure_reference_film(state, &generated).await?;
     Ok(MeasuredAgainst {
+        key: "generated".to_string(),
         source: generated,
-        duration: melyxar_ffmpeg::calibration::REFERENCE_DURATION,
         video_index: 0,
         starts_at: Millis::ZERO,
         native_height: i32::try_from(melyxar_ffmpeg::calibration::REFERENCE_HEIGHT)
@@ -201,357 +237,435 @@ fn video_encode_for(
     encode.scale_to_height = (height < against.native_height).then_some(height);
     encode.tone_map = against.wide_gamut;
     encode.max_bitrate = Some(crate::playback::rate_for(Some(height), codec));
-    encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
     Ok(encode)
 }
 
-/// Opens a session that rebuilds the film being measured against into one
-/// codec, at one height, so a client can be pointed at it and watched.
+/// The clips one account is measured on, and where they are kept.
+struct Plan {
+    against: MeasuredAgainst,
+    folder: PathBuf,
+    clips: Vec<Clip>,
+}
+
+impl Plan {
+    fn path_of(&self, clip: &Clip) -> PathBuf {
+        self.folder
+            .join(format!("{}-{}.mp4", clip.codec, clip.height))
+    }
+
+    fn missing(&self) -> Vec<&Clip> {
+        self.clips
+            .iter()
+            .filter(|clip| !self.path_of(clip).exists())
+            .collect()
+    }
+
+    fn codecs(&self) -> Vec<&str> {
+        let mut codecs: Vec<&str> = Vec::new();
+        for clip in &self.clips {
+            if !codecs.contains(&clip.codec.as_str()) {
+                codecs.push(&clip.codec);
+            }
+        }
+        codecs
+    }
+}
+
+/// The heights a film is cut at: every rung of the ladder it is tall enough
+/// for, or its own height when it is shorter than all of them.
+fn heights_for(native_height: i32) -> Vec<i32> {
+    let heights: Vec<i32> = CLIP_HEIGHTS
+        .iter()
+        .copied()
+        .filter(|height| *height <= native_height)
+        .collect();
+    match heights.is_empty() {
+        true => vec![native_height],
+        false => heights,
+    }
+}
+
+/// The codecs a device is asked about: the ones this server is set to write
+/// and has something to write them with.
+fn codecs_offered(
+    allowed: &[String],
+    card: Option<&melyxar_ffmpeg::Card>,
+    wide_gamut: bool,
+) -> Vec<String> {
+    CALIBRATED_CODECS
+        .iter()
+        .filter(|codec| allowed.iter().any(|one| one.eq_ignore_ascii_case(codec)))
+        .filter(|codec| {
+            let on_the_card = card
+                .filter(|card| !wide_gamut || card.can_tone_map)
+                .is_some_and(|card| card.encoder_for(codec).is_some());
+            on_the_card || codec.eq_ignore_ascii_case(melyxar_playback::profile::ALWAYS_READ)
+        })
+        .map(|codec| (*codec).to_string())
+        .collect()
+}
+
+async fn plan(state: &AppState, who: &melyxar_core::user::User) -> Result<Plan> {
+    let capabilities = state.capabilities().ok_or_else(no_tools)?;
+    let against = what_to_measure_against(state, who, capabilities.card()).await?;
+    let allowed = state.database().transcoding_limits().await?.video_codecs;
+    let codecs = codecs_offered(&allowed, capabilities.card(), against.wide_gamut);
+    let heights = heights_for(against.native_height);
+    let clips = codecs
+        .iter()
+        .flat_map(|codec| {
+            heights.iter().map(|height| Clip {
+                codec: codec.clone(),
+                height: *height,
+                frame_rate: against.frame_rate,
+            })
+        })
+        .collect();
+    let folder = state
+        .config()
+        .directories
+        .calibration()
+        .join(format!("clips-v{CALIBRATION_VERSION}-{}", against.key));
+    Ok(Plan {
+        against,
+        folder,
+        clips,
+    })
+}
+
+/// Where the clips one account is measured on stand.
+pub async fn readiness(state: &AppState, who: &melyxar_core::user::User) -> Result<Readiness> {
+    let plan = plan(state, who).await?;
+    if plan.missing().is_empty() {
+        return Ok(Readiness::Ready(plan.clips));
+    }
+    Ok(preparing()
+        .get(&plan.folder)
+        .cloned()
+        .unwrap_or(Readiness::NotPrepared))
+}
+
+/// Starts making whatever clips are missing, in the background.
 ///
-/// Hands back what it really produced beside the session: the height, which
-/// is not always the one asked for since a film is never asked to be taller
-/// than it is, and the rate, which is what keeping up is counted against on
-/// the other side. A client measures against what it really watched.
-pub async fn open_calibration_session(
+/// Asked twice, it makes them once. Each clip is written aside and moved into
+/// place whole, so a clip on the disk is always a clip that finished.
+pub async fn prepare(state: &AppState, who: &melyxar_core::user::User) -> Result<()> {
+    let plan = plan(state, who).await?;
+    let missing: Vec<Clip> = plan.missing().into_iter().cloned().collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    {
+        let mut under_way = preparing();
+        if matches!(
+            under_way.get(&plan.folder),
+            Some(Readiness::Preparing { .. })
+        ) {
+            return Ok(());
+        }
+        under_way.insert(
+            plan.folder.clone(),
+            Readiness::Preparing {
+                done: 0,
+                total: missing.len(),
+            },
+        );
+    }
+    let tools = state.tools().ok_or_else(no_tools)?.clone();
+    let card = state
+        .capabilities()
+        .and_then(melyxar_ffmpeg::Capabilities::card)
+        .cloned();
+    tracing::info!(
+        film = %plan.against.named,
+        clips = missing.len(),
+        folder = %plan.folder.display(),
+        "the clips a device is measured on are being made"
+    );
+    tokio::spawn(async move {
+        let outcome = make_clips(&tools, card.as_ref(), &plan, &missing).await;
+        let mut under_way = preparing();
+        match outcome {
+            Ok(()) => {
+                under_way.remove(&plan.folder);
+                tracing::info!("the clips a device is measured on are ready");
+            }
+            Err(error) => {
+                tracing::error!(reason = %error, "the clips a device is measured on could not be made");
+                under_way.insert(plan.folder.clone(), Readiness::Failed(error.to_string()));
+            }
+        }
+    });
+    Ok(())
+}
+
+async fn make_clips(
+    tools: &melyxar_ffmpeg::ToolPaths,
+    card: Option<&melyxar_ffmpeg::Card>,
+    plan: &Plan,
+    missing: &[Clip],
+) -> Result<()> {
+    clear_older_clips(&plan.folder).await;
+    tokio::fs::create_dir_all(&plan.folder)
+        .await
+        .map_err(AppError::Directory)?;
+    for (done, clip) in missing.iter().enumerate() {
+        let finished = plan.path_of(clip);
+        let aside = finished.with_extension("part.mp4");
+        let encode = video_encode_for(card, &clip.codec, clip.height, &plan.against)?;
+        let command = melyxar_ffmpeg::calibration::clip(
+            &plan.against.source,
+            plan.against.starts_at,
+            plan.against.video_index,
+            &clip.codec,
+            encode,
+            &aside,
+        );
+        let began = std::time::Instant::now();
+        RunningProcess::start(&tools.ffmpeg, &command, None)?
+            .wait()
+            .await?;
+        tokio::fs::rename(&aside, &finished)
+            .await
+            .map_err(AppError::Directory)?;
+        tracing::debug!(
+            codec = clip.codec,
+            height = clip.height,
+            took_ms = began.elapsed().as_millis(),
+            "a calibration clip was made"
+        );
+        preparing().insert(
+            plan.folder.clone(),
+            Readiness::Preparing {
+                done: done + 1,
+                total: missing.len(),
+            },
+        );
+    }
+    Ok(())
+}
+
+/// Removes the clips of another film or another recipe, which nothing will
+/// ask for again.
+async fn clear_older_clips(keep: &Path) {
+    let Some(parent) = keep.parent() else {
+        return;
+    };
+    let Ok(mut entries) = tokio::fs::read_dir(parent).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let path = entry.path();
+        let is_clips = entry.file_name().to_string_lossy().starts_with("clips-");
+        if is_clips && path != keep {
+            let _ = tokio::fs::remove_dir_all(&path).await;
+        }
+    }
+}
+
+/// The file of one clip, when it is one this account is measured on and it
+/// is ready.
+pub async fn clip_file(
     state: &AppState,
     who: &melyxar_core::user::User,
     codec: &str,
     height: i32,
-) -> Result<(Arc<Session>, i32, f64)> {
-    if !CALIBRATED_CODECS
+) -> Result<PathBuf> {
+    let plan = plan(state, who).await?;
+    plan.clips
         .iter()
-        .any(|known| known.eq_ignore_ascii_case(codec))
-    {
+        .find(|clip| clip.codec.eq_ignore_ascii_case(codec) && clip.height == height)
+        .map(|clip| plan.path_of(clip))
+        .filter(|path| path.exists())
+        .ok_or_else(|| {
+            AppError::Domain(melyxar_core::Error::not_found(
+                "there is no such calibration clip ready",
+            ))
+        })
+}
+
+/// Whether a calibration answers for exactly the clips that were offered.
+///
+/// Every codec once, no codec that was not offered, and no height that was
+/// not one of the clips: anything else is a run that did not finish, or one
+/// measured against other clips, and neither is a calibration.
+fn is_whole(offered: &[Clip], codecs: &[CodecResult]) -> bool {
+    let mut offered_codecs: Vec<&str> = offered.iter().map(|clip| clip.codec.as_str()).collect();
+    offered_codecs.dedup();
+    codecs.len() == offered_codecs.len()
+        && offered_codecs.iter().all(|codec| {
+            codecs.iter().filter(|result| result.codec == *codec).count() == 1
+        })
+        && codecs.iter().all(|result| {
+            let heights_offered = |height: i32| {
+                offered
+                    .iter()
+                    .any(|clip| clip.codec == result.codec && clip.height == height)
+            };
+            result.smooth_height.is_none_or(heights_offered)
+                && result
+                    .measurements
+                    .iter()
+                    .all(|measurement| heights_offered(measurement.height))
+        })
+}
+
+/// Keeps one device's whole calibration.
+pub async fn record(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    client_id: PlaybackClientId,
+    calibration_version: i32,
+    codecs: Vec<CodecResult>,
+) -> Result<()> {
+    if calibration_version != CALIBRATION_VERSION {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "this is not a codec a calibration ever asks about",
+            "this calibration was made by another recipe",
         )));
     }
-    if !state
+    let plan = plan(state, who).await?;
+    if !is_whole(&plan.clips, &codecs) {
+        tracing::warn!(
+            client = %client_id,
+            offered = ?plan.codecs(),
+            "a calibration that does not answer for every clip offered was refused"
+        );
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "this calibration is not whole",
+        )));
+    }
+    for result in &codecs {
+        tracing::info!(
+            client = %client_id,
+            codec = result.codec,
+            smooth_height = result.smooth_height,
+            measured = ?result.measurements,
+            "a device's calibration of one codec"
+        );
+    }
+    state
         .database()
-        .transcoding_limits()
-        .await?
-        .video_codecs
-        .iter()
-        .any(|allowed| allowed.eq_ignore_ascii_case(codec))
-    {
-        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "this server is not set to transcode into that codec",
-        )));
-    }
-
-    let sessions = state.sessions().ok_or_else(no_tools)?;
-    let capabilities = state.capabilities().ok_or_else(no_tools)?;
-
-    let against = what_to_measure_against(state, who, capabilities.card()).await?;
-    // Never taller than the film itself: asking for more would measure a
-    // picture this server would have had to invent.
-    let height = height.min(against.native_height);
-    let encode = video_encode_for(capabilities.card(), codec, height, &against)?;
-    let on_a_card = encode.card().is_some();
-
-    // A measure is a conversion like any other, and is held to the same
-    // limits.
-    let limits = crate::playback::session_limits(state).await?;
-    let session = sessions
-        .open(
-            who.id,
-            Recipe {
-                source: against.source,
-                duration: against.duration,
-                streams: StreamSelection {
-                    video_index: Some(against.video_index),
-                    audio_index: None,
-                    subtitle_index: None,
-                },
-                video: VideoOutput::Encode(encode),
-                audio: AudioOutput::None,
-                where_the_viewer_starts: against.starts_at,
-                where_it_can_be_started: Vec::new(),
-                if_the_card_refuses: Vec::new(),
+        .save_device_calibration(
+            client_id,
+            &DeviceCalibration {
+                calibration_version,
+                measured_at: melyxar_core::time::now(),
+                codecs,
             },
-            true,
-            limits,
         )
         .await?;
-    tracing::info!(
-        session = %session.id,
-        codec,
-        height,
-        at_second = against.starts_at.as_seconds_f64(),
-        wide_gamut = against.wide_gamut,
-        read_by = if against.card_reads_it { "card" } else { "processor" },
-        rebuilt_by = if on_a_card { "card" } else { "processor" },
-        measured_against = %against.named,
-        "a calibration session was opened"
-    );
-    Ok((session, height, against.frame_rate))
-}
-
-/// Records what one client measured for one codec.
-///
-/// The one line that answers "did the calibration really run, and what did it
-/// conclude": a page saying "optimized" is a claim, and this is where it can
-/// be checked against what actually happened, codec by codec.
-pub async fn record_calibration(
-    state: &AppState,
-    client_id: PlaybackClientId,
-    calibration: &CodecCalibration,
-) -> Result<()> {
-    // What a real film did on this machine is not to be talked out of by a
-    // test: the test plays a film this server generated, and no generated
-    // film costs what a real one costs to decode. Forgetting this device's
-    // calibration is what clears a verdict watching established.
-    if calibration.found_by == FoundBy::Test {
-        let already = state.database().codec_calibrations_of(client_id).await?;
-        if already.iter().any(|kept| {
-            kept.codec.eq_ignore_ascii_case(&calibration.codec)
-                && kept.found_by == FoundBy::Watching
-        }) {
-            tracing::info!(
-                client = %client_id,
-                codec = calibration.codec,
-                "a test's verdict was left aside: watching a real film already answered for this codec"
-            );
-            return Ok(());
-        }
-    }
-
-    tracing::info!(
-        client = %client_id,
-        codec = calibration.codec,
-        usable = calibration.usable,
-        tested_height = calibration.tested_height,
-        dropped_share = calibration.dropped_share,
-        shown_share = calibration.shown_share,
-        found_by = calibration.found_by.as_word(),
-        calibration_version = calibration.calibration_version,
-        "a client's calibration of one codec was recorded"
-    );
-    state
-        .database()
-        .save_codec_calibration(client_id, calibration)
-        .await?;
+    tracing::info!(client = %client_id, "a device's whole calibration was kept");
     Ok(())
 }
 
-/// Everything measured for one client so far, one entry per codec it was
-/// asked about.
-pub async fn calibration_profile(
+/// One device's calibration, when it has one made by this recipe.
+pub async fn calibration_of(
     state: &AppState,
     client_id: PlaybackClientId,
-) -> Result<Vec<CodecCalibration>> {
-    Ok(state.database().codec_calibrations_of(client_id).await?)
+) -> Result<Option<DeviceCalibration>> {
+    Ok(state
+        .database()
+        .device_calibration(client_id, CALIBRATION_VERSION)
+        .await?)
 }
 
-/// Forgets everything measured for one client, all codecs at once.
-pub async fn forget_calibration(state: &AppState, client_id: PlaybackClientId) -> Result<()> {
-    tracing::info!(client = %client_id, "a client's whole calibration was forgotten");
-    state
-        .database()
-        .forget_codec_calibrations(client_id)
-        .await?;
-    Ok(())
+/// Forgets one device's calibration.
+pub async fn forget(state: &AppState, client_id: PlaybackClientId) -> Result<()> {
+    tracing::info!(client = %client_id, "a device's calibration was forgotten");
+    Ok(state.database().forget_device_calibration(client_id).await?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use melyxar_config::{Config, Directories, LibraryConfig, RootConfig};
-    use melyxar_database::Database;
 
-    async fn state_without_media_tools() -> (tempfile::TempDir, AppState) {
-        let directory = tempfile::tempdir().expect("temporary directory");
-        let config = Config {
-            directories: Directories {
-                data: directory.path().join("data"),
-                cache: directory.path().join("cache"),
-                transcodes: directory.path().join("cache/transcodes"),
-                ..Default::default()
-            },
-            libraries: vec![LibraryConfig {
-                name: "Films".into(),
-                kind: "movies".into(),
-                metadata_language: "fr".into(),
-                roots: vec![RootConfig {
-                    label: "disk-one".into(),
-                    path: directory.path().join("films"),
-                }],
-            }],
-            ..Config::default()
-        };
-        std::fs::create_dir_all(&config.libraries[0].roots[0].path).expect("media folder");
-        crate::startup::prepare_directories(&config).expect("directories prepared");
-
-        let database = Database::open_in_memory().await.expect("database opens");
-        (directory, AppState::new(config, database, None, None))
+    fn clip(codec: &str, height: i32) -> Clip {
+        Clip {
+            codec: codec.to_string(),
+            height,
+            frame_rate: 24.0,
+        }
     }
 
-    #[tokio::test]
-    async fn a_server_with_no_media_tools_cannot_calibrate_anything() {
-        let (_directory, state) = state_without_media_tools().await;
-        let watching = crate::an_ordinary_account(melyxar_core::id::UserId::new());
-        let outcome = open_calibration_session(&state, &watching, "h264", 1080).await;
-        assert!(
-            outcome.is_err(),
-            "nothing can be produced without the tools"
-        );
+    fn result(codec: &str, smooth: Option<i32>, heights: &[i32]) -> CodecResult {
+        CodecResult {
+            codec: codec.to_string(),
+            smooth_height: smooth,
+            measurements: heights
+                .iter()
+                .map(|height| Measurement {
+                    height: *height,
+                    passed: Some(*height) == smooth,
+                    dropped_share: 0.0,
+                    shown_share: 1.0,
+                })
+                .collect(),
+        }
     }
 
-    #[tokio::test]
-    async fn a_codec_a_calibration_never_asks_about_is_refused_by_name() {
-        let (_directory, state) = state_without_media_tools().await;
-        let watching = crate::an_ordinary_account(melyxar_core::id::UserId::new());
-        let outcome = open_calibration_session(&state, &watching, "vp9", 1080).await;
-        assert!(matches!(outcome, Err(AppError::Domain(_))));
+    fn offered() -> Vec<Clip> {
+        vec![
+            clip("h264", 1080),
+            clip("h264", 720),
+            clip("hevc", 1080),
+            clip("hevc", 720),
+        ]
     }
 
-    #[tokio::test]
-    async fn nothing_measured_yet_is_an_empty_profile_rather_than_a_fault() {
-        let (_directory, state) = state_without_media_tools().await;
-        let profile = calibration_profile(&state, PlaybackClientId::new())
-            .await
-            .expect("read");
-        assert!(profile.is_empty());
+    #[test]
+    fn a_film_is_cut_at_every_rung_it_is_tall_enough_for() {
+        assert_eq!(heights_for(2160), vec![2160, 1440, 1080, 720]);
+        assert_eq!(heights_for(1600), vec![1440, 1080, 720]);
+        assert_eq!(heights_for(576), vec![576]);
     }
 
-    #[tokio::test]
-    async fn what_is_recorded_is_what_is_read_back() {
-        let (_directory, state) = state_without_media_tools().await;
-        let client = PlaybackClientId::new();
-        let calibration = CodecCalibration {
-            codec: "hevc".to_string(),
-            calibration_version: 1,
-            usable: true,
-            tested_height: 2160,
-            dropped_share: 0.0,
-            shown_share: 1.0,
-            found_by: FoundBy::Test,
-            measured_at: melyxar_core::time::now(),
-        };
-
-        record_calibration(&state, client, &calibration)
-            .await
-            .expect("recorded");
-
-        let profile = calibration_profile(&state, client).await.expect("read");
-        assert_eq!(profile, vec![calibration]);
+    #[test]
+    fn a_calibration_answering_for_every_codec_is_whole() {
+        assert!(is_whole(
+            &offered(),
+            &[
+                result("h264", Some(1080), &[1080]),
+                result("hevc", None, &[1080, 720]),
+            ]
+        ));
     }
 
-    #[tokio::test]
-    async fn what_a_real_film_proved_is_not_talked_out_of_by_the_test() {
-        // The whole reason the two are told apart. The test plays a film this
-        // server generated, and no generated film costs what a real one costs
-        // to decode: measured on real hardware, the same codec at the same
-        // size passed the generated film cleanly and stuttered through every
-        // real one. A test must never quietly overwrite that.
-        let (_directory, state) = state_without_media_tools().await;
-        let client = PlaybackClientId::new();
-
-        let from_a_film = CodecCalibration {
-            codec: "av1".to_string(),
-            calibration_version: 1,
-            usable: false,
-            tested_height: 1600,
-            dropped_share: 0.31,
-            shown_share: 0.69,
-            found_by: FoundBy::Watching,
-            measured_at: melyxar_core::time::now(),
-        };
-        record_calibration(&state, client, &from_a_film)
-            .await
-            .expect("recorded");
-
-        record_calibration(
-            &state,
-            client,
-            &CodecCalibration {
-                usable: true,
-                dropped_share: 0.0,
-                shown_share: 1.0,
-                found_by: FoundBy::Test,
-                ..from_a_film.clone()
-            },
-        )
-        .await
-        .expect("accepted without complaint");
-
-        let profile = calibration_profile(&state, client).await.expect("read");
-        assert_eq!(
-            profile,
-            vec![from_a_film],
-            "the film outranks the test, and says so by being the row that is left"
-        );
+    #[test]
+    fn a_run_stopped_before_its_last_codec_is_not_a_calibration() {
+        assert!(!is_whole(&offered(), &[result("h264", Some(1080), &[1080])]));
     }
 
-    #[tokio::test]
-    async fn a_test_still_answers_for_a_codec_no_film_ever_did() {
-        let (_directory, state) = state_without_media_tools().await;
-        let client = PlaybackClientId::new();
-
-        record_calibration(
-            &state,
-            client,
-            &CodecCalibration {
-                codec: "hevc".to_string(),
-                calibration_version: 1,
-                usable: false,
-                tested_height: 2160,
-                dropped_share: 0.4,
-                shown_share: 0.6,
-                found_by: FoundBy::Watching,
-                measured_at: melyxar_core::time::now(),
-            },
-        )
-        .await
-        .expect("recorded");
-
-        let av1 = CodecCalibration {
-            codec: "av1".to_string(),
-            calibration_version: 1,
-            usable: true,
-            tested_height: 2160,
-            dropped_share: 0.0,
-            shown_share: 1.0,
-            found_by: FoundBy::Test,
-            measured_at: melyxar_core::time::now(),
-        };
-        record_calibration(&state, client, &av1)
-            .await
-            .expect("recorded");
-
-        let profile = calibration_profile(&state, client).await.expect("read");
-        assert!(
-            profile.iter().any(|kept| kept == &av1),
-            "one codec a film answered for must not silence the test on the others"
-        );
+    #[test]
+    fn a_codec_or_a_height_that_was_not_offered_is_not_a_calibration() {
+        assert!(!is_whole(
+            &offered(),
+            &[
+                result("h264", Some(1080), &[1080]),
+                result("av1", Some(1080), &[1080]),
+            ]
+        ));
+        assert!(!is_whole(
+            &offered(),
+            &[
+                result("h264", Some(2160), &[2160]),
+                result("hevc", None, &[1080, 720]),
+            ]
+        ));
+        assert!(!is_whole(
+            &offered(),
+            &[
+                result("h264", Some(1080), &[1080]),
+                result("h264", Some(1080), &[1080]),
+                result("hevc", None, &[1080, 720]),
+            ]
+        ));
     }
 
-    #[tokio::test]
-    async fn a_forgotten_calibration_is_offered_afresh() {
-        let (_directory, state) = state_without_media_tools().await;
-        let client = PlaybackClientId::new();
-        record_calibration(
-            &state,
-            client,
-            &CodecCalibration {
-                codec: "h264".to_string(),
-                calibration_version: 1,
-                usable: true,
-                tested_height: 1080,
-                dropped_share: 0.0,
-                shown_share: 1.0,
-                found_by: FoundBy::Test,
-                measured_at: melyxar_core::time::now(),
-            },
-        )
-        .await
-        .expect("recorded");
-
-        forget_calibration(&state, client).await.expect("forgotten");
-
-        assert!(calibration_profile(&state, client)
-            .await
-            .expect("read")
-            .is_empty());
+    #[test]
+    fn only_a_codec_this_server_can_write_is_offered() {
+        let allowed: Vec<String> = ["h264", "hevc", "av1"].map(String::from).to_vec();
+        assert_eq!(codecs_offered(&allowed, None, false), vec!["h264"]);
+        let only_h264: Vec<String> = vec!["h264".to_string()];
+        assert_eq!(codecs_offered(&only_h264, None, true), vec!["h264"]);
     }
 }

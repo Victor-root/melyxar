@@ -60,6 +60,8 @@ pub fn tag_of(module: &str) -> &'static str {
         // Ratings from elsewhere are what the metadata screen sets up.
         ("melyxar_app::ratings", "metadata"),
         ("melyxar_app::subtitles", "subtitles"),
+        // Measuring what a device decodes: the clips, and every result kept.
+        ("melyxar_app::calibration", "calibration"),
         ("melyxar_app::playback", "playback"),
         ("melyxar_app::images", "images"),
         ("melyxar_app::startup", "startup"),
@@ -269,6 +271,7 @@ mod tests {
         assert_eq!(tag_of("melyxar_ffmpeg::hardware"), "card");
         assert_eq!(tag_of("melyxar_ffmpeg::command"), "ffmpeg");
         assert_eq!(tag_of("melyxar_ffmpeg::painting"), "painting");
+        assert_eq!(tag_of("melyxar_app::calibration"), "calibration");
         assert_eq!(tag_of("melyxar_server::playback"), "playback");
         assert_eq!(tag_of("melyxar_server::works"), "http");
     }
