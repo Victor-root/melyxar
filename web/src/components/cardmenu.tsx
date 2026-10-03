@@ -40,7 +40,7 @@ import { useCardsInOrder } from "./in-order";
 import { COLLECTIONS, PLAYLISTS, PutInListsDialog } from "./lists";
 import { OnlineSubtitlesDialog } from "./online-subtitles";
 import { useSelection } from "./selection";
-import { useToast } from "./toasts";
+import { useToast } from "../notifications/toasts";
 import {
   ClockIcon,
   CollectionIcon,

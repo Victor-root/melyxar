@@ -14,7 +14,7 @@ import { useAccount } from "../account";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
 import { Setting, Toggle } from "../components/panel";
-import { useToast } from "../components/toasts";
+import { useToast } from "../notifications/toasts";
 import { refusalKey } from "../i18n";
 import { useLeave } from "../leaving";
 import { useRunning } from "../running";

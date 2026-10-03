@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { refusalOf } from "../../asking";
 import { NumberField, PageHead, Panel, Setting } from "../../components/panel";
-import { useToast } from "../../components/toasts";
+import { useToast } from "../../notifications/toasts";
 import { refusalKey } from "../../i18n";
 import { WarningIcon } from "../../icons";
 import { useSettings } from "../../settings";

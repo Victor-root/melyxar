@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { refusalAbout, useAsked } from "../asking";
 import { Modal } from "../components/modal";
-import { useToast } from "../components/toasts";
+import { useToast } from "../notifications/toasts";
 import { PlaylistIcon } from "../icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";

@@ -38,7 +38,7 @@ import {
   releaseOf,
 } from "../../readable";
 import { useRunning } from "../../running";
-import { useAttention } from "../../attention";
+import { useAttention } from "../../notifications/attention";
 import { useSettings } from "../../settings";
 import { sayPoint, sayWorry } from "./activity";
 import { ActivityLines, useActivity } from "./activity-list";

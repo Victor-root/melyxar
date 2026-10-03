@@ -18,7 +18,7 @@ import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
-import { useToast } from "./toasts";
+import { useToast } from "../notifications/toasts";
 
 /** How many files are named before the rest are only counted. */
 const FILES_NAMED = 8;

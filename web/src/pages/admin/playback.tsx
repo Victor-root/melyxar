@@ -13,7 +13,7 @@ import { api } from "../../api";
 import type { ActivityFamily, Watched, WatchedDecision } from "../../api";
 import { refusalOf } from "../../asking";
 import { PageHead, Panel, Stat } from "../../components/panel";
-import { useToast } from "../../components/toasts";
+import { useToast } from "../../notifications/toasts";
 import { deviceName } from "../../devices";
 import { refusalKey } from "../../i18n";
 import {

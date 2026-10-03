@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "../account";
 import type { PlaybackPlan, PlaybackTrack, Stretches, Work } from "../api";
-import { useToast } from "../components/toasts";
+import { useToast } from "../notifications/toasts";
 import { nameOfPlayed } from "../readable";
 import { showPlaying } from "../tab";
 import { useSettings } from "../settings";
