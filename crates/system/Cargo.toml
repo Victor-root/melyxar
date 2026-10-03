@@ -5,12 +5,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "What the machine Melyxar runs on is spending, read from the files the kernel keeps."
+description = "What the machine Melyxar runs on is spending, read from the files the kernel keeps and from the graphics drivers."
 
 [dependencies]
 # The one call that needs the operating system itself: how full a disk is.
 # Already in the tree, and it makes the call without a line of unsafe code.
 rustix = { workspace = true }
+# NVIDIA's driver keeps no tally the kernel shows: its own library, loaded
+# when an NVIDIA card is in use, is asked instead.
+nvml-wrapper = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]

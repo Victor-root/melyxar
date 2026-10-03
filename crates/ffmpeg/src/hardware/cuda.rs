@@ -12,12 +12,15 @@
 use std::path::Path;
 
 use super::trials::WIDE_GAMUT_CODEC;
-use super::{handed_up_and_made_smaller, opening_with, Card, CardPath, Driver, ToneMapping, DEVICE_NAME};
+use super::{handed_up_and_made_smaller, opening_with, Card, CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME};
 use crate::painting::{AT_THE_FOOT, PAINTED};
 
 /// Where Nvidia's driver lists its cards, one folder each, named after where
 /// the card sits on the machine.
 const NVIDIA_CARDS: &str = "/proc/driver/nvidia/gpus";
+
+/// What a card's key starts with, before its slot on the machine.
+const KEY_PREFIX: &str = "cuda:";
 
 /// Where Nvidia's device files are, numbered after the cards.
 const NVIDIA_DEVICES: &str = "/dev";
@@ -125,9 +128,11 @@ impl Driver for Cuda {
     }
 
     // The driver keeps no tally for the work done through the compute
-    // interface.
-    fn tallies_its_work(&self) -> bool {
-        false
+    // interface, its own library is asked instead.
+    fn work_tally(&self, card: &Card) -> WorkTally {
+        WorkTally::NvidiaLibrary {
+            slot: card.key.trim_start_matches(KEY_PREFIX).to_string(),
+        }
     }
 
     // The filter takes transparency in one layout only.
@@ -191,7 +196,7 @@ fn nvidia_cards() -> Vec<Card> {
             let described = nvidia_information(&information);
             Some(Card::unproved(
                 CardPath::Cuda,
-                format!("cuda:{slot}"),
+                format!("{KEY_PREFIX}{slot}"),
                 described.model.unwrap_or_else(|| "NVIDIA".to_string()),
                 Path::new(NVIDIA_DEVICES).join(format!("nvidia{}", described.minor.unwrap_or(number))),
                 number.to_string(),
@@ -365,9 +370,14 @@ mod tests {
     }
 
     #[test]
-    fn the_work_of_an_nvidia_card_is_said_to_be_unknown_rather_than_idle() {
-        assert!(!nvidia_card().tallies_its_work());
-        assert!(card(true, true).tallies_its_work());
+    fn the_work_of_an_nvidia_card_is_asked_of_its_library_by_its_slot() {
+        assert_eq!(
+            nvidia_card().work_tally(),
+            WorkTally::NvidiaLibrary {
+                slot: "0000:0c:00.0".to_string()
+            }
+        );
+        assert_eq!(card(true, true).work_tally(), WorkTally::PerHandle);
     }
 
     #[test]

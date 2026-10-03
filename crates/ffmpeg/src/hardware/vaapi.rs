@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{handed_up_and_made_smaller, opening_with, Card, CardPath, Driver, ToneMapping, DEVICE_NAME};
+use super::{handed_up_and_made_smaller, opening_with, Card, CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME};
 use crate::painting::PAINTED;
 
 /// Where the graphics devices of a Linux machine appear.
@@ -97,8 +97,8 @@ impl Driver for Vaapi {
         &[]
     }
 
-    fn tallies_its_work(&self) -> bool {
-        true
+    fn work_tally(&self, _card: &Card) -> WorkTally {
+        WorkTally::PerHandle
     }
 
     // The first is the one the tool itself draws a subtitle in, so it costs
