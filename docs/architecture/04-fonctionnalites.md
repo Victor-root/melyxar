@@ -705,6 +705,24 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - Une commande `melyxar` à lancer dans le LXC envoie une notification de test, avec ses réglages : niveau (donc couleur), durée d'affichage, fixe ou non, prioritaire ou non, titre et texte, et destinataires (par défaut les administrateurs seulement, pour qu'un essai ne dérange personne d'autre).
 - Elle sert à voir chaque niveau à l'écran sans attendre qu'un vrai événement le produise.
 
+*Langue, synchronisation et droits.*
+
+- **Les notifications du serveur sont enregistrées sous forme de type et de données, et traduites à l'affichage** dans la langue du compte (anglais et français pour l'instant). Un **message libre de l'administrateur** n'est écrit que dans une seule langue, la même pour tous.
+- **Lu, non lu et suppression se synchronisent en direct entre tous les appareils d'un compte.** Marquer une notification lue sur le téléphone la marque lue sur le portable aussitôt.
+- Une notification de nouveau contenu **déjà reçue reste** si le compte perd ensuite l'accès à la bibliothèque. Les suivantes ne sont plus envoyées.
+- **Un compte créé plus tard ne reçoit pas les anciennes notifications.**
+
+*Maintenance annoncée à l'avance.*
+
+- Un message de l'administrateur peut porter une **date** : il s'affiche tout de suite, se rappelle avant l'échéance, et se retire de lui-même une fois passée. Le détail (rappels, durée de vie) se règle au moment de coder.
+
+*Plusieurs messages, heures calmes, accessibilité.*
+
+- **Trois messages visibles au plus** dans le coin de l'écran, empilés. Un indicateur dit **« X de plus »** quand d'autres attendent. Les notifications en attente restent dans la cloche.
+- **Heures calmes** réglables par compte : pas de notification d'appareil pendant les heures choisies.
+- **Les notifications obligatoires ou prioritaires sont toujours enregistrées et visibles dans la cloche**, et aucun compte ne peut les supprimer du système. **Chaque compte choisit en revanche s'il les voit apparaître à l'écran** pendant une lecture ou pendant ses heures calmes.
+- Les messages sont annoncés par les lecteurs d'écran.
+
 *Historique et contrôle.*
 
 - La cloche est ouverte à tous les comptes et garde un **historique**. Chaque notification est **lue ou non lue**, par compte, et le compte peut la marquer lue ou non lue, **la faire disparaître ou la laisser**.
