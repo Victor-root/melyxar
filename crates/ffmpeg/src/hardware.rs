@@ -98,6 +98,16 @@ const ENOUGH_TO_READ: usize = 400;
 /// The name the trial gives the card inside one invocation.
 const DEVICE_NAME: &str = "card";
 
+/// The name given to the Vulkan device opened on the same card, for a recipe
+/// that converts colour through it.
+const VULKAN_DEVICE_NAME: &str = "vk";
+
+/// What Vulkan is asked to make of a wide gamut picture: standard range, in
+/// the layout the encoder takes, converted the way the filter judges best for
+/// that film.
+const VULKAN_CONVERSION: &str = "format=nv12:colorspace=bt709:color_primaries=bt709\
+    :color_trc=bt709:range=tv:tonemapping=auto";
+
 /// Size the trial works at. Small enough to take no time, large enough that a
 /// driver does not refuse it for being absurd.
 pub(crate) const TRIAL_HEIGHT: i32 = 180;
@@ -158,14 +168,21 @@ enum TrialInput<'a> {
 /// A recipe rather than a yes or a no, because the paths differ in more than
 /// the name of a filter. The official tool converts on Intel and AMD cards with
 /// the card's own filter, and carries nothing of the kind for Nvidia's, where
-/// the conversion has to go through another interface opened on the same card.
-/// Each path offers its recipes best first, and the first one the card is
-/// proved to run is the one it keeps.
+/// the conversion goes through Vulkan opened on the same card. Each path offers
+/// its recipes best first, and the first one the card is proved to run is the
+/// one it keeps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ToneMapping {
-    /// The card's own conversion filter.
+    /// The card's own conversion filter, fed by the card's own reader.
     OwnFilter,
+    /// Vulkan on the same card converts, and the picture comes down to the
+    /// processor at its final size for the encoder.
+    ///
+    /// The tool cannot hand a picture from Nvidia's reader to Vulkan, so
+    /// Vulkan reads the film itself when it was proved to read a wide gamut
+    /// one, and the processor reads it otherwise.
+    ThroughVulkan { reads: bool },
 }
 
 impl ToneMapping {
@@ -173,17 +190,26 @@ impl ToneMapping {
     fn offered_on(way: HardwareAcceleration) -> &'static [Self] {
         match way {
             HardwareAcceleration::Vaapi => &[Self::OwnFilter],
-            // The official tool has no conversion of its own for these cards.
+            HardwareAcceleration::Cuda => &[
+                Self::ThroughVulkan { reads: true },
+                Self::ThroughVulkan { reads: false },
+            ],
             _ => &[],
         }
     }
 
-    /// The filter that converts, leaving the picture in the layout the
-    /// encoder takes.
-    fn filter(self, way: HardwareAcceleration) -> String {
+    /// What the trial of this recipe is called in a report.
+    fn trial_name(self) -> &'static str {
         match self {
-            Self::OwnFilter => format!("tonemap_{}=format=nv12", way.as_str()),
+            Self::OwnFilter => "convert_wide_gamut",
+            Self::ThroughVulkan { reads: true } => "convert_wide_gamut_vulkan_reading",
+            Self::ThroughVulkan { reads: false } => "convert_wide_gamut_vulkan",
         }
+    }
+
+    /// Whether the picture leaves the card once converted.
+    pub fn brings_the_picture_down(self) -> bool {
+        matches!(self, Self::ThroughVulkan { .. })
     }
 }
 
@@ -281,6 +307,16 @@ impl Card {
         self.decoders.contains(codec)
     }
 
+    /// Whether the card reads a film in one codec for itself, given whether
+    /// its colours are converted: through Vulkan it is Vulkan that reads, and
+    /// it was proved to on the wide gamut sample alone.
+    pub fn reads_for(&self, codec: &str, tone_map: bool) -> bool {
+        match self.tone_mapping.filter(|_| tone_map) {
+            Some(ToneMapping::ThroughVulkan { reads }) => reads && codec == WIDE_GAMUT_CODEC,
+            _ => self.reads(codec),
+        }
+    }
+
     /// Whether the driver keeps a tally of the card's work for each program
     /// that has it open, which is how the server reads how busy it is.
     ///
@@ -289,6 +325,18 @@ impl Card {
     /// nothing.
     pub fn tallies_its_work(&self) -> bool {
         self.way != HardwareAcceleration::Cuda
+    }
+
+    /// What the encoder is told about the card it runs on.
+    ///
+    /// Nvidia's encoders are named the card by its number: a picture that comes
+    /// down from Vulkan reaches them on the processor, and left to choose they
+    /// would take whichever card the driver puts first.
+    pub fn encoder_arguments(&self) -> Vec<String> {
+        match self.way {
+            HardwareAcceleration::Cuda => vec!["-gpu".to_string(), self.address.clone()],
+            _ => Vec::new(),
+        }
     }
 
     /// What the encoder is told so that a forced key frame starts a segment
@@ -321,26 +369,42 @@ impl Card {
     ///
     /// When the card reads the film too, that is said here rather than
     /// anywhere else: reading is an option of the input, and an option of the
-    /// input placed after it applies to nothing.
-    pub fn opening_arguments(&self, reads_the_film: bool) -> Vec<String> {
+    /// input placed after it applies to nothing. Converting colour through
+    /// Vulkan opens Vulkan on the same card as well, and then it is Vulkan
+    /// that reads and filters.
+    pub fn opening_arguments(&self, reads_the_film: bool, tone_map: bool) -> Vec<String> {
+        self.opening(reads_the_film, self.tone_mapping.filter(|_| tone_map))
+    }
+
+    /// The same opening, for one given recipe.
+    fn opening(&self, reads_the_film: bool, tone_mapping: Option<ToneMapping>) -> Vec<String> {
         let way = self.way.as_str();
         let mut arguments = vec![
             "-init_hw_device".to_string(),
             format!("{way}={DEVICE_NAME}:{}", self.address),
-            "-filter_hw_device".to_string(),
-            DEVICE_NAME.to_string(),
         ];
+        let (reader, device) = match tone_mapping {
+            Some(ToneMapping::ThroughVulkan { .. }) => {
+                arguments.extend([
+                    "-init_hw_device".to_string(),
+                    format!("vulkan={VULKAN_DEVICE_NAME}@{DEVICE_NAME}"),
+                ]);
+                ("vulkan", VULKAN_DEVICE_NAME)
+            }
+            _ => (way, DEVICE_NAME),
+        };
+        arguments.extend(["-filter_hw_device".to_string(), device.to_string()]);
         if reads_the_film {
             arguments.extend([
                 "-hwaccel".to_string(),
-                way.to_string(),
+                reader.to_string(),
                 // Without this the card decodes and then hands every frame
                 // back down to the processor, which is most of the cost of
                 // decoding and all of the point of not doing it there.
                 "-hwaccel_output_format".to_string(),
-                way.to_string(),
+                reader.to_string(),
                 "-hwaccel_device".to_string(),
-                DEVICE_NAME.to_string(),
+                device.to_string(),
             ]);
         }
         arguments
@@ -373,6 +437,19 @@ impl Card {
         tone_mapping: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
+        // Vulkan takes the picture from wherever it was read, makes it smaller
+        // and converts it in one pass, and hands it down at its final size.
+        if let Some(ToneMapping::ThroughVulkan { .. }) = tone_mapping {
+            let size = scale_to_height
+                .map(|height| format!("w=-2:h={height}:"))
+                .unwrap_or_default();
+            return vec![
+                format!("libplacebo={size}{VULKAN_CONVERSION}"),
+                "hwdownload".to_string(),
+                "format=nv12".to_string(),
+            ];
+        }
+
         let way = self.way.as_str();
         let tone_map = tone_mapping.is_some();
         let mut filters = Vec::new();
@@ -410,8 +487,8 @@ impl Card {
             (None, false) if reads_the_film => filters.push(format!("scale_{way}=format=nv12")),
             (None, _) => {}
         }
-        if let Some(recipe) = tone_mapping {
-            filters.push(recipe.filter(self.way));
+        if tone_mapping == Some(ToneMapping::OwnFilter) {
+            filters.push(format!("tonemap_{way}=format=nv12"));
         }
 
         filters
@@ -590,7 +667,7 @@ impl CardSearch {
             }
             let (worked, said) = try_it(
                 ffmpeg,
-                &card,
+                card.opening_arguments(false, false),
                 &encoder,
                 TrialInput::Generated,
                 "format=nv12,hwupload",
@@ -616,7 +693,14 @@ impl CardSearch {
         // refuses what comes out of the one before it is exactly the failure
         // that only shows up in the middle of somebody's film.
         let chain = card.chain(Some(TRIAL_HEIGHT), None, false).join(",");
-        let (can_scale, said) = try_it(ffmpeg, &card, &floor, TrialInput::Generated, &chain).await;
+        let (can_scale, said) = try_it(
+            ffmpeg,
+            card.opening_arguments(false, false),
+            &floor,
+            TrialInput::Generated,
+            &chain,
+        )
+        .await;
         self.trials.push(Trial {
             what: "make_it_smaller".to_string(),
             device: named.clone(),
@@ -651,31 +735,26 @@ impl CardSearch {
         floor: &str,
         wide_gamut: Option<&Sample>,
     ) -> Option<ToneMapping> {
-        let device = card.device.display().to_string();
-        let offered = ToneMapping::offered_on(card.way);
-        if offered.is_empty() {
-            self.trials.push(Trial {
-                what: "convert_wide_gamut".to_string(),
-                device,
-                worked: false,
-                said: format!(
-                    "the official media tool carries no way to convert wide gamut colour on a \
-                     card driven by {}",
-                    card.way.as_str()
-                ),
-            });
-            return None;
-        }
         // Said once already, when the sample could not be made.
         let sample = wide_gamut?;
 
-        for recipe in offered {
-            let chain = card.chain(Some(TRIAL_HEIGHT), Some(*recipe), false).join(",");
-            let (worked, said) =
-                try_it(ffmpeg, card, floor, TrialInput::File(sample.path()), &chain).await;
+        for recipe in ToneMapping::offered_on(card.way) {
+            let reads = match recipe {
+                ToneMapping::ThroughVulkan { reads } => *reads,
+                ToneMapping::OwnFilter => false,
+            };
+            let chain = card.chain(Some(TRIAL_HEIGHT), Some(*recipe), reads).join(",");
+            let (worked, said) = try_it(
+                ffmpeg,
+                card.opening(reads, Some(*recipe)),
+                floor,
+                TrialInput::File(sample.path()),
+                &chain,
+            )
+            .await;
             self.trials.push(Trial {
-                what: "convert_wide_gamut".to_string(),
-                device: device.clone(),
+                what: recipe.trial_name().to_string(),
+                device: card.device.display().to_string(),
                 worked,
                 said,
             });
@@ -770,10 +849,21 @@ impl CardSearch {
             // that reads a film and then offers the frames in a layout the
             // encoder refuses has not read it, as far as a viewer is
             // concerned, and that refusal comes at the end of the chain.
-            let chain = card
-                .filters_for(None, *codec == WIDE_GAMUT_CODEC, true)
-                .join(",");
-            let (worked, said) = try_reading(ffmpeg, card, floor, sample.path(), &chain).await;
+            //
+            // What is asked here is what the card's own reader reads, so the
+            // wide gamut sample is converted only by a recipe that reader
+            // feeds: Vulkan reads for itself, and is proved to with its recipe.
+            let tone_map =
+                *codec == WIDE_GAMUT_CODEC && card.tone_mapping == Some(ToneMapping::OwnFilter);
+            let chain = card.filters_for(None, tone_map, true).join(",");
+            let (worked, said) = try_reading(
+                ffmpeg,
+                card.opening_arguments(true, tone_map),
+                floor,
+                sample.path(),
+                &chain,
+            )
+            .await;
             self.trials.push(Trial {
                 what: format!("read_{codec}"),
                 device: named.to_string(),
@@ -1141,7 +1231,7 @@ async fn sample_in(
             ],
         ),
         WitnessWriter::Card(encoder) => (
-            card.opening_arguments(false),
+            card.opening_arguments(false, false),
             vec![
                 "-vf".to_string(),
                 "format=nv12,hwupload".to_string(),
@@ -1182,7 +1272,7 @@ async fn sample_in(
 /// the reading.
 async fn try_reading(
     ffmpeg: &Path,
-    card: &Card,
+    opening: Vec<String>,
     encoder: &str,
     sample: &Path,
     filters: &str,
@@ -1190,7 +1280,7 @@ async fn try_reading(
     let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
         .into_iter()
-        .chain(card.opening_arguments(true))
+        .chain(opening)
         .chain(
             [
                 "-i",
@@ -1219,7 +1309,7 @@ async fn try_reading(
 /// film on the disk.
 async fn try_it(
     ffmpeg: &Path,
-    card: &Card,
+    opening: Vec<String>,
     encoder: &str,
     input: TrialInput<'_>,
     filters: &str,
@@ -1237,7 +1327,7 @@ async fn try_it(
     let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
         .into_iter()
-        .chain(card.opening_arguments(false))
+        .chain(opening)
         .chain(read)
         .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
 
@@ -1311,7 +1401,7 @@ mod tests {
         // path.
         let card = nvidia_card();
         assert_eq!(
-            card.opening_arguments(true),
+            card.opening_arguments(true, false),
             vec![
                 "-init_hw_device".to_string(),
                 "cuda=card:0".to_string(),
@@ -1343,12 +1433,99 @@ mod tests {
 
     #[test]
     fn a_card_with_no_way_to_convert_colour_is_never_asked_to() {
-        // The official tool carries no conversion for Nvidia's cards, and a
-        // chain asking for one would be refused in the middle of a film.
+        // A chain asking for a conversion the card was never proved to make
+        // would be refused in the middle of a film.
         let filters = nvidia_card().filters_for(Some(1080), true, true);
-        assert!(!filters.iter().any(|value| value.contains("tonemap")), "{filters:?}");
-        assert!(ToneMapping::offered_on(HardwareAcceleration::Cuda).is_empty());
+        assert!(
+            !filters.iter().any(|value| value.contains("tonemap") || value.contains("libplacebo")),
+            "{filters:?}"
+        );
         assert!(!nvidia_card().can_tone_map());
+    }
+
+    fn through_vulkan(reads: bool) -> Card {
+        Card {
+            tone_mapping: Some(ToneMapping::ThroughVulkan { reads }),
+            ..nvidia_card()
+        }
+    }
+
+    #[test]
+    fn an_nvidia_card_converts_colour_through_vulkan_reading_first() {
+        // Vulkan reading the film was measured nearly twice as fast as the
+        // processor reading it, so it is tried first.
+        assert_eq!(
+            ToneMapping::offered_on(HardwareAcceleration::Cuda),
+            &[
+                ToneMapping::ThroughVulkan { reads: true },
+                ToneMapping::ThroughVulkan { reads: false },
+            ]
+        );
+    }
+
+    #[test]
+    fn through_vulkan_the_film_is_opened_and_read_by_vulkan_on_the_same_card() {
+        assert_eq!(
+            through_vulkan(true).opening_arguments(true, true),
+            vec![
+                "-init_hw_device".to_string(),
+                "cuda=card:0".to_string(),
+                "-init_hw_device".to_string(),
+                "vulkan=vk@card".to_string(),
+                "-filter_hw_device".to_string(),
+                "vk".to_string(),
+                "-hwaccel".to_string(),
+                "vulkan".to_string(),
+                "-hwaccel_output_format".to_string(),
+                "vulkan".to_string(),
+                "-hwaccel_device".to_string(),
+                "vk".to_string(),
+            ]
+        );
+        // A film whose colours are left alone opens the card as before.
+        assert_eq!(
+            through_vulkan(true).opening_arguments(true, false),
+            nvidia_card().opening_arguments(true, false)
+        );
+    }
+
+    #[test]
+    fn through_vulkan_the_picture_comes_down_at_its_final_size() {
+        assert_eq!(
+            through_vulkan(true).filters_for(Some(1080), true, true),
+            vec![
+                format!("libplacebo=w=-2:h=1080:{VULKAN_CONVERSION}"),
+                "hwdownload".to_string(),
+                "format=nv12".to_string(),
+            ]
+        );
+        // Read by the processor, the same chain: Vulkan takes the picture
+        // from wherever it was read.
+        assert_eq!(
+            through_vulkan(false).filters_for(None, true, false),
+            vec![
+                format!("libplacebo={VULKAN_CONVERSION}"),
+                "hwdownload".to_string(),
+                "format=nv12".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn what_vulkan_reads_is_told_apart_from_what_nvidias_reader_reads() {
+        let reading = through_vulkan(true);
+        assert!(reading.reads_for("hevc", true), "proved on the wide gamut sample");
+        assert!(!reading.reads_for("av1", true), "never proved through Vulkan");
+        assert!(reading.reads_for("av1", false), "Nvidia's reader was");
+        assert!(!through_vulkan(false).reads_for("hevc", true));
+        // The card's own filter is fed by the card's own reader.
+        assert!(card(true, true).reads_for("hevc", true));
+    }
+
+    #[test]
+    fn an_nvidia_encoder_is_named_its_card() {
+        assert_eq!(nvidia_card().encoder_arguments(), vec!["-gpu", "0"]);
+        assert!(card(true, true).encoder_arguments().is_empty());
     }
 
     #[test]
@@ -1451,7 +1628,7 @@ mod tests {
         // The tool has to be told about the card before it reads anything: a
         // device named afterwards is a device the filters cannot reach.
         assert_eq!(
-            card(true, true).opening_arguments(false),
+            card(true, true).opening_arguments(false, false),
             vec![
                 "-init_hw_device".to_string(),
                 "vaapi=card:/dev/dri/renderD128".to_string(),

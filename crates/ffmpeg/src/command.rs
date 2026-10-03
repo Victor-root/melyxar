@@ -486,8 +486,10 @@ impl Command {
         // The card is opened before anything is read: a device named after the
         // input is a device the filters cannot reach, and the tool says so in
         // a sentence that names neither.
-        if let Some((card, reads_the_film)) = self.card() {
-            for argument in card.opening_arguments(reads_the_film) {
+        if let VideoOutput::Encode(encode) = &self.video
+            && let Some((card, reads_the_film)) = encode.card()
+        {
+            for argument in card.opening_arguments(reads_the_film, encode.tone_map) {
                 push!(&argument);
             }
         }
@@ -671,7 +673,10 @@ impl Command {
                     // A rate rather than a quality, because the three codecs a
                     // card produces count quality on three different scales
                     // and a rate means the same thing to all of them.
-                    Rebuilding::OnACard { .. } => {
+                    Rebuilding::OnACard { card, .. } => {
+                        for argument in card.encoder_arguments() {
+                            push!(&argument);
+                        }
                         if let Some(bitrate) = encode.max_bitrate {
                             push!("-b:v");
                             push!(&bitrate.to_string());
@@ -1365,6 +1370,62 @@ mod tests {
         let forced = position(&args, "-forced-idr").expect("forced key frames start a segment");
         assert_eq!(args[forced + 1], "1");
         assert!(forced > position(&args, "-force_key_frames").expect("key frames are forced"));
+    }
+
+    #[test]
+    fn a_wide_gamut_film_on_an_nvidia_card_is_read_and_converted_by_vulkan() {
+        // And its subtitle laid on the picture once it has come down, at its
+        // size and at the foot: the picture is on the processor by then.
+        let card = Card {
+            tone_mapping: Some(crate::hardware::ToneMapping::ThroughVulkan { reads: true }),
+            ..an_nvidia_card()
+        };
+        let mut encode = VideoEncode::on_a_card(&card, "hevc", true).expect("proved");
+        encode.tone_map = true;
+        encode.scale_to_height = Some(1080);
+        encode.burn_in_subtitle = Some(5);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        assert_eq!(args[position(&args, "-hwaccel").expect("read on the card") + 1], "vulkan");
+        assert!(args.contains(&"vulkan=vk@card".to_string()), "{args:?}");
+        assert_eq!(args[position(&args, "-gpu").expect("the encoder is named its card") + 1], "0");
+
+        let graph = command.picture_painted_with_subtitles().expect("painted");
+        assert!(graph.starts_with("[0:5]scale=1920:1080[words];[0:v:0]libplacebo=w=-2:h=1080:"), "{graph}");
+        assert!(graph.contains(",hwdownload,format=nv12[picture];"), "{graph}");
+        assert!(
+            graph.ends_with(
+                "[picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
+            ),
+            "{graph}"
+        );
+    }
+
+    #[test]
+    fn a_subtitle_painted_by_the_processor_is_brought_to_the_picture_and_set_at_its_foot() {
+        // A film cut to its picture and made 1080 lines tall is 2592 across:
+        // laid as it is, a subtitle drawn for 1920 stayed against the left.
+        let mut encode = VideoEncode::software_h264();
+        encode.scale_to_height = Some(1080);
+        encode.burn_in_subtitle = Some(3);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        assert_eq!(
+            command.picture_painted_with_subtitles().expect("painted"),
+            "[0:3]scale=1920:1080[words];[0:v:0]scale=-2:1080[picture];\
+             [picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
+        );
     }
 
     #[test]
