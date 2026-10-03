@@ -101,6 +101,9 @@ pub struct CardChoice {
     pub in_use: Option<String>,
     /// Whether a film that card cannot take goes to another card that can.
     pub other_card_when_refused: bool,
+    /// Whether a film the card refuses once it is playing goes to the
+    /// processor, rather than stopping.
+    pub processor_when_refused: bool,
 }
 
 impl CardChoice {
@@ -116,6 +119,7 @@ impl CardChoice {
 pub async fn choice(state: &AppState) -> Result<CardChoice> {
     let chosen = state.database().transcoding_card().await?;
     let other_card_when_refused = state.database().transcoding_card_fallback().await?;
+    let processor_when_refused = state.database().transcoding_processor_fallback().await?;
     let cards = state
         .capabilities()
         .map(melyxar_ffmpeg::Capabilities::cards)
@@ -129,16 +133,19 @@ pub async fn choice(state: &AppState) -> Result<CardChoice> {
         chosen,
         in_use,
         other_card_when_refused,
+        processor_when_refused,
     })
 }
 
 /// Chooses the card that converts films, or leaves it to the server with
-/// nothing, and whether another card takes what it cannot. Only a card that
-/// passed here can be chosen.
+/// nothing, whether another card takes what it cannot, and whether the
+/// processor takes what it refuses while playing. Only a card that passed
+/// here can be chosen.
 pub async fn choose(
     state: &AppState,
     key: Option<&str>,
     other_card_when_refused: bool,
+    processor_when_refused: bool,
 ) -> Result<CardChoice> {
     if let Some(key) = key {
         let passed = state
@@ -155,11 +162,16 @@ pub async fn choose(
         .database()
         .set_transcoding_card_fallback(other_card_when_refused)
         .await?;
+    state
+        .database()
+        .set_transcoding_processor_fallback(processor_when_refused)
+        .await?;
     let choice = choice(state).await?;
     tracing::info!(
         chosen = key,
         in_use = choice.in_use.as_deref(),
         other_card_when_refused,
+        processor_when_refused,
         "the card that converts films was chosen"
     );
     Ok(choice)
@@ -188,6 +200,7 @@ mod tests {
             chosen: Some("cuda:0000:0c:00.0".to_string()),
             in_use: Some("vaapi:0000:03:00.0".to_string()),
             other_card_when_refused: false,
+            processor_when_refused: false,
         };
         assert!(gone.chosen_is_missing());
 
@@ -246,14 +259,14 @@ mod tests {
         let wide_gamut = |card: &Card| card.can_tone_map();
         let key = |card: Option<Card>| card.map(|card| card.key);
 
-        choose(&state, Some("plain"), false).await.expect("chosen");
+        choose(&state, Some("plain"), false, false).await.expect("chosen");
         assert_eq!(
             key(for_this_film(&state, wide_gamut).await.expect("read")).as_deref(),
             Some("plain"),
             "left off, choosing a card is choosing that card"
         );
 
-        choose(&state, Some("plain"), true).await.expect("turned on");
+        choose(&state, Some("plain"), true, true).await.expect("turned on");
         assert_eq!(
             key(for_this_film(&state, wide_gamut).await.expect("read")).as_deref(),
             Some("converts")
@@ -263,7 +276,9 @@ mod tests {
             Some("plain"),
             "a film the chosen card takes stays on it"
         );
-        assert!(choice(&state).await.expect("read").other_card_when_refused);
+        let kept = choice(&state).await.expect("read");
+        assert!(kept.other_card_when_refused);
+        assert!(kept.processor_when_refused);
     }
 
     #[tokio::test]
@@ -273,14 +288,14 @@ mod tests {
             .expect("database opens");
         let state = AppState::new(melyxar_config::Config::default(), database, None, None);
 
-        assert!(choose(&state, Some("cuda:0000:0c:00.0"), false).await.is_err());
+        assert!(choose(&state, Some("cuda:0000:0c:00.0"), false, false).await.is_err());
         assert_eq!(
             state.database().transcoding_card().await.expect("read"),
             None,
             "nothing is kept for a card that is not there"
         );
 
-        let left = choose(&state, None, false).await.expect("left to the server");
+        let left = choose(&state, None, false, false).await.expect("left to the server");
         assert!(left.cards.is_empty());
         assert_eq!(left.in_use, None);
         assert!(in_use(&state).await.expect("read").is_none());

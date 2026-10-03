@@ -329,33 +329,51 @@ export function CardPanel() {
         />
       </div>
 
-      {kept && kept.cards.length > 1 && (
+      {kept && kept.cards.length > 0 && (
         <>
+          {kept.cards.length > 1 && (
+            <>
+              <Setting
+                label={t("admin.card_choice")}
+                why={t("admin.card_choice_why")}
+              >
+                <Picker
+                  label={t("admin.card_choice")}
+                  value={kept.chosen ?? AUTOMATIC}
+                  options={[
+                    [AUTOMATIC, t("admin.card_automatic")] as const,
+                    ...kept.cards.map((card) => [card.key, card.name] as const),
+                  ]}
+                  onPick={(picked) =>
+                    choice.setTo({
+                      chosen: picked === AUTOMATIC ? null : picked,
+                    })
+                  }
+                />
+              </Setting>
+              <Setting
+                label={t("admin.card_fallback")}
+                why={t("admin.card_fallback_why")}
+              >
+                <Toggle
+                  label={t("admin.card_fallback")}
+                  checked={kept.other_card_when_refused}
+                  onChange={(other_card_when_refused) =>
+                    choice.setTo({ other_card_when_refused })
+                  }
+                />
+              </Setting>
+            </>
+          )}
           <Setting
-            label={t("admin.card_choice")}
-            why={t("admin.card_choice_why")}
-          >
-            <Picker
-              label={t("admin.card_choice")}
-              value={kept.chosen ?? AUTOMATIC}
-              options={[
-                [AUTOMATIC, t("admin.card_automatic")] as const,
-                ...kept.cards.map((card) => [card.key, card.name] as const),
-              ]}
-              onPick={(picked) =>
-                choice.setTo({ chosen: picked === AUTOMATIC ? null : picked })
-              }
-            />
-          </Setting>
-          <Setting
-            label={t("admin.card_fallback")}
-            why={t("admin.card_fallback_why")}
+            label={t("admin.card_processor_fallback")}
+            why={t("admin.card_processor_fallback_why")}
           >
             <Toggle
-              label={t("admin.card_fallback")}
-              checked={kept.other_card_when_refused}
-              onChange={(other_card_when_refused) =>
-                choice.setTo({ other_card_when_refused })
+              label={t("admin.card_processor_fallback")}
+              checked={kept.processor_when_refused}
+              onChange={(processor_when_refused) =>
+                choice.setTo({ processor_when_refused })
               }
             />
           </Setting>

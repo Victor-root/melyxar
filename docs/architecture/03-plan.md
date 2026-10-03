@@ -193,7 +193,7 @@ Fait :
 - VAAPI pour l'Intel Arc A380 : détection par **essai réel** au démarrage, un essai par codec, chaque refus conservé mot pour mot dans le journal et dans le rapport.
 - Encodage H.264, HEVC et AV1 sur la carte, le meilleur codec que le client et la carte portent tous les deux.
 - Conversion HDR vers SDR sur la carte (`tonemap_vaapi`), avec repli complet sur le logiciel si la carte ne sait pas la faire : une carte qui ne convertit pas rendrait un film gris, ce qui est pire qu'un film plus petit.
-- Repli automatique sur le processeur quand la carte refuse un film en cours de session, une seule fois, avec la phrase de l'outil au journal.
+- Repli sur le processeur quand la carte refuse un film en cours de session, une seule fois, avec la phrase de l'outil au journal. **Option de la page Transcodage, désactivée par défaut** : sans elle, la carte peut seulement être invitée à en faire moins, puis la lecture s'arrête.
 - Choix de qualité par le spectateur (taille et débit), qui devient un plafond dans le profil client.
 - Décodage sur la carte dans les codecs qu'elle a prouvé savoir lire, établis un par un, avec repli sur le processeur pour les autres.
 - Un segment rendu dès que l'outil annonce l'avoir dépassé, au lieu d'attendre que le suivant soit produit par-dessus.

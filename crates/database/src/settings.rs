@@ -557,6 +557,29 @@ impl Database {
         Ok(())
     }
 
+    /// Whether a film the card refuses in the middle of its playback is
+    /// handed to the processor, rather than stopped.
+    pub async fn transcoding_processor_fallback(&self) -> Result<bool> {
+        let value: i64 = sqlx::query_scalar(
+            "SELECT transcode_processor_fallback FROM server_settings WHERE id = 1",
+        )
+        .fetch_one(self.reader())
+        .await?;
+        Ok(int_to_bool(value))
+    }
+
+    /// Turns that on or off.
+    pub async fn set_transcoding_processor_fallback(&self, on: bool) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET transcode_processor_fallback = ?, updated_at = ? WHERE id = 1",
+        )
+        .bind(bool_to_int(on))
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     /// What the server is called, on its own for the same reason as the
     /// switch above.
     pub async fn set_server_name(&self, name: &str) -> Result<()> {
