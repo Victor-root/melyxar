@@ -48,14 +48,11 @@ pub const CLIP_LENGTH: Millis = Millis::new(12_000);
 /// be rebuilt, into a file a browser opens whole.
 ///
 /// The index sits at the front of the file, so a browser handed the whole
-/// thing at once can start at once. A rebuilt HEVC picture is labelled the
-/// way a browser expects it inside such a file; labelled the other way, a
-/// browser that plays HEVC perfectly refuses to open it.
+/// thing at once can start at once.
 pub fn clip(
     source: &Path,
     starts_at: Millis,
     video_index: i32,
-    codec: &str,
     encode: VideoEncode,
     into: &Path,
 ) -> Command {
@@ -72,11 +69,6 @@ pub fn clip(
     .with_audio(AudioOutput::None);
     command.duration = Some(CLIP_LENGTH);
     command.extra_arguments = vec!["-movflags".to_string(), "+faststart".to_string()];
-    if codec.eq_ignore_ascii_case("hevc") {
-        command
-            .extra_arguments
-            .extend(["-tag:v".to_string(), "hvc1".to_string()]);
-    }
     command
 }
 
@@ -198,13 +190,15 @@ pub async fn make_reference_film(tools: &ToolPaths, into: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn clip_arguments(codec: &str) -> Vec<String> {
+    fn clip_arguments(encoder: &str) -> Vec<String> {
         clip(
             Path::new("/films/a-film.mkv"),
             Millis::new(3_600_000),
             0,
-            codec,
-            VideoEncode::software_h264(),
+            VideoEncode {
+                encoder: encoder.to_string(),
+                ..VideoEncode::software_h264()
+            },
             Path::new("/cache/h264-1080.mp4"),
         )
         .to_arguments()
@@ -215,7 +209,7 @@ mod tests {
 
     #[test]
     fn a_clip_is_a_short_silent_file_a_browser_opens_whole() {
-        let built = clip_arguments("h264");
+        let built = clip_arguments("libx264");
         let at = |what: &str| built.iter().position(|value| value == what);
         assert_eq!(built[at("-t").expect("a length") + 1], "12.000");
         assert_eq!(built[at("-ss").expect("a start") + 1], "3600.000");
@@ -227,7 +221,7 @@ mod tests {
 
     #[test]
     fn an_hevc_clip_is_labelled_the_way_a_browser_opens_it() {
-        let built = clip_arguments("hevc");
+        let built = clip_arguments("libx265");
         let at = built.iter().position(|value| value == "-tag:v").expect("a label");
         assert_eq!(built[at + 1], "hvc1");
     }

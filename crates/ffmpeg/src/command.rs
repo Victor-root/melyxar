@@ -201,6 +201,11 @@ impl VideoEncode {
         })
     }
 
+    /// Whether what comes out is HEVC, whoever writes it.
+    pub(crate) fn writes_hevc(&self) -> bool {
+        self.encoder.starts_with("hevc_") || self.encoder == "libx265"
+    }
+
     /// The card doing the work, and whether it reads the film as well.
     pub fn card(&self) -> Option<(&Card, bool)> {
         match &self.how {
@@ -662,6 +667,12 @@ impl Command {
 
                 push!("-c:v");
                 push!(&encode.encoder);
+                // The label every reader of an MP4 knows HEVC by; left alone,
+                // the tool writes one some refuse.
+                if encode.writes_hevc() {
+                    push!("-tag:v");
+                    push!("hvc1");
+                }
 
                 match &encode.how {
                     Rebuilding::InSoftware { quality, preset } => {
@@ -1367,6 +1378,7 @@ mod tests {
 
         assert_eq!(args[position(&args, "-init_hw_device").expect("opened") + 1], "cuda=card:0");
         assert!(args.contains(&"hevc_nvenc".to_string()));
+        assert_eq!(args[position(&args, "-tag:v").expect("HEVC is labelled") + 1], "hvc1");
         let forced = position(&args, "-forced-idr").expect("forced key frames start a segment");
         assert_eq!(args[forced + 1], "1");
         assert!(forced > position(&args, "-force_key_frames").expect("key frames are forced"));

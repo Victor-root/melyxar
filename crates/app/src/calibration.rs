@@ -415,7 +415,6 @@ async fn make_clips(
             &plan.against.source,
             plan.against.starts_at,
             plan.against.video_index,
-            &clip.codec,
             encode,
             &aside,
         );

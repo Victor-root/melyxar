@@ -288,6 +288,11 @@ fn resident_kilobytes_in(status: &str) -> Option<u64> {
 /// that keeps a few thousand lines.
 const LINES_KEPT_PER_RUN: usize = 40;
 
+/// What the tool says on every picture of a run that is not worth a line of
+/// the journal: the Vulkan conversion telling, twice a picture, that a layout
+/// cannot be copied in one go, which changes nothing it does.
+const NOTHING_TO_SAY: &[&str] = &["Masking `blit_src`"];
+
 /// What the tool said while it ran, kept for the journal.
 ///
 /// A tool painting a subtitle is asked to say warnings as well as errors, and
@@ -312,7 +317,8 @@ impl ToolSaid {
     }
 
     pub(crate) fn hear(&mut self, line: &str) {
-        if self.painting && self.said < LINES_KEPT_PER_RUN {
+        let worth_saying = !NOTHING_TO_SAY.iter().any(|noise| line.contains(noise));
+        if self.painting && worth_saying && self.said < LINES_KEPT_PER_RUN {
             self.said += 1;
             tracing::debug!(said = line, "the tool, painting a subtitle, said");
         }
@@ -514,6 +520,19 @@ mod tests {
              [picture][words]overlay_cuda=x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
         );
         assert_eq!(CardPath::Cuda.driver().subtitle_layouts(), &["yuva420p"]);
+    }
+
+    #[test]
+    fn what_the_vulkan_conversion_repeats_on_every_picture_stays_out_of_the_journal() {
+        let mut said = ToolSaid {
+            painting: true,
+            said: 0,
+            tail: VecDeque::new(),
+        };
+        said.hear("[libplacebo @ 0x1] Masking `blit_src` from wrapped texture");
+        assert_eq!(said.said, 0);
+        said.hear("[hls @ 0x2] something worth reading");
+        assert_eq!(said.said, 1);
     }
 
     #[test]
