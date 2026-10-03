@@ -1,109 +1,146 @@
-//! Finding out what one client really decodes.
+//! Finding out what one device really decodes.
 //!
-//! Nothing here belongs to an account: a calibration is a fact about a
-//! machine, kept apart so a laptop and a television never inherit each
-//! other's answer. The client names itself with a value it made up and keeps
-//! to itself; nothing here checks it against anything.
+//! The clips are the server's, and only somebody signed in is handed them. The
+//! calibration itself belongs to a device rather than to an account, so a
+//! laptop and a television never inherit each other's answer: the device names
+//! itself with a value it made up and keeps to itself.
 
-use crate::identifiers::parse_client;
+use axum::body::Body;
 use axum::extract::{Path as RoutePath, State};
+use axum::http::Request;
+use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
-use melyxar_app::calibration::{CodecCalibration, FoundBy};
+use melyxar_app::calibration::{CodecResult, Readiness, CALIBRATION_VERSION};
 use melyxar_app::AppState;
-use melyxar_core::time::now;
 use serde::{Deserialize, Serialize};
 
+use crate::account::Viewer;
 use crate::error::Result;
+use crate::identifiers::parse_client;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route(
-            "/api/v1/calibration/session",
-            axum::routing::post(open_session),
+            "/api/v1/calibration/clips",
+            axum::routing::get(clips).post(prepare),
         )
         .route(
-            "/api/v1/calibration/verdict",
-            axum::routing::post(record_verdict),
+            "/api/v1/calibration/clips/{codec}/{height}",
+            axum::routing::get(clip),
         )
         .route(
             "/api/v1/calibration/{client}",
-            axum::routing::get(profile).delete(forget),
+            axum::routing::get(calibration)
+                .post(record)
+                .delete(forget),
         )
 }
 
-#[derive(Debug, Deserialize)]
-struct OpenBody {
+#[derive(Debug, Serialize)]
+struct ClipView {
     codec: String,
     height: i32,
+    frame_rate: f64,
+    url: String,
 }
 
 #[derive(Debug, Serialize)]
-struct SessionView {
-    id: String,
-    playlist_url: String,
-    /// The height really produced, which is not always the one asked for: a
-    /// film is never asked to be taller than it is, and what a client records
-    /// has to be what it really watched.
-    height: i32,
-    /// How many pictures a second it runs at, which is what keeping up is
-    /// counted against on the other side.
-    frame_rate: f64,
+struct ClipsView {
+    /// Which recipe these clips are made by, handed back with the result.
+    calibration_version: i32,
+    /// not_prepared, preparing, failed or ready.
+    state: &'static str,
+    done: usize,
+    total: usize,
+    reason: Option<String>,
+    clips: Vec<ClipView>,
 }
 
-/// Opens a session that rebuilds the film being measured against into one
-/// codec, at one height, for a client to watch and measure.
-///
-/// Nameless on purpose: which film this is, is the server's business, and
-/// nothing about a client is known until the verdict comes back.
-async fn open_session(
+/// Where the clips this account is measured on stand, and what they are once
+/// they are ready.
+async fn clips(State(state): State<AppState>, Viewer(who): Viewer) -> Result<Json<ClipsView>> {
+    let readiness = melyxar_app::calibration::readiness(&state, &who).await?;
+    let mut view = ClipsView {
+        calibration_version: CALIBRATION_VERSION,
+        state: "not_prepared",
+        done: 0,
+        total: 0,
+        reason: None,
+        clips: Vec::new(),
+    };
+    match readiness {
+        Readiness::NotPrepared => {}
+        Readiness::Preparing { done, total } => {
+            view.state = "preparing";
+            view.done = done;
+            view.total = total;
+        }
+        Readiness::Failed(reason) => {
+            view.state = "failed";
+            view.reason = Some(reason);
+        }
+        Readiness::Ready(clips) => {
+            view.state = "ready";
+            view.clips = clips
+                .into_iter()
+                .map(|clip| ClipView {
+                    url: format!("/api/v1/calibration/clips/{}/{}", clip.codec, clip.height),
+                    codec: clip.codec,
+                    height: clip.height,
+                    frame_rate: clip.frame_rate,
+                })
+                .collect();
+        }
+    }
+    Ok(Json(view))
+}
+
+/// Starts making whatever clips are missing.
+async fn prepare(
     State(state): State<AppState>,
-    crate::account::Viewer(who): crate::account::Viewer,
-    Json(body): Json<OpenBody>,
-) -> Result<Json<SessionView>> {
-    let (session, height, frame_rate) =
-        melyxar_app::calibration::open_calibration_session(&state, &who, &body.codec, body.height)
-            .await?;
-    Ok(Json(SessionView {
-        id: session.id.to_string(),
-        playlist_url: format!("/api/v1/stream/{}/playlist.m3u8", session.id),
-        height,
-        frame_rate,
-    }))
+    Viewer(who): Viewer,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::calibration::prepare(&state, &who).await?;
+    Ok(Json(serde_json::json!({ "preparing": true })))
+}
+
+/// Hands one ready clip over whole.
+async fn clip(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    RoutePath((codec, height)): RoutePath<(String, i32)>,
+    request: Request<Body>,
+) -> Response {
+    let served = async {
+        let path = melyxar_app::calibration::clip_file(&state, &who, &codec, height).await?;
+        crate::serve_the_file(&path, request).await
+    };
+    match served.await {
+        Ok(response) => response,
+        Err(error) => error.into_response(),
+    }
 }
 
 #[derive(Debug, Deserialize)]
-struct VerdictBody {
-    client_id: String,
-    codec: String,
+struct RecordBody {
     calibration_version: i32,
-    usable: bool,
-    tested_height: i32,
-    dropped_share: f64,
-    shown_share: f64,
-    /// Whether this came out of the test or out of watching a real film. The
-    /// two are not equal, and the server is the one that knows it.
-    found_by: String,
+    codecs: Vec<CodecResult>,
 }
 
-/// Records what one client measured for one codec.
-async fn record_verdict(
+/// Keeps one device's whole calibration. A partial one is refused.
+async fn record(
     State(state): State<AppState>,
-    Json(body): Json<VerdictBody>,
+    Viewer(who): Viewer,
+    RoutePath(client): RoutePath<String>,
+    Json(body): Json<RecordBody>,
 ) -> Result<Json<serde_json::Value>> {
-    let client_id = parse_client(&body.client_id)?;
-    melyxar_app::calibration::record_calibration(
+    let client_id = parse_client(&client)?;
+    melyxar_app::calibration::record(
         &state,
+        &who,
         client_id,
-        &CodecCalibration {
-            codec: body.codec,
-            calibration_version: body.calibration_version,
-            usable: body.usable,
-            tested_height: body.tested_height,
-            dropped_share: body.dropped_share,
-            shown_share: body.shown_share,
-            found_by: FoundBy::from_word(&body.found_by),
-            measured_at: now(),
-        },
+        body.calibration_version,
+        body.codecs,
     )
     .await?;
     Ok(Json(serde_json::json!({ "recorded": true })))
@@ -111,45 +148,36 @@ async fn record_verdict(
 
 #[derive(Debug, Serialize)]
 struct CalibrationView {
-    codec: String,
     calibration_version: i32,
-    usable: bool,
-    tested_height: i32,
-    dropped_share: f64,
-    shown_share: f64,
-    found_by: &'static str,
+    #[serde(with = "time::serde::rfc3339")]
+    measured_at: melyxar_core::time::Timestamp,
+    codecs: Vec<CodecResult>,
 }
 
-/// Everything measured for one client so far.
-async fn profile(
+/// One device's calibration, or nothing when it has no whole one made the
+/// way this server makes them now.
+async fn calibration(
     State(state): State<AppState>,
+    Viewer(_): Viewer,
     RoutePath(client): RoutePath<String>,
-) -> Result<Json<Vec<CalibrationView>>> {
+) -> Result<Json<Option<CalibrationView>>> {
     let client_id = parse_client(&client)?;
-    let calibrations = melyxar_app::calibration::calibration_profile(&state, client_id).await?;
-    Ok(Json(
-        calibrations
-            .into_iter()
-            .map(|calibration| CalibrationView {
-                codec: calibration.codec,
-                calibration_version: calibration.calibration_version,
-                usable: calibration.usable,
-                tested_height: calibration.tested_height,
-                dropped_share: calibration.dropped_share,
-                shown_share: calibration.shown_share,
-                found_by: calibration.found_by.as_word(),
-            })
-            .collect(),
-    ))
+    let kept = melyxar_app::calibration::calibration_of(&state, client_id).await?;
+    Ok(Json(kept.map(|kept| CalibrationView {
+        calibration_version: kept.calibration_version,
+        measured_at: kept.measured_at,
+        codecs: kept.codecs,
+    })))
 }
 
-/// Forgets everything measured for one client, all codecs at once.
+/// Forgets one device's calibration.
 async fn forget(
     State(state): State<AppState>,
+    Viewer(_): Viewer,
     RoutePath(client): RoutePath<String>,
 ) -> Result<Json<serde_json::Value>> {
     let client_id = parse_client(&client)?;
-    melyxar_app::calibration::forget_calibration(&state, client_id).await?;
+    melyxar_app::calibration::forget(&state, client_id).await?;
     Ok(Json(serde_json::json!({ "forgotten": true })))
 }
 

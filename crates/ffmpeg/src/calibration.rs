@@ -1,4 +1,5 @@
-//! The reference film a browser is measured against.
+//! What a browser is measured against: the clips cut out of a film, and the
+//! film this server makes for itself when the library holds none.
 //!
 //! Calibrating a client means finding out what it really decodes, rather than
 //! what it says about a codec in the abstract. That has to be asked against
@@ -31,7 +32,53 @@ use std::process::Stdio;
 use melyxar_core::time::Millis;
 use tokio::process::Command as TokioCommand;
 
+use crate::command::{
+    AudioOutput, Command, Input, Output, StreamSelection, VideoEncode, VideoOutput,
+};
 use crate::{FfmpegError, Result, ToolPaths};
+
+/// How long one clip a device is measured on runs.
+///
+/// Long enough for a decoder to settle into what it really does and to be
+/// counted over two hundred pictures, short enough that a device measured
+/// at every height of every codec is done in a few minutes.
+pub const CLIP_LENGTH: Millis = Millis::new(12_000);
+
+/// Cuts one clip out of a film, rebuilt the way a real playback of it would
+/// be rebuilt, into a file a browser opens whole.
+///
+/// The index sits at the front of the file, so a browser handed the whole
+/// thing at once can start at once. A rebuilt HEVC picture is labelled the
+/// way a browser expects it inside such a file; labelled the other way, a
+/// browser that plays HEVC perfectly refuses to open it.
+pub fn clip(
+    source: &Path,
+    starts_at: Millis,
+    video_index: i32,
+    codec: &str,
+    encode: VideoEncode,
+    into: &Path,
+) -> Command {
+    let mut command = Command::new(
+        Input::new(source).starting_at(starts_at),
+        Output::File(into.to_path_buf()),
+    )
+    .with_streams(StreamSelection {
+        video_index: Some(video_index),
+        audio_index: None,
+        subtitle_index: None,
+    })
+    .with_video(VideoOutput::Encode(encode))
+    .with_audio(AudioOutput::None);
+    command.duration = Some(CLIP_LENGTH);
+    command.extra_arguments = vec!["-movflags".to_string(), "+faststart".to_string()];
+    if codec.eq_ignore_ascii_case("hevc") {
+        command
+            .extra_arguments
+            .extend(["-tag:v".to_string(), "hvc1".to_string()]);
+    }
+    command
+}
 
 /// Shape of the reference film. The size a calibration is actually asked
 /// about, since nothing taller than this is ever offered to a client to
@@ -150,6 +197,40 @@ pub async fn make_reference_film(tools: &ToolPaths, into: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn clip_arguments(codec: &str) -> Vec<String> {
+        clip(
+            Path::new("/films/a-film.mkv"),
+            Millis::new(3_600_000),
+            0,
+            codec,
+            VideoEncode::software_h264(),
+            Path::new("/cache/h264-1080.mp4"),
+        )
+        .to_arguments()
+        .into_iter()
+        .map(|value| value.to_string_lossy().to_string())
+        .collect()
+    }
+
+    #[test]
+    fn a_clip_is_a_short_silent_file_a_browser_opens_whole() {
+        let built = clip_arguments("h264");
+        let at = |what: &str| built.iter().position(|value| value == what);
+        assert_eq!(built[at("-t").expect("a length") + 1], "12.000");
+        assert_eq!(built[at("-ss").expect("a start") + 1], "3600.000");
+        assert!(at("-an").is_some(), "no sound: a picture is measured");
+        assert_eq!(built[at("-movflags").expect("an index") + 1], "+faststart");
+        assert!(at("hvc1").is_none());
+        assert!(built.last().unwrap().ends_with("h264-1080.mp4"));
+    }
+
+    #[test]
+    fn an_hevc_clip_is_labelled_the_way_a_browser_opens_it() {
+        let built = clip_arguments("hevc");
+        let at = built.iter().position(|value| value == "-tag:v").expect("a label");
+        assert_eq!(built[at + 1], "hvc1");
+    }
 
     #[test]
     fn the_reference_film_is_made_from_nothing_a_library_holds() {
