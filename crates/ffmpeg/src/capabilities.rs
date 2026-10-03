@@ -42,15 +42,6 @@ impl HardwareAcceleration {
             Self::Vulkan => "vulkan",
         }
     }
-
-    /// The name the tool gives the encoders of this path, which is the name
-    /// of the path everywhere but at Nvidia.
-    pub fn encoders_are_called(self) -> &'static str {
-        match self {
-            Self::Cuda => "nvenc",
-            other => other.as_str(),
-        }
-    }
 }
 
 /// Everything the installed tool reports about itself.

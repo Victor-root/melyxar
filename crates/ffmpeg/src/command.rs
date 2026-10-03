@@ -1323,7 +1323,7 @@ mod tests {
             tone_mapping: Some(crate::hardware::ToneMapping::OwnFilter),
             picture_subtitle_layout: Some("bgra".to_string()),
             ..Card::unproved(
-                crate::capabilities::HardwareAcceleration::Vaapi,
+                crate::hardware::CardPath::Vaapi,
                 "vaapi:0000:03:00.0".to_string(),
                 "Intel DG2 [Arc A380]".to_string(),
                 PathBuf::from("/dev/dri/renderD128"),
@@ -1344,7 +1344,7 @@ mod tests {
                 .collect(),
             picture_subtitle_layout: Some("yuva420p".to_string()),
             ..Card::unproved(
-                crate::capabilities::HardwareAcceleration::Cuda,
+                crate::hardware::CardPath::Cuda,
                 "cuda:0000:0c:00.0".to_string(),
                 "NVIDIA GeForce RTX 3060".to_string(),
                 PathBuf::from("/dev/nvidia0"),

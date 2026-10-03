@@ -33,7 +33,7 @@ use std::path::PathBuf;
 
 pub use capabilities::{Capabilities, HardwareAcceleration};
 pub use command::{AudioOutput, Command, Input, Output, StreamSelection, VideoOutput};
-pub use hardware::{Card, CardSearch, ToneMapping};
+pub use hardware::{Card, CardPath, CardSearch, ToneMapping};
 pub use probe::{ProbeReport, ProbeStream};
 pub use process::{AskedToStop, Progress, RunningProcess};
 
