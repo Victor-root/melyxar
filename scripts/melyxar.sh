@@ -1334,6 +1334,11 @@ ExecStart=${BINARY_PATH} --config ${CONFIG_FILE} serve
 Restart=on-failure
 RestartSec=5
 
+# NVIDIA cards are named to the media tool by number. Counted in the order
+# they sit on the machine, the number is the one the server worked out, rather
+# than whichever card the driver would put first.
+Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
+
 # Playback sessions own external processes. Stopping has to be given time to
 # close them, otherwise they are left behind, which is the failure this whole
 # project set out to avoid.
@@ -1475,6 +1480,9 @@ action_update() {
 
   build_and_install
   install_speech
+  # Written again so that what the service is started with reaches a machine
+  # installed before it changed. Taken up at the next restart.
+  install_service
   # Only a new server needs a restart. A new interface alone is already being
   # served, and a film playing through the update is not cut.
   if [[ -f "$WRITES_FILE" ]]; then
