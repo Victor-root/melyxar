@@ -8,6 +8,9 @@
 //!
 //! The choice is read each time a film is opened, so a new one applies to the
 //! next film without anything being restarted.
+//!
+//! A film the chosen card cannot take goes to the processor, unless the
+//! administrator asked for another card that can to take it instead.
 
 use melyxar_ffmpeg::Card;
 use serde::Serialize;
@@ -55,6 +58,39 @@ impl CardOffered {
     }
 }
 
+/// The card that converts one film: the one in use when it takes the film,
+/// otherwise, when that was asked for, the first other card that does.
+///
+/// `takes` says whether a card can take this film. A film no card takes is
+/// still answered with the card in use, which turns it down and leaves the
+/// film to the processor.
+pub async fn for_this_film(state: &AppState, takes: impl Fn(&Card) -> bool) -> Result<Option<Card>> {
+    let Some(in_use) = in_use(state).await? else {
+        return Ok(None);
+    };
+    if takes(&in_use) || !state.database().transcoding_card_fallback().await? {
+        return Ok(Some(in_use));
+    }
+    let instead = state
+        .capabilities()
+        .map(melyxar_ffmpeg::Capabilities::cards)
+        .unwrap_or_default()
+        .iter()
+        .find(|card| card.key != in_use.key && takes(card))
+        .cloned();
+    match instead {
+        Some(card) => {
+            tracing::info!(
+                in_use = in_use.name,
+                instead = card.name,
+                "the card in use cannot take this film, so another card takes it"
+            );
+            Ok(Some(card))
+        }
+        None => Ok(Some(in_use)),
+    }
+}
+
 /// The cards there are to choose from, and where the choice stands.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CardChoice {
@@ -63,6 +99,8 @@ pub struct CardChoice {
     pub chosen: Option<String>,
     /// The key of the card that converts now.
     pub in_use: Option<String>,
+    /// Whether a film that card cannot take goes to another card that can.
+    pub other_card_when_refused: bool,
 }
 
 impl CardChoice {
@@ -77,6 +115,7 @@ impl CardChoice {
 /// Where the choice of a card stands.
 pub async fn choice(state: &AppState) -> Result<CardChoice> {
     let chosen = state.database().transcoding_card().await?;
+    let other_card_when_refused = state.database().transcoding_card_fallback().await?;
     let cards = state
         .capabilities()
         .map(melyxar_ffmpeg::Capabilities::cards)
@@ -89,12 +128,18 @@ pub async fn choice(state: &AppState) -> Result<CardChoice> {
         cards: cards.iter().map(CardOffered::of).collect(),
         chosen,
         in_use,
+        other_card_when_refused,
     })
 }
 
 /// Chooses the card that converts films, or leaves it to the server with
-/// nothing. Only a card that passed here can be chosen.
-pub async fn choose(state: &AppState, key: Option<&str>) -> Result<CardChoice> {
+/// nothing, and whether another card takes what it cannot. Only a card that
+/// passed here can be chosen.
+pub async fn choose(
+    state: &AppState,
+    key: Option<&str>,
+    other_card_when_refused: bool,
+) -> Result<CardChoice> {
     if let Some(key) = key {
         let passed = state
             .capabilities()
@@ -106,10 +151,15 @@ pub async fn choose(state: &AppState, key: Option<&str>) -> Result<CardChoice> {
         }
     }
     state.database().set_transcoding_card(key).await?;
+    state
+        .database()
+        .set_transcoding_card_fallback(other_card_when_refused)
+        .await?;
     let choice = choice(state).await?;
     tracing::info!(
         chosen = key,
         in_use = choice.in_use.as_deref(),
+        other_card_when_refused,
         "the card that converts films was chosen"
     );
     Ok(choice)
@@ -137,6 +187,7 @@ mod tests {
             cards: vec![offered("vaapi:0000:03:00.0")],
             chosen: Some("cuda:0000:0c:00.0".to_string()),
             in_use: Some("vaapi:0000:03:00.0".to_string()),
+            other_card_when_refused: false,
         };
         assert!(gone.chosen_is_missing());
 
@@ -153,6 +204,68 @@ mod tests {
         assert!(!none.chosen_is_missing());
     }
 
+    fn a_card(key: &str, converts_colour: bool) -> Card {
+        Card {
+            way: melyxar_ffmpeg::CardPath::Vaapi,
+            key: key.to_string(),
+            name: key.to_string(),
+            device: std::path::PathBuf::from("/dev/dri/renderD128"),
+            address: "/dev/dri/renderD128".to_string(),
+            encoders: [("h264".to_string(), "h264_vaapi".to_string())]
+                .into_iter()
+                .collect(),
+            decoders: Default::default(),
+            can_scale: true,
+            tone_mapping: converts_colour.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
+            picture_subtitle_layout: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_film_the_chosen_card_cannot_take_goes_to_another_only_when_asked() {
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        let capabilities = melyxar_ffmpeg::Capabilities {
+            version: "ffmpeg version invented".to_string(),
+            encoders: Default::default(),
+            decoders: Default::default(),
+            filters: Default::default(),
+            hardware: Default::default(),
+            card_search: melyxar_ffmpeg::CardSearch {
+                cards: vec![a_card("plain", false), a_card("converts", true)],
+                ..Default::default()
+            },
+        };
+        let state = AppState::new(
+            melyxar_config::Config::default(),
+            database,
+            None,
+            Some(capabilities),
+        );
+        let wide_gamut = |card: &Card| card.can_tone_map();
+        let key = |card: Option<Card>| card.map(|card| card.key);
+
+        choose(&state, Some("plain"), false).await.expect("chosen");
+        assert_eq!(
+            key(for_this_film(&state, wide_gamut).await.expect("read")).as_deref(),
+            Some("plain"),
+            "left off, choosing a card is choosing that card"
+        );
+
+        choose(&state, Some("plain"), true).await.expect("turned on");
+        assert_eq!(
+            key(for_this_film(&state, wide_gamut).await.expect("read")).as_deref(),
+            Some("converts")
+        );
+        assert_eq!(
+            key(for_this_film(&state, |_| true).await.expect("read")).as_deref(),
+            Some("plain"),
+            "a film the chosen card takes stays on it"
+        );
+        assert!(choice(&state).await.expect("read").other_card_when_refused);
+    }
+
     #[tokio::test]
     async fn a_card_that_did_not_pass_here_cannot_be_chosen() {
         let database = melyxar_database::Database::open_in_memory()
@@ -160,14 +273,14 @@ mod tests {
             .expect("database opens");
         let state = AppState::new(melyxar_config::Config::default(), database, None, None);
 
-        assert!(choose(&state, Some("cuda:0000:0c:00.0")).await.is_err());
+        assert!(choose(&state, Some("cuda:0000:0c:00.0"), false).await.is_err());
         assert_eq!(
             state.database().transcoding_card().await.expect("read"),
             None,
             "nothing is kept for a card that is not there"
         );
 
-        let left = choose(&state, None).await.expect("left to the server");
+        let left = choose(&state, None, false).await.expect("left to the server");
         assert!(left.cards.is_empty());
         assert_eq!(left.in_use, None);
         assert!(in_use(&state).await.expect("read").is_none());

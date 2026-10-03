@@ -315,13 +315,17 @@ pub async fn plan(
         },
     );
 
-    let card = crate::cards::in_use(state).await?;
+    let painting = subtitle_to_paint_on(&decision, &tracks).is_some();
+    let card = crate::cards::for_this_film(state, |card| {
+        card_takes(card, painting, decision.tone_map)
+    })
+    .await?;
     let rebuild = how_to_rebuild(
         &decision,
         &tracks,
         &profile,
         card.as_ref(),
-        subtitle_to_paint_on(&decision, &tracks).is_some(),
+        painting,
         &state.database().transcoding_limits().await?.video_codecs,
         request.preferred_video_codec.as_deref(),
     );
@@ -351,7 +355,7 @@ pub async fn plan(
         audio = ?decision.audio,
         subtitles = ?decision.subtitles,
         tone_map = decision.tone_map,
-        picture_subtitle_painted = subtitle_to_paint_on(&decision, &tracks).is_some(),
+        picture_subtitle_painted = painting,
         card_paints_picture_subtitles = card
             .as_ref()
             .map(|card| card.picture_subtitle_layout().is_some()),
@@ -794,6 +798,17 @@ pub(crate) fn rate_for(height: Option<i32>, codec: &str) -> i64 {
     }
 }
 
+/// Whether a card can take a film at all.
+fn card_takes(card: &melyxar_ffmpeg::Card, painting_subtitles: bool, tone_map: bool) -> bool {
+    // A subtitle made of pictures is laid on the picture where the picture
+    // is, which is only the card once it has proved it can. Until then it is
+    // the processor, which has nothing to prove.
+    (!painting_subtitles || card.picture_subtitle_layout().is_some())
+        // A card that cannot convert wide gamut colour would hand back a film
+        // that is grey, which is worse than one that is merely smaller.
+        && (!tone_map || card.can_tone_map())
+}
+
 /// Works out who rebuilds the picture, into what, and at what size.
 ///
 /// Nothing when the picture is not being rebuilt at all, which is most films.
@@ -811,14 +826,7 @@ fn how_to_rebuild(
     }
     let source_height = height_of(tracks);
 
-    let card = card
-        // A subtitle made of pictures is laid on the picture where the picture
-        // is, which is only the card once it has proved it can. Until then it
-        // is the processor, which has nothing to prove.
-        .filter(|card| !painting_subtitles || card.picture_subtitle_layout().is_some())
-        // A card that cannot convert wide gamut colour would hand back a film
-        // that is grey, which is worse than one that is merely smaller.
-        .filter(|card| !decision.tone_map || card.can_tone_map());
+    let card = card.filter(|card| card_takes(card, painting_subtitles, decision.tone_map));
 
     // The height the picture will really be, which is what the client answered
     // about. A card rebuilds at the film's own size unless the viewer asked for

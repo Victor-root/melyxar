@@ -387,6 +387,9 @@ struct CardAsked {
     /// The key of the card to convert films, or nothing to leave it to the
     /// server.
     chosen: Option<String>,
+    /// Whether a film that card cannot take goes to another card that can.
+    #[serde(default)]
+    other_card_when_refused: bool,
 }
 
 /// The cards there are to choose from, and which one converts films.
@@ -406,7 +409,12 @@ async fn choose_card(
     Json(asked): Json<CardAsked>,
 ) -> Result<Json<CardChoiceView>> {
     Ok(Json(CardChoiceView::of(
-        melyxar_app::cards::choose(&state, asked.chosen.as_deref()).await?,
+        melyxar_app::cards::choose(
+            &state,
+            asked.chosen.as_deref(),
+            asked.other_card_when_refused,
+        )
+        .await?,
     )))
 }
 
