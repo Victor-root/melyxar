@@ -700,10 +700,11 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - Le **niveau de priorité** (afficher même pendant une lecture) est **distinct de la couleur** : une notification de n'importe quel niveau peut être prioritaire.
 - Chaque notification a aussi une **durée d'affichage** et peut être **fixe**, c'est-à-dire qu'elle reste à l'écran jusqu'à ce qu'on la ferme.
 
-*Commande de test en ligne de commande.*
+*Formulaire d'envoi dans l'administration.*
 
-- Une commande `melyxar` à lancer dans le LXC envoie une notification de test, avec ses réglages : niveau (donc couleur), durée d'affichage, fixe ou non, prioritaire ou non, titre et texte, et destinataires (par défaut les administrateurs seulement, pour qu'un essai ne dérange personne d'autre).
-- Elle sert à voir chaque niveau à l'écran sans attendre qu'un vrai événement le produise.
+- **Un formulaire de l'administration sert à la fois à envoyer un message de l'administrateur et à essayer une notification** : niveau (donc couleur), durée d'affichage, fixe ou non, prioritaire ou non, titre et texte, destinataires, et date quand il s'agit d'une maintenance annoncée. Pas de commande dans le LXC : les PC du mainteneur sont sous Windows, et le serveur prévenu directement affiche la notification en direct.
+- Pour un essai, les destinataires par défaut sont les administrateurs seulement, pour qu'un test ne dérange personne d'autre.
+- Une commande en ligne pourra s'ajouter plus tard en appelant la même fonction du serveur, si le besoin se présente.
 
 *Langue, synchronisation et droits.*
 
