@@ -15,7 +15,11 @@ import { Route, Routes, useParams } from "react-router-dom";
 import type { Library } from "./api";
 import { api } from "./api";
 import { AttentionProvider } from "./notifications/attention";
-import { AdministrationLine } from "./live";
+import { AdminNotifications } from "./notifications/admin";
+import { NotesPage } from "./notifications/page";
+import { MyNotifications } from "./notifications/settings";
+import { NotesProvider } from "./notifications/store";
+import { LiveLine } from "./live";
 import { Header } from "./components/header";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
@@ -167,8 +171,9 @@ function TheLibrary() {
     <RunningContext.Provider value={running}>
       <LibrariesContext.Provider value={libraries}>
         <Toasts>
-        <AdministrationLine>
+        <LiveLine>
         <AttentionProvider>
+        <NotesProvider>
         {/* The bar stands over the page rather than beside it, so the page
             can be scrolled up behind it and read faintly through the glass.
             Where the two sit in the markup does not decide that on its own;
@@ -202,6 +207,7 @@ function TheLibrary() {
               <Route path="/collection/:id" element={<CollectionPage />} />
               <Route path="/playlists" element={<PlaylistsPage />} />
               <Route path="/playlist/:id" element={<PlaylistPage />} />
+              <Route path="/notifications" element={<NotesPage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />
@@ -211,6 +217,7 @@ function TheLibrary() {
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="devices" element={<AdminDevices />} />
                 <Route path="security" element={<AdminSecurity />} />
+                <Route path="notifications" element={<AdminNotifications />} />
                 <Route path="tasks" element={<AdminTasks />} />
                 <Route path="journal" element={<AdminJournal />} />
                 <Route path="diagnostics" element={<AdminDiagnostics />} />
@@ -223,6 +230,7 @@ function TheLibrary() {
                 <Route path="playback" element={<MyPlayback />} />
                 <Route path="music" element={<MyMusic />} />
                 <Route path="subtitles" element={<MySubtitles />} />
+                <Route path="notifications" element={<MyNotifications />} />
                 <Route path="about" element={<MyAbout />} />
               </Route>
               <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
@@ -237,8 +245,9 @@ function TheLibrary() {
         </div>
         </MusicProvider>
         </MusicMarksProvider>
+        </NotesProvider>
         </AttentionProvider>
-        </AdministrationLine>
+        </LiveLine>
         </Toasts>
       </LibrariesContext.Provider>
     </RunningContext.Provider>

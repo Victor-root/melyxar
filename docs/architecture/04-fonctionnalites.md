@@ -748,7 +748,7 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 
 **Reste à décider** : la connexion permanente avec l'application Android (économie de batterie, reconnexion), avec l'application ; la fin des tâches longues.
 
-**Quand.** En cours pour le navigateur. Le canal de l'appareil viendra avec l'application Android.
+**Quand.** Livré pour le navigateur. Le canal de l'appareil viendra avec l'application Android.
 
 ## 35. Demandes de titres
 

@@ -7,7 +7,8 @@
  * the journal and in the history of what was watched.
  */
 
-import type { ActivityFamily, ActivityLine, AttentionPoint } from "../../api";
+import type { ActivityFamily, ActivityLine } from "../../api";
+import type { AttentionPoint } from "../../notifications/api";
 import { deviceName } from "../../devices";
 import { fullnessOf, howLong, howMany, releaseOf } from "../../readable";
 import type { Wording } from "../../readable";

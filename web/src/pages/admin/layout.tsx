@@ -20,6 +20,7 @@ import { useAccount } from "../../account";
 import { Sectioned } from "../../components/sectioned";
 import type { SectionGroup } from "../../components/sectioned";
 import {
+  BellIcon,
   DeviceIcon,
   DiagnosticsIcon,
   FolderIcon,
@@ -65,6 +66,7 @@ const SECTIONS: SectionGroup[] = [
       { path: "users", icon: PeopleIcon, label: "admin.users" },
       { path: "devices", icon: DeviceIcon, label: "admin.devices" },
       { path: "security", icon: ShieldIcon, label: "admin.security" },
+      { path: "notifications", icon: BellIcon, label: "admin.notifications" },
     ],
   },
   {

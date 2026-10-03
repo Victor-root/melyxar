@@ -13,8 +13,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
-import { api } from "../api";
-import type { AttentionPoint } from "../api";
+import { notesApi } from "./api";
+import type { AttentionPoint } from "./api";
 import { useJournalNews } from "../live";
 
 /** How often the points are asked for again. */
@@ -45,7 +45,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     if (!administrator) {
       return;
     }
-    api
+    notesApi
       .attention()
       .then((answer) => setPoints(answer.points))
       .catch(() => {
@@ -68,7 +68,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
   }, [administrator, look]);
 
   const markSeen = useCallback(async () => {
-    const answer = await api.markAttentionSeen();
+    const answer = await notesApi.markAttentionSeen();
     setPoints(answer.points);
   }, []);
 

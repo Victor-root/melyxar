@@ -6,7 +6,16 @@
 
 import { Sectioned } from "../../components/sectioned";
 import type { SectionGroup } from "../../components/sectioned";
-import { HomeIcon, InfoIcon, MusicIcon, PaletteIcon, PlaybackIcon, ProfileIcon, SubtitlesIcon } from "../../icons";
+import {
+  BellIcon,
+  HomeIcon,
+  InfoIcon,
+  MusicIcon,
+  PaletteIcon,
+  PlaybackIcon,
+  ProfileIcon,
+  SubtitlesIcon,
+} from "../../icons";
 
 const SECTIONS: SectionGroup[] = [
   {
@@ -17,6 +26,7 @@ const SECTIONS: SectionGroup[] = [
       { path: "playback", icon: PlaybackIcon, label: "me.playback" },
       { path: "subtitles", icon: SubtitlesIcon, label: "me.subtitles" },
       { path: "music", icon: MusicIcon, label: "me.music" },
+      { path: "notifications", icon: BellIcon, label: "me.notifications" },
       { path: "about", icon: InfoIcon, label: "me.about" },
     ],
   },

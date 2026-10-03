@@ -1,15 +1,15 @@
 /*
- * The administration's live line, held once for the page.
+ * The page's live line, held once for the page.
  *
- * The server says on it the moment a line of the activity journal is
- * written, and sends what is being watched whenever it changes while
- * something on the page shows it. One line for the whole page, whatever it
- * shows: each one held open is one of the few connections a browser opens to
- * a server. Closed while the page is hidden, and opened again when it comes
- * back, which is also when whatever follows the journal looks again, since
+ * The server says on it what changes in this account's notifications, the
+ * moment it changes. To an administrator it also says the moment a line of
+ * the activity journal is written, and sends what is being watched whenever
+ * it changes while something on the page shows it. One line for the whole
+ * page, whatever it shows: each one held open is one of the few connections
+ * a browser opens to a server. Closed while the page is hidden, unless this
+ * device asked for the system's notifications, and opened again when it
+ * comes back, which is also when whatever follows it looks again, since
  * nothing was said to it meanwhile.
- *
- * Nobody but an administrator opens it.
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -22,6 +22,23 @@ import type { Watched } from "./api";
  *  could not be had. */
 export type PlayingNews = { watched: Watched[] } | { cut: true };
 
+/** The words of the line about this account's notifications. */
+const NOTIFICATION_WORDS = [
+  "notification",
+  "notification_recalled",
+  "notifications_read",
+  "notifications_unread",
+  "notifications_removed",
+  "notification_choices",
+  "notifications_missed",
+] as const;
+
+/** One word about this account's notifications, and what it carries; or
+ *  that the line opened again, after which everything is read afresh. */
+export type NotificationWord =
+  | { name: (typeof NOTIFICATION_WORDS)[number]; data: unknown }
+  | { name: "open" };
+
 interface Line {
   /** Told of every line written in the journal, and whenever the line opens.
    *  Answers how to stop being told. */
@@ -29,25 +46,39 @@ interface Line {
   /** Told what is being watched whenever it changes, for as long as it
    *  follows. Answers how to stop following. */
   followPlaying: (listener: (news: PlayingNews) => void) => () => void;
+  /** Told of every word about this account's notifications, for as long as
+   *  it follows. */
+  followNotifications: (listener: (word: NotificationWord) => void) => () => void;
+  /** Keeps the line open while the page is hidden, for as long as it is
+   *  asked: the system's own notifications are said from a hidden page.
+   *  Answers how to stop asking. */
+  keepWhileHidden: () => () => void;
 }
 
 const LineContext = createContext<Line>({
   followJournal: () => () => {},
   followPlaying: () => () => {},
+  followNotifications: () => () => {},
+  keepWhileHidden: () => () => {},
 });
 
-export function AdministrationLine({ children }: { children: ReactNode }) {
+export function LiveLine({ children }: { children: ReactNode }) {
   const { account } = useAccount();
+  const signedIn = account !== null;
   const administrator = account?.is_administrator === true;
   const journalListeners = useRef(new Set<() => void>());
   const playingListeners = useRef(new Set<(news: PlayingNews) => void>());
+  const notificationListeners = useRef(new Set<(word: NotificationWord) => void>());
   /* How many on the page follow what is being watched: the line carries it
      only while at least one does. */
   const [playingFollowers, setPlayingFollowers] = useState(0);
   const wantsPlaying = playingFollowers > 0;
+  /* How many on the page need the line while it is hidden. */
+  const [hiddenKeepers, setHiddenKeepers] = useState(0);
+  const keptWhileHidden = hiddenKeepers > 0;
 
   useEffect(() => {
-    if (!administrator) {
+    if (!signedIn) {
       return;
     }
     let line: EventSource | null = null;
@@ -57,9 +88,20 @@ export function AdministrationLine({ children }: { children: ReactNode }) {
     const toJournal = () => {
       for (const listener of journalListeners.current) listener();
     };
+    const toNotifications = (word: NotificationWord) => {
+      for (const listener of notificationListeners.current) listener(word);
+    };
     const open = () => {
-      line = api.administrationLine(wantsPlaying);
-      line.addEventListener("open", toJournal);
+      line = api.liveLine(administrator && wantsPlaying);
+      line.addEventListener("open", () => {
+        toNotifications({ name: "open" });
+        if (administrator) toJournal();
+      });
+      for (const name of NOTIFICATION_WORDS) {
+        line.addEventListener(name, (event) =>
+          toNotifications({ name, data: JSON.parse((event as MessageEvent<string>).data) as unknown }),
+        );
+      }
       line.addEventListener("activity", toJournal);
       line.addEventListener("playing", (event) =>
         toPlaying({ watched: JSON.parse((event as MessageEvent<string>).data) as Watched[] }),
@@ -73,12 +115,12 @@ export function AdministrationLine({ children }: { children: ReactNode }) {
     };
     const followVisibility = () => {
       if (document.visibilityState === "hidden") {
-        close();
+        if (!keptWhileHidden) close();
       } else if (line === null) {
         open();
       }
     };
-    if (document.visibilityState !== "hidden") {
+    if (document.visibilityState !== "hidden" || keptWhileHidden) {
       open();
     }
     document.addEventListener("visibilitychange", followVisibility);
@@ -86,7 +128,7 @@ export function AdministrationLine({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", followVisibility);
       close();
     };
-  }, [administrator, wantsPlaying]);
+  }, [signedIn, administrator, wantsPlaying, keptWhileHidden]);
 
   const followJournal = useCallback((listener: () => void) => {
     journalListeners.current.add(listener);
@@ -104,7 +146,23 @@ export function AdministrationLine({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <LineContext.Provider value={{ followJournal, followPlaying }}>{children}</LineContext.Provider>;
+  const followNotifications = useCallback((listener: (word: NotificationWord) => void) => {
+    notificationListeners.current.add(listener);
+    return () => {
+      notificationListeners.current.delete(listener);
+    };
+  }, []);
+
+  const keepWhileHidden = useCallback(() => {
+    setHiddenKeepers((count) => count + 1);
+    return () => setHiddenKeepers((count) => count - 1);
+  }, []);
+
+  return (
+    <LineContext.Provider value={{ followJournal, followPlaying, followNotifications, keepWhileHidden }}>
+      {children}
+    </LineContext.Provider>
+  );
 }
 
 /** Calls `look` every time a line of the journal is written, and when the
@@ -122,4 +180,20 @@ export function usePlayingNews(heard: (news: PlayingNews) => void) {
   const latest = useRef(heard);
   latest.current = heard;
   useEffect(() => followPlaying((news) => latest.current(news)), [followPlaying]);
+}
+
+/** Follows every word about this account's notifications for as long as the
+ *  caller is on the page. */
+export function useNotificationWords(heard: (word: NotificationWord) => void) {
+  const { followNotifications } = useContext(LineContext);
+  const latest = useRef(heard);
+  latest.current = heard;
+  useEffect(() => followNotifications((word) => latest.current(word)), [followNotifications]);
+}
+
+/** Keeps the line open while the page is hidden, for as long as `keep` holds
+ *  and the caller is on the page. */
+export function useLineKeptWhileHidden(keep: boolean) {
+  const { keepWhileHidden } = useContext(LineContext);
+  useEffect(() => (keep ? keepWhileHidden() : undefined), [keep, keepWhileHidden]);
 }
