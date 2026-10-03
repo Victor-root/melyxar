@@ -9,7 +9,7 @@
 
 import type { ActivityFamily, ActivityLine, AttentionPoint } from "../../api";
 import { deviceName } from "../../devices";
-import { howLong, howMany, percentOf, releaseOf } from "../../readable";
+import { fullnessOf, howLong, howMany, releaseOf } from "../../readable";
 import type { Wording } from "../../readable";
 
 /** The family a kind of line belongs to, for its icon and its filter. */
@@ -231,7 +231,7 @@ export function sayWorry(
     case "disk_nearly_full":
       return t("admin.worry.disk_nearly_full", {
         mount: worry.mount ?? "",
-        share: percentOf(worry.used ?? 0, language),
+        share: fullnessOf(worry.used ?? 0, language),
       });
     default:
       return t(`admin.worry.${worry.kind}`);
