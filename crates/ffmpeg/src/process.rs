@@ -25,6 +25,7 @@ use tokio::process::{Child, Command as TokioCommand};
 use tokio::sync::mpsc;
 
 use crate::command::Command;
+use crate::painting::ToolSaid;
 use crate::{FfmpegError, Result};
 
 /// How long a process is given to stop on its own before it is forced.
@@ -147,6 +148,12 @@ pub struct Progress {
 pub struct RunningProcess {
     child: Child,
     tool: &'static str,
+    /// Reads what the tool says on its error output for as long as it runs.
+    ///
+    /// Left unread, a tool that says enough fills the pipe and stops until
+    /// somebody reads it. It also keeps the tail, which is what a failure is
+    /// reported with.
+    said: tokio::task::JoinHandle<ToolSaid>,
 }
 
 impl RunningProcess {
@@ -176,6 +183,18 @@ impl RunningProcess {
 
         let mut child = builder.spawn()?;
 
+        let mut said = ToolSaid::new(command);
+        let stderr = child.stderr.take();
+        let said = tokio::spawn(async move {
+            if let Some(stderr) = stderr {
+                let mut lines = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    said.hear(&line);
+                }
+            }
+            said
+        });
+
         if let (Some(sender), Some(stdout)) = (progress, child.stdout.take()) {
             tokio::spawn(async move {
                 let mut lines = BufReader::new(stdout).lines();
@@ -195,6 +214,7 @@ impl RunningProcess {
         Ok(Self {
             child,
             tool: "encoder",
+            said,
         })
     }
 
@@ -254,27 +274,15 @@ impl RunningProcess {
     /// message naming what went wrong is the difference between a fix and a
     /// debugging session.
     pub async fn wait(mut self) -> Result<()> {
-        let stderr = self.child.stderr.take();
         let status = self.child.wait().await?;
 
         if status.success() {
             return Ok(());
         }
 
-        let output = match stderr {
-            Some(stream) => {
-                let mut lines = BufReader::new(stream).lines();
-                let mut collected = Vec::new();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    collected.push(line);
-                    if collected.len() > 20 {
-                        collected.remove(0);
-                    }
-                }
-                collected.join(" | ")
-            }
-            None => String::new(),
-        };
+        // The pipe closes with the process, so this ends as soon as the last
+        // line has been read.
+        let output = self.said.await.map(|said| said.tail()).unwrap_or_default();
 
         Err(FfmpegError::Failed {
             tool: self.tool,

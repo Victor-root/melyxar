@@ -352,6 +352,11 @@ pub async fn plan(
         audio = ?decision.audio,
         subtitles = ?decision.subtitles,
         tone_map = decision.tone_map,
+        picture_subtitle_painted = subtitle_to_paint_on(&decision, &tracks).is_some(),
+        card_paints_picture_subtitles = state
+            .capabilities()
+            .and_then(melyxar_ffmpeg::Capabilities::card)
+            .map(|card| card.picture_subtitle_layout().is_some()),
         rebuilt_by = rebuild.as_ref().map(|rebuild| match rebuild.on_a_card() {
             true => "card",
             false => "processor",
@@ -794,10 +799,10 @@ fn how_to_rebuild(
 
     let card = capabilities
         .and_then(melyxar_ffmpeg::Capabilities::card)
-        // Painting words into a picture is done where the words are, which is
-        // on the processor. Getting them onto a card is a different piece of
-        // work, and this is not it.
-        .filter(|_| !painting_subtitles)
+        // A subtitle made of pictures is laid on the picture where the picture
+        // is, which is only the card once it has proved it can. Until then it
+        // is the processor, which has nothing to prove.
+        .filter(|card| !painting_subtitles || card.picture_subtitle_layout().is_some())
         // A card that cannot convert wide gamut colour would hand back a film
         // that is grey, which is worse than one that is merely smaller.
         .filter(|card| !decision.tone_map || card.can_tone_map);
@@ -2502,6 +2507,7 @@ mod tests {
             decoders: codecs.iter().map(|codec| (*codec).to_string()).collect(),
             can_scale: true,
             can_tone_map,
+            picture_subtitle_layout: Some("bgra".to_string()),
         }
     }
 
@@ -2943,6 +2949,61 @@ mod tests {
             !rebuild.reads_the_film,
             "the card was proved to read this codec, and still must not read this film"
         );
+    }
+
+    #[test]
+    fn a_card_that_paints_picture_subtitles_keeps_a_film_that_has_one() {
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let rebuild = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&capabilities_with(Some(a_card(&["h264"], true)))),
+            true,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(
+            rebuild.on_a_card(),
+            "the card lays the subtitle on the picture itself"
+        );
+    }
+
+    #[test]
+    fn a_card_never_proved_to_paint_picture_subtitles_leaves_such_a_film_to_the_processor() {
+        let tracks = vec![video(MediaSourceId::new(), "hevc", 2160)];
+        let unproved = melyxar_ffmpeg::Card {
+            picture_subtitle_layout: None,
+            ..a_card(&["h264"], true)
+        };
+        let rebuild = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&capabilities_with(Some(unproved.clone()))),
+            true,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(
+            !rebuild.on_a_card(),
+            "a card that has not shown it can paint is not asked to"
+        );
+
+        // The same card is still used for a film that has nothing to paint.
+        let without = how_to_rebuild(
+            &rebuilding(None, false, None),
+            &tracks,
+            &ClientProfile::conservative_browser(),
+            Some(&capabilities_with(Some(unproved))),
+            false,
+            &all_codecs(),
+            None,
+        )
+        .expect("this picture is rebuilt");
+        assert!(without.on_a_card());
     }
 
     #[test]

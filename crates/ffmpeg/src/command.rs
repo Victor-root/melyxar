@@ -18,6 +18,7 @@ use melyxar_core::time::Millis;
 use melyxar_core::user::DownmixMethod;
 
 use crate::hardware::Card;
+use crate::painting;
 
 /// The input file and where to start reading it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -402,28 +403,38 @@ impl Command {
         }
     }
 
+    /// The rebuild that paints a subtitle made of pictures, and which subtitle
+    /// of the file it paints.
+    pub(crate) fn painted_subtitle(&self) -> Option<(&VideoEncode, i32)> {
+        match &self.video {
+            VideoOutput::Encode(encode) => encode.burn_in_subtitle.map(|index| (encode, index)),
+            _ => None,
+        }
+    }
+
+    /// Whether a subtitle made of pictures is being painted onto the picture.
+    pub fn is_painting_a_subtitle(&self) -> bool {
+        self.painted_subtitle().is_some()
+    }
+
     /// The filter graph that paints a subtitle onto every frame, when one is
     /// being drawn in.
     ///
     /// Everything else the picture goes through happens first, on the picture
     /// alone: painting the words on and then shrinking would shrink the words
     /// with it, which is how subtitles end up unreadable on a small screen.
-    fn picture_painted_with_subtitles(&self) -> Option<String> {
-        let VideoOutput::Encode(encode) = &self.video else {
-            return None;
-        };
-        let subtitle = encode.burn_in_subtitle?;
+    pub(crate) fn picture_painted_with_subtitles(&self) -> Option<String> {
+        let (encode, subtitle) = self.painted_subtitle()?;
 
         let picture = match self.streams.video_index {
             Some(index) => format!("[0:{index}]"),
             None => "[0:v:0]".to_string(),
         };
-        let before = match picture_filter_chain(encode) {
-            Some(filters) => format!("{picture}{filters}[picture];[picture]"),
-            None => picture,
-        };
-        Some(format!(
-            "{before}[0:{subtitle}]overlay=shortest=0{PAINTED_PICTURE}"
+        Some(painting::graph(
+            &picture,
+            picture_filter_chain(encode).as_deref(),
+            subtitle,
+            &painting::Place::of(encode),
         ))
     }
 
@@ -441,7 +452,13 @@ impl Command {
         push!("-hide_banner");
         push!("-nostdin");
         push!("-loglevel");
-        push!("error");
+        // A tool painting a subtitle is asked for its warnings as well: the
+        // subtitle being the wrong size, or a picture dropped, is said there
+        // and nowhere else.
+        push!(match self.painted_subtitle() {
+            Some(_) => "warning",
+            None => "error",
+        });
 
         // The card is opened before anything is read: a device named after the
         // input is a device the filters cannot reach, and the tool says so in
@@ -501,11 +518,9 @@ impl Command {
         // one has been read, and the tool does not set the picture going
         // before it knows every size: that wait is how a film seemed to hang
         // at its start. Saying how large the canvas is lets it begin at once.
-        if let VideoOutput::Encode(encode) = &self.video
-            && encode.burn_in_subtitle.is_some()
-        {
+        if self.painted_subtitle().is_some() {
             push!("-canvas_size");
-            push!(PICTURE_SUBTITLE_CANVAS);
+            push!(painting::CANVAS);
         }
 
         push!("-i");
@@ -550,7 +565,7 @@ impl Command {
             push!("-filter_complex");
             push!(graph);
             push!("-map");
-            push!(PAINTED_PICTURE);
+            push!(painting::PAINTED);
         }
 
         match (self.streams.video_index, &self.video) {
@@ -796,13 +811,6 @@ pub(crate) const TONE_MAP_FILTER: &str = concat!(
     "zscale=transfer=bt709:matrix=bt709:range=limited,",
     "format=yuv420p"
 );
-
-/// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
-/// authors them for.
-const PICTURE_SUBTITLE_CANVAS: &str = "1920x1080";
-
-/// What the painted picture is called inside the filter graph.
-const PAINTED_PICTURE: &str = "[painted]";
 
 /// Builds what happens to the picture before it is encoded.
 ///
@@ -1076,6 +1084,61 @@ mod tests {
     }
 
     #[test]
+    fn on_a_card_the_picture_stays_on_it_while_the_subtitle_is_painted() {
+        // The picture going down to the processor and up again is what held
+        // gigabytes and ran at a fraction of real time. Here only the
+        // subtitle goes up.
+        let mut encode =
+            VideoEncode::on_a_card(&a_card(), "h264", true).expect("this card produces it");
+        encode.burn_in_subtitle = Some(3);
+        encode.scale_to_height = Some(1080);
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        let graph = position(&args, "-filter_complex").expect("a graph is built");
+        assert_eq!(
+            args[graph + 1],
+            "[0:v:0]scale_vaapi=w=-2:h=1080:format=nv12[picture];\
+             [0:3]format=bgra,hwupload[words];\
+             [picture][words]overlay_vaapi=w='min(main_w,main_h*overlay_iw/overlay_ih)'\
+             :h='min(main_h,main_w*overlay_ih/overlay_iw)'\
+             :x='(main_w-w)/2':y='main_h-h'[painted]"
+        );
+        assert!(
+            !args.iter().any(|value| value.contains("hwdownload")),
+            "{args:?}"
+        );
+        assert!(position(&args, "-hwaccel_output_format").is_some());
+        assert!(
+            position(&args, "-pix_fmt").is_none(),
+            "a picture on a card is not held in a layout the processor names"
+        );
+    }
+
+    #[test]
+    fn a_tool_painting_a_subtitle_is_asked_for_its_warnings() {
+        // The subtitle being the wrong size, or a picture dropped, is said as
+        // a warning, and nowhere else.
+        let level = |command: &Command| {
+            let args = arguments(command);
+            let at = position(&args, "-loglevel").expect("a level is named");
+            args[at + 1].clone()
+        };
+        assert_eq!(level(&painting(3)), "warning");
+        assert_eq!(
+            level(&Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )),
+            "error"
+        );
+    }
+
+    #[test]
     fn a_subtitle_being_painted_on_is_not_also_carried_out_as_a_track() {
         // It is consumed by the graph; carrying it as well would show it twice.
         let command = painting(3).with_streams(StreamSelection {
@@ -1159,6 +1222,7 @@ mod tests {
                 .collect(),
             can_scale: true,
             can_tone_map: true,
+            picture_subtitle_layout: Some("bgra".to_string()),
         }
     }
 

@@ -27,6 +27,7 @@ use serde::Serialize;
 use tokio::process::Command as TokioCommand;
 
 use crate::capabilities::HardwareAcceleration;
+use crate::painting;
 
 /// Where the graphics devices of a Linux machine appear.
 ///
@@ -69,7 +70,7 @@ const DEVICE_NAME: &str = "card";
 
 /// Size the trial works at. Small enough to take no time, large enough that a
 /// driver does not refuse it for being absurd.
-const TRIAL_HEIGHT: i32 = 180;
+pub(crate) const TRIAL_HEIGHT: i32 = 180;
 
 /// The picture every trial is run on, made on the spot.
 const A_GENERATED_PICTURE: &str = "testsrc2=size=640x360:rate=25:duration=0.4";
@@ -133,9 +134,23 @@ pub struct Card {
     /// do it is left out of those films entirely and they are rebuilt in
     /// software, where the ceiling on the picture size applies.
     pub can_tone_map: bool,
+    /// The layout a subtitle made of pictures is handed up to the card in,
+    /// when the card was proved to lay one onto a picture.
+    ///
+    /// Absent when it was not, and a film with such a subtitle is then
+    /// rebuilt by the processor: handing the picture down to lay the subtitle
+    /// on it and up again was measured to hold gigabytes and to run at a
+    /// fraction of real time.
+    pub picture_subtitle_layout: Option<String>,
 }
 
 impl Card {
+    /// The layout a subtitle made of pictures is handed up in, when this card
+    /// was proved to paint one onto a picture.
+    pub fn picture_subtitle_layout(&self) -> Option<&str> {
+        self.picture_subtitle_layout.as_deref()
+    }
+
     /// The encoder that produces one codec here, when this card produces it.
     pub fn encoder_for(&self, codec: &str) -> Option<&str> {
         self.encoders.get(codec).map(String::as_str)
@@ -392,6 +407,7 @@ impl CardSearch {
             decoders: BTreeSet::new(),
             can_scale: true,
             can_tone_map: false,
+            picture_subtitle_layout: None,
         };
 
         let chain = card.filters_for(Some(TRIAL_HEIGHT), false, false).join(",");
@@ -444,11 +460,45 @@ impl CardSearch {
             }
         }
 
+        card.picture_subtitle_layout = self.which_layout_it_paints_in(ffmpeg, &card, &floor).await;
+
         card.decoders = self
             .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut.ok(), &named)
             .await;
 
         Some(card)
+    }
+
+    /// Establishes whether the card lays a subtitle made of pictures onto a
+    /// picture, and in which layout it takes the subtitle.
+    ///
+    /// Run through the same graph a film will run, so that what is proved is
+    /// the placement and the hand-up and not something that resembles them. The
+    /// layouts are tried in order and the first that works is kept, each with
+    /// what the tool said when it refused.
+    async fn which_layout_it_paints_in(
+        &mut self,
+        ffmpeg: &Path,
+        card: &Card,
+        floor: &str,
+    ) -> Option<String> {
+        for layout in painting::LAYOUTS {
+            let (worked, said) =
+                match run_briefly(ffmpeg, painting::trial_arguments(card, floor, layout)).await {
+                    Ok(outcome) => outcome,
+                    Err(said) => (false, said),
+                };
+            self.trials.push(Trial {
+                what: format!("paint_a_picture_subtitle_{layout}"),
+                device: card.device.display().to_string(),
+                worked,
+                said,
+            });
+            if worked {
+                return Some((*layout).to_string());
+            }
+        }
+        None
     }
 
     /// Establishes which codecs the card reads for itself.
@@ -817,6 +867,7 @@ mod tests {
             decoders: ["hevc".to_string()].into_iter().collect(),
             can_scale,
             can_tone_map,
+            picture_subtitle_layout: None,
         }
     }
 

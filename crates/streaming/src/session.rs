@@ -1049,7 +1049,20 @@ impl Session {
             arguments = ?command.to_arguments(),
             "the tool is being set going with these arguments"
         );
+        melyxar_ffmpeg::painting::announce(&self.id.to_string(), index, &command);
         let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
+        if command.is_painting_a_subtitle()
+            && let Some(pid) = process.id()
+        {
+            let (reached, speed, pictures) = (reached.clone(), speed.clone(), pictures.clone());
+            melyxar_ffmpeg::painting::watch(self.id.to_string(), index, pid, move || {
+                melyxar_ffmpeg::painting::Pace {
+                    speed: speed.load(Ordering::Relaxed) as f64 / 1000.0,
+                    pictures_a_second: pictures.load(Ordering::Relaxed) as f64 / 1000.0,
+                    reached: Millis::new(reached.load(Ordering::Relaxed)),
+                }
+            });
+        }
         tracing::debug!(
             session = %self.id,
             index,

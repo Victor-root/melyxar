@@ -248,6 +248,9 @@ pub struct CardReport {
     pub reads: Vec<String>,
     pub can_scale: bool,
     pub can_tone_map: bool,
+    /// Whether it was proved to lay a subtitle made of pictures onto a
+    /// picture, which is what keeps a film carrying one off the processor.
+    pub can_paint_picture_subtitles: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -415,6 +418,7 @@ pub async fn collect(state: &AppState) -> Result<Diagnostics> {
                     reads: card.decoders.iter().cloned().collect(),
                     can_scale: card.can_scale,
                     can_tone_map: card.can_tone_map,
+                    can_paint_picture_subtitles: card.picture_subtitle_layout().is_some(),
                 }),
             card_device_opened: capabilities
                 .is_some_and(|capabilities| capabilities.card_search.a_device_opened()),
@@ -829,7 +833,8 @@ pub fn render_text(report: &Diagnostics) -> String {
                 "+",
                 format!(
                     "a card is rebuilding pictures: {} ({}), writes {}, reads {}, can make a \
-                     picture smaller: {}, can convert wide gamut colour: {}",
+                     picture smaller: {}, can convert wide gamut colour: {}, can paint a subtitle \
+                     made of pictures onto a picture: {}",
                     card.device,
                     card.way,
                     card.codecs.join(", "),
@@ -838,7 +843,8 @@ pub fn render_text(report: &Diagnostics) -> String {
                         false => card.reads.join(", "),
                     },
                     yes_no(card.can_scale),
-                    yes_no(card.can_tone_map)
+                    yes_no(card.can_tone_map),
+                    yes_no(card.can_paint_picture_subtitles)
                 ),
             ),
             None => {
