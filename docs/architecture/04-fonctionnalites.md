@@ -674,18 +674,51 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 
 **Décisions prises.**
 
-- **Chaque notification a un type, et chaque type a un public.** Les types réservés à l'administration (disque plein, base en panne, tâches échouées, etc.) ne sont envoyés qu'aux administrateurs et ne sont jamais visibles des autres comptes.
-- **Notification de nouveau contenu.** Quand du contenu est ajouté, une notification peut être envoyée aux appareils, en priorité les appareils Android quand l'application existera. Elle se règle **par bibliothèque** : l'administrateur choisit quelles bibliothèques en envoient.
-- **Chaque compte personnalise chaque type de notification** : il peut activer ou désactiver chacun d'eux pour lui-même.
-- La cloche de la barre du haut est ouverte à tous les comptes, avec la liste de ce qui les concerne.
+*Public et types.*
 
-**Questions encore ouvertes** (à trancher avant de coder, puis à écrire dans le README des décisions) :
+- Chaque notification a un **type**, et chaque type a un **public**. Les types réservés à l'administration (disque plein, base en panne, tâches échouées, etc.) ne sont envoyés qu'aux administrateurs et ne sont jamais visibles des autres comptes.
+- Un compte ne reçoit que ce qui concerne les bibliothèques auxquelles il a accès.
+- Types voulus pour les comptes ordinaires : nouveau contenu, et **message de l'administrateur à tous** (maintenance prévue, ou message libre). Les autres types (titre de « À voir plus tard » arrivé, nouvel épisode d'une série suivie, titre demandé disponible, alerte de sécurité) dépendent de la fonction de demande de titres (section 35) et seront décidés avec elle.
+- Les demandes entre serveurs (section du partage entre serveurs) passent aussi par ce système.
 
-- Ce que la cloche garde : un historique qu'on peut relire, ou seulement l'état du moment comme aujourd'hui, et pendant combien de temps.
-- Comment « lu » et « non lu » se comptent, par compte.
-- Comment une notification arrive sur un appareil quand l'application est fermée, sans passer par un service tiers.
-- Comment plusieurs ajouts rapprochés sont regroupés en une seule notification.
-- Quels autres types, au-delà du nouveau contenu, pour les comptes ordinaires.
-- Où se règlent les préférences : page « Mes réglages » et valeurs par défaut posées par l'administrateur.
+*Nouveau contenu.*
+
+- Ce qui compte comme nouveau : **un titre identifié, avec son affiche**, jamais un nom de fichier brut. Un remplacement par une meilleure qualité ou une correction d'identification n'est pas une nouveauté.
+- **Une seule notification groupée** pour les ajouts rapprochés (« 40 nouveaux épisodes de X »), envoyée **après 15 minutes** sans nouvel ajout, pour laisser le scan finir.
+- Activée **par bibliothèque** par l'administrateur, et **chaque compte choisit** pour lui-même, bibliothèque par bibliothèque.
+
+*Historique et contrôle.*
+
+- La cloche est ouverte à tous les comptes et garde un **historique**. Chaque notification est **lue ou non lue**, par compte, et le compte peut la marquer lue ou non lue, **la faire disparaître ou la laisser**.
+- **Rien n'est jamais effacé par un redémarrage ou par le serveur de sa propre initiative sans règle écrite : c'est le compte qui a la main.** Durée de conservation : pas de limite, ou très large (un an), à confirmer.
+- La notification est **cliquable** (elle ouvre la fiche concernée) et **montre l'affiche** quand il y en a une.
+
+*Où elle apparaît.*
+
+- Dans le navigateur, **en direct dans le coin de l'écran** quand la page est ouverte, mais **jamais pendant une lecture**.
+- **Exception : les notifications prioritaires** (maintenance, urgence) s'affichent même pendant une lecture.
+- Sur **Android**, par une notification de l'appareil, et dans le navigateur aussi.
+- **Aucune dépendance à Google.** Pour joindre un téléphone dont l'application est fermée, l'application garde une connexion ouverte avec le serveur du mainteneur, au lieu de passer par le service de notifications de Google.
+- Pas de courriel.
+
+*Réglages.*
+
+- Dans « Mes réglages » : un tableau avec une ligne par type de notification et un interrupteur par canal (cloche, navigateur, appareil).
+- L'administrateur pose des **valeurs par défaut** pour les nouveaux comptes.
+- Une notification peut être **rendue obligatoire** par l'administrateur (les maintenances) : aucun compte ne peut la couper.
+
+**Points à régler au moment de coder** (à écrire dans le README des décisions) :
+
+- Les notifications du navigateur quand l'onglet est fermé passent par le service de poussée du navigateur lui-même (Google pour Chrome, Mozilla pour Firefox, et Brave le coupe par défaut) : à décider si on s'en contente ou si on ne notifie dans le navigateur que page ouverte.
+- Le détail de la connexion permanente avec l'application Android (économie de batterie, reconnexion).
+- Un message de l'administrateur : ses destinataires (tous, ou des comptes choisis), sa durée de vie, et comment il se retire.
 
 **Quand.** Pas planifié. À préparer en même temps que l'application Android.
+
+## 35. Demandes de titres
+
+**Intention du mainteneur.** Une grosse fonction à part entière : un compte peut **demander un titre** qui n'est pas sur le serveur, l'administrateur la voit et la traite, et le compte est prévenu quand le titre est disponible. Elle alimente le système de notifications de la section 34 (titre demandé disponible, titre de « À voir plus tard » arrivé, nouvel épisode d'une série suivie).
+
+**À discuter** avant toute décision : qui peut demander, comment on trouve le titre à demander (recherche chez le fournisseur de métadonnées), ce que voit l'administrateur et comment il répond (accepter, refuser avec un mot, marquer comme ajouté), doublons entre comptes, limite de demandes par compte, état d'une demande, et lien avec les titres déjà présents.
+
+**Quand.** Pas planifié.
