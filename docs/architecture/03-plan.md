@@ -229,7 +229,6 @@ Reste à faire :
 - Mesure pendant un scan et pendant deux transcodages. Rien à coder pour la première : il suffit de lancer un scan et de lancer le banc pendant qu'il tourne. Demande une vraie collection, puisqu'une bibliothèque inventée n'a aucun fichier à lire.
 - Test automatisé de l'interface (Playwright) pour les temps côté client. Attend l'interface définitive.
 - Tableau de bord d'administration en temps réel : sessions de lecture et leurs décisions, charge processeur et mémoire, carte graphique, tâches de fond, file d'écriture, espace disque, dernières erreurs. Flux d'événements arrêté quand personne ne regarde.
-- Détail d'une session en cours : utilisateur, appareil, œuvre, position, décision et raisons, débit, vitesse d'encodage et matériel utilisé.
 - Journal d'activité consultable, avec purge automatique.
 - Export de diagnostic en un clic.
 - Résultat visible : les budgets sont tenus à 100 000 œuvres, chiffres à l'appui, et le tableau de bord montre l'activité en direct.
