@@ -506,6 +506,19 @@ impl Command {
             push!(&format_seconds(start));
         }
 
+        // A subtitle made of pictures has no size of its own until the first
+        // one has been read. The tool does not start the picture's journey
+        // before it knows every size, so it sets everything it reads aside in
+        // memory until the first line of dialogue: minutes of a film of four
+        // thousand pixels, which fills a machine. Saying how large the canvas
+        // is lets it start at once.
+        if let VideoOutput::Encode(encode) = &self.video
+            && encode.burn_in_subtitle.is_some()
+        {
+            push!("-canvas_size");
+            push!(PICTURE_SUBTITLE_CANVAS);
+        }
+
         push!("-i");
         // Pushed as a path rather than a string: a name starting with a dash
         // must never be read as an option.
@@ -795,6 +808,10 @@ pub(crate) const TONE_MAP_FILTER: &str = concat!(
     "format=yuv420p"
 );
 
+/// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
+/// authors them for.
+const PICTURE_SUBTITLE_CANVAS: &str = "1920x1080";
+
 /// What the painted picture is called inside the filter graph.
 const PAINTED_PICTURE: &str = "[painted]";
 
@@ -1056,6 +1073,23 @@ mod tests {
              [picture][0:3]overlay=shortest=0,format=nv12,hwupload[painted]"
         );
         assert!(args.iter().any(|value| value == "-hwaccel"), "the card still reads the film");
+    }
+
+    #[test]
+    fn the_canvas_of_a_picture_subtitle_is_named_before_the_film_is_read() {
+        // Left unsaid, the tool holds everything it reads in memory until the
+        // first subtitle shows it how large to draw.
+        let args = arguments(&painting(3));
+        let canvas = position(&args, "-canvas_size").expect("a canvas is named");
+        let input = position(&args, "-i").expect("an input is present");
+        assert_eq!(args[canvas + 1], "1920x1080");
+        assert!(canvas < input, "an option about an input comes before it");
+
+        let plain = arguments(&Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        ));
+        assert!(position(&plain, "-canvas_size").is_none());
     }
 
     #[test]
