@@ -420,6 +420,8 @@ Pour Melyxar, ce serait, dans l'ordre :
 
 Décision validée : pas de notification poussée ni de courriel. Les nouveautés se voient dans une **section « Récemment ajoutés »** sur la page d'accueil, à la manière d'Emby, alimentée par la date d'ajout déjà stockée et indexée.
 
+**Révisé :** la section « Récemment ajoutés » reste, mais la notification de nouveau contenu est désormais voulue, par bibliothèque et par compte. Voir la section 34.
+
 ## 28. Analyse des noms de fichiers
 
 Le mainteneur a fourni un échantillon de sa bibliothèque réelle, **à ne pas reproduire dans le dépôt**. Seules les formes observées sont consignées ici, illustrées par des exemples inventés. Les jeux de tests utiliseront eux aussi des titres inventés couvrant ces mêmes formes.
@@ -665,3 +667,25 @@ Deux conséquences pratiques :
 Les méthodes de repliement sont des **jeux de coefficients appliqués par un filtre audio**, donc des préréglages nommés dans la crate qui construit les commandes de traitement. Jamais des chaînes recopiées à plusieurs endroits. Le choix et le gain sont des **préférences par utilisateur**, avec une valeur par défaut au niveau du serveur : le réglage confortable pour regarder un film le soir n'est pas celui de quelqu'un d'autre dans la journée.
 
 **Quand.** Préférences et prise en compte dans la décision au jalon 4, application effective au jalon 5 avec le traitement audio.
+
+## 34. Notifications pour tous les comptes
+
+**Intention du mainteneur.** Le système de notifications n'est pas réservé à l'administrateur. Aujourd'hui, la cloche de la barre du haut ne sert qu'à lui (points à surveiller) et les messages du coin de l'écran disent ce qu'une action vient de faire. Cela devient un système à part entière, ouvert à tous les comptes.
+
+**Décisions prises.**
+
+- **Chaque notification a un type, et chaque type a un public.** Les types réservés à l'administration (disque plein, base en panne, tâches échouées, etc.) ne sont envoyés qu'aux administrateurs et ne sont jamais visibles des autres comptes.
+- **Notification de nouveau contenu.** Quand du contenu est ajouté, une notification peut être envoyée aux appareils, en priorité les appareils Android quand l'application existera. Elle se règle **par bibliothèque** : l'administrateur choisit quelles bibliothèques en envoient.
+- **Chaque compte personnalise chaque type de notification** : il peut activer ou désactiver chacun d'eux pour lui-même.
+- La cloche de la barre du haut est ouverte à tous les comptes, avec la liste de ce qui les concerne.
+
+**Questions encore ouvertes** (à trancher avant de coder, puis à écrire dans le README des décisions) :
+
+- Ce que la cloche garde : un historique qu'on peut relire, ou seulement l'état du moment comme aujourd'hui, et pendant combien de temps.
+- Comment « lu » et « non lu » se comptent, par compte.
+- Comment une notification arrive sur un appareil quand l'application est fermée, sans passer par un service tiers.
+- Comment plusieurs ajouts rapprochés sont regroupés en une seule notification.
+- Quels autres types, au-delà du nouveau contenu, pour les comptes ordinaires.
+- Où se règlent les préférences : page « Mes réglages » et valeurs par défaut posées par l'administrateur.
+
+**Quand.** Pas planifié. À préparer en même temps que l'application Android.
