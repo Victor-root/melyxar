@@ -30,7 +30,7 @@ import {
   NetworkIcon,
 } from "../../icons";
 import type { IconProps } from "../../icons";
-import { amountOfData, networkRate, percentOf } from "../../readable";
+import { amountOfData, fullnessOf, networkRate, percentOf } from "../../readable";
 import { safeRead, safeWrite } from "../../i18n";
 import { useSettings } from "../../settings";
 import { diskName, fullness, usedShare } from "./disks";
@@ -158,7 +158,7 @@ function Disks({ disks }: { disks: MeasuredDisk[] }) {
                 <span
                   className={`line-figure${state ? ` state-${state}` : ""}`}
                 >
-                  {percentOf(used, language)}
+                  {fullnessOf(used, language)}
                 </span>
                 <span className="line-note">
                   {t("admin.disk_free", {

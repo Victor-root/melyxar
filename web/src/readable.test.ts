@@ -27,6 +27,7 @@ import {
   networkRate,
   outOfAHundred,
   outOfTen,
+  fullnessOf,
   percentOf,
   howManyVoted,
   readableBitrate,
@@ -335,5 +336,17 @@ describe("whenItCameOut", () => {
     const series = { kind: "series", year: 2019, release_date: "2019-03-12", end_date: "2023-06-01" };
     expect(whenItCameOut(series, "en", t)).toBe("2019 to 2023");
     expect(whenItCameOut({ ...series, end_date: "2019-12-01" }, "en", t)).toBe("2019");
+  });
+});
+
+describe("fullnessOf", () => {
+  it("gives a tenth of a percent, the way the language writes it", () => {
+    expect(fullnessOf(0.8421, "en")).toBe("84.2%");
+    expect(fullnessOf(0.8421, "fr")).toBe("84,2\u00a0%");
+  });
+
+  it("never rounds a disk with room left up to full", () => {
+    expect(fullnessOf(0.99996, "en")).toBe("99.9%");
+    expect(fullnessOf(1, "en")).toBe("100.0%");
   });
 });

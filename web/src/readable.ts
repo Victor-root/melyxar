@@ -494,6 +494,18 @@ export function percentOf(share: number, language: string): string {
 }
 
 /**
+ * How full a disk is, to a tenth of a percent and never rounded up: a disk
+ * with room left must not read as full.
+ */
+export function fullnessOf(used: number, language: string): string {
+  return (Math.floor(used * 1000) / 1000).toLocaleString(language, {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+/**
  * A number a field handed back, brought inside what the server will keep.
  *
  * The bounds are here as well as on the server, so somebody dragging the
