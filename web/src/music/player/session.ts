@@ -53,17 +53,26 @@ export function useMediaSession(music: Music): void {
     }
   }, [session, song, playing]);
 
+  /* The keys are taken only while a song is there to answer them. A key
+     handler with nothing playing swallows the key: the browser would have
+     paused the film, and does not once somebody else claims the key. */
+  const listening = song !== null;
   useEffect(() => {
     if (!session) {
       return;
     }
     const handlers: [MediaSessionAction, MediaSessionActionHandler | null][] = [
-      ["play", () => !music.playing && music.toggle()],
-      ["pause", () => music.playing && music.toggle()],
-      ["stop", () => music.stop()],
-      ["nexttrack", () => music.next()],
-      ["previoustrack", () => music.previous()],
-      ["seekto", (details) => details.seekTime !== undefined && music.seek(details.seekTime)],
+      ["play", listening ? () => !music.playing && music.toggle() : null],
+      ["pause", listening ? () => music.playing && music.toggle() : null],
+      ["stop", listening ? () => music.stop() : null],
+      ["nexttrack", listening ? () => music.next() : null],
+      ["previoustrack", listening ? () => music.previous() : null],
+      [
+        "seekto",
+        listening
+          ? (details) => details.seekTime !== undefined && music.seek(details.seekTime)
+          : null,
+      ],
     ];
     for (const [action, handler] of handlers) {
       try {
@@ -72,7 +81,7 @@ export function useMediaSession(music: Music): void {
         // A browser that does not know this action shows no button for it.
       }
     }
-  }, [session, music]);
+  }, [session, music, listening]);
 
   /* A media key is a key pressed on the page, which is what makes the browser
      draw the frame of the focused button: the play button, still focused from
