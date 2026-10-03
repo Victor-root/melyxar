@@ -299,6 +299,7 @@ export const FINDABLE: FindableSection[] = [
     named: [
       ["admin.card", "admin.card_lead"],
       ["admin.card_choice", "admin.card_choice_why"],
+      ["admin.card_fallback", "admin.card_fallback_why"],
       ["admin.limits", "admin.limits_lead"],
       ["admin.limit_sessions", "admin.limit_sessions_why"],
       ["admin.limit_room", "admin.limit_room_why"],
