@@ -364,6 +364,11 @@ pub async fn plan(
         rebuilt_on = rebuild.as_ref().and_then(PictureRebuild::card_name),
         rebuilt_into = rebuild.as_ref().map(|rebuild| rebuild.codec.as_str()),
         requested_codec = request.preferred_video_codec.as_deref(),
+        // What the client said it decodes once rebuilt, codec by codec and up
+        // to what height: what decides whether a card is offered the film at
+        // all, and nowhere else to be read afterwards.
+        client_decodes_rebuilt = ?profile.rebuilt_video,
+        client_tallest = profile.max_height,
         wide_gamut = has_wide_gamut.then_some(wide_gamut.as_str()),
         wide_gamut_shown = wide_gamut_shown.as_deref(),
         read_by = rebuild.as_ref().map(|rebuild| match rebuild.reads_the_film {
