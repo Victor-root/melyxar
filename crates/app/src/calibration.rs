@@ -445,22 +445,30 @@ async fn make_clips(
     Ok(())
 }
 
-/// Removes the clips of another film or another recipe, which nothing will
-/// ask for again.
-async fn clear_older_clips(keep: &Path) {
-    let Some(parent) = keep.parent() else {
+/// Removes the clips made by another recipe, which nothing will ask for
+/// again.
+///
+/// Only those: the clips of another film are another account's, measured
+/// against what that account can reach, and removing them would only have
+/// them made again at its next calibration.
+async fn clear_older_clips(beside: &Path) {
+    let Some(parent) = beside.parent() else {
         return;
     };
     let Ok(mut entries) = tokio::fs::read_dir(parent).await else {
         return;
     };
     while let Ok(Some(entry)) = entries.next_entry().await {
-        let path = entry.path();
-        let is_clips = entry.file_name().to_string_lossy().starts_with("clips-");
-        if is_clips && path != keep {
-            let _ = tokio::fs::remove_dir_all(&path).await;
+        if made_by_another_recipe(&entry.file_name().to_string_lossy()) {
+            let _ = tokio::fs::remove_dir_all(entry.path()).await;
         }
     }
+}
+
+/// Whether a folder of the calibration cache holds clips of another recipe.
+fn made_by_another_recipe(folder: &str) -> bool {
+    folder.starts_with("clips-")
+        && !folder.starts_with(&format!("clips-v{CALIBRATION_VERSION}-"))
 }
 
 /// The file of one clip, when it is one this account is measured on and it
@@ -610,6 +618,14 @@ mod tests {
             clip("hevc", 1080),
             clip("hevc", 720),
         ]
+    }
+
+    #[test]
+    fn only_the_clips_of_another_recipe_are_cleared() {
+        let current = format!("clips-v{CALIBRATION_VERSION}-another-film");
+        assert!(!made_by_another_recipe(&current));
+        assert!(made_by_another_recipe("clips-v1-a-film"));
+        assert!(!made_by_another_recipe("reference-v2.mkv"));
     }
 
     #[test]
