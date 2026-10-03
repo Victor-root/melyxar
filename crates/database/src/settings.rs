@@ -511,6 +511,30 @@ impl Database {
         Ok(limits)
     }
 
+    /// The graphics card chosen to convert films, by its key, or nothing when
+    /// nobody chose one.
+    ///
+    /// Read each time a film is opened, so its own small query for the same
+    /// reason as the switch above.
+    pub async fn transcoding_card(&self) -> Result<Option<String>> {
+        Ok(
+            sqlx::query_scalar("SELECT transcode_card FROM server_settings WHERE id = 1")
+                .fetch_one(self.reader())
+                .await?,
+        )
+    }
+
+    /// Chooses the card that converts films, or leaves it to the server with
+    /// nothing.
+    pub async fn set_transcoding_card(&self, key: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET transcode_card = ?, updated_at = ? WHERE id = 1")
+            .bind(key)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     /// What the server is called, on its own for the same reason as the
     /// switch above.
     pub async fn set_server_name(&self, name: &str) -> Result<()> {
@@ -1138,6 +1162,24 @@ mod tests {
             .map(|codec| codec.to_string())
             .collect();
         assert_eq!(codecs_in_order(&asked), ["av1", "h264"]);
+    }
+
+    #[tokio::test]
+    async fn the_card_that_converts_is_chosen_and_left_to_the_server_again() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.transcoding_card().await.expect("read"), None);
+
+        database
+            .set_transcoding_card(Some("cuda:0000:0c:00.0"))
+            .await
+            .expect("chosen");
+        assert_eq!(
+            database.transcoding_card().await.expect("read").as_deref(),
+            Some("cuda:0000:0c:00.0")
+        );
+
+        database.set_transcoding_card(None).await.expect("left");
+        assert_eq!(database.transcoding_card().await.expect("read"), None);
     }
 
     #[tokio::test]
