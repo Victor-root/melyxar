@@ -58,7 +58,7 @@ import {
 } from "../readable";
 import { whenItCameOut } from "../readable";
 import type { Wording } from "../readable";
-import { elsewhere, groupCrew, useWorkScreen } from "../screens/work";
+import { elsewhere, groupCrew, linksOf, useWorkScreen } from "../screens/work";
 import type { Tracks } from "../screens/work";
 import { useSettings } from "../settings";
 import { useShownPicture } from "../components/picture";
@@ -686,7 +686,7 @@ function HowFarIn({ seconds, minutes }: { seconds: number | null; minutes: numbe
  */
 function Credits({ work }: { work: Work }) {
   const { t } = useSettings();
-  const links = work.external_ids.filter((entry) => elsewhere(entry.provider, entry.id, work.kind));
+  const links = linksOf(work.external_ids, work.kind);
 
   if (work.crew.length === 0 && work.studios.length === 0 && links.length === 0 && !work.collection) {
     return null;
