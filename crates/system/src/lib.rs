@@ -1,5 +1,6 @@
 //! What the machine Melyxar runs on is spending, read from the files the
-//! kernel keeps rather than from any tool.
+//! kernel keeps rather than from any tool, and for an NVIDIA card from the
+//! library its driver installs.
 //!
 //! Every reading is split in two: a function that reads a file, and a function
 //! that makes sense of its text. The second is where every mistake would be,
@@ -16,6 +17,7 @@
 #![forbid(unsafe_code)]
 
 pub mod card;
+pub mod nvidia;
 
 use std::collections::BTreeMap;
 use std::os::unix::fs::MetadataExt;

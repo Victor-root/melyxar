@@ -126,10 +126,8 @@ pub(crate) trait Driver: Sync {
     /// player can read on its own.
     fn key_frame_arguments(&self) -> &'static [&'static str];
 
-    /// Whether the driver keeps a tally of the card's work for each program
-    /// that has it open, which is how the server reads how busy it is. A card
-    /// read as idle while it converts is worse than one read as nothing.
-    fn tallies_its_work(&self) -> bool;
+    /// Where the server reads how busy the card is.
+    fn work_tally(&self, card: &Card) -> WorkTally;
 
     /// The layouts a subtitle made of pictures is offered to the card in, in
     /// the order they are tried.
@@ -152,6 +150,16 @@ pub(crate) trait Driver: Sync {
         layout: &str,
         sized: Option<(i32, i32)>,
     ) -> String;
+}
+
+/// Where the server reads how busy a card is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkTally {
+    /// The tally the driver keeps for each program that has the card open.
+    PerHandle,
+    /// NVIDIA's management library, asked about the card at this slot on the
+    /// machine.
+    NvidiaLibrary { slot: String },
 }
 
 /// How a card converts wide gamut colour to standard range.
@@ -305,10 +313,9 @@ impl Card {
             .reads_for(self, codec, self.tone_mapping.filter(|_| tone_map))
     }
 
-    /// Whether the driver keeps a tally of the card's work, which is how the
-    /// server reads how busy it is.
-    pub fn tallies_its_work(&self) -> bool {
-        self.way.driver().tallies_its_work()
+    /// Where the server reads how busy the card is.
+    pub fn work_tally(&self) -> WorkTally {
+        self.way.driver().work_tally(self)
     }
 
     /// What the encoder is told about the card it runs on.

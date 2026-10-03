@@ -58,6 +58,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # How full a disk is, asked of the kernel without unsafe code of our own.
 rustix = { version = "1", features = ["fs"] }
+# How busy an NVIDIA card is, asked of the library its driver installs.
+nvml-wrapper = "0.13"
 toml = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "signal", "sync", "time", "io-util"] }
 tracing = "0.1"

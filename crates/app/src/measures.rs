@@ -12,13 +12,15 @@
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use melyxar_core::time::Timestamp;
 use melyxar_database::measures::{Measure, Span};
+use melyxar_ffmpeg::WorkTally;
 use melyxar_system::card::Handles;
+use melyxar_system::nvidia::Nvidia;
 use melyxar_system::{Disk, Memory, ProcessorTimes, Sources, Traffic};
 use serde::Serialize;
 
@@ -127,11 +129,47 @@ struct Counters {
     memory: Option<Memory>,
     load: Option<f64>,
     traffic: Traffic,
-    card: Handles,
+    card: CardCounters,
     temperature: Option<f64>,
 }
 
-fn read_the_machine(sources: &Sources) -> Counters {
+/// What one reading gathered about the card that converts films.
+enum CardCounters {
+    /// No card converts films, or it could not be asked.
+    Unknown,
+    /// The tally of every handle on the card, a share once two are compared.
+    Handles(Handles),
+    /// The share the card gave of itself.
+    Share(f64),
+}
+
+/// The card that converts films, read where its driver says it can be.
+/// NVIDIA's library is loaded the first time it is needed, and kept.
+fn read_the_card(
+    sources: &Sources,
+    tally: Option<&WorkTally>,
+    nvidia: &OnceLock<Option<Nvidia>>,
+) -> CardCounters {
+    match tally {
+        None => CardCounters::Unknown,
+        Some(WorkTally::PerHandle) => CardCounters::Handles(melyxar_system::card::handles(sources)),
+        Some(WorkTally::NvidiaLibrary { slot }) => nvidia
+            .get_or_init(|| {
+                let library = Nvidia::open();
+                if library.is_none() {
+                    tracing::warn!(
+                        "NVIDIA's management library could not be loaded, so how busy the card is stays unknown"
+                    );
+                }
+                library
+            })
+            .as_ref()
+            .and_then(|library| library.busy_share(slot))
+            .map_or(CardCounters::Unknown, CardCounters::Share),
+    }
+}
+
+fn read_the_machine(sources: &Sources, card: CardCounters) -> Counters {
     let read = |name: &str| std::fs::read_to_string(sources.proc.join(name)).unwrap_or_default();
     Counters {
         taken: Instant::now(),
@@ -139,14 +177,13 @@ fn read_the_machine(sources: &Sources) -> Counters {
         memory: melyxar_system::read_memory(sources),
         load: melyxar_system::load(&read("loadavg")),
         traffic: melyxar_system::traffic(&read("net/dev")),
-        card: melyxar_system::card::handles(sources),
+        card,
         temperature: melyxar_system::processor_temperature(sources),
     }
 }
 
-/// One point, from two readings a beat apart. The card's share is read only
-/// when the card converting films keeps the tally it is read from.
-fn point_between(before: &Counters, after: &Counters, card_tallied: bool, at: Timestamp) -> Point {
+/// One point, from two readings a beat apart.
+fn point_between(before: &Counters, after: &Counters, at: Timestamp) -> Point {
     let seconds = after.taken.duration_since(before.taken).as_secs_f64();
     let (received, sent) =
         melyxar_system::traffic_rate(before.traffic, after.traffic, seconds).unwrap_or_default();
@@ -165,7 +202,13 @@ fn point_between(before: &Counters, after: &Counters, card_tallied: bool, at: Ti
         load: after.load,
         received,
         sent,
-        card: card_tallied.then(|| melyxar_system::card::busy_share(&before.card, &after.card, seconds)),
+        card: match (&before.card, &after.card) {
+            (CardCounters::Handles(was), CardCounters::Handles(is)) => {
+                Some(melyxar_system::card::busy_share(was, is, seconds))
+            }
+            (_, CardCounters::Share(share)) => Some(*share),
+            _ => None,
+        },
         temperature: after.temperature,
     }
 }
@@ -302,11 +345,24 @@ pub fn keep_measuring(state: &AppState) -> tokio::task::JoinHandle<()> {
     let state = state.clone();
     tokio::spawn(async move {
         let sources = Sources::default();
-        let read = {
+        let nvidia: Arc<OnceLock<Option<Nvidia>>> = Arc::default();
+        // The card is asked each time, since the one that converts can be
+        // changed while the server runs.
+        let read = || {
+            let state = state.clone();
             let sources = sources.clone();
-            move || {
-                let sources = sources.clone();
-                tokio::task::spawn_blocking(move || read_the_machine(&sources))
+            let nvidia = Arc::clone(&nvidia);
+            async move {
+                let tally = crate::cards::in_use(&state)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|card| card.work_tally());
+                tokio::task::spawn_blocking(move || {
+                    let card = read_the_card(&sources, tally.as_ref(), &nvidia);
+                    read_the_machine(&sources, card)
+                })
+                .await
             }
         };
 
@@ -324,15 +380,7 @@ pub fn keep_measuring(state: &AppState) -> tokio::task::JoinHandle<()> {
                 continue;
             };
             let now = melyxar_core::time::now();
-            // Asked each time, since the card that converts can be changed
-            // while the server runs, and only some drivers keep the tally
-            // this reads.
-            let card_tallied = crate::cards::in_use(&state)
-                .await
-                .ok()
-                .flatten()
-                .is_some_and(|card| card.tallies_its_work());
-            let point = point_between(&before, &after, card_tallied, now);
+            let point = point_between(&before, &after, now);
             before = after;
             state.measuring().remember(point.clone());
 
@@ -571,7 +619,7 @@ mod tests {
             memory: None,
             load: None,
             traffic: Traffic { received: 0, sent: 0 },
-            card: Handles::default(),
+            card: CardCounters::Handles(Handles::default()),
             temperature: None,
         };
         let after = Counters {
@@ -580,18 +628,35 @@ mod tests {
             memory: Some(Memory { total_bytes: 4000, used_bytes: 3000 }),
             load: Some(0.5),
             traffic: Traffic { received: 4000, sent: 200 },
-            card: Handles::default(),
+            card: CardCounters::Handles(Handles::default()),
             temperature: Some(41.0),
         };
         let at = datetime!(2026-09-23 14:05 UTC);
 
-        let point = point_between(&before, &after, true, at);
+        let point = point_between(&before, &after, at);
         assert_eq!(point.processor, Some(0.25));
         assert_eq!(point.memory_used, 3000);
         assert_eq!((point.received, point.sent), (2000.0, 100.0));
         assert_eq!(point.card, Some(0.0), "a card doing nothing is idle, not unknown");
 
-        let without = point_between(&before, &after, false, at);
-        assert_eq!(without.card, None, "a server with no card says nothing about one");
+        let given = Counters {
+            card: CardCounters::Share(0.6),
+            ..after
+        };
+        assert_eq!(
+            point_between(&before, &given, at).card,
+            Some(0.6),
+            "a card that gives its own share is taken at its word"
+        );
+
+        let without = Counters {
+            card: CardCounters::Unknown,
+            ..given
+        };
+        assert_eq!(
+            point_between(&before, &without, at).card,
+            None,
+            "a server with no card says nothing about one"
+        );
     }
 }
