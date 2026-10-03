@@ -22,8 +22,9 @@ pub enum HardwareAcceleration {
     Vaapi,
     /// Intel's own interface, which the maintainer's card can use.
     QuickSync,
-    /// Nvidia's interface.
-    Nvenc,
+    /// Nvidia's compute interface, through which its cards decode, filter and
+    /// encode.
+    Cuda,
     /// The portable compute interface, occasionally used for filtering.
     OpenCl,
     /// The portable graphics interface, used by some tone mapping filters.
@@ -31,13 +32,23 @@ pub enum HardwareAcceleration {
 }
 
 impl HardwareAcceleration {
+    /// The name the tool knows the device and its filters by.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Vaapi => "vaapi",
             Self::QuickSync => "qsv",
-            Self::Nvenc => "nvenc",
+            Self::Cuda => "cuda",
             Self::OpenCl => "opencl",
             Self::Vulkan => "vulkan",
+        }
+    }
+
+    /// The name the tool gives the encoders of this path, which is the name
+    /// of the path everywhere but at Nvidia.
+    pub fn encoders_are_called(self) -> &'static str {
+        match self {
+            Self::Cuda => "nvenc",
+            other => other.as_str(),
         }
     }
 }
@@ -79,10 +90,15 @@ impl Capabilities {
         })
     }
 
-    /// The card this machine can rebuild a picture on, when it has one that
-    /// was proved to work.
-    pub fn card(&self) -> Option<&Card> {
-        self.card_search.card.as_ref()
+    /// The card that rebuilds pictures: the one chosen by its key when it was
+    /// proved to work here, otherwise the one that does the most.
+    pub fn card(&self, chosen: Option<&str>) -> Option<&Card> {
+        self.card_search.card(chosen)
+    }
+
+    /// Every card proved to work here, in the order they were found.
+    pub fn cards(&self) -> &[Card] {
+        &self.card_search.cards
     }
 
     pub fn has_encoder(&self, name: &str) -> bool {
@@ -198,7 +214,7 @@ fn parse_hardware_list(text: &str) -> BTreeSet<HardwareAcceleration> {
         .filter_map(|line| match line {
             "vaapi" => Some(HardwareAcceleration::Vaapi),
             "qsv" => Some(HardwareAcceleration::QuickSync),
-            "cuda" | "nvenc" | "nvdec" => Some(HardwareAcceleration::Nvenc),
+            "cuda" | "nvenc" | "nvdec" => Some(HardwareAcceleration::Cuda),
             "opencl" => Some(HardwareAcceleration::OpenCl),
             "vulkan" => Some(HardwareAcceleration::Vulkan),
             _ => None,
@@ -230,7 +246,7 @@ mod tests {
         let hardware = parse_hardware_list(listing);
         assert!(hardware.contains(&HardwareAcceleration::Vaapi));
         assert!(hardware.contains(&HardwareAcceleration::QuickSync));
-        assert!(hardware.contains(&HardwareAcceleration::Nvenc));
+        assert!(hardware.contains(&HardwareAcceleration::Cuda));
         assert_eq!(hardware.len(), 3);
     }
 

@@ -3,7 +3,8 @@
 //! Whether wide gamut colour is ever converted for a client that cannot show
 //! it: a real switch for a real problem, a processor too slow to rebuild a
 //! picture whose only fault is its colour. And what the server is called, the
-//! logo it wears and what stands behind its sign in screen. More
+//! logo it wears and what stands behind its sign in screen. Which graphics
+//! card converts films, on a machine carrying several. More
 //! belongs here as branding and maintenance reach the interface, which is why
 //! this is its own small module rather than a corner of another one.
 
@@ -21,6 +22,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/settings/playback",
             axum::routing::get(playback_settings).put(set_playback_settings),
+        )
+        .route(
+            "/api/v1/settings/card",
+            axum::routing::get(card_choice).put(choose_card),
         )
         .route("/api/v1/settings/server", axum::routing::get(server_settings))
         .route(
@@ -356,6 +361,52 @@ async fn set_playback_settings(
     Ok(Json(PlaybackSettingsView::of(
         asked.tone_mapping_disabled,
         limits,
+    )))
+}
+
+#[derive(Debug, Serialize)]
+struct CardChoiceView {
+    #[serde(flatten)]
+    choice: melyxar_app::cards::CardChoice,
+    /// Whether the card that was chosen did not pass its trials this time,
+    /// so another converts meanwhile.
+    chosen_missing: bool,
+}
+
+impl CardChoiceView {
+    fn of(choice: melyxar_app::cards::CardChoice) -> Self {
+        Self {
+            chosen_missing: choice.chosen_is_missing(),
+            choice,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CardAsked {
+    /// The key of the card to convert films, or nothing to leave it to the
+    /// server.
+    chosen: Option<String>,
+}
+
+/// The cards there are to choose from, and which one converts films.
+async fn card_choice(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+) -> Result<Json<CardChoiceView>> {
+    Ok(Json(CardChoiceView::of(
+        melyxar_app::cards::choice(&state).await?,
+    )))
+}
+
+/// Chooses the card that converts films, from the next film on.
+async fn choose_card(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(asked): Json<CardAsked>,
+) -> Result<Json<CardChoiceView>> {
+    Ok(Json(CardChoiceView::of(
+        melyxar_app::cards::choose(&state, asked.chosen.as_deref()).await?,
     )))
 }
 

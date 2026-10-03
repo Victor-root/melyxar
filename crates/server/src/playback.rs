@@ -1292,11 +1292,11 @@ struct DecisionView {
     reasons: Vec<serde_json::Value>,
     film: FilmView,
     rebuild: Option<RebuildView>,
-    /// How the card is driven, when one rebuilds the picture: vaapi, qsv...
+    /// What the card is called, when one rebuilds the picture.
     ///
     /// Said here and not to a viewer: this is a fact about the machine, and
     /// the administration is where it is read.
-    card_way: Option<&'static str>,
+    card: Option<String>,
     /// Whether that card reads the film as well as writing it.
     card_reads_the_film: bool,
     sound: StreamAction,
@@ -1312,7 +1312,7 @@ fn decision_view(plan: &PlayPlan) -> DecisionView {
         reasons: reasons_of(plan),
         film: film_view(plan),
         rebuild: rebuild_view(plan),
-        card_way: card.map(|card| card.way.as_str()),
+        card: card.map(|card| card.name.clone()),
         card_reads_the_film: plan
             .rebuild
             .as_ref()

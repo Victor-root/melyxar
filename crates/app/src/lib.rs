@@ -15,6 +15,7 @@ pub mod attention;
 pub mod avatars;
 pub mod bench;
 pub mod calibration;
+pub mod cards;
 pub mod catalogue;
 pub mod collections;
 pub mod counted;
