@@ -14,7 +14,7 @@ import { refusalKey } from "../i18n";
 import { DeviceIcon } from "../icons";
 import { useSettings } from "../settings";
 import { Face } from "./face";
-import { useToast } from "./toasts";
+import { useToast } from "../notifications/toasts";
 
 export function DeviceLines({
   devices,

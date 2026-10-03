@@ -12,10 +12,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { useAccount } from "./account";
-import { api } from "./api";
-import type { AttentionPoint } from "./api";
-import { useJournalNews } from "./live";
+import { useAccount } from "../account";
+import { api } from "../api";
+import type { AttentionPoint } from "../api";
+import { useJournalNews } from "../live";
 
 /** How often the points are asked for again. */
 const LOOKED_AT_EVERY_MS = 30_000;

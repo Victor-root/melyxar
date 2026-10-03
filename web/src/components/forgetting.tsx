@@ -11,7 +11,7 @@ import { api } from "../api";
 import { refusalAbout, useTold } from "../asking";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
-import { useToast } from "./toasts";
+import { useToast } from "../notifications/toasts";
 
 export function ForgetIdentityDialog({
   workId,

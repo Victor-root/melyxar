@@ -31,6 +31,7 @@ pub mod music;
 pub mod music_playlists;
 pub mod music_preferences;
 pub mod music_tags;
+pub mod notifications;
 pub mod online_subtitles;
 pub mod page;
 pub mod pictures;

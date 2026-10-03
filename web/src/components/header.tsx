@@ -41,8 +41,8 @@ import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
-import { useAttention } from "../attention";
-import { sayPoint } from "../pages/admin/activity";
+import { Bell, BellLine } from "../notifications/bell";
+import { Dropdown } from "./dropdown";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
 import { FOR_ADMINISTRATORS } from "../buttons";
@@ -55,8 +55,6 @@ import { headroomAt } from "../headroom";
 import type { Headroom } from "../headroom";
 import {
   BackIcon,
-  BellIcon,
-  ChevronDownIcon,
   ClockIcon,
   CollectionIcon,
   PlaylistIcon,
@@ -66,7 +64,6 @@ import {
   LeaveIcon,
   RefreshIcon,
   ScreenCastIcon,
-  TickIcon,
   SearchIcon,
   DashboardIcon,
 } from "../icons";
@@ -904,202 +901,6 @@ function ScopeLine({
   );
 }
 
-/**
- * A word that opens a short list under it.
- *
- * Closes on a click anywhere else and on the escape key, which are the two
- * ways anybody ever tries to close one.
- *
- * The list is drawn at the end of the page rather than inside the bar, and
- * placed against the window by hand. That is not a preference: the pieces
- * of the bar are frosted glass, and an element that frosts what is behind
- * it becomes the backdrop of everything inside it. A list that frosts the
- * page from in there frosts the inside of its own piece, which is nothing
- * at all, and comes out as clear glass over whatever film is playing
- * underneath. Outside it, there is a page behind it to frost.
- */
-function Dropdown({
-  label,
-  className,
-  reachable,
-  icon,
-  listClassName,
-  children,
-}: {
-  label: React.ReactNode;
-  /** What this one is, for the few that are not a word in the bar. */
-  className?: string;
-  /** Whether what holds it is open. Folded away, the tab key passes it by
-   *  and any list it had left hanging is shut. */
-  reachable: boolean;
-  /** Opened by an icon of the bar rather than a word: drawn as the other
-   *  icons are, without the fold, and named for whoever cannot see it. */
-  icon?: string;
-  /** What the list is, for one that holds more than short lines. */
-  listClassName?: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const holder = useRef<HTMLDivElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-  /** Where the list goes: under what opened it, and ending where it ends. */
-  const [under, setUnder] = useState({ top: 0, right: 0 });
-
-  /* Measured when it opens and again if the window changes shape. The bar it
-     hangs from is fixed to the window, so a page scrolled underneath moves
-     nothing here. */
-  useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
-    const place = () => {
-      const it = holder.current?.getBoundingClientRect();
-      if (it) {
-        setUnder({ top: it.bottom + 6, right: Math.max(window.innerWidth - it.right, 0) });
-      }
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    /* The list is no longer inside what opened it, so a press in it is a
-       press outside as far as the page is concerned: both are asked. */
-    const elsewhere = (event: MouseEvent) => {
-      const on = event.target as Node;
-      if (!holder.current?.contains(on) && !list.current?.contains(on)) {
-        setOpen(false);
-      }
-    };
-    const away = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", elsewhere);
-    document.addEventListener("keydown", away);
-    return () => {
-      document.removeEventListener("mousedown", elsewhere);
-      document.removeEventListener("keydown", away);
-    };
-  }, [open]);
-
-  /* Shut along with whatever folded it away, or it would be left hanging
-     over a field that is no longer there. */
-  useEffect(() => {
-    if (!reachable) {
-      setOpen(false);
-    }
-  }, [reachable]);
-
-  return (
-    <div className={`header-menu${className ? ` ${className}` : ""}`} ref={holder}>
-      <button
-        type="button"
-        className={`${icon ? "header-icon" : "header-link"}${open ? " header-link-on" : ""}`}
-        aria-expanded={open}
-        aria-label={icon}
-        title={icon}
-        tabIndex={reachable ? undefined : -1}
-        onClick={() => setOpen((was) => !was)}
-      >
-        {label}
-        {!icon && <ChevronDownIcon size={15} />}
-      </button>
-      {open &&
-        createPortal(
-          <div
-            className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
-            ref={list}
-            style={{ top: under.top, right: under.right }}
-            /* A press in the list leaves the focus where it was. Drawn at
-               the end of the page, the list is outside what opened it, and
-               a press taking the focus there read as leaving: the search
-               field, empty, folded away with its scope list under the hand
-               choosing from it. */
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => setOpen(false)}
-          >
-            {children}
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
-}
-
-/**
- * What deserves a look, for an administrator: how many points, the worst of
- * them in its colour, and the list itself on a press.
- *
- * For anybody else there is nothing behind it yet, and it stays greyed and
- * saying so rather than left out: a function nobody can see is a function
- * nobody knows is coming.
- */
-function Bell({ administrator }: { administrator: boolean }) {
-  const { t, language } = useSettings();
-  const { points, markSeen } = useAttention();
-
-  if (!administrator) {
-    return (
-      <button
-        type="button"
-        className="header-icon"
-        disabled
-        title={t("nav.later")}
-        aria-label={`${t("nav.notifications")} (${t("nav.later")})`}
-      >
-        <BellIcon size={24} />
-      </button>
-    );
-  }
-
-  const shown = points ?? [];
-  const worst = shown.some((point) => point.state === "trouble") ? "trouble" : "attention";
-  return (
-    <Dropdown
-      className="header-bell"
-      icon={t("admin.watch")}
-      listClassName="bell-list"
-      reachable
-      label={
-        <>
-          <BellIcon size={24} />
-          {shown.length > 0 && (
-            <span className={`bell-count bell-count-${worst}`}>{shown.length}</span>
-          )}
-        </>
-      }
-    >
-      {/* Marking them seen sits with the title rather than under the last
-          point, where a long list would push it out of reach. */}
-      <span className="bell-head">
-        <span className="bell-title">{t("admin.watch")}</span>
-        {shown.some((point) => point.may_be_seen) && (
-          <button type="button" className="bell-seen" onClick={() => void markSeen()}>
-            <TickIcon size={14} />
-            {t("attention.mark_seen")}
-          </button>
-        )}
-      </span>
-      {shown.length === 0 && <span className="bell-none">{t("attention.none")}</span>}
-      {shown.map((point, index) => {
-        const said = sayPoint(point, t, language);
-        return (
-          <Link key={index} to={said.to} className="header-menu-line bell-point">
-            <span className={`state-dot state-${point.state}`} aria-hidden="true" />
-            <span>{said.title}</span>
-          </Link>
-        );
-      })}
-    </Dropdown>
-  );
-}
-
 /** Where a button of the bar leads, and what it is called. */
 const PLACES = {
   favourites: { to: "/favourites", name: "nav.favourites" },
@@ -1169,36 +970,6 @@ function Place({ place, inTheMenu }: { place: keyof typeof PLACES; inTheMenu: bo
     >
       {icon}
       {inTheMenu && said}
-    </NavLink>
-  );
-}
-
-/**
- * The bell moved into the account's menu: for an administrator, the page
- * where the points are listed, with how many there are; greyed for anybody
- * else, as the bell is.
- */
-function BellLine({ administrator }: { administrator: boolean }) {
-  const { t } = useSettings();
-  const { points } = useAttention();
-
-  if (!administrator) {
-    return (
-      <span className="header-menu-line header-menu-later" aria-disabled="true" title={t("nav.later")}>
-        <BellIcon size={16} />
-        {t("nav.notifications")}
-      </span>
-    );
-  }
-  const shown = points ?? [];
-  const worst = shown.some((point) => point.state === "trouble") ? "trouble" : "attention";
-  return (
-    <NavLink to="/admin" end className="header-menu-line">
-      <BellIcon size={16} />
-      {t("admin.watch")}
-      {shown.length > 0 && (
-        <span className={`bell-count bell-count-${worst} bell-count-line`}>{shown.length}</span>
-      )}
     </NavLink>
   );
 }

@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CloseIcon, TickIcon, WarningIcon } from "../icons";
 import { useSettings } from "../settings";
-import type { State } from "./panel";
+import type { State } from "../components/panel";
 
 /** How long a word stays, by what it says. */
 const STAYS_FOR_MS: Record<State, number> = {

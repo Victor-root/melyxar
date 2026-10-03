@@ -10,7 +10,7 @@ import { api } from "../../api";
 import type { AccessMode, AccessStatus } from "../../api";
 import { refusalAbout } from "../../asking";
 import { Panel, Picker, Setting } from "../../components/panel";
-import { useToast } from "../../components/toasts";
+import { useToast } from "../../notifications/toasts";
 import { ShieldIcon, TickIcon } from "../../icons";
 import { useSettings } from "../../settings";
 import type { Draft } from "./access";

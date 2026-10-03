@@ -1,15 +1,14 @@
-//! The activity journal and what deserves a look, for the administration.
+//! The activity journal, for the administration.
 //!
-//! Translation only: which lines, and which points, are the app's to decide.
+//! Translation only: which lines are the app's to decide.
 
 use axum::extract::{Query, State};
 use axum::{Json, Router};
 use melyxar_app::activity::Category;
-use melyxar_app::attention::Shown;
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
-use crate::account::{Administrator, Viewer};
+use crate::account::Administrator;
 use crate::error::{Result, ServerError};
 
 /// The most lines one page of the journal carries.
@@ -21,11 +20,6 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/system/activity/kept",
             axum::routing::get(kept_days).put(keep_days),
-        )
-        .route("/api/v1/system/attention", axum::routing::get(attention))
-        .route(
-            "/api/v1/system/attention/seen",
-            axum::routing::post(mark_seen),
         )
 }
 
@@ -133,32 +127,6 @@ async fn keep_days(
 ) -> Result<Json<KeptView>> {
     Ok(Json(KeptView {
         days: melyxar_app::activity::keep_days(&state, asked.days).await?,
-    }))
-}
-
-#[derive(Debug, Serialize)]
-struct AttentionView {
-    points: Vec<Shown>,
-}
-
-async fn attention(
-    _: Administrator,
-    Viewer(who): Viewer,
-    State(state): State<AppState>,
-) -> Result<Json<AttentionView>> {
-    Ok(Json(AttentionView {
-        points: melyxar_app::attention::points(&state, who.id).await?,
-    }))
-}
-
-async fn mark_seen(
-    _: Administrator,
-    Viewer(who): Viewer,
-    State(state): State<AppState>,
-) -> Result<Json<AttentionView>> {
-    melyxar_app::attention::mark_seen(&state, who.id).await?;
-    Ok(Json(AttentionView {
-        points: melyxar_app::attention::points(&state, who.id).await?,
     }))
 }
 

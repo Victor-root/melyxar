@@ -19,7 +19,7 @@ import {
   Setting,
   Toggle,
 } from "../../components/panel";
-import { useToast } from "../../components/toasts";
+import { useToast } from "../../notifications/toasts";
 import { refusalKey } from "../../i18n";
 import { refusalAbout, refusalOf, useAsked } from "../../asking";
 import {

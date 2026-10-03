@@ -13,7 +13,7 @@ import { Cropper } from "../../components/cropper";
 import { DeviceLines } from "../../components/device-lines";
 import { Face } from "../../components/face";
 import { PageHead, Panel, Setting, Toggle } from "../../components/panel";
-import { useToast } from "../../components/toasts";
+import { useToast } from "../../notifications/toasts";
 import { refusalKey } from "../../i18n";
 import { AccountIcon, DeviceIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
 import { useJournalNews } from "../../live";

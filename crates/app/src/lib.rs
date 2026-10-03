@@ -11,7 +11,6 @@
 pub mod access;
 pub mod accounts;
 pub mod activity;
-pub mod attention;
 pub mod avatars;
 pub mod bench;
 pub mod calibration;
@@ -34,6 +33,7 @@ pub mod measures;
 pub mod music;
 pub mod online_subtitles;
 pub mod openings;
+pub mod notifications;
 pub mod overview;
 pub mod people;
 mod own;
