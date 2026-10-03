@@ -911,7 +911,7 @@ fn how_to_rebuild(
         // never had. The processor cuts them as it reads, which is what every
         // still image pulled out of these files has always shown.
         reads_the_film: !says_it_is_cut(tracks)
-            && codec_of(tracks).is_some_and(|codec| card.reads(&codec)),
+            && codec_of(tracks).is_some_and(|codec| card.reads_for(&codec, decision.tone_map)),
         codec,
         card: Some(card.clone()),
         height,
@@ -2542,6 +2542,37 @@ mod tests {
             tone_mapping: can_tone_map.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
             picture_subtitle_layout: Some("bgra".to_string()),
         }
+    }
+
+    #[test]
+    fn a_wide_gamut_film_is_read_by_vulkan_only_in_the_codec_vulkan_was_proved_on() {
+        // Converting through Vulkan, it is Vulkan that reads, and it was
+        // proved to on a wide gamut film in one codec. Nvidia's own reader
+        // knowing another codec says nothing about Vulkan reading it.
+        let card = melyxar_ffmpeg::Card {
+            tone_mapping: Some(melyxar_ffmpeg::ToneMapping::ThroughVulkan { reads: true }),
+            ..a_card(&["h264", "hevc", "av1"], false)
+        };
+        let profile = ClientProfile::conservative_browser();
+        let read = |codec: &str| {
+            how_to_rebuild(
+                &rebuilding(None, true, None),
+                &[video(MediaSourceId::new(), codec, 2160)],
+                &profile,
+                Some(&card),
+                false,
+                &all_codecs(),
+                None,
+            )
+            .expect("this picture is rebuilt")
+        };
+
+        let hevc = read("hevc");
+        assert!(hevc.on_a_card(), "the card converts colour through Vulkan");
+        assert!(hevc.reads_the_film);
+        let av1 = read("av1");
+        assert!(av1.on_a_card());
+        assert!(!av1.reads_the_film, "the processor reads it and Vulkan converts");
     }
 
     #[test]

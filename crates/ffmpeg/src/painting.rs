@@ -75,7 +75,11 @@ const PLACEMENT: &str = "w='min(main_w,main_h*overlay_iw/overlay_ih)'\
 
 /// Where the picture is when the subtitle is laid on it.
 pub(crate) enum Place<'a> {
-    Processor,
+    /// On the processor, where the subtitle is brought to its size there and
+    /// laid at the foot, when the size of the picture is known.
+    Processor {
+        sized: Option<(i32, i32)>,
+    },
     Card {
         way: HardwareAcceleration,
         layout: &'a str,
@@ -87,11 +91,12 @@ pub(crate) enum Place<'a> {
 }
 
 impl<'a> Place<'a> {
-    /// Where a rebuild lays a subtitle: on the card when it was proved to,
-    /// otherwise on the processor.
+    /// Where a rebuild lays a subtitle: on the card when it was proved to and
+    /// the picture stays up there, otherwise on the processor.
     pub(crate) fn of(encode: &'a VideoEncode) -> Self {
         let proved = encode
             .card()
+            .filter(|(card, _)| !comes_down(card, encode.tone_map))
             .and_then(|(card, _)| card.picture_subtitle_layout().map(|layout| (card, layout)));
         match proved {
             Some((card, layout)) => Self::Card {
@@ -101,9 +106,24 @@ impl<'a> Place<'a> {
                     sized_for(card, picture, encode.scale_to_height, CANVAS)
                 }),
             },
-            None => Self::Processor,
+            // Every chain that ends on the processor makes the picture the
+            // height asked for, whatever the card could do on its own.
+            None => Self::Processor {
+                sized: encode.picture_size.map(|picture| {
+                    fitted(CANVAS, rebuilt_size(picture, encode.scale_to_height))
+                }),
+            },
         }
     }
+}
+
+/// Whether the picture leaves the card before it is encoded, which is where
+/// a subtitle is then laid on it.
+fn comes_down(card: &Card, tone_map: bool) -> bool {
+    tone_map
+        && card
+            .tone_mapping
+            .is_some_and(crate::hardware::ToneMapping::brings_the_picture_down)
 }
 
 /// The size a subtitle drawn on `canvas` is brought to before a card lays it
@@ -168,12 +188,18 @@ const AT_THE_FOOT: &str = "x='(main_w-overlay_w)/2':y='main_h-overlay_h'";
 /// small screen.
 pub(crate) fn graph(picture: &str, before: Option<&str>, subtitle: i32, place: &Place) -> String {
     match place {
-        Place::Processor => {
+        Place::Processor { sized } => {
             let picture = match before {
                 Some(filters) => format!("{picture}{filters}[picture];[picture]"),
                 None => picture.to_string(),
             };
-            format!("{picture}[0:{subtitle}]overlay=shortest=0{PAINTED}")
+            match sized {
+                Some((width, height)) => format!(
+                    "[0:{subtitle}]scale={width}:{height}[words];\
+                     {picture}[words]overlay=shortest=0:{AT_THE_FOOT}{PAINTED}"
+                ),
+                None => format!("{picture}[0:{subtitle}]overlay=shortest=0{PAINTED}"),
+            }
         }
         // The subtitle arrives at its size, in the layout that carries
         // transparency, onto a picture put in the one layout that accepts
@@ -216,12 +242,15 @@ pub fn announce(session: &str, index: u32, command: &Command) {
     let place = Place::of(encode);
     let painted_by = match (&place, encode.card()) {
         (Place::Card { .. }, _) => "card",
-        (Place::Processor, Some(_)) => "processor, this card was never proved to paint",
-        (Place::Processor, None) => "processor",
+        (Place::Processor { .. }, Some((card, _))) if comes_down(card, encode.tone_map) => {
+            "processor, the picture comes down from the card once its colours are converted"
+        }
+        (Place::Processor { .. }, Some(_)) => "processor, this card was never proved to paint",
+        (Place::Processor { .. }, None) => "processor",
     };
     let (layout, subtitle_sized_to) = match place {
         Place::Card { layout, sized, .. } => (Some(layout), sized),
-        Place::Processor => (None, None),
+        Place::Processor { sized } => (None, sized),
     };
     tracing::debug!(
         session,
@@ -375,7 +404,7 @@ pub(crate) fn trial_arguments(card: &Card, encoder: &str, layout: &str) -> Vec<S
     ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
         .into_iter()
-        .chain(card.opening_arguments(false))
+        .chain(card.opening_arguments(false, false))
         .chain(
             [
                 "-f",
@@ -414,7 +443,7 @@ mod tests {
 
     #[test]
     fn on_the_processor_the_subtitle_is_laid_on_the_picture_where_it_is() {
-        let graph = graph("[0:0]", Some("scale=-2:1080"), 3, &Place::Processor);
+        let graph = graph("[0:0]", Some("scale=-2:1080"), 3, &Place::Processor { sized: None });
         assert_eq!(
             graph,
             "[0:0]scale=-2:1080[picture];[picture][0:3]overlay=shortest=0[painted]"

@@ -183,7 +183,7 @@ async fn what_to_measure_against(
             native_height: film.height,
             frame_rate: film.frame_rate.unwrap_or(FRAME_RATE_WHEN_UNREAD),
             wide_gamut: film.wide_gamut,
-            card_reads_it: card.is_some_and(|card| card.reads(&film.codec)),
+            card_reads_it: card.is_some_and(|card| card.reads_for(&film.codec, film.wide_gamut)),
             source: film.path,
             named,
         });
