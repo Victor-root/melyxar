@@ -133,7 +133,7 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
   const words = (
     <>
       <strong>{toast.title}</strong>
-      {toast.detail && <span>{toast.detail}</span>}
+      {toast.detail && <span className="toast-detail">{toast.detail}</span>}
     </>
   );
   const open = () => {

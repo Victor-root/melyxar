@@ -26,7 +26,7 @@ import { arrived, marked, NOTHING_HELD, olderPage, removed, unreadAmong } from "
 import type { Held } from "./history";
 import { chooseSystem, sayToTheSystem, systemSays } from "./system";
 import { useToast } from "./toasts";
-import { minuteOfTheDay, sayNote, showsNow } from "./wording";
+import { minuteOfTheDay, posterOf, sayNote, showsNow } from "./wording";
 
 /** What an account that has not been read yet is taken to have chosen. */
 const UNTIL_READ: NoteSettings = {
@@ -194,14 +194,14 @@ export function NotesProvider({ children }: { children: ReactNode }) {
         state: note.level,
         title: said.title,
         detail: said.detail,
-        poster: note.poster,
+        poster: posterOf(note, said),
         to: said.to,
         sticky: note.sticky,
         shownForMs: note.shown_for_ms,
         onOpen: open,
       });
       if (document.visibilityState === "hidden" && systemSays()) {
-        sayToTheSystem(said.title, said.detail, pictureSet(note.poster)?.src ?? null, () => {
+        sayToTheSystem(said.title, said.detail, pictureSet(posterOf(note, said))?.src ?? null, () => {
           open();
           if (said.to) navigate(said.to);
         });

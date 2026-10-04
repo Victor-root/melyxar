@@ -23,9 +23,22 @@ async fn tell(state: &AppState, title: &str, news: RequestNews, level: Level, to
     }
 }
 
+/// The most characters of a synopsis a notification carries.
+const OVERVIEW_AT_MOST: usize = 280;
+
+/// A synopsis cut on a word, the dots saying there was more.
+fn cut_short(text: &str) -> String {
+    if text.chars().count() <= OVERVIEW_AT_MOST {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(OVERVIEW_AT_MOST).collect();
+    let on_a_word = kept.rsplit_once(' ').map_or(kept.as_str(), |(before, _)| before);
+    format!("{}…", on_a_word.trim_end_matches([',', ';', ':', '.', ' ']))
+}
+
 /// Tells the administrators an account asked for a title, the one who asked
 /// included when it is one: it may be the only administrator.
-pub(super) async fn asked(state: &AppState, request: &TitleRequest) {
+pub(super) async fn asked(state: &AppState, request: &TitleRequest, poster: Option<String>) {
     let administrators = match state.database().list_users().await {
         Ok(users) => users
             .into_iter()
@@ -40,6 +53,9 @@ pub(super) async fn asked(state: &AppState, request: &TitleRequest) {
     let news = RequestNews::Asked {
         by: request.user_name.clone(),
         seasons: request.seasons.clone(),
+        year: request.year,
+        overview: request.overview.as_deref().filter(|text| !text.is_empty()).map(cut_short),
+        poster,
     };
     tell(state, &request.title, news, Level::News, administrators, None).await;
 }
@@ -57,4 +73,18 @@ pub(super) async fn decided(state: &AppState, request: &TitleRequest) {
         _ => (RequestNews::Added, Level::News),
     };
     tell(state, &request.title, news, level, vec![request.user_id], request.work_id).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_long_synopsis_is_cut_on_a_word_and_a_short_one_is_left() {
+        assert_eq!(cut_short("A keeper and a lantern."), "A keeper and a lantern.");
+        let long = "word ".repeat(100);
+        let cut = cut_short(&long);
+        assert!(cut.ends_with("word…"), "{cut}");
+        assert!(cut.chars().count() <= OVERVIEW_AT_MOST + 1);
+    }
 }

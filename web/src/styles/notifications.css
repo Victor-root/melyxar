@@ -419,9 +419,20 @@
 }
 
 .note-detail {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--text-soft);
   font-size: 12.5px;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.toast-detail {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .note-age {

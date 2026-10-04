@@ -93,6 +93,11 @@ pub enum RequestNews {
         by: String,
         /// The seasons asked for; none for a film or a whole series.
         seasons: Vec<i32>,
+        year: Option<i32>,
+        /// What the title is about, cut short.
+        overview: Option<String>,
+        /// Where a small copy of its poster is, at the provider.
+        poster: Option<String>,
     },
     Accepted,
     Refused {

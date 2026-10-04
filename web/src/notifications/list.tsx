@@ -13,7 +13,7 @@ import type { Wording } from "../readable";
 import { useSettings } from "../settings";
 import type { Note } from "./api";
 import { useNotes } from "./store";
-import { sayNote } from "./wording";
+import { posterOf, sayNote } from "./wording";
 
 /** How often the ages of the lines are counted again. */
 const AGED_EVERY_MS = 60_000;
@@ -49,7 +49,7 @@ function NoteLine({ note, now }: { note: Note; now: number }) {
   const { t, language } = useSettings();
   const { markRead, markUnread, remove } = useNotes();
   const said = sayNote(note, t, language);
-  const poster = useShownPicture(note.poster);
+  const poster = useShownPicture(posterOf(note, said));
   const open = () => {
     if (!note.read) markRead([note.id]);
   };
