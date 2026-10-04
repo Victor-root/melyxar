@@ -342,10 +342,7 @@ pub(crate) async fn listen_to_the_videos_of(
 
     handle.at_step(JobStep::ListeningToSpeech).await;
     let already_done = database.count_with_speech(library.id).await?;
-    if already_done > 0 {
-        handle.advance(already_done).await;
-    }
-    handle.set_total(already_done + waiting).await;
+    handle.size_up(already_done, waiting).await;
     let threads = effort(state)
         .await?
         .threads(std::thread::available_parallelism().map_or(2, usize::from));

@@ -335,17 +335,12 @@ pub(crate) async fn read_the_key_frames_of(
     // Counted against the whole reading rather than against this run of it. A
     // run picking up where it left off and one starting again from nothing
     // look exactly alike from a bar that always begins at zero, and the
-    // difference between them is two hours.
+    // difference between them is two hours. One film on its own is counted as
+    // itself, which is what sizing the work up does.
     let already_read = database.count_read_for_key_frames(library.id).await?;
     // Counted before the size is given, because giving the size is what writes
-    // both of them down. The other way round, what is already done is held
-    // back until the first film of this run has been read through, and a
-    // reading that is nine tenths finished says nought per cent for as long as
-    // that takes.
-    if already_read > 0 {
-        handle.advance(already_read).await;
-    }
-    handle.set_total(already_read + waiting).await;
+    // both of them down.
+    handle.size_up(already_read, waiting).await;
     tracing::debug!(
         library = library.name,
         waiting,
@@ -478,10 +473,7 @@ pub(crate) async fn pull_the_subtitles_out_of(
 
     handle.at_step(JobStep::PullingOutSubtitles).await;
     let already_done = database.count_with_pulled_out_subtitles(library.id).await?;
-    if already_done > 0 {
-        handle.advance(already_done).await;
-    }
-    handle.set_total(already_done + waiting).await;
+    handle.size_up(already_done, waiting).await;
     tracing::debug!(
         library = library.name,
         waiting,
@@ -603,10 +595,7 @@ pub(crate) async fn make_the_thumbnails_of(
 
     handle.at_step(JobStep::MakingThumbnails).await;
     let already_made = database.count_made_thumbnails(library.id, layout).await?;
-    if already_made > 0 {
-        handle.advance(already_made).await;
-    }
-    handle.set_total(already_made + waiting).await;
+    handle.size_up(already_made, waiting).await;
     tracing::debug!(
         library = library.name,
         waiting,
@@ -649,9 +638,14 @@ pub(crate) async fn make_the_thumbnails_of(
                     // was about, which is what a refusal has to carry to be
                     // read. This is the longest of the three readings, so it is
                     // the one a stop has to reach into rather than wait out.
-                    let done = crate::thumbnails::make_for(&state, source_id, asked_to_stop)
-                        .await
-                        .is_ok_and(|made| made.counted > 0);
+                    let done = crate::thumbnails::make_for(
+                        &state,
+                        source_id,
+                        asked_to_stop,
+                        &|fraction| handle.element_at(fraction),
+                    )
+                    .await
+                    .is_ok_and(|made| made.counted > 0);
                     handle.advance(1).await;
                     done
                 }

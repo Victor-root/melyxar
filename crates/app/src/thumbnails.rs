@@ -15,6 +15,7 @@ use melyxar_core::media::TrackKind;
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::thumbnails::{Layout, Thumbnails};
 use melyxar_core::time::Millis;
+use melyxar_ffmpeg::thumbnails::Watch;
 use melyxar_ffmpeg::AskedToStop;
 
 use serde::{Deserialize, Serialize};
@@ -153,6 +154,7 @@ pub async fn make_for(
     state: &AppState,
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
+    on_progress: &(dyn Fn(f64) + Sync),
 ) -> Result<Thumbnails> {
     let Some(layout) = wanted(state).await else {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
@@ -194,6 +196,17 @@ pub async fn make_for(
         .await
         .map_err(AppError::Directory)?;
 
+    // How many there will be, worked out from the length of the film: the
+    // reading says how many it has made, and this is what that is told against.
+    let expected = source
+        .duration
+        .map_or(0.0, |length| length.get() as f64 / layout.every.get().max(1) as f64);
+    let how_far = move |counted: u32| {
+        if expected >= 1.0 {
+            on_progress(f64::from(counted) / expected);
+        }
+    };
+
     tracing::debug!(file = %name, tone_map, "reading a film for the thumbnails of its bar");
     // Only the pictures that stand on their own, which is four times faster
     // and invisible at this size. A film whose pictures cannot be read that
@@ -206,7 +219,10 @@ pub async fn make_for(
         layout,
         tone_map,
         true,
-        asked_to_stop.clone(),
+        Watch {
+            asked_to_stop: asked_to_stop.clone(),
+            on_counted: &how_far,
+        },
     )
     .await;
     if made.as_ref().is_ok_and(|made| made.counted == 0) {
@@ -221,7 +237,10 @@ pub async fn make_for(
             layout,
             tone_map,
             false,
-            asked_to_stop,
+            Watch {
+                asked_to_stop,
+                on_counted: &how_far,
+            },
         )
         .await;
     }

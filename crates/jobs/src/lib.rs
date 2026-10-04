@@ -60,7 +60,12 @@ struct Progress {
     done: i64,
     total: Option<i64>,
     last_written: Instant,
+    /// Counting the steps of one element rather than a whole library's.
+    one_element: bool,
 }
+
+/// What a bar counts when one element is all there is to do: per cent of it.
+const ONE_ELEMENT: i64 = 100;
 
 impl JobHandle {
     pub fn id(&self) -> JobId {
@@ -126,6 +131,7 @@ impl JobHandle {
                 .expect("the progress lock is never held across an await");
             progress.done = 0;
             progress.total = None;
+            progress.one_element = false;
             progress.last_written = Instant::now();
         }
         // A step's own name says whether it is worth the machine's heavy
@@ -155,6 +161,57 @@ impl JobHandle {
         self.write_progress().await;
     }
 
+    /// Says how much there is to do: `waiting` elements, after `already`
+    /// others that earlier runs have done.
+    ///
+    /// Counted against the whole when there are many. One element on its own
+    /// is counted as itself, in per cent, however many others the library
+    /// holds: against a library of a thousand done, a single new film would
+    /// read ninety nine per cent from its first second to its last.
+    pub async fn size_up(&self, already: i64, waiting: i64) {
+        if waiting == 1 {
+            {
+                let mut progress = self
+                    .progress
+                    .lock()
+                    .expect("the progress lock is never held across an await");
+                progress.one_element = true;
+                progress.done = 0;
+            }
+            self.set_total(ONE_ELEMENT).await;
+            return;
+        }
+        if already > 0 {
+            self.advance(already).await;
+        }
+        self.set_total(already + waiting).await;
+    }
+
+    /// Says how far along the one element is, from nought to one. Nothing
+    /// when there are many elements to count: there, a step is a whole
+    /// element.
+    ///
+    /// Never reaches the end by itself: an element is done once it says so,
+    /// with [`JobHandle::advance`].
+    pub fn element_at(&self, fraction: f64) {
+        let due = {
+            let mut progress = self
+                .progress
+                .lock()
+                .expect("the progress lock is never held across an await");
+            if !progress.one_element {
+                return;
+            }
+            let reached = (fraction.clamp(0.0, 1.0) * ONE_ELEMENT as f64) as i64;
+            progress.done = reached.min(ONE_ELEMENT - 1).max(progress.done);
+            progress.last_written.elapsed() >= PROGRESS_INTERVAL
+        };
+        if due {
+            let handle = self.clone();
+            tokio::spawn(async move { handle.write_progress().await });
+        }
+    }
+
     /// Records one more step done.
     pub async fn advance(&self, by: i64) {
         let due = {
@@ -162,7 +219,11 @@ impl JobHandle {
                 .progress
                 .lock()
                 .expect("the progress lock is never held across an await");
-            progress.done += by;
+            match progress.one_element {
+                // The element is done: the whole of it.
+                true => progress.done = ONE_ELEMENT,
+                false => progress.done += by,
+            }
             progress.last_written.elapsed() >= PROGRESS_INTERVAL
         };
         if due {
@@ -283,6 +344,7 @@ impl JobRunner {
                 done: 0,
                 total: None,
                 last_written: Instant::now(),
+                one_element: false,
             })),
         };
 
@@ -450,6 +512,52 @@ mod tests {
         assert_eq!(stored.progress_total, Some(2));
         assert!(stored.finished_at.is_some());
         assert_eq!(runner.running_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn one_element_alone_is_counted_as_itself_and_many_against_the_whole() {
+        let runner = runner().await;
+        let database = runner.database().clone();
+
+        let started = runner
+            .start(
+                JobKind::ReadKeyFrames,
+                JobPriority::BACKGROUND,
+                Some("films".to_string()),
+                move |handle| async move {
+                    // A thousand done before, and one new film.
+                    handle.size_up(1_000, 1).await;
+                    let row = database.job(handle.id()).await.expect("read").expect("present");
+                    assert_eq!((row.progress_done, row.progress_total), (0, Some(100)));
+
+                    handle.element_at(0.4);
+                    handle.element_at(0.2);
+                    handle.element_at(2.0);
+                    handle.write_progress().await;
+                    let row = database.job(handle.id()).await.expect("read").expect("present");
+                    assert_eq!(row.progress_done, 99, "never the end before it is said to be done");
+                    handle.advance(1).await;
+                    handle.write_progress().await;
+                    let row = database.job(handle.id()).await.expect("read").expect("present");
+                    assert_eq!(row.progress_done, 100);
+
+                    handle.at_step(JobStep::AnalysingFiles).await;
+                    handle.size_up(1_000, 5).await;
+                    handle.element_at(0.5);
+                    handle.advance(1).await;
+                    handle.write_progress().await;
+                    let row = database.job(handle.id()).await.expect("read").expect("present");
+                    assert_eq!(
+                        (row.progress_done, row.progress_total),
+                        (1_001, Some(1_005)),
+                        "with several to do, a step is a whole element"
+                    );
+                    Ok(())
+                },
+            )
+            .await
+            .expect("job started");
+        assert_eq!(started.completion.await.expect("the task ran"), JobState::Succeeded);
     }
 
     #[tokio::test]
