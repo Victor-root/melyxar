@@ -57,6 +57,7 @@
 }
 
 .request-card {
+  position: relative;
   display: flex;
   gap: 14px;
   min-width: 0;
@@ -100,8 +101,31 @@
   text-decoration: none;
 }
 
-.request-title-link:hover {
-  color: var(--accent-bright);
+/* The name's link is stretched over the whole tile, so pressing anywhere on
+   it opens the title; what can be pressed inside it stays above. */
+.request-title-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-card);
+}
+
+.request-card button,
+.request-card a:not(.request-title-link),
+.request-card textarea {
+  position: relative;
+  z-index: 1;
+}
+
+.request-card:has(.request-title-link) {
+  cursor: pointer;
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.request-card:has(.request-title-link):hover,
+.request-card:has(.request-title-link:focus-visible) {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 14px 2px var(--accent-glow);
 }
 
 .request-title {
