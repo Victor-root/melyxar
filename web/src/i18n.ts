@@ -1303,6 +1303,7 @@ const en: Dictionary = {
   "reason.subtitle_must_be_burned_in": "the selected subtitles must be burned into the video",
   "reason.subtitle_format_not_drawn_by_client": "the browser cannot display the available subtitle formats",
   "reason.non_default_track_selected": "a non-default track was selected",
+  "reason.open_groups_in_pieces": "the picture is built in open groups, which the browser stumbles on in a stream",
 
   "attribution.tmdb":
     "This product uses the TMDB API but is not endorsed or certified by TMDB.",
@@ -3271,6 +3272,7 @@ const fr: Dictionary = {
   "reason.subtitle_must_be_burned_in": "les sous-titres sélectionnés doivent être incrustés dans la vidéo",
   "reason.subtitle_format_not_drawn_by_client": "le navigateur ne peut pas afficher les formats de sous-titres disponibles",
   "reason.non_default_track_selected": "une piste différente de la piste par défaut a été sélectionnée",
+  "reason.open_groups_in_pieces": "l’image est construite en groupes ouverts, sur lesquels le navigateur trébuche en streaming",
 
   "attribution.tmdb":
     "Ce produit utilise l'API de TMDB mais n'est ni approuvé ni certifié par TMDB.",

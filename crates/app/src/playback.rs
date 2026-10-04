@@ -235,6 +235,10 @@ pub async fn plan(
         },
         added_at: melyxar_core::time::now(),
         tracks: tracks.clone(),
+        open_groups_of_pictures: database
+            .open_groups_of(source.id)
+            .await?
+            .unwrap_or(false),
     };
 
     let profile = request
