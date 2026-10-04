@@ -38,10 +38,6 @@ pub struct MediaSource {
     pub identity: FileIdentity,
     pub added_at: Timestamp,
     pub tracks: Vec<Track>,
-    /// Whether the picture is built in open groups: a picture or two shown
-    /// before the key picture that comes ahead of them in the file. False
-    /// until the file has been read for it.
-    pub open_groups_of_pictures: bool,
 }
 
 impl MediaSource {
@@ -768,7 +764,6 @@ mod tests {
             },
             added_at: crate::time::now(),
             tracks,
-            open_groups_of_pictures: false,
         }
     }
 

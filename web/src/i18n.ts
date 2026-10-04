@@ -454,7 +454,7 @@ const en: Dictionary = {
   "task.ratings": "IMDb and Rotten Tomatoes ratings",
   "task.ratings_why": "Downloads the ratings file IMDb publishes every day and updates the IMDb rating of every film and series. With an OMDb key, set in Metadata, also fetches the Rotten Tomatoes critics score, up to 950 titles a day.",
   "task.key_frames": "Keyframe indexing",
-  "task.key_frames_why": "Finds where each video can start playing, so that skipping ahead lands exactly where you click, and whether its picture has to be rebuilt to play smoothly in a browser. Usually read straight from the file in a fraction of a second. Always done when a file is added; this task catches up on anything missed.",
+  "task.key_frames_why": "Finds where each video can start playing, so that skipping ahead lands exactly where you click. Usually read straight from the file in a fraction of a second. Always done when a file is added; this task catches up on anything missed.",
   "task.subtitles": "Subtitle extraction",
   "task.subtitles_why": "Takes the text subtitles stored inside videos out ahead of time, so they appear the moment you turn them on. Reads each video that has some from start to end, mostly work for the disk. Only in libraries where it is switched on.",
   "task.thumbnails": "Preview thumbnails",
@@ -1303,7 +1303,6 @@ const en: Dictionary = {
   "reason.subtitle_must_be_burned_in": "the selected subtitles must be burned into the video",
   "reason.subtitle_format_not_drawn_by_client": "the browser cannot display the available subtitle formats",
   "reason.non_default_track_selected": "a non-default track was selected",
-  "reason.open_groups_in_pieces": "the picture is built in open groups, which the browser stumbles on in a stream",
 
   "attribution.tmdb":
     "This product uses the TMDB API but is not endorsed or certified by TMDB.",
@@ -2421,7 +2420,7 @@ const fr: Dictionary = {
   "task.ratings": "Notes IMDb et Rotten Tomatoes",
   "task.ratings_why": "Télécharge le fichier des notes qu’IMDb publie chaque jour et met à jour la note IMDb de chaque film et série. Avec une clé OMDb, réglée dans Métadonnées, récupère aussi la note des critiques de Rotten Tomatoes, jusqu’à 950 titres par jour.",
   "task.key_frames": "Indexation des images clés",
-  "task.key_frames_why": "Repère où chaque vidéo peut démarrer, pour qu’avancer dans la vidéo tombe exactement là où vous cliquez, et si son image doit être reconstruite pour rester fluide dans un navigateur. En général lu directement dans le fichier en une fraction de seconde. Toujours fait à l’ajout d’un fichier ; cette tâche rattrape ce qui aurait manqué.",
+  "task.key_frames_why": "Repère où chaque vidéo peut démarrer, pour qu’avancer dans la vidéo tombe exactement là où vous cliquez. En général lu directement dans le fichier en une fraction de seconde. Toujours fait à l’ajout d’un fichier ; cette tâche rattrape ce qui aurait manqué.",
   "task.subtitles": "Extraction des sous-titres",
   "task.subtitles_why": "Sort à l’avance les sous-titres texte rangés dans les vidéos, pour qu’ils s’affichent dès que vous les activez. Lit en entier chaque vidéo qui en contient, surtout du travail pour le disque. Seulement dans les médiathèques où c’est activé.",
   "task.thumbnails": "Vignettes d’aperçu",
@@ -3272,7 +3271,6 @@ const fr: Dictionary = {
   "reason.subtitle_must_be_burned_in": "les sous-titres sélectionnés doivent être incrustés dans la vidéo",
   "reason.subtitle_format_not_drawn_by_client": "le navigateur ne peut pas afficher les formats de sous-titres disponibles",
   "reason.non_default_track_selected": "une piste différente de la piste par défaut a été sélectionnée",
-  "reason.open_groups_in_pieces": "l’image est construite en groupes ouverts, sur lesquels le navigateur trébuche en streaming",
 
   "attribution.tmdb":
     "Ce produit utilise l'API de TMDB mais n'est ni approuvé ni certifié par TMDB.",

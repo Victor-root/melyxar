@@ -235,10 +235,6 @@ pub async fn plan(
         },
         added_at: melyxar_core::time::now(),
         tracks: tracks.clone(),
-        open_groups_of_pictures: database
-            .open_groups_of(source.id)
-            .await?
-            .unwrap_or(false),
     };
 
     let profile = request
@@ -586,13 +582,8 @@ pub async fn open_session(
 
     let expensive = plan.decision.method.is_expensive();
     let limits = session_limits(state).await?;
-    let copied = recipe.video == melyxar_ffmpeg::command::VideoOutput::Copy;
-    let begins = recipe.where_the_viewer_starts;
     let session = sessions.open(who.id, recipe, expensive, limits).await?;
     say_how_the_film_was_cut(&session);
-    if copied {
-        say_how_the_picture_is_built(state, plan, &session, begins);
-    }
 
     // The upkeep normally pulled these out of the film long before anybody
     // opened it, and then this costs a look at the cache and stops. What is
@@ -653,69 +644,6 @@ fn say_how_the_film_was_cut(session: &melyxar_streaming::session::Session) {
         shortest_segment = shortest as f64 / 1000.0,
         "how this film was cut"
     );
-}
-
-/// How long a stretch of the picture is read to say how it is built.
-const BUILD_READ_OVER_SECONDS: u32 = 10;
-
-/// Writes down how a picture carried over untouched is built, from where the
-/// viewer starts.
-///
-/// A browser can stumble once in every group of pictures of one film and play
-/// another of the same codec without a hitch, and what sets the two apart is
-/// how each was made, which only the film itself says. Read only while the
-/// journal keeps such lines, and beside the film rather than before it: it is
-/// a few seconds of the file read without decoding, and nobody waits on it.
-fn say_how_the_picture_is_built(
-    state: &AppState,
-    plan: &PlayPlan,
-    session: &melyxar_streaming::session::Session,
-    from: Millis,
-) {
-    if !tracing::enabled!(tracing::Level::DEBUG) {
-        return;
-    }
-    let (Some(tools), Some(codec)) = (state.tools(), codec_of(&plan.tracks)) else {
-        return;
-    };
-    let encoder = tools.ffmpeg.clone();
-    let media = plan.path.clone();
-    let session = session.id;
-    tokio::spawn(async move {
-        match melyxar_ffmpeg::picture_build::picture_build(
-            &encoder,
-            &media,
-            from,
-            BUILD_READ_OVER_SECONDS,
-            &codec,
-        )
-        .await
-        {
-            Ok(Some(build)) => tracing::debug!(
-                session = %session,
-                codec,
-                from_second = from.as_seconds_f64(),
-                pictures = build.pictures,
-                key_pictures = build.key_pictures,
-                full_refresh = build.full_refresh,
-                with_leading_pictures = build.with_leading_pictures,
-                most_leading_pictures = build.most_leading_pictures,
-                described_again = build.described_again,
-                sequence_ends = build.sequence_ends,
-                key_messages = ?build.key_messages,
-                deepest_reorder = build.deepest_reorder,
-                key_kb = build.key_bytes / 1024,
-                other_kb = build.other_bytes / 1024,
-                "how the copied picture is built"
-            ),
-            Ok(None) => {}
-            Err(error) => tracing::debug!(
-                session = %session,
-                error = %error,
-                "how the copied picture is built could not be read"
-            ),
-        }
-    });
 }
 
 /// Where this film can really be started, when it has been read for it.
@@ -1010,7 +938,7 @@ fn says_it_is_cut(tracks: &[Track]) -> bool {
 }
 
 /// What the picture of a film is written in, when it holds one.
-pub(crate) fn codec_of(tracks: &[Track]) -> Option<String> {
+fn codec_of(tracks: &[Track]) -> Option<String> {
     tracks.iter().find_map(|track| match &track.kind {
         melyxar_core::media::TrackKind::Video(details) => Some(details.codec.to_lowercase()),
         _ => None,
