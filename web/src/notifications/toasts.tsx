@@ -110,13 +110,24 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
   const poster = useShownPicture(toast.poster ?? []);
   const staysFor = shownForMs ?? STAYS_FOR_MS[state];
 
+  /* Held while the pointer or the keyboard is on it: the time it has left
+     stops, to be read, and carries on from where it stood. */
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const held = hovered || focused;
+  const timeLeft = useRef(staysFor);
+
   useEffect(() => {
-    if (sticky) {
+    if (sticky || held) {
       return;
     }
-    const timer = window.setTimeout(() => onGone(id), staysFor);
-    return () => window.clearTimeout(timer);
-  }, [id, sticky, staysFor, onGone]);
+    const startedAt = Date.now();
+    const timer = window.setTimeout(() => onGone(id), timeLeft.current);
+    return () => {
+      window.clearTimeout(timer);
+      timeLeft.current -= Date.now() - startedAt;
+    };
+  }, [id, sticky, held, onGone]);
 
   const Mark = MARKS[state];
   const words = (
@@ -130,7 +141,13 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
     onGone(id);
   };
   return (
-    <div className={`toast toast-${state}`}>
+    <div
+      className={`toast toast-${state}${held ? " toast-held" : ""}`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    >
       {poster.picture ? (
         <img
           className="toast-poster"
