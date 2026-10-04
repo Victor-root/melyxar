@@ -301,6 +301,10 @@ export function usePlayback({
   const [length, setLength] = useState(0);
   const [loaded, setLoaded] = useState(0);
   const [playing, setPlaying] = useState(false);
+  /* What `playing` said before the element was replaced, read when the new one
+     is set up. */
+  const wasPlaying = useRef(false);
+  wasPlaying.current = playing;
   const [muted, setMutedState] = useState(false);
   const [loudness, setLoudnessState] = useState(1);
   const { words, shownWords, holdTheWords, wordsOffset, setWordsOffset } = useWords(video);
@@ -1232,6 +1236,12 @@ export function usePlayback({
     if (listenedTo.current !== null && listenedTo.current !== pictureKey) {
       if (resumeAt.current === null && lastPosition.current > 0) {
         resumeAt.current = lastPosition.current;
+      }
+      // A film paused stays paused on its new element: it would otherwise
+      // start by itself, as a fresh element does, after a restart of the
+      // server or a change of track or quality.
+      if (!wasPlaying.current) {
+        element.autoplay = false;
       }
     }
     listenedTo.current = pictureKey;
