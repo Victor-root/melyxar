@@ -822,7 +822,8 @@ pub struct Watched {
     /// For a song: who plays it, and the album it is on.
     pub artist: Option<String>,
     pub album: Option<String>,
-    /// How long it lasts, for a song, whose length no plan says.
+    /// How long it lasts, for a song whose length no plan says, and for a film
+    /// whose plan was never heard.
     pub length: Option<Millis>,
     /// A wide picture of it, as a path in the picture cache, when it has one.
     pub picture: Option<String>,
@@ -871,6 +872,12 @@ pub async fn now_playing(state: &AppState) -> Result<Vec<Watched>> {
             picture = wide_picture_of(state, series.id).await?;
         }
 
+        let length = match (&song, &seen.plan) {
+            (Some(song), _) => song.duration,
+            (None, Some(_)) => None,
+            (None, None) => crate::marks::longest_version(state, work.id).await?,
+        };
+
         let producing = match (seen.session, state.sessions()) {
             (Some(id), Some(sessions)) => match sessions.get(id, seen.viewer.user).await {
                 Ok(session) => session.preparation().await.producing,
@@ -899,7 +906,7 @@ pub async fn now_playing(state: &AppState) -> Result<Vec<Watched>> {
             album: song
                 .as_ref()
                 .and_then(|song| song.album.as_ref().map(|album| album.name.clone())),
-            length: song.as_ref().and_then(|song| song.duration),
+            length,
             title: work.title,
             kind: work.kind,
             picture,
