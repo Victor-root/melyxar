@@ -41,7 +41,15 @@ export type Said =
 
 /** What happened to a title asked for. */
 export type RequestNews =
-  | { what: "asked"; by: string; seasons: number[] }
+  | {
+      what: "asked";
+      by: string;
+      seasons: number[];
+      year: number | null;
+      overview: string | null;
+      /** A small copy of the poster, at the provider. */
+      poster: string | null;
+    }
   | { what: "accepted" }
   | { what: "refused"; answer: string }
   | { what: "added" };

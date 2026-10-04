@@ -16,6 +16,9 @@ use crate::AppState;
 /// The longest a note added to a request may be, in characters.
 const LONGEST_NOTE: usize = 500;
 
+/// How wide the poster told to the administrators is asked for, in pixels.
+const NOTIFICATION_POSTER_WIDTH: u32 = 154;
+
 /// What an account asks for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Asking {
@@ -80,7 +83,11 @@ pub async fn ask<P: MetadataProvider>(
         other => other?,
     };
     moved(state);
-    telling::asked(state, &request).await;
+    let poster = details
+        .poster_path
+        .as_deref()
+        .map(|path| provider.image_url_at(path, NOTIFICATION_POSTER_WIDTH));
+    telling::asked(state, &request, poster).await;
     Ok(request)
 }
 
@@ -155,6 +162,8 @@ mod tests {
         };
         assert_eq!(told.notification.kind, "request");
         assert!(told.notification.data.contains("\"by\":\"viewer\""));
+        assert!(told.notification.data.contains("All about Amber Field."), "the synopsis comes along");
+        assert!(told.notification.data.contains("https://pictures.invalid/1.jpg"), "and the poster");
 
         assert!(matches!(
             ask(&state, &provider(), &viewer, asking(Catalogue::Films, "1", &[]), "fr").await,

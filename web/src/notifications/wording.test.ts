@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Note, NoteSettings } from "./api";
-import { clockOf, isQuiet, minuteOfClock, sayNote, showsNow } from "./wording";
+import { clockOf, isQuiet, minuteOfClock, posterOf, sayNote, showsNow } from "./wording";
 
 /** Says the key and its values, so a test reads what was chosen. */
 const t = (key: string, values?: Record<string, string | number>) =>
@@ -89,17 +89,28 @@ describe("what a notification says", () => {
     });
   });
 
-  it("tells the administrators who asked for which seasons, and takes them to the requests", () => {
-    const said = sayNote(
-      a({ kind: "request", title: "Salt Road", news: { what: "asked", by: "Sam", seasons: [0, 2] } }),
-      t,
-      "en",
-    );
-    expect(said).toEqual({
-      title: 'notes.request_asked {"by":"Sam","title":"Salt Road"}',
-      detail: 'work.specials, work.season {"number":2}',
-      to: "/admin/requests",
+  it("tells the administrators who asked for what, with its synopsis and poster, and takes them to the requests", () => {
+    const asked = a({
+      kind: "request",
+      title: "Salt Road",
+      news: {
+        what: "asked",
+        by: "Sam",
+        seasons: [0, 2],
+        year: 2019,
+        overview: "A keeper and a lantern.",
+        poster: "https://pictures.invalid/x.jpg",
+      },
     });
+    const said = sayNote(asked, t, "en");
+    expect(said).toEqual({
+      title: 'notes.request_asked {"by":"Sam","title":"Salt Road (2019)"}',
+      detail: 'work.specials, work.season {"number":2} · A keeper and a lantern.',
+      to: "/admin/requests",
+      poster: "https://pictures.invalid/x.jpg",
+    });
+    expect(posterOf(asked, said)).toEqual([{ url: "https://pictures.invalid/x.jpg", width: null, height: null }]);
+    expect(posterOf({ ...asked, poster: [{ url: "mine", width: 1, height: 1 }] }, said)[0].url).toBe("mine");
   });
 
   it("tells the account what became of its request, and opens the title once here", () => {

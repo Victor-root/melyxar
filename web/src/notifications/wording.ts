@@ -6,6 +6,7 @@
 
 import { howMany, readableDate, seasonsNamed } from "../readable";
 import type { Wording } from "../readable";
+import type { Picture } from "../api";
 import type { Note, NoteSettings, RequestNews } from "./api";
 
 /** How many titles are named before the rest are counted. */
@@ -18,6 +19,17 @@ export interface NoteSaid {
   title: string;
   detail: string | null;
   to: string | null;
+  /** A poster to wear that is not one of this server's, when it has one. */
+  poster?: string;
+}
+
+/** The poster a notification wears: its work's, or failing that the one the
+ *  notification itself names. */
+export function posterOf(note: Note, said: NoteSaid): Picture[] {
+  if (note.poster.length > 0 || !said.poster) {
+    return note.poster;
+  }
+  return [{ url: said.poster, width: null, height: null }];
 }
 
 /** A few titles named, the rest counted. */
@@ -35,9 +47,12 @@ function sayRequest(title: string, news: RequestNews, work: string | null, t: Wo
   switch (news.what) {
     case "asked":
       return {
-        title: t("notes.request_asked", { by: news.by, title }),
-        detail: news.seasons.length > 0 ? seasonsNamed(news.seasons, t) : null,
+        title: t("notes.request_asked", { by: news.by, title: news.year ? `${title} (${news.year})` : title }),
+        detail: [news.seasons.length > 0 ? seasonsNamed(news.seasons, t) : null, news.overview]
+          .filter(Boolean)
+          .join(" · ") || null,
         to: "/admin/requests",
+        poster: news.poster ?? undefined,
       };
     case "accepted":
       return { title: t("notes.request_accepted", { title }), detail: null, to: mine };
