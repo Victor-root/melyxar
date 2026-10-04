@@ -7,13 +7,13 @@
  * A word in the corner about what an action did
  * ----------------------------------------------------------------------- */
 
-/* Stacked from the bottom right, over everything, panels and the player
-   included: a word said as a panel closes has to outlive it, and an urgent
-   one has to be read over a film. */
+/* Stacked from the top right, just under the bar, over everything, panels
+   and the player included: a word said as a panel closes has to outlive it,
+   and an urgent one has to be read over a film. */
 .toasts {
   position: fixed;
+  top: calc(var(--header-height) - 8px);
   right: var(--gutter);
-  bottom: var(--gutter);
   z-index: 110;
   display: flex;
   flex-direction: column;
@@ -23,8 +23,9 @@
   pointer-events: none;
 }
 
-/* The glass of the panels, rimmed on its left edge in the colour of what it
-   says. */
+/* The glass of the bar and of its lists: rimmed in the accent, washed with it
+   and lit by a halo, whatever the word says. What it says is carried by its
+   mark, in the colour of its level. */
 .toast {
   pointer-events: auto;
   display: flex;
@@ -32,12 +33,16 @@
   gap: 12px;
   width: 100%;
   padding: 14px 12px 14px 14px;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--toast-state);
-  background: var(--panel-glass);
+  border-radius: var(--radius-panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  --toast-glow: color-mix(in srgb, var(--accent) 14%, transparent);
+  background:
+    linear-gradient(var(--toast-glow), var(--toast-glow)),
+    var(--surface-raised);
   backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-card);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 14px 2px var(--accent-glow);
   animation: toast-in var(--calm) var(--ease);
 }
 
@@ -69,6 +74,7 @@
   border-radius: var(--radius-control);
   object-fit: cover;
   background: var(--toast-wash);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 .toast-link {
@@ -84,8 +90,10 @@
 .toasts-more {
   pointer-events: auto;
   padding: 4px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: var(--radius-pill);
-  background: var(--panel-glass);
+  background: var(--surface-raised);
+  box-shadow: 0 0 14px 2px var(--accent-glow);
   backdrop-filter: blur(18px);
   color: var(--text-soft);
   font-size: 12.5px;
@@ -100,6 +108,7 @@
   height: 30px;
   border-radius: 50%;
   background: var(--toast-wash);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--toast-state) 55%, transparent);
   color: var(--toast-state);
 }
 
@@ -145,7 +154,7 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(-12px) scale(0.98);
   }
 }
 
@@ -477,8 +486,8 @@
   padding-top: var(--gap);
 }
 
-/* Over a film, above its controls rather than on them. */
+/* Over a film, which has no bar of the page above it. */
 body:has(.player) .toasts,
 .player-stage .toasts {
-  bottom: 96px;
+  top: 24px;
 }
