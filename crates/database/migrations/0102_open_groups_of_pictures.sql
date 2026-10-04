@@ -1,0 +1,12 @@
+-- Whether a film's picture is built in open groups.
+--
+-- An open group shows a picture or two before the key picture that comes
+-- ahead of them in the file. Most discs are made this way, and a browser fed
+-- such a picture in pieces loses one picture at the start of every piece:
+-- such a film is rebuilt rather than copied whenever it would go in pieces.
+--
+-- Read once per file by the same pass that reads where its picture can be
+-- started, and kept beside that answer. Empty until it has been read, which
+-- is what sends a file already read for its key frames back to that pass
+-- once, for this alone.
+ALTER TABLE media_source_key_frames ADD COLUMN open_groups INTEGER;

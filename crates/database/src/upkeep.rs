@@ -117,7 +117,8 @@ impl Database {
     }
 
     /// Files that have been described but never read for where they can be
-    /// started, oldest first, a few at a time.
+    /// started, or for whether their picture is built in open groups, oldest
+    /// first, a few at a time.
     ///
     /// Reading one means reading the whole file through once, so this is a
     /// background pass bounded like the analysis, and it is picked up again by
@@ -136,7 +137,8 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_key_frames.source_id IS NULL
+               AND (media_source_key_frames.source_id IS NULL
+                    OR media_source_key_frames.open_groups IS NULL)
                ",
             a_moving_picture!(),
             "
@@ -172,7 +174,8 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_key_frames.source_id IS NULL
+               AND (media_source_key_frames.source_id IS NULL
+                    OR media_source_key_frames.open_groups IS NULL)
                ",
             a_moving_picture!()
         ))
@@ -202,12 +205,39 @@ impl Database {
              JOIN library_roots ON library_roots.id = media_sources.root_id
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
-               AND media_sources.missing_since IS NULL",
+               AND media_sources.missing_since IS NULL
+               AND media_source_key_frames.open_groups IS NOT NULL",
         )
         .bind(library_id.to_db_string())
         .fetch_one(self.reader())
         .await?;
         Ok(row.0)
+    }
+
+    /// Keeps whether the picture of one file is built in open groups.
+    ///
+    /// Beside where it can be started, which is read first: a file whose key
+    /// frames could not be written down has nowhere to keep this either, and
+    /// is read for both again.
+    pub async fn store_open_groups(&self, source_id: MediaSourceId, open: bool) -> Result<()> {
+        sqlx::query("UPDATE media_source_key_frames SET open_groups = ? WHERE source_id = ?")
+            .bind(open)
+            .bind(source_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
+    /// Whether the picture of one file is built in open groups, when it has
+    /// been read for it.
+    pub async fn open_groups_of(&self, source_id: MediaSourceId) -> Result<Option<bool>> {
+        let row: Option<(Option<bool>,)> = sqlx::query_as(
+            "SELECT open_groups FROM media_source_key_frames WHERE source_id = ?",
+        )
+        .bind(source_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        Ok(row.and_then(|(open,)| open))
     }
 
     /// Keeps what a reading of one film gave for the bar somebody drags along.
@@ -1052,6 +1082,10 @@ mod tests {
             .store_key_frames(source_id, &[])
             .await
             .expect("kept");
+        database
+            .store_open_groups(source_id, false)
+            .await
+            .expect("kept");
         assert_eq!(
             database.key_frames_of(source_id).await.expect("read"),
             Some(Vec::new()),
@@ -1108,6 +1142,18 @@ mod tests {
 
         database
             .store_key_frames(source_id, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        assert_eq!(
+            database
+                .sources_without_key_frames(library_id, 10)
+                .await
+                .expect("read"),
+            vec![source_id],
+            "still to be read for how its picture is built"
+        );
+        database
+            .store_open_groups(source_id, true)
             .await
             .expect("kept");
         assert!(
@@ -1201,6 +1247,20 @@ mod tests {
             .store_key_frames(in_series, &[Millis::ZERO])
             .await
             .expect("kept");
+        assert_eq!(
+            database
+                .count_read_for_key_frames(films)
+                .await
+                .expect("read"),
+            0,
+            "not read through until its picture is read too"
+        );
+        for source in [in_films, in_series] {
+            database
+                .store_open_groups(source, false)
+                .await
+                .expect("kept");
+        }
 
         assert_eq!(
             database
@@ -1216,6 +1276,59 @@ mod tests {
                 .await
                 .expect("read"),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn whether_a_picture_opens_its_groups_is_kept_beside_its_key_frames() {
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        assert_eq!(database.open_groups_of(source_id).await.expect("read"), None);
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            1
+        );
+
+        // Nowhere to keep it before the key frames are kept.
+        database
+            .store_open_groups(source_id, true)
+            .await
+            .expect("asked");
+        assert_eq!(database.open_groups_of(source_id).await.expect("read"), None);
+
+        database
+            .store_key_frames(source_id, &[Millis::ZERO, Millis::new(1_001)])
+            .await
+            .expect("kept");
+        assert_eq!(database.open_groups_of(source_id).await.expect("read"), None);
+        database
+            .store_open_groups(source_id, true)
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.open_groups_of(source_id).await.expect("read"),
+            Some(true)
+        );
+
+        // Reading the key frames again leaves what was learnt alone.
+        database
+            .store_key_frames(source_id, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.open_groups_of(source_id).await.expect("read"),
+            Some(true)
+        );
+        assert_eq!(
+            database
+                .count_awaiting_key_frames(library_id)
+                .await
+                .expect("read"),
+            0
         );
     }
 
@@ -1293,6 +1406,10 @@ mod tests {
 
         database
             .store_key_frames(first, &[Millis::ZERO])
+            .await
+            .expect("kept");
+        database
+            .store_open_groups(first, false)
             .await
             .expect("kept");
         database
@@ -1410,6 +1527,10 @@ mod tests {
         for film in [here, gone] {
             database
                 .store_key_frames(film, &[Millis::ZERO])
+                .await
+                .expect("kept");
+            database
+                .store_open_groups(film, false)
                 .await
                 .expect("kept");
         }
