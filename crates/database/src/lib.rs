@@ -49,6 +49,7 @@ pub mod people;
 pub mod playback;
 pub mod playlists;
 pub mod ratings;
+pub mod requests;
 pub mod sessions;
 pub mod schedule;
 pub mod settings;

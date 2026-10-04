@@ -162,6 +162,12 @@ define_id!(
     NotificationId
 );
 
+define_id!(
+    /// Identifies one account's request for a title the server does not
+    /// hold. Ordered by when it was made.
+    RequestId
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
