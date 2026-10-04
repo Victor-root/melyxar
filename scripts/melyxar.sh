@@ -1363,7 +1363,6 @@ UNIT
     systemctl daemon-reload
   "
   step "$(tr_msg step_enable)" systemctl enable "$SERVICE"
-  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
 }
 
 show_done() {
@@ -1415,6 +1414,7 @@ action_install() {
   install_speech
   write_configuration "$port"
   install_service
+  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
   mark_installed engine
   show_done
 }
