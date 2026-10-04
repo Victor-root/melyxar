@@ -37,19 +37,19 @@ export type Said =
       series: SeriesArrived[];
     }
   | { kind: "deletion"; titles: string[]; works: number; checked_gone: number | null }
-  | { kind: "request"; title: string; news: RequestNews };
-
-/** What happened to a title asked for. */
-export type RequestNews =
   | {
-      what: "asked";
-      by: string;
-      seasons: number[];
+      kind: "request";
+      title: string;
       year: number | null;
       overview: string | null;
       /** A small copy of the poster, at the provider. */
       poster: string | null;
-    }
+      news: RequestNews;
+    };
+
+/** What happened to a title asked for. */
+export type RequestNews =
+  | { what: "asked"; by: string; seasons: number[] }
   | { what: "accepted" }
   | { what: "refused"; answer: string }
   | { what: "added" };

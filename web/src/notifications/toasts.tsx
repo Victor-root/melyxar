@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { Picture } from "../api";
+import { Named } from "./named";
 import { useShownPicture } from "../components/picture";
 import { CloseIcon, InfoIcon, TickIcon, WarningIcon } from "../icons";
 import { useSettings } from "../settings";
@@ -33,6 +34,8 @@ const SHOWN_AT_MOST = 3;
 export interface Toast {
   state: Level;
   title: string;
+  /** The title the words are about, said inside `title`. */
+  named?: string;
   detail?: string | null;
   /** Every size of a poster to wear, largest first. */
   poster?: Picture[];
@@ -132,7 +135,9 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
   const Mark = MARKS[state];
   const words = (
     <>
-      <strong>{toast.title}</strong>
+      <strong>
+        <Named text={toast.title} named={toast.named} />
+      </strong>
       {toast.detail && <span className="toast-detail">{toast.detail}</span>}
     </>
   );

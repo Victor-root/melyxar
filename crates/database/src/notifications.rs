@@ -56,16 +56,6 @@ pub struct Notification {
     pub read_at: Option<Timestamp>,
 }
 
-/// What became of asking to remove a notification.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Removal {
-    Removed,
-    /// Mandatory or urgent: kept whatever the account asks.
-    Kept,
-    /// Not one of this account's.
-    Missing,
-}
-
 /// Whether one kind of notification reaches the bell and the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Channels {
@@ -265,29 +255,15 @@ impl Database {
             .collect()
     }
 
-    /// Removes one of an account's notifications, unless it may not be.
-    pub async fn remove_notification(&self, user: UserId, id: NotificationId) -> Result<Removal> {
-        let done = sqlx::query(
-            "DELETE FROM notifications
-              WHERE id = ? AND user_id = ? AND mandatory = 0 AND priority = 0",
-        )
-        .bind(id.to_db_string())
-        .bind(user.to_db_string())
-        .execute(self.writer())
-        .await?;
-        if done.rows_affected() > 0 {
-            return Ok(Removal::Removed);
-        }
-        let there: Option<i64> =
-            sqlx::query_scalar("SELECT 1 FROM notifications WHERE id = ? AND user_id = ?")
-                .bind(id.to_db_string())
-                .bind(user.to_db_string())
-                .fetch_optional(self.reader())
-                .await?;
-        Ok(match there {
-            Some(_) => Removal::Kept,
-            None => Removal::Missing,
-        })
+    /// Removes one of an account's notifications, whatever it is, and answers
+    /// whether it was there.
+    pub async fn remove_notification(&self, user: UserId, id: NotificationId) -> Result<bool> {
+        let done = sqlx::query("DELETE FROM notifications WHERE id = ? AND user_id = ?")
+            .bind(id.to_db_string())
+            .bind(user.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(done.rows_affected() > 0)
     }
 
     /// Erases the read notifications that arrived before an instant, and
@@ -778,7 +754,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn what_is_mandatory_or_urgent_cannot_be_removed() {
+    async fn any_notification_may_be_removed_by_its_own_account_and_only_by_it() {
         let (database, one, other) = two_accounts().await;
         let plain = database.add_notifications(&[one], &a_message(NOON)).await.expect("written");
         let urgent = database
@@ -790,16 +766,12 @@ mod tests {
             .await
             .expect("written");
 
-        let remove = |id| database.remove_notification(one, id);
-        assert_eq!(remove(urgent[0].id).await.expect("asked"), Removal::Kept);
-        assert_eq!(remove(mandatory[0].id).await.expect("asked"), Removal::Kept);
-        assert_eq!(
-            database.remove_notification(other, plain[0].id).await.expect("asked"),
-            Removal::Missing
-        );
-        assert_eq!(remove(plain[0].id).await.expect("asked"), Removal::Removed);
-        assert_eq!(remove(plain[0].id).await.expect("asked"), Removal::Missing);
-        assert_eq!(database.notifications_of(one, None, 10).await.expect("read").len(), 2);
+        assert!(!database.remove_notification(other, plain[0].id).await.expect("asked"));
+        for id in [urgent[0].id, mandatory[0].id, plain[0].id] {
+            assert!(database.remove_notification(one, id).await.expect("asked"));
+            assert!(!database.remove_notification(one, id).await.expect("asked"), "gone once");
+        }
+        assert!(database.notifications_of(one, None, 10).await.expect("read").is_empty());
     }
 
     #[tokio::test]

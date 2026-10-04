@@ -4,18 +4,16 @@ import { Dropdown } from "../components/dropdown";
 import { sayPoint } from "../pages/admin/activity";
 import { useSettings } from "../settings";
 import type { Level } from "./api";
+import { pieOf } from "./pie";
 import { useAttention } from "./attention";
 import { NoteList } from "./list";
 import { useNotes } from "./store";
 
-/** The order of the colours, the gravest last. */
-const GRAVITY: Level[] = ["ok", "news", "attention", "trouble"];
-
 /**
- * How many things wait, and the gravest colour among them: the unread
- * notifications, and for an administrator the points deserving a look.
+ * How many things wait, and the kinds among them: the unread notifications,
+ * and for an administrator the points deserving a look.
  */
-function useWaiting(administrator: boolean): { count: number; worst: Level } {
+function useWaiting(administrator: boolean): { count: number; levels: Level[] } {
   const { notes, unread } = useNotes();
   const { points } = useAttention();
   const looked = administrator ? (points ?? []) : [];
@@ -23,11 +21,17 @@ function useWaiting(administrator: boolean): { count: number; worst: Level } {
     ...notes.filter((note) => !note.read).map((note) => note.level),
     ...looked.map((point) => point.state),
   ];
-  const worst = levels.reduce<Level>(
-    (gravest, level) => (GRAVITY.indexOf(level) > GRAVITY.indexOf(gravest) ? level : gravest),
-    "ok",
+  return { count: unread + looked.length, levels };
+}
+
+/** The number of things that wait, on a background of the colour of what
+ *  waits, or shared between the colours when there are several. */
+function Count({ count, levels, line }: { count: number; levels: Level[]; line?: boolean }) {
+  return (
+    <span className={`bell-count${line ? " bell-count-line" : ""}`} style={{ background: pieOf(levels) }}>
+      {count}
+    </span>
   );
-  return { count: unread + looked.length, worst };
 }
 
 /**
@@ -39,7 +43,7 @@ export function Bell({ administrator }: { administrator: boolean }) {
   const { t, language } = useSettings();
   const { points, markSeen } = useAttention();
   const { unread, markRead } = useNotes();
-  const { count, worst } = useWaiting(administrator);
+  const { count, levels } = useWaiting(administrator);
   const looked = administrator ? (points ?? []) : [];
 
   return (
@@ -47,11 +51,16 @@ export function Bell({ administrator }: { administrator: boolean }) {
       className="header-bell"
       icon={t("nav.notifications")}
       listClassName="bell-list"
+      /* Looked at, so read: what was new is told by the count that goes, and
+         any of them can be put back as unread. */
+      onOpen={() => {
+        if (unread > 0) markRead();
+      }}
       reachable
       label={
         <>
           <BellIcon size={24} />
-          {count > 0 && <span className={`bell-count bell-count-${worst}`}>{count}</span>}
+          {count > 0 && <Count count={count} levels={levels} />}
         </>
       }
     >
@@ -109,12 +118,12 @@ export function Bell({ administrator }: { administrator: boolean }) {
  */
 export function BellLine({ administrator }: { administrator: boolean }) {
   const { t } = useSettings();
-  const { count, worst } = useWaiting(administrator);
+  const { count, levels } = useWaiting(administrator);
   return (
     <NavLink to="/notifications" className="header-menu-line">
       <BellIcon size={16} />
       {t("nav.notifications")}
-      {count > 0 && <span className={`bell-count bell-count-${worst} bell-count-line`}>{count}</span>}
+      {count > 0 && <Count count={count} levels={levels} line />}
     </NavLink>
   );
 }

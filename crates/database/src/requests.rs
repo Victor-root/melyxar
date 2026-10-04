@@ -333,6 +333,23 @@ impl Database {
         rows.iter().map(request_from_row).collect()
     }
 
+    /// The works of the libraries that somebody asked for, still waiting or
+    /// already added: a film, or a series, identified by the number the
+    /// request carries.
+    pub async fn requested_works(&self) -> Result<std::collections::HashSet<WorkId>> {
+        let ids: Vec<String> = sqlx::query_scalar(
+            "SELECT DISTINCT w.id
+               FROM title_requests r
+               JOIN work_external_ids e ON e.provider = 'tmdb' AND e.external_id = r.tmdb_id
+               JOIN works w ON w.id = e.work_id AND w.parent_id IS NULL
+                           AND w.kind = CASE r.catalogue WHEN 'series' THEN 'series' ELSE 'movie' END
+              WHERE r.state IN ('pending', 'accepted', 'added')",
+        )
+        .fetch_all(self.reader())
+        .await?;
+        ids.iter().map(|id| parse_id(id)).collect()
+    }
+
     /// Which of some titles of one catalogue the libraries hold, identified,
     /// by their identifier at the provider. A title held twice is answered
     /// by its oldest copy, with the seasons of every copy.
@@ -557,7 +574,13 @@ mod tests {
             "a film and a series do not share their identifiers"
         );
 
+        assert!(database.requested_works().await.expect("read").is_empty());
         let request = database.add_request(&asking(one, "40", &[1])).await.expect("written");
+        assert_eq!(
+            database.requested_works().await.expect("read"),
+            std::collections::HashSet::from([series.id]),
+            "a series is found by the number its request carries"
+        );
         let added = database
             .requests_arrived(&[request.id], series.id, NOON)
             .await

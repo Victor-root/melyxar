@@ -2,7 +2,6 @@
 //! and the ones it removes. Every change is told to all its pages at once.
 
 use melyxar_core::id::{NotificationId, UserId};
-use melyxar_database::notifications::Removal;
 
 use super::live::{tell, Change};
 use super::{with_posters, Told};
@@ -55,19 +54,14 @@ pub async fn mark_unread(state: &AppState, user: UserId, which: &[NotificationId
     Ok(())
 }
 
-/// Removes one notification from an account's history. One that is
-/// mandatory or urgent stays: no account may take it off the server.
+/// Removes one notification from an account's history, whatever it is.
 pub async fn remove(state: &AppState, user: UserId, id: NotificationId) -> Result<()> {
     match state.database().remove_notification(user, id).await? {
-        Removal::Removed => {
+        true => {
             tell(state, user, Change::Removed(vec![id]));
             Ok(())
         }
-        Removal::Kept => Err(melyxar_core::Error::forbidden(
-            "a mandatory or urgent notification stays until its time is over",
-        )
-        .into()),
-        Removal::Missing => Err(melyxar_core::Error::not_found("no such notification").into()),
+        false => Err(melyxar_core::Error::not_found("no such notification").into()),
     }
 }
 
@@ -108,8 +102,8 @@ mod tests {
         mark_read(&state, user, None).await.expect("nothing left to mark");
         mark_unread(&state, user, &[plain]).await.expect("marked");
         remove(&state, user, plain).await.expect("removed");
-        assert!(remove(&state, user, urgent).await.is_err(), "urgent stays");
         assert!(remove(&state, user, plain).await.is_err(), "already gone");
+        remove(&state, user, urgent).await.expect("an urgent one goes like the others");
 
         let mut said = Vec::new();
         while let Ok(news) = line.try_recv() {
@@ -126,17 +120,20 @@ mod tests {
                     "unread"
                 }
                 Change::Removed(ids) => {
-                    assert_eq!(ids, vec![plain]);
+                    assert!(ids == vec![plain] || ids == vec![urgent]);
                     "removed"
                 }
                 _ => "other",
             });
         }
-        assert_eq!(said, vec!["read", "unread", "removed"], "a mark that changed nothing says nothing");
+        assert_eq!(
+            said,
+            vec!["read", "unread", "removed", "removed"],
+            "a mark that changed nothing says nothing"
+        );
 
         let page = page(&state, user, None).await.expect("read");
-        assert_eq!(page.told.len(), 1);
-        assert_eq!(page.told[0].notification.id, urgent);
+        assert!(page.told.is_empty());
         assert_eq!(page.unread, 0);
         assert!(!page.more);
     }

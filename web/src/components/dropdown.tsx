@@ -22,6 +22,7 @@ export function Dropdown({
   reachable,
   icon,
   listClassName,
+  onOpen,
   children,
 }: {
   label: React.ReactNode;
@@ -35,6 +36,8 @@ export function Dropdown({
   icon?: string;
   /** What the list is, for one that holds more than short lines. */
   listClassName?: string;
+  /** Told each time the list is opened. */
+  onOpen?: () => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -103,7 +106,10 @@ export function Dropdown({
         aria-label={icon}
         title={icon}
         tabIndex={reachable ? undefined : -1}
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen(!open);
+        }}
       >
         {label}
         {!icon && <ChevronDownIcon size={15} />}

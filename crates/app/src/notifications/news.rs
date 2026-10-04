@@ -174,6 +174,7 @@ pub async fn announce(state: &AppState) -> Result<()> {
 async fn announce_at(state: &AppState, now: Timestamp) -> Result<()> {
     let database = state.database();
     let libraries = database.list_libraries().await?;
+    let requested = database.requested_works().await?;
     for library in announcing(state).await? {
         // A library met for the first time was added after the
         // notifications were: its first import is news.
@@ -198,6 +199,15 @@ async fn announce_at(state: &AppState, now: Timestamp) -> Result<()> {
         {
             continue;
         }
+        // A title somebody asked for is told to them by their request, and is
+        // not news to be announced a second time.
+        let announced: Vec<&Arrival> = announced
+            .into_iter()
+            .filter(|arrival| {
+                !requested.contains(&arrival.work_id)
+                    && !arrival.series.as_ref().is_some_and(|(id, _)| requested.contains(id))
+            })
+            .collect();
         let readers = readers_of(state, library.id).await?;
         for (accounts, theirs) in by_what_they_may_watch(&readers, &announced) {
             let (said, shown) = said_of(&library, &theirs);
@@ -400,28 +410,7 @@ mod tests {
             .await
             .expect("account")
             .id;
-        let film = database
-            .create_work(films, WorkKind::Movie, "Amber Field", "amber field", None)
-            .await
-            .expect("film");
-        database
-            .apply_identification(film.id, &named("Amber Field"), false)
-            .await
-            .expect("named");
-        let poster = StoredImage {
-            owner_kind: "work".to_string(),
-            owner_id: film.id.to_db_string(),
-            image_kind: "poster".to_string(),
-            relative_path: "works/amber/poster-400.webp".to_string(),
-            width: Some(400),
-            height: Some(600),
-            fingerprint: "amber".to_string(),
-            dominant_color: None,
-        };
-        database
-            .replace_images("work", &film.id.to_db_string(), "poster", &[poster])
-            .await
-            .expect("poster");
+        let film = a_named_film_with_a_poster(database, films).await;
         let kept = || database.notifications_of(reader, None, 10);
 
         announce_at(&state, film.added_at + time::Duration::minutes(1))
@@ -459,28 +448,7 @@ mod tests {
             .await
             .expect("account")
             .id;
-        let film = database
-            .create_work(films, WorkKind::Movie, "Amber Field", "amber field", None)
-            .await
-            .expect("film");
-        database
-            .apply_identification(film.id, &named("Amber Field"), false)
-            .await
-            .expect("named");
-        let poster = StoredImage {
-            owner_kind: "work".to_string(),
-            owner_id: film.id.to_db_string(),
-            image_kind: "poster".to_string(),
-            relative_path: "works/amber/poster-400.webp".to_string(),
-            width: Some(400),
-            height: Some(600),
-            fingerprint: "amber".to_string(),
-            dominant_color: None,
-        };
-        database
-            .replace_images("work", &film.id.to_db_string(), "poster", &[poster])
-            .await
-            .expect("poster");
+        let film = a_named_film_with_a_poster(database, films).await;
 
         let target = films.to_string();
         let reading = database
@@ -502,6 +470,96 @@ mod tests {
             .await
             .expect("looked");
         assert_eq!(database.notifications_of(reader, None, 10).await.expect("read").len(), 1);
+    }
+
+    /// A film the libraries could announce: named, and wearing a poster.
+    async fn a_named_film_with_a_poster(
+        database: &melyxar_database::Database,
+        library: LibraryId,
+    ) -> melyxar_core::work::Work {
+        let film = database
+            .create_work(library, WorkKind::Movie, "Amber Field", "amber field", None)
+            .await
+            .expect("film");
+        database
+            .apply_identification(film.id, &named("Amber Field"), false)
+            .await
+            .expect("named");
+        let poster = StoredImage {
+            owner_kind: "work".to_string(),
+            owner_id: film.id.to_db_string(),
+            image_kind: "poster".to_string(),
+            relative_path: "works/amber/poster-400.webp".to_string(),
+            width: Some(400),
+            height: Some(600),
+            fingerprint: "amber".to_string(),
+            dominant_color: None,
+        };
+        database
+            .replace_images("work", &film.id.to_db_string(), "poster", &[poster])
+            .await
+            .expect("poster");
+        film
+    }
+
+    #[tokio::test]
+    async fn a_title_somebody_asked_for_is_not_announced_as_news() {
+        let (_held, state) = crate::an_empty_server().await;
+        let database = state.database();
+        let films = database
+            .create_library("Films", LibraryKind::Movies, "fr", &[])
+            .await
+            .expect("library")
+            .id;
+        let reader = database
+            .create_user("reader", None, &Permissions::viewer())
+            .await
+            .expect("account")
+            .id;
+        let asked = a_named_film_with_a_poster(database, films).await;
+        database
+            .add_request(&melyxar_database::requests::NewRequest {
+                user_id: reader,
+                catalogue: "films",
+                tmdb_id: "tmdb-Amber Field",
+                title: "Amber Field",
+                year: None,
+                poster_path: None,
+                overview: None,
+                seasons: &[],
+                note: "",
+                created_at: NOON,
+            })
+            .await
+            .expect("asked");
+        let other = database
+            .create_work(films, WorkKind::Movie, "Salt Road", "salt road", None)
+            .await
+            .expect("film");
+        database
+            .apply_identification(other.id, &IdentifiedWork { external_id: "tmdb-Salt".to_string(), ..named("Salt Road") }, false)
+            .await
+            .expect("named");
+        let poster = StoredImage {
+            owner_kind: "work".to_string(),
+            owner_id: other.id.to_db_string(),
+            image_kind: "poster".to_string(),
+            relative_path: "works/salt/poster-400.webp".to_string(),
+            width: Some(400),
+            height: Some(600),
+            fingerprint: "salt".to_string(),
+            dominant_color: None,
+        };
+        database
+            .replace_images("work", &other.id.to_db_string(), "poster", &[poster])
+            .await
+            .expect("poster");
+
+        let settled = asked.added_at.max(other.added_at) + QUIET_FOR + time::Duration::seconds(1);
+        announce_at(&state, settled).await.expect("looked");
+        let told = database.notifications_of(reader, None, 10).await.expect("read");
+        assert_eq!(told.len(), 1);
+        assert_eq!(told[0].work_id, Some(other.id), "only the film nobody asked for");
     }
 
     fn named(title: &str) -> IdentifiedWork {

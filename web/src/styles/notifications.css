@@ -207,8 +207,8 @@
  * The bell: what deserves an administrator's look
  * ----------------------------------------------------------------------- */
 
-/* The count sits on the shoulder of the bell, in the colour of the worst of
-   what it counts. */
+/* The count sits on the shoulder of the bell, on the colour of what it counts,
+   or on a slice of each colour when it counts several kinds. */
 .header-bell .header-icon {
   position: relative;
 }
@@ -229,14 +229,6 @@
   font-variant-numeric: tabular-nums;
   line-height: 1;
   pointer-events: none;
-}
-
-.bell-count-attention {
-  background: var(--attention);
-}
-
-.bell-count-trouble {
-  background: var(--trouble);
 }
 
 /* In the account's menu, at the end of its line rather than on a shoulder. */
@@ -297,14 +289,6 @@
 
 .bell-point .state-dot {
   margin-top: 6px;
-}
-
-.bell-count-ok {
-  background: var(--ok);
-}
-
-.bell-count-news {
-  background: var(--news);
 }
 
 /* The history is read in the bell without leaving the page, and only so
@@ -411,6 +395,13 @@
   color: var(--text-soft);
   font-size: 13.5px;
   overflow-wrap: anywhere;
+}
+
+/* The title a notification is about, standing out of the words around it. */
+.note-name,
+.toast strong .note-name {
+  color: var(--accent-bright);
+  font-weight: 700;
 }
 
 .note-unread .note-title {
