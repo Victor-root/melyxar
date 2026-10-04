@@ -86,6 +86,22 @@ function whatIsHeldAround(element: HTMLVideoElement, moment: number) {
   return { held_from_second: null, held_to_second: null, stretches: held.length };
 }
 
+/** Seconds of film the browser holds in all. */
+function allThatIsHeld(element: HTMLVideoElement): number {
+  const held = element.buffered;
+  let seconds = 0;
+  for (let index = 0; index < held.length; index += 1) {
+    seconds += held.end(index) - held.start(index);
+  }
+  return Math.round(seconds);
+}
+
+/** What the page weighs in memory, in the browsers that say. */
+function pageMemoryMb(): number | null {
+  const memory = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+  return memory ? Math.round(memory.usedJSHeapSize / 1_048_576) : null;
+}
+
 /** Pictures the browser says it has shown, when it counts them. */
 function picturesShown(element: HTMLVideoElement): number {
   const quality = element.getVideoPlaybackQuality?.();
@@ -363,6 +379,8 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
           over_ms: Math.round(now - droppedWindowSince),
           pictures_shown: shown - shownAtWindowStart,
           pictures_dropped: dropped,
+          held_seconds: allThatIsHeld(element),
+          page_memory_mb: pageMemoryMb(),
         });
       }
       droppedWindowSince = now;
