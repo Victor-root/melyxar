@@ -15,7 +15,7 @@ import { readableDate, seasonsNamed } from "../readable";
 import { useSettings } from "../settings";
 import { requestsApi } from "./api";
 import type { Decision, RequestsAdministration, Waiting } from "./api";
-import { TitleCard } from "./card";
+import { TitleCard, titleAddress } from "./card";
 
 /** The longest word a refusal keeps. */
 const LONGEST_ANSWER = 500;
@@ -38,6 +38,7 @@ function WaitingTitle({
       year={first.year}
       poster={first.poster}
       overview={first.overview}
+      to={titleAddress(title.catalogue, title.tmdb_id)}
     >
       <div className="request-standing">
         <span className={`state-pill ${title.accepted ? "state-ok" : "state-news"}`}>

@@ -13,6 +13,7 @@ pub mod live;
 pub mod rounds;
 mod rules;
 pub mod search;
+pub mod title;
 #[cfg(test)]
 mod testing;
 mod telling;

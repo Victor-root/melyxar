@@ -44,6 +44,36 @@ export interface SeasonChoice {
   held: boolean;
 }
 
+/** One person of the cast, as the provider names them. */
+export interface TitlePerson {
+  name: string;
+  character: string | null;
+  photo: string | null;
+}
+
+/** A title as the provider describes it, whole, with where it stands here. */
+export interface TitlePage {
+  /** The same answer a search gives, which asking for it starts from. */
+  found: Found;
+  tagline: string | null;
+  imdb_id: string | null;
+  release_date: string | null;
+  end_date: string | null;
+  runtime_minutes: number | null;
+  rating: number | null;
+  age_rating: string | null;
+  genres: string[];
+  studios: string[];
+  collection: string | null;
+  big_poster: string | null;
+  backdrop: string | null;
+  /** Where each trailer can be watched, the official ones first. */
+  trailers: string[];
+  cast: TitlePerson[];
+  crew: { name: string; role: string }[];
+  seasons: SeasonChoice[];
+}
+
 /** One account's request, as kept. */
 export interface TitleRequest {
   id: string;
@@ -103,6 +133,11 @@ export const requestsApi = {
   seasons: (tmdbId: string, language: string, signal?: AbortSignal) =>
     get<SeasonChoice[]>(
       `/api/v1/requests/series/${encodeURIComponent(tmdbId)}/seasons?language=${language}`,
+      signal,
+    ),
+  title: (catalogue: Catalogue, tmdbId: string, language: string, signal?: AbortSignal) =>
+    get<TitlePage>(
+      `/api/v1/requests/title/${catalogue}/${encodeURIComponent(tmdbId)}?language=${language}`,
       signal,
     ),
   mine: (signal?: AbortSignal) => get<TitleRequest[]>("/api/v1/requests", signal),
