@@ -127,6 +127,23 @@ pub fn sheet_at(into: &Path, number: u32) -> std::path::PathBuf {
     into.join(format!("{number:04}.jpg"))
 }
 
+/// What follows a reading while it goes: whether it is called off, and how
+/// many thumbnails there are so far, which is how far along it is.
+pub struct Watch<'a> {
+    pub asked_to_stop: AskedToStop,
+    pub on_counted: &'a (dyn Fn(u32) + Sync),
+}
+
+impl Watch<'static> {
+    /// Called off when asked, and said nothing of how far along it is.
+    pub fn quietly(asked_to_stop: AskedToStop) -> Self {
+        Self {
+            asked_to_stop,
+            on_counted: &|_| {},
+        }
+    }
+}
+
 /// Reads one film through and writes every sheet of thumbnails it gives.
 ///
 /// Answers what really came out, measured rather than worked out: how many
@@ -145,7 +162,7 @@ pub async fn make(
     layout: Layout,
     tone_map: bool,
     standing_pictures_only: bool,
-    asked_to_stop: AskedToStop,
+    watch: Watch<'_>,
 ) -> Result<Thumbnails> {
     let mut builder = TokioCommand::new(&tools.ffmpeg);
     builder.args(arguments(
@@ -155,7 +172,10 @@ pub async fn make(
         tone_map,
         standing_pictures_only,
     ));
-    let output = crate::process::output_of(builder, asked_to_stop).await?;
+    let output = crate::process::output_counting(builder, watch.asked_to_stop, &|bytes| {
+        (watch.on_counted)(u32::try_from(bytes).unwrap_or(u32::MAX));
+    })
+    .await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
@@ -376,6 +396,7 @@ mod tests {
 
         let into = directory.path().join("thumbnails");
         std::fs::create_dir_all(&into).expect("a folder to write in");
+        let told = std::sync::atomic::AtomicU32::new(0);
         let made = make(
             &tools,
             &film,
@@ -388,12 +409,20 @@ mod tests {
             },
             false,
             false,
-            AskedToStop::never(),
+            Watch {
+                asked_to_stop: AskedToStop::never(),
+                on_counted: &|counted| told.store(counted, std::sync::atomic::Ordering::Relaxed),
+            },
         )
         .await
         .expect("the tool accepted the command");
 
         assert_eq!(made.counted, 3, "nought, ten and twenty seconds");
+        assert_eq!(
+            told.load(std::sync::atomic::Ordering::Relaxed),
+            3,
+            "the reading said how many there were as they came"
+        );
         assert_eq!(made.sheets, 1);
         assert_eq!(made.height, 90);
         assert_eq!(made.width, 160, "the shape of the film is kept");
@@ -462,7 +491,7 @@ mod tests {
             false,
             // Read in full, which is the slow rung and the one that bit.
             false,
-            AskedToStop::when(listening),
+            Watch::quietly(AskedToStop::when(listening)),
         )
         .await;
         let waited = began.elapsed();

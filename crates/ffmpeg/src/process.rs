@@ -121,6 +121,67 @@ pub(crate) async fn output_of(
     }
 }
 
+/// The same, telling `counted` how many bytes the tool has written to its
+/// standard output so far, as they come.
+///
+/// For a reading whose output is one byte for each thing it makes, which is
+/// the only way to know how far along it is: the tool says nothing of how far
+/// through the file it has read.
+pub(crate) async fn output_counting(
+    mut builder: TokioCommand,
+    mut asked_to_stop: AskedToStop,
+    counted: &(dyn Fn(u64) + Sync),
+) -> Result<std::process::Output> {
+    use tokio::io::AsyncReadExt;
+
+    if asked_to_stop.already() {
+        return Err(FfmpegError::GivenUp);
+    }
+
+    builder
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = builder.spawn()?;
+    let (Some(mut stdout), Some(mut stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        return Err(FfmpegError::Spawn(std::io::Error::other("no pipe to read")));
+    };
+    let reading = async {
+        let written = async {
+            let mut all = Vec::new();
+            let mut chunk = [0_u8; 4096];
+            loop {
+                let read = stdout.read(&mut chunk).await?;
+                if read == 0 {
+                    break;
+                }
+                all.extend_from_slice(&chunk[..read]);
+                counted(all.len() as u64);
+            }
+            Ok::<_, std::io::Error>(all)
+        };
+        let said = async {
+            let mut all = Vec::new();
+            stderr.read_to_end(&mut all).await?;
+            Ok::<_, std::io::Error>(all)
+        };
+        let (stdout, stderr) = tokio::try_join!(written, said)?;
+        let status = child.wait().await?;
+        Ok::<_, std::io::Error>(std::process::Output {
+            status,
+            stdout,
+            stderr,
+        })
+    };
+    tokio::select! {
+        biased;
+        () = asked_to_stop.happens() => Err(FfmpegError::GivenUp),
+        output = reading => Ok(output?),
+    }
+}
+
 /// How far along the tool reports being.
 ///
 /// Read from the machine-facing progress stream rather than from the status

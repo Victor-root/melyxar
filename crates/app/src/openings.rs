@@ -149,10 +149,7 @@ pub(crate) async fn listen_to_the_seasons_of(
 
     handle.at_step(JobStep::ListeningForOpenings).await;
     let already_done = database.count_seasons_listened_to(library.id).await?;
-    if already_done > 0 {
-        handle.advance(already_done).await;
-    }
-    handle.set_total(already_done + waiting).await;
+    handle.size_up(already_done, waiting).await;
     tracing::debug!(
         library = library.name,
         waiting,
@@ -414,13 +411,25 @@ async fn listen_to_one_season(
         .zip(chosen.iter().copied())
         .collect();
     let owned_tool = tool.to_path_buf();
+    // A season alone is counted by its episodes, the last tenth being left for
+    // the comparison that follows them.
+    let to_hear = wanted.len().max(1);
+    let heard_so_far = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let owned_handle = handle.clone();
     let read = melyxar_jobs::for_each_bounded(
         wanted,
         state.config().limits.concurrent_probes,
         move |(episode, track)| {
             let tool = owned_tool.clone();
             let asked_to_stop = asked_to_stop.clone();
-            async move { listen_to_one_file(&tool, &episode, track, asked_to_stop).await }
+            let handle = owned_handle.clone();
+            let heard_so_far = heard_so_far.clone();
+            async move {
+                let how = listen_to_one_file(&tool, &episode, track, asked_to_stop).await;
+                let heard = heard_so_far.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                handle.element_at(0.9 * heard as f64 / to_hear as f64);
+                how
+            }
         },
     )
     .await;
