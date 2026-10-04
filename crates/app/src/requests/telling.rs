@@ -3,23 +3,47 @@
 //! that could not be sent leaves the request as it is, and is said in the
 //! technical journal.
 
-use melyxar_core::id::{UserId, WorkId};
+use melyxar_core::id::UserId;
+use melyxar_metadata::MetadataProvider;
 use melyxar_database::requests::TitleRequest;
 
 use crate::notifications::{send, Audience, Level, Outgoing, RequestNews, Said};
 use crate::AppState;
 
-async fn tell(state: &AppState, title: &str, news: RequestNews, level: Level, to: Vec<UserId>, work: Option<WorkId>) {
+/// How wide the poster told in a notification is asked for, in pixels.
+const POSTER_WIDTH: u32 = 154;
+
+/// Where a small copy of the poster of a request is, at the provider.
+pub(super) fn poster_of<P: MetadataProvider>(provider: &P, request: &TitleRequest) -> Option<String> {
+    request
+        .poster_path
+        .as_deref()
+        .map(|path| provider.image_url_at(path, POSTER_WIDTH))
+}
+
+/// A request told: the title as the account asked for it, with its year, its
+/// synopsis and its poster, to those it concerns.
+async fn tell(
+    state: &AppState,
+    request: &TitleRequest,
+    poster: Option<String>,
+    news: RequestNews,
+    level: Level,
+    to: Vec<UserId>,
+) {
     let said = Said::Request {
-        title: title.to_string(),
+        title: request.title.clone(),
+        year: request.year,
+        overview: request.overview.as_deref().filter(|text| !text.is_empty()).map(cut_short),
+        poster,
         news,
     };
     let outgoing = Outgoing {
-        work,
+        work: request.work_id,
         ..Outgoing::new(said, level, Audience::Accounts(to))
     };
     if let Err(error) = send(state, outgoing).await {
-        tracing::warn!(%error, title, "a request could not be told");
+        tracing::warn!(%error, title = request.title, "a request could not be told");
     }
 }
 
@@ -53,11 +77,8 @@ pub(super) async fn asked(state: &AppState, request: &TitleRequest, poster: Opti
     let news = RequestNews::Asked {
         by: request.user_name.clone(),
         seasons: request.seasons.clone(),
-        year: request.year,
-        overview: request.overview.as_deref().filter(|text| !text.is_empty()).map(cut_short),
-        poster,
     };
-    tell(state, &request.title, news, Level::News, administrators, None).await;
+    tell(state, request, poster, news, Level::News, administrators).await;
 }
 
 /// Tells the account that asked what became of its request.
@@ -72,7 +93,10 @@ pub(super) async fn decided(state: &AppState, request: &TitleRequest) {
         ),
         _ => (RequestNews::Added, Level::News),
     };
-    tell(state, &request.title, news, level, vec![request.user_id], request.work_id).await;
+    let poster = state
+        .metadata_provider()
+        .and_then(|provider| poster_of(provider.as_ref(), request));
+    tell(state, request, poster, news, level, vec![request.user_id]).await;
 }
 
 #[cfg(test)]

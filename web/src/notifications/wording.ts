@@ -21,6 +21,9 @@ export interface NoteSaid {
   to: string | null;
   /** A poster to wear that is not one of this server's, when it has one. */
   poster?: string;
+  /** The title the words are about, said inside `title`: it is what stands
+   *  out. */
+  named?: string;
 }
 
 /** The poster a notification wears: its work's, or failing that the one the
@@ -41,25 +44,38 @@ function someOf(titles: string[], total: number, t: Wording): string {
 
 /** What became of a title asked for. The administrators are told of a new
  *  request, and taken to the requests; the account that asked, of what it
- *  became, and taken to the title once it is here. */
-function sayRequest(title: string, news: RequestNews, work: string | null, t: Wording): NoteSaid {
+ *  became, and taken to the title once it is here. Each wears the poster and
+ *  the synopsis of the title, as its tile in a search does. */
+function sayRequest(
+  said: Extract<NonNullable<Note["data"]>, { kind: "request" }>,
+  work: string | null,
+  t: Wording,
+): NoteSaid {
+  const named = said.year ? `${said.title} (${said.year})` : said.title;
   const mine = "/requests/mine";
+  const about = (first?: string | null) =>
+    [first, said.overview].filter(Boolean).join(" · ") || null;
+  const wearing = { poster: said.poster ?? undefined, named };
+  const news: RequestNews = said.news;
   switch (news.what) {
     case "asked":
       return {
-        title: t("notes.request_asked", { by: news.by, title: news.year ? `${title} (${news.year})` : title }),
-        detail: [news.seasons.length > 0 ? seasonsNamed(news.seasons, t) : null, news.overview]
-          .filter(Boolean)
-          .join(" · ") || null,
+        title: t("notes.request_asked", { by: news.by, title: named }),
+        detail: about(news.seasons.length > 0 ? seasonsNamed(news.seasons, t) : null),
         to: "/admin/requests",
-        poster: news.poster ?? undefined,
+        ...wearing,
       };
     case "accepted":
-      return { title: t("notes.request_accepted", { title }), detail: null, to: mine };
+      return { title: t("notes.request_accepted", { title: named }), detail: about(), to: mine, ...wearing };
     case "refused":
-      return { title: t("notes.request_refused", { title }), detail: news.answer || null, to: mine };
+      return {
+        title: t("notes.request_refused", { title: named }),
+        detail: about(news.answer),
+        to: mine,
+        ...wearing,
+      };
     case "added":
-      return { title: t("notes.request_added", { title }), detail: null, to: work ?? mine };
+      return { title: t("notes.request_added", { title: named }), detail: about(), to: work ?? mine, ...wearing };
   }
 }
 
@@ -78,7 +94,8 @@ export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
       const library = `/library/${said.library}`;
       const episodes = said.series.reduce((sum, series) => sum + series.episodes, 0);
       if (said.series.length === 0 && said.films === 1) {
-        return { title: t("notes.new_film", { title: said.film_titles[0] ?? "" }), detail: said.library_name, to: work };
+        const film = said.film_titles[0] ?? "";
+        return { title: t("notes.new_film", { title: film }), detail: said.library_name, to: work, named: film };
       }
       if (said.series.length === 0) {
         return {
@@ -96,6 +113,7 @@ export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
               : t("notes.new_episodes", { count: series.episodes, series: series.title }),
           detail: said.library_name,
           to: `/work/${series.id}`,
+          named: series.title,
         };
       }
       return {
@@ -120,7 +138,7 @@ export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
             to: null,
           };
     case "request":
-      return sayRequest(said.title, said.news, work, t);
+      return sayRequest(said, work, t);
     default:
       return { title: t("notes.unreadable"), detail: null, to: null };
   }

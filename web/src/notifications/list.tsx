@@ -13,6 +13,7 @@ import type { Wording } from "../readable";
 import { useSettings } from "../settings";
 import type { Note } from "./api";
 import { useNotes } from "./store";
+import { Named } from "./named";
 import { posterOf, sayNote } from "./wording";
 
 /** How often the ages of the lines are counted again. */
@@ -70,7 +71,9 @@ function NoteLine({ note, now }: { note: Note; now: number }) {
         <span className={`state-dot state-${note.level} note-dot`} aria-hidden="true" />
       )}
       <span className="note-words">
-        <span className="note-title">{said.title}</span>
+        <span className="note-title">
+          <Named text={said.title} named={said.named} />
+        </span>
         {said.detail && <span className="note-detail">{said.detail}</span>}
         <span className="note-age">{age(note.created_at, now, t)}</span>
       </span>
@@ -98,17 +101,15 @@ function NoteLine({ note, now }: { note: Note; now: number }) {
         >
           {note.read ? <EyeOffIcon size={15} /> : <EyeIcon size={15} />}
         </button>
-        {!note.mandatory && !note.priority && (
-          <button
-            type="button"
-            className="note-action"
-            title={t("notes.remove")}
-            aria-label={t("notes.remove")}
-            onClick={only(() => remove(note.id))}
-          >
-            <CloseIcon size={15} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="note-action"
+          title={t("notes.remove")}
+          aria-label={t("notes.remove")}
+          onClick={only(() => remove(note.id))}
+        >
+          <CloseIcon size={15} />
+        </button>
       </span>
     </li>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Note, NoteSettings } from "./api";
+import type { Note, NoteSettings, RequestNews } from "./api";
 import { clockOf, isQuiet, minuteOfClock, posterOf, sayNote, showsNow } from "./wording";
 
 /** Says the key and its values, so a test reads what was chosen. */
@@ -41,6 +41,7 @@ describe("what a notification says", () => {
       title: 'notes.new_film {"title":"Amber Field"}',
       detail: "Films",
       to: "/work/w",
+      named: "Amber Field",
     });
   });
 
@@ -89,42 +90,53 @@ describe("what a notification says", () => {
     });
   });
 
-  it("tells the administrators who asked for what, with its synopsis and poster, and takes them to the requests", () => {
-    const asked = a({
-      kind: "request",
-      title: "Salt Road",
-      news: {
-        what: "asked",
-        by: "Sam",
-        seasons: [0, 2],
+  const request = (news: RequestNews, changes: Partial<Note> = {}) =>
+    a(
+      {
+        kind: "request",
+        title: "Salt Road",
         year: 2019,
         overview: "A keeper and a lantern.",
         poster: "https://pictures.invalid/x.jpg",
+        news,
       },
-    });
+      changes,
+    );
+
+  it("tells the administrators who asked for what, with its synopsis and poster, and takes them to the requests", () => {
+    const asked = request({ what: "asked", by: "Sam", seasons: [0, 2] });
     const said = sayNote(asked, t, "en");
     expect(said).toEqual({
       title: 'notes.request_asked {"by":"Sam","title":"Salt Road (2019)"}',
       detail: 'work.specials, work.season {"number":2} · A keeper and a lantern.',
       to: "/admin/requests",
       poster: "https://pictures.invalid/x.jpg",
+      named: "Salt Road (2019)",
     });
     expect(posterOf(asked, said)).toEqual([{ url: "https://pictures.invalid/x.jpg", width: null, height: null }]);
     expect(posterOf({ ...asked, poster: [{ url: "mine", width: 1, height: 1 }] }, said)[0].url).toBe("mine");
   });
 
-  it("tells the account what became of its request, and opens the title once here", () => {
-    const refused = sayNote(
-      a({ kind: "request", title: "Ash", news: { what: "refused", answer: "Not to be found" } }),
-      t,
-      "en",
-    );
-    expect(refused.detail).toBe("Not to be found");
+  it("tells the account what became of its request with the same tile, and opens the title once here", () => {
+    const accepted = sayNote(request({ what: "accepted" }), t, "en");
+    expect(accepted).toMatchObject({
+      title: 'notes.request_accepted {"title":"Salt Road (2019)"}',
+      detail: "A keeper and a lantern.",
+      poster: "https://pictures.invalid/x.jpg",
+      named: "Salt Road (2019)",
+      to: "/requests/mine",
+    });
+    const refused = sayNote(request({ what: "refused", answer: "Not to be found" }), t, "en");
+    expect(refused.detail).toBe("Not to be found · A keeper and a lantern.");
     expect(refused.to).toBe("/requests/mine");
-    const added = sayNote(a({ kind: "request", title: "Ash", news: { what: "added" } }), t, "en");
-    expect(added.to).toBe("/work/w");
-    const gone = sayNote(a({ kind: "request", title: "Ash", news: { what: "added" } }, { work_id: null }), t, "en");
-    expect(gone.to).toBe("/requests/mine");
+    expect(sayNote(request({ what: "added" }), t, "en").to).toBe("/work/w");
+    expect(sayNote(request({ what: "added" }, { work_id: null }), t, "en").to).toBe("/requests/mine");
+  });
+
+  it("makes the title of a new film or of a series stand out of the words", () => {
+    expect(sayNote(content(["Amber Field"]), t, "en").named).toBe("Amber Field");
+    expect(sayNote(content([], [{ id: "s", title: "Salt Road", episodes: 4 }]), t, "en").named).toBe("Salt Road");
+    expect(sayNote(content(["One", "Two"]), t, "en").named).toBeUndefined();
   });
 
   it("says something even of what it cannot read", () => {

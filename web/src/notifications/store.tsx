@@ -193,6 +193,7 @@ export function NotesProvider({ children }: { children: ReactNode }) {
       toast({
         state: note.level,
         title: said.title,
+        named: said.named,
         detail: said.detail,
         poster: posterOf(note, said),
         to: said.to,
