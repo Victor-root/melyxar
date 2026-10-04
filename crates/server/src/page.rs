@@ -613,6 +613,7 @@ enum PageChangeKind {
     Fullscreen,
     TabHidden,
     TabShown,
+    PieceAdded,
 }
 
 impl PageChangeKind {
@@ -630,12 +631,13 @@ impl PageChangeKind {
             Self::Fullscreen => "fullscreen",
             Self::TabHidden => "tab hidden",
             Self::TabShown => "tab shown",
+            Self::PieceAdded => "piece added",
         }
     }
 }
 
 /// How many changes around a film are written, whatever a page sends.
-const CHANGES_WRITTEN: usize = 24;
+const CHANGES_WRITTEN: usize = 80;
 
 /// The changes around a film on one line, the first few only.
 fn changes_in_a_line(changes: &[PageChange]) -> String {

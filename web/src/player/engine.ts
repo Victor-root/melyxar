@@ -781,6 +781,13 @@ export function usePlayback({
         const stats = loading.frag.stats;
         watchCarrying(() => (stats.total > 0 ? stats.loaded / stats.total : 0));
       });
+      // Each piece of picture handed to the browser, so the opening seconds
+      // say whether a lost picture follows one.
+      feed.on(Library.Events.BUFFER_APPENDED, (_event, appended) => {
+        if (appended.type === "video" || appended.type === "audiovideo") {
+          markTheOpening(element, "piece_added");
+        }
+      });
       feed.on(Library.Events.FRAG_LOADED, (_event, loaded) => {
         if (firstPieceArrived || typeof loaded.frag.sn !== "number") {
           return;

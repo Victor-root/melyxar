@@ -192,7 +192,7 @@ const OPENING_MS = 15_000;
 let filmsBefore = 0;
 
 /** The most changes around a film said for one opening. */
-const CHANGES_SAID = 24;
+const CHANGES_SAID = 80;
 
 /** Where each film being followed takes note of what the player changed
  *  around it, which only the player knows it did. */
