@@ -7,38 +7,13 @@
  * The page
  * ----------------------------------------------------------------------- */
 
-.request-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: var(--gap-wide);
-}
-
-.request-tab {
-  padding: 8px 16px;
-  border-radius: var(--radius-pill);
-  color: var(--text-soft);
-  font-weight: 600;
-  text-decoration: none;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
-}
-
-.request-tab:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.request-tab.active {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
-  color: var(--text);
-}
-
 .request-search {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 640px;
-  padding: 0 16px;
+  max-width: 820px;
+  margin: var(--gap-section) auto 0;
+  padding: 0 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--panel-glass);
@@ -54,16 +29,19 @@
 .request-search input {
   flex: 1;
   min-width: 0;
-  padding: 12px 0;
+  padding: 20px 0;
   border: 0;
   outline: none;
   background: none;
   color: var(--text);
   font: inherit;
+  font-size: 19px;
 }
 
 .request-hint {
-  margin: 8px 0 var(--gap-wide) 18px;
+  max-width: 820px;
+  margin: 10px auto var(--gap-wide);
+  padding-left: 24px;
   color: var(--text-faint);
   font-size: 13px;
 }
@@ -251,6 +229,9 @@
 
 .request-note textarea,
 .request-refusal textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.4;
   resize: vertical;
 }
 

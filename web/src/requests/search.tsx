@@ -39,7 +39,7 @@ function Answer({ found, onAsk }: { found: Found; onAsk: () => void }) {
           <>
             <span className="state-pill state-ok">{t("requests.here")}</span>
             {standing.workId && (
-              <Link className="button" to={`/work/${standing.workId}`}>
+              <Link className="button button-accent" to={`/work/${standing.workId}`}>
                 {t("requests.open")}
               </Link>
             )}
@@ -104,7 +104,7 @@ export function AskSearch() {
           setParameters(typed.trim() ? { query: typed.trim() } : {}, { replace: true });
         }}
       >
-        <SearchIcon size={20} />
+        <SearchIcon size={26} />
         <input
           type="search"
           autoFocus
