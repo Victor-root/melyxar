@@ -11,7 +11,7 @@ import { LanguagePicker } from "../../components/language-picker";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
-import { FOR_ADMINISTRATORS } from "../../buttons";
+import { offeredButtons } from "../../buttons";
 import { LIGHTS } from "../../lights";
 import {
   BellIcon,
@@ -23,12 +23,14 @@ import {
   HeartIcon,
   PaletteIcon,
   RefreshIcon,
+  RequestIcon,
   ResetIcon,
   ScreenCastIcon,
   SearchIcon,
   SlidersIcon,
   TickIcon,
 } from "../../icons";
+import { useRequests } from "../../requests/store";
 import { OFFERED_ACCENTS, useSettings } from "../../settings";
 import { reorderedAmong } from "../../sorting";
 import type { ThemeChoice } from "../../settings";
@@ -151,6 +153,7 @@ const BUTTON_NAMES: Record<HeaderButton, string> = {
   watch_later: "nav.watch_later",
   collections: "nav.collections",
   playlists: "nav.playlists",
+  requests: "requests.title",
   notifications: "nav.notifications",
   scan: "home.scan",
   administration: "nav.administration",
@@ -177,10 +180,11 @@ function TopBar() {
   } = useSettings();
   const { account } = useAccount();
   const name = (button: HeaderButton) => t(BUTTON_NAMES[button]);
-  const offered =
-    account?.is_administrator === true
-      ? headerButtons
-      : headerButtons.filter((button) => !FOR_ADMINISTRATORS.includes(button));
+  const { access } = useRequests();
+  const offered = offeredButtons(headerButtons, {
+    administrator: account?.is_administrator === true,
+    mayRequest: access?.may_ask === true,
+  });
 
   return (
     <Panel
@@ -243,6 +247,8 @@ function ButtonMark({ button }: { button: HeaderButton }) {
       return <CollectionIcon size={18} />;
     case "playlists":
       return <PlaylistIcon size={18} />;
+    case "requests":
+      return <RequestIcon size={18} />;
     case "scan":
       return <RefreshIcon size={18} />;
     case "administration":

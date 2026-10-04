@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buttonOrder, EVERY_HEADER_BUTTON, knownButtons } from "./buttons";
+import { buttonOrder, EVERY_HEADER_BUTTON, knownButtons, offeredButtons } from "./buttons";
 
 describe("knownButtons", () => {
   it("keeps each known button once and drops the rest", () => {
@@ -15,6 +15,7 @@ describe("buttonOrder", () => {
       "favourites",
       "collections",
       "playlists",
+      "requests",
       "notifications",
       "scan",
       "administration",
@@ -25,5 +26,19 @@ describe("buttonOrder", () => {
 
   it("is the usual order when nothing was chosen", () => {
     expect(buttonOrder([])).toEqual(EVERY_HEADER_BUTTON);
+  });
+});
+
+describe("offeredButtons", () => {
+  it("keeps requests for an account that may ask, and the administration for an administrator", () => {
+    const all = (administrator: boolean, mayRequest: boolean) =>
+      offeredButtons(EVERY_HEADER_BUTTON, { administrator, mayRequest });
+    expect(all(false, false)).not.toContain("requests");
+    expect(all(false, false)).not.toContain("administration");
+    expect(all(false, true)).toContain("requests");
+    expect(all(false, true)).not.toContain("scan");
+    expect(all(true, false)).toContain("scan");
+    expect(all(true, false)).not.toContain("requests");
+    expect(all(true, true)).toEqual(EVERY_HEADER_BUTTON);
   });
 });

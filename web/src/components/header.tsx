@@ -42,11 +42,11 @@ import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { Bell, BellLine } from "../notifications/bell";
-import { RequestsLine } from "../requests/page";
+import { useRequests } from "../requests/store";
 import { Dropdown } from "./dropdown";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
-import { FOR_ADMINISTRATORS } from "../buttons";
+import { offeredButtons } from "../buttons";
 import { addressOf, find } from "../findable";
 import type { Area, Found } from "../findable";
 import { useSettings } from "../settings";
@@ -64,6 +64,7 @@ import {
   KindIcon,
   LeaveIcon,
   RefreshIcon,
+  RequestIcon,
   ScreenCastIcon,
   SearchIcon,
   DashboardIcon,
@@ -198,6 +199,7 @@ export function Header({
   const { jobs } = useRunning();
   const { account, leave } = useAccount();
   const administrator = account?.is_administrator === true;
+  const { access } = useRequests();
   const branding = useBranding();
   const start = useRef<HTMLDivElement>(null);
   const side = useRef<HTMLDivElement>(null);
@@ -467,11 +469,10 @@ export function Header({
   const inTheMenu = (button: HeaderButton) => !buttonsInTheBar.includes(button);
   /* What only an administrator has any use for is nowhere for anybody else,
      and a scan nowhere on a server with nothing to scan. */
-  const offered = headerButtons.filter(
-    (button) =>
-      (administrator || !FOR_ADMINISTRATORS.includes(button)) &&
-      (button !== "scan" || libraries.length > 0),
-  );
+  const offered = offeredButtons(headerButtons, {
+    administrator,
+    mayRequest: access?.may_ask === true,
+  }).filter((button) => button !== "scan" || libraries.length > 0);
 
   /* The press that starts a scan, on the bar or in the menu. Nothing to
      start while something is already running, and the bar is saying so
@@ -740,8 +741,6 @@ export function Header({
               ),
             )}
 
-            <RequestsLine />
-
             <button type="button" className="header-menu-line" onClick={() => void leave()}>
               <LeaveIcon size={16} />
               {t("nav.sign_out")}
@@ -910,6 +909,7 @@ const PLACES = {
   watch_later: { to: "/watch-later", name: "nav.watch_later" },
   collections: { to: "/collections", name: "nav.collections" },
   playlists: { to: "/playlists", name: "nav.playlists" },
+  requests: { to: "/requests", name: "requests.title" },
   administration: { to: "/admin", name: "nav.administration" },
   settings: { to: "/settings", name: "nav.settings" },
   cast: { to: null, name: "nav.cast" },
@@ -925,6 +925,8 @@ function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }
       return <CollectionIcon size={size} />;
     case "playlists":
       return <PlaylistIcon size={size} />;
+    case "requests":
+      return <RequestIcon size={size} />;
     case "administration":
       return <DashboardIcon size={size} />;
     case "settings":

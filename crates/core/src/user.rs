@@ -486,6 +486,9 @@ pub enum HeaderButton {
     Collections,
     /// This account's playlists.
     Playlists,
+    /// Asking for a title the server does not hold. Offered only to an
+    /// account that may.
+    Requests,
     Notifications,
     /// Offered to administrators only, as the next one.
     Scan,
@@ -496,13 +499,14 @@ pub enum HeaderButton {
 
 impl HeaderButton {
     /// Every button, in the order everybody starts with.
-    pub const fn every() -> [Self; 10] {
+    pub const fn every() -> [Self; 11] {
         [
             Self::Search,
             Self::Favourites,
             Self::WatchLater,
             Self::Collections,
             Self::Playlists,
+            Self::Requests,
             Self::Notifications,
             Self::Scan,
             Self::Administration,
@@ -529,6 +533,7 @@ impl HeaderButton {
             Self::WatchLater => "watch_later",
             Self::Collections => "collections",
             Self::Playlists => "playlists",
+            Self::Requests => "requests",
             Self::Notifications => "notifications",
             Self::Scan => "scan",
             Self::Administration => "administration",

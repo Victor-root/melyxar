@@ -764,6 +764,7 @@ export type HeaderButton =
   | "watch_later"
   | "collections"
   | "playlists"
+  | "requests"
   | "notifications"
   | "scan"
   | "administration"
