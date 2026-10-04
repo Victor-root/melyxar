@@ -8,10 +8,12 @@
 
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::{Sqlite, SqlitePool, Transaction};
+use tokio::sync::watch;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseError {
@@ -50,6 +52,9 @@ const READER_COUNT: u32 = 8;
 pub struct Database {
     readers: SqlitePool,
     writer: SqlitePool,
+    /// Counted up each time a library's version is bumped, so whoever shows
+    /// what a library holds is told it moved rather than asking on a beat.
+    pub(crate) library_moves: Arc<watch::Sender<u64>>,
 }
 
 impl Database {
@@ -82,7 +87,15 @@ impl Database {
             .connect_with(Self::options(path)?)
             .await?;
 
-        Ok(Self { readers, writer })
+        Ok(Self::from_pools(readers, writer))
+    }
+
+    fn from_pools(readers: SqlitePool, writer: SqlitePool) -> Self {
+        Self {
+            readers,
+            writer,
+            library_moves: Arc::new(watch::channel(0).0),
+        }
     }
 
     /// Opens a throwaway database in memory, for tests.
@@ -104,10 +117,7 @@ impl Database {
             .connect_with(options)
             .await?;
 
-        let database = Self {
-            readers: pool.clone(),
-            writer: pool,
-        };
+        let database = Self::from_pools(pool.clone(), pool);
         database.migrate().await?;
         Ok(database)
     }

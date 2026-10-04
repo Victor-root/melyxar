@@ -20,6 +20,7 @@ import { NotesPage } from "./notifications/page";
 import { MyNotifications } from "./notifications/settings";
 import { AdminRequests } from "./requests/admin";
 import { RequestsPage } from "./requests/page";
+import { WhenLibrariesMove } from "./library-news";
 import { RequestsProvider } from "./requests/store";
 import { RequestTitlePage } from "./requests/title";
 import { NotesProvider } from "./notifications/store";
@@ -187,6 +188,7 @@ function TheLibrary() {
         {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
         <DebugJournal />
         <Tooltips />
+        <WhenLibrariesMove />
         {/* The player of music stands outside every page, so that going
             from one to the next never stops a song. */}
         <MusicMarksProvider>

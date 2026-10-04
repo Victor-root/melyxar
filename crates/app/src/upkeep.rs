@@ -175,6 +175,35 @@ impl UpkeepTask {
     }
 }
 
+/// Whether a library is still taking in what arrived in it: a scan, or one of
+/// the readings its files get as they arrive, is under way or waiting its turn.
+///
+/// Only the readings the library asked to have done on arrival count: what is
+/// left to the night is not something a film arriving now waits for. This is
+/// what a film is held back by before somebody is told it is ready, so a
+/// notification never sends anyone to a film whose bar still lands seconds
+/// early.
+pub async fn is_still_taking_in(state: &AppState, library: &Library) -> Result<bool> {
+    let database = state.database();
+    let target = library.id.to_string();
+    if database
+        .has_unfinished_job(JobKind::ScanLibrary, Some(&target))
+        .await?
+    {
+        return Ok(true);
+    }
+    for task in UpkeepTask::ALL {
+        if task.follows_an_arrival_in(library)
+            && database
+                .has_unfinished_job(task.job_kind(), Some(&target))
+                .await?
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// How many files one batch asks for.
 ///
 /// A bound on what is held in memory at once rather than on the work: a

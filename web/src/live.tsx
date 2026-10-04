@@ -2,7 +2,8 @@
  * The page's live line, held once for the page.
  *
  * The server says on it what changes in this account's notifications, the
- * moment it changes, and that the title requests moved. To an administrator it also says the moment a line of
+ * moment it changes, and that the title requests or what the libraries hold
+ * moved. To an administrator it also says the moment a line of
  * the activity journal is written, and sends what is being watched whenever
  * it changes while something on the page shows it. One line for the whole
  * page, whatever it shows: each one held open is one of the few connections
@@ -52,6 +53,9 @@ interface Line {
   /** Told every time the title requests move, and whenever the line opens.
    *  Answers how to stop being told. */
   followRequests: (listener: () => void) => () => void;
+  /** Told every time what a library holds changes, and whenever the line
+   *  opens. Answers how to stop being told. */
+  followLibraries: (listener: () => void) => () => void;
   /** Keeps the line open while the page is hidden, for as long as it is
    *  asked: the system's own notifications are said from a hidden page.
    *  Answers how to stop asking. */
@@ -63,6 +67,7 @@ const LineContext = createContext<Line>({
   followPlaying: () => () => {},
   followNotifications: () => () => {},
   followRequests: () => () => {},
+  followLibraries: () => () => {},
   keepWhileHidden: () => () => {},
 });
 
@@ -74,6 +79,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
   const playingListeners = useRef(new Set<(news: PlayingNews) => void>());
   const notificationListeners = useRef(new Set<(word: NotificationWord) => void>());
   const requestListeners = useRef(new Set<() => void>());
+  const libraryListeners = useRef(new Set<() => void>());
   /* How many on the page follow what is being watched: the line carries it
      only while at least one does. */
   const [playingFollowers, setPlayingFollowers] = useState(0);
@@ -99,11 +105,15 @@ export function LiveLine({ children }: { children: ReactNode }) {
     const toRequests = () => {
       for (const listener of requestListeners.current) listener();
     };
+    const toLibraries = () => {
+      for (const listener of libraryListeners.current) listener();
+    };
     const open = () => {
       line = api.liveLine(administrator && wantsPlaying);
       line.addEventListener("open", () => {
         toNotifications({ name: "open" });
         toRequests();
+        toLibraries();
         if (administrator) toJournal();
       });
       for (const name of NOTIFICATION_WORDS) {
@@ -112,6 +122,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
         );
       }
       line.addEventListener("requests", toRequests);
+      line.addEventListener("libraries", toLibraries);
       line.addEventListener("activity", toJournal);
       line.addEventListener("playing", (event) =>
         toPlaying({ watched: JSON.parse((event as MessageEvent<string>).data) as Watched[] }),
@@ -170,6 +181,13 @@ export function LiveLine({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const followLibraries = useCallback((listener: () => void) => {
+    libraryListeners.current.add(listener);
+    return () => {
+      libraryListeners.current.delete(listener);
+    };
+  }, []);
+
   const keepWhileHidden = useCallback(() => {
     setHiddenKeepers((count) => count + 1);
     return () => setHiddenKeepers((count) => count - 1);
@@ -177,7 +195,14 @@ export function LiveLine({ children }: { children: ReactNode }) {
 
   return (
     <LineContext.Provider
-      value={{ followJournal, followPlaying, followNotifications, followRequests, keepWhileHidden }}
+      value={{
+        followJournal,
+        followPlaying,
+        followNotifications,
+        followRequests,
+        followLibraries,
+        keepWhileHidden,
+      }}
     >
       {children}
     </LineContext.Provider>
@@ -200,6 +225,15 @@ export function useRequestsNews(look: () => void) {
   const latest = useRef(look);
   latest.current = look;
   useEffect(() => followRequests(() => latest.current()), [followRequests]);
+}
+
+/** Calls `look` every time what a library holds changes, and when the line
+ *  opens again after the page was hidden. */
+export function useLibrariesNews(look: () => void) {
+  const { followLibraries } = useContext(LineContext);
+  const latest = useRef(look);
+  latest.current = look;
+  useEffect(() => followLibraries(() => latest.current()), [followLibraries]);
 }
 
 /** Follows what is being watched for as long as the caller is on the page. */

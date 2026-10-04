@@ -1,6 +1,6 @@
 //! What the requests do of their own accord, every minute: notice the titles
-//! asked for that arrived in a library and were identified, mark their
-//! requests added, and tell each account that asked.
+//! asked for that arrived in a library, were identified and are done being
+//! taken in, mark their requests added, and tell each account that asked.
 
 use std::collections::HashMap;
 
@@ -22,6 +22,7 @@ pub async fn settle_arrivals(state: &AppState) -> Result<()> {
         return Ok(());
     }
     let open = database.open_requests().await?;
+    let libraries = database.list_libraries().await?;
     let mut arrived: HashMap<WorkId, Vec<RequestId>> = HashMap::new();
     for catalogue in [Catalogue::Films, Catalogue::Series] {
         let asked: Vec<_> = open
@@ -34,7 +35,15 @@ pub async fn settle_arrivals(state: &AppState) -> Result<()> {
             if let Some(title) = held.get(&request.tmdb_id)
                 && has_arrived(&request.seasons, title)
             {
-                arrived.entry(title.work_id).or_default().push(request.id);
+                // Said added once the library is done taking it in, so the
+                // title somebody is sent to is ready to be played.
+                let taking_in = match libraries.iter().find(|one| one.id == title.library_id) {
+                    Some(library) => crate::upkeep::is_still_taking_in(state, library).await?,
+                    None => false,
+                };
+                if !taking_in {
+                    arrived.entry(title.work_id).or_default().push(request.id);
+                }
             }
         }
     }
@@ -128,6 +137,24 @@ mod tests {
         assert_eq!(mine(&state, &viewer).await.expect("read")[0].state, "pending");
 
         place_season(2).await;
+        let reading = database
+            .create_job(
+                melyxar_core::job::JobKind::ReadKeyFrames,
+                melyxar_core::job::JobPriority::BACKGROUND,
+                Some(&library.id.to_string()),
+            )
+            .await
+            .expect("job");
+        settle_arrivals(&state).await.expect("looked");
+        assert_eq!(
+            mine(&state, &viewer).await.expect("read")[0].state,
+            "pending",
+            "the title is still being taken in"
+        );
+        database
+            .finish_job(reading.id, melyxar_core::job::JobState::Succeeded, None)
+            .await
+            .expect("finished");
         let mut line = follow(&state);
         settle_arrivals(&state).await.expect("looked");
         let request = &mine(&state, &viewer).await.expect("read")[0];

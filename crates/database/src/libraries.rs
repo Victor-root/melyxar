@@ -670,7 +670,16 @@ impl Database {
         .bind(library_id.to_db_string())
         .fetch_one(self.writer())
         .await?;
+        self.library_moves
+            .send_modify(|count| *count = count.wrapping_add(1));
         Ok(row.0)
+    }
+
+    /// Moved every time any library's version is bumped: what a page showing
+    /// what the libraries hold is told by, so it reads again the moment
+    /// something in them changed.
+    pub fn library_moves(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.library_moves.subscribe()
     }
 }
 
@@ -1118,12 +1127,14 @@ mod tests {
             .expect("library created");
 
         assert_eq!(database.library_version(library.id).await.expect("read"), 1);
+        let moves = database.library_moves();
         let bumped = database
             .bump_library_version(library.id)
             .await
             .expect("bumped");
         assert_eq!(bumped, 2);
         assert_eq!(database.library_version(library.id).await.expect("read"), 2);
+        assert!(moves.has_changed().expect("open"), "whoever follows the libraries is told");
     }
 
     #[tokio::test]

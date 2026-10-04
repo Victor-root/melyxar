@@ -1,8 +1,8 @@
 //! The live line of every page: what changes in the account's
-//! notifications, told the moment it changes; that the title requests moved;
-//! and for an administrator, what
-//! is written in the activity journal and what is being watched, sent again
-//! the moment it changes when the page shows it.
+//! notifications, told the moment it changes; that the title requests or what
+//! the libraries hold moved; and for an administrator, what is written in the
+//! activity journal and what is being watched, sent again the moment it
+//! changes when the page shows it.
 //!
 //! One line per page, whatever that page shows: each line held open is one
 //! of the few connections a browser opens to a server.
@@ -54,6 +54,7 @@ struct Following {
     who: melyxar_core::id::UserId,
     notified: broadcast::Receiver<News>,
     requests: watch::Receiver<u64>,
+    libraries: watch::Receiver<u64>,
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
     administration: Option<Administration>,
@@ -120,6 +121,7 @@ async fn line(
         who: who.id,
         notified: melyxar_app::notifications::live::follow(&state),
         requests: melyxar_app::requests::live::follow(&state),
+        libraries: state.database().library_moves(),
         administration,
         closing: melyxar_app::watching::closing(&state),
         state,
@@ -138,6 +140,8 @@ enum Word {
     Notified(Box<News>),
     /// The title requests moved: the page reads again what it shows of them.
     Requests,
+    /// Something a library holds changed: a page showing it reads it again.
+    Libraries,
     /// The page fell behind and some changes were lost: it reads its
     /// notifications again.
     Missed,
@@ -166,6 +170,10 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                     moved.ok()?;
                     Word::Requests
                 }
+                moved = following.libraries.changed() => {
+                    moved.ok()?;
+                    Word::Libraries
+                }
                 // Only whether it closed is kept: what it hands back may not
                 // be held across what the other branches wait on.
                 () = async {
@@ -192,6 +200,7 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                 Event::default().event(name).json_data(data)
             }
             Word::Requests => Ok(Event::default().event("requests").data("moved")),
+            Word::Libraries => Ok(Event::default().event("libraries").data("moved")),
             Word::Missed => Event::default()
                 .event("notifications_missed")
                 .json_data(serde_json::Value::Null),
