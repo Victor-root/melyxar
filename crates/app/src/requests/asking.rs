@@ -164,6 +164,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_administrator_asking_is_told_of_it_like_the_others() {
+        let (_held, state, _) = requests_on().await;
+        let admin = state
+            .database()
+            .create_user("admin", None, &Permissions::administrator())
+            .await
+            .expect("account");
+        let mut line = follow(&state);
+        ask(&state, &provider(), &admin, asking(Catalogue::Films, "1", &[]), "fr")
+            .await
+            .expect("asked");
+        let told = line.try_recv().expect("told");
+        assert_eq!(told.user, admin.id);
+    }
+
+    #[tokio::test]
     async fn seasons_are_asked_of_a_series_only_and_among_those_it_has() {
         let (_held, state, viewer) = requests_on().await;
         let request = ask(&state, &provider(), &viewer, asking(Catalogue::Series, "7", &[2, 1, 2]), "fr")
