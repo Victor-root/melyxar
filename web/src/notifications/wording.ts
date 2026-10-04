@@ -4,9 +4,9 @@
  * be tested without a page.
  */
 
-import { howMany, readableDate } from "../readable";
+import { howMany, readableDate, seasonsNamed } from "../readable";
 import type { Wording } from "../readable";
-import type { Note, NoteSettings } from "./api";
+import type { Note, NoteSettings, RequestNews } from "./api";
 
 /** How many titles are named before the rest are counted. */
 const NAMED_AT_MOST = 3;
@@ -25,6 +25,27 @@ function someOf(titles: string[], total: number, t: Wording): string {
   const named = titles.slice(0, NAMED_AT_MOST).join(", ");
   const rest = total - Math.min(titles.length, NAMED_AT_MOST);
   return rest > 0 ? t("notes.and_more", { named, count: rest }) : named;
+}
+
+/** What became of a title asked for. The administrators are told of a new
+ *  request, and taken to the requests; the account that asked, of what it
+ *  became, and taken to the title once it is here. */
+function sayRequest(title: string, news: RequestNews, work: string | null, t: Wording): NoteSaid {
+  const mine = "/requests/mine";
+  switch (news.what) {
+    case "asked":
+      return {
+        title: t("notes.request_asked", { by: news.by, title }),
+        detail: news.seasons.length > 0 ? seasonsNamed(news.seasons, t) : null,
+        to: "/admin/requests",
+      };
+    case "accepted":
+      return { title: t("notes.request_accepted", { title }), detail: null, to: mine };
+    case "refused":
+      return { title: t("notes.request_refused", { title }), detail: news.answer || null, to: mine };
+    case "added":
+      return { title: t("notes.request_added", { title }), detail: null, to: work ?? mine };
+  }
 }
 
 export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
@@ -83,6 +104,8 @@ export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
                 : howMany(said.checked_gone, "delete.done_disk_checked", t),
             to: null,
           };
+    case "request":
+      return sayRequest(said.title, said.news, work, t);
     default:
       return { title: t("notes.unreadable"), detail: null, to: null };
   }

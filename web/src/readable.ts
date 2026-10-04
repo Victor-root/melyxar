@@ -85,6 +85,11 @@ export function numberOfOne(kind: string, number: number | null, t: Wording): st
 /** The season everything belonging to no season is filed under. */
 const SEASON_OF_SPECIALS = 0;
 
+/** Some seasons named one after another, the specials by their name. */
+export function seasonsNamed(seasons: number[], t: Wording): string {
+  return seasons.map((season) => numberOfOne("season", season, t)).join(", ");
+}
+
 /** How many of something, said with the wording that fits one of it. */
 export function howMany(count: number, key: string, t: Wording): string {
   return count === 1 ? t(`${key}_one`) : t(key, { count });

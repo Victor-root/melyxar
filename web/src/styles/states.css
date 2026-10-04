@@ -113,6 +113,10 @@
   background: var(--trouble-wash);
 }
 
+.state-pill.state-news {
+  background: var(--news-wash);
+}
+
 /* A bar that fills as work is done. */
 .meter {
   position: relative;

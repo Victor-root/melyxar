@@ -238,7 +238,7 @@ mod tests {
     use melyxar_core::user::Permissions;
 
     async fn a_server() -> (tempfile::TempDir, AppState, UserId) {
-        let (directory, state) = crate::notifications::testing::a_server().await;
+        let (directory, state) = crate::an_empty_server().await;
         let user = state
             .database()
             .create_user("somebody", None, &Permissions::administrator())

@@ -1459,16 +1459,7 @@ where
             .details(catalogue, named, &language)
             .await
             .map_err(refused)?;
-        return Ok(vec![Candidate {
-            external_id: details.external_id,
-            catalogue,
-            title: details.title,
-            original_title: details.original_title,
-            release_year: details.release_year,
-            overview: details.overview,
-            poster_path: details.poster_path,
-            popularity: 0.0,
-        }]);
+        return Ok(vec![details.as_candidate(catalogue)]);
     }
 
     if let Some(elsewhere) = &asked.imdb_id {

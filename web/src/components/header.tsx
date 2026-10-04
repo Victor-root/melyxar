@@ -42,6 +42,7 @@ import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
 import { Bell, BellLine } from "../notifications/bell";
+import { RequestsLine } from "../requests/page";
 import { Dropdown } from "./dropdown";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
@@ -738,6 +739,8 @@ export function Header({
                 <Place key={button} place={button} inTheMenu />
               ),
             )}
+
+            <RequestsLine />
 
             <button type="button" className="header-menu-line" onClick={() => void leave()}>
               <LeaveIcon size={16} />

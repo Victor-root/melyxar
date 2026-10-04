@@ -2,7 +2,7 @@
  * The page's live line, held once for the page.
  *
  * The server says on it what changes in this account's notifications, the
- * moment it changes. To an administrator it also says the moment a line of
+ * moment it changes, and that the title requests moved. To an administrator it also says the moment a line of
  * the activity journal is written, and sends what is being watched whenever
  * it changes while something on the page shows it. One line for the whole
  * page, whatever it shows: each one held open is one of the few connections
@@ -49,6 +49,9 @@ interface Line {
   /** Told of every word about this account's notifications, for as long as
    *  it follows. */
   followNotifications: (listener: (word: NotificationWord) => void) => () => void;
+  /** Told every time the title requests move, and whenever the line opens.
+   *  Answers how to stop being told. */
+  followRequests: (listener: () => void) => () => void;
   /** Keeps the line open while the page is hidden, for as long as it is
    *  asked: the system's own notifications are said from a hidden page.
    *  Answers how to stop asking. */
@@ -59,6 +62,7 @@ const LineContext = createContext<Line>({
   followJournal: () => () => {},
   followPlaying: () => () => {},
   followNotifications: () => () => {},
+  followRequests: () => () => {},
   keepWhileHidden: () => () => {},
 });
 
@@ -69,6 +73,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
   const journalListeners = useRef(new Set<() => void>());
   const playingListeners = useRef(new Set<(news: PlayingNews) => void>());
   const notificationListeners = useRef(new Set<(word: NotificationWord) => void>());
+  const requestListeners = useRef(new Set<() => void>());
   /* How many on the page follow what is being watched: the line carries it
      only while at least one does. */
   const [playingFollowers, setPlayingFollowers] = useState(0);
@@ -91,10 +96,14 @@ export function LiveLine({ children }: { children: ReactNode }) {
     const toNotifications = (word: NotificationWord) => {
       for (const listener of notificationListeners.current) listener(word);
     };
+    const toRequests = () => {
+      for (const listener of requestListeners.current) listener();
+    };
     const open = () => {
       line = api.liveLine(administrator && wantsPlaying);
       line.addEventListener("open", () => {
         toNotifications({ name: "open" });
+        toRequests();
         if (administrator) toJournal();
       });
       for (const name of NOTIFICATION_WORDS) {
@@ -102,6 +111,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
           toNotifications({ name, data: JSON.parse((event as MessageEvent<string>).data) as unknown }),
         );
       }
+      line.addEventListener("requests", toRequests);
       line.addEventListener("activity", toJournal);
       line.addEventListener("playing", (event) =>
         toPlaying({ watched: JSON.parse((event as MessageEvent<string>).data) as Watched[] }),
@@ -153,13 +163,22 @@ export function LiveLine({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const followRequests = useCallback((listener: () => void) => {
+    requestListeners.current.add(listener);
+    return () => {
+      requestListeners.current.delete(listener);
+    };
+  }, []);
+
   const keepWhileHidden = useCallback(() => {
     setHiddenKeepers((count) => count + 1);
     return () => setHiddenKeepers((count) => count - 1);
   }, []);
 
   return (
-    <LineContext.Provider value={{ followJournal, followPlaying, followNotifications, keepWhileHidden }}>
+    <LineContext.Provider
+      value={{ followJournal, followPlaying, followNotifications, followRequests, keepWhileHidden }}
+    >
       {children}
     </LineContext.Provider>
   );
@@ -172,6 +191,15 @@ export function useJournalNews(look: () => void) {
   const latest = useRef(look);
   latest.current = look;
   useEffect(() => followJournal(() => latest.current()), [followJournal]);
+}
+
+/** Calls `look` every time the title requests move, and when the line
+ *  opens again after the page was hidden. */
+export function useRequestsNews(look: () => void) {
+  const { followRequests } = useContext(LineContext);
+  const latest = useRef(look);
+  latest.current = look;
+  useEffect(() => followRequests(() => latest.current()), [followRequests]);
 }
 
 /** Follows what is being watched for as long as the caller is on the page. */

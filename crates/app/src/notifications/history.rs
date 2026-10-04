@@ -75,7 +75,7 @@ pub async fn remove(state: &AppState, user: UserId, id: NotificationId) -> Resul
 mod tests {
     use super::*;
     use crate::notifications::live::follow;
-    use crate::notifications::testing::a_server;
+    use crate::an_empty_server;
     use crate::notifications::{send, Audience, Level, Outgoing, Said};
     use melyxar_core::user::Permissions;
 
@@ -93,7 +93,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_unread_and_removed_are_told_to_every_page_of_the_account() {
-        let (_held, state) = a_server().await;
+        let (_held, state) = an_empty_server().await;
         let user = state
             .database()
             .create_user("somebody", None, &Permissions::viewer())
@@ -143,7 +143,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_history_comes_a_page_at_a_time() {
-        let (_held, state) = a_server().await;
+        let (_held, state) = an_empty_server().await;
         let user = state
             .database()
             .create_user("somebody", None, &Permissions::viewer())

@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { PageHead, Panel, Setting, Toggle } from "../components/panel";
 import { BellIcon, ClockIcon, DeviceIcon, FolderIcon } from "../icons";
+import { useRequests } from "../requests/store";
 import { useSettings } from "../settings";
 import { notesApi } from "./api";
 import type { Channels, ChoosableKind, NoteChoices, NoteSettings } from "./api";
@@ -55,6 +56,7 @@ export function ChannelSwitches({
 export function MyNotifications() {
   const { t } = useSettings();
   const { choices, changeChoices, system, setSystem } = useNotes();
+  const { access } = useRequests();
   const [refused, setRefused] = useState(systemRefused);
 
   if (!choices) {
@@ -87,11 +89,14 @@ export function MyNotifications() {
     <>
       <PageHead lead={t("me.notifications_lead")} />
       <Panel icon={BellIcon} title={t("notes.what")} lead={t("notes.what_why")}>
-        {choices.kinds.map((one) => (
-          <Setting key={one.kind} label={t(`notes.kind.${one.kind}`)} why={t(`notes.kind.${one.kind}_why`)}>
-            <ChannelSwitches kind={one.kind} channels={one} onChange={(channels) => choose(one.kind, channels)} />
-          </Setting>
-        ))}
+        {/* Requests say nothing to an account that may not make them. */}
+        {choices.kinds
+          .filter((one) => one.kind !== "request" || access?.may_ask)
+          .map((one) => (
+            <Setting key={one.kind} label={t(`notes.kind.${one.kind}`)} why={t(`notes.kind.${one.kind}_why`)}>
+              <ChannelSwitches kind={one.kind} channels={one} onChange={(channels) => choose(one.kind, channels)} />
+            </Setting>
+          ))}
         <Setting label={t("notes.kind.maintenance")} why={t("notes.kind.maintenance_why")}>
           <span className="note-always">{t("notes.always")}</span>
         </Setting>

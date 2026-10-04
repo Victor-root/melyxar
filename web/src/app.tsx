@@ -18,6 +18,9 @@ import { AttentionProvider } from "./notifications/attention";
 import { AdminNotifications } from "./notifications/admin";
 import { NotesPage } from "./notifications/page";
 import { MyNotifications } from "./notifications/settings";
+import { AdminRequests } from "./requests/admin";
+import { RequestsPage } from "./requests/page";
+import { RequestsProvider } from "./requests/store";
 import { NotesProvider } from "./notifications/store";
 import { LiveLine } from "./live";
 import { Header } from "./components/header";
@@ -174,6 +177,7 @@ function TheLibrary() {
         <LiveLine>
         <AttentionProvider>
         <NotesProvider>
+        <RequestsProvider>
         {/* The bar stands over the page rather than beside it, so the page
             can be scrolled up behind it and read faintly through the glass.
             Where the two sit in the markup does not decide that on its own;
@@ -208,6 +212,8 @@ function TheLibrary() {
               <Route path="/playlists" element={<PlaylistsPage />} />
               <Route path="/playlist/:id" element={<PlaylistPage />} />
               <Route path="/notifications" element={<NotesPage />} />
+              <Route path="/requests" element={<RequestsPage view="ask" />} />
+              <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />
@@ -218,6 +224,7 @@ function TheLibrary() {
                 <Route path="devices" element={<AdminDevices />} />
                 <Route path="security" element={<AdminSecurity />} />
                 <Route path="notifications" element={<AdminNotifications />} />
+                <Route path="requests" element={<AdminRequests />} />
                 <Route path="tasks" element={<AdminTasks />} />
                 <Route path="journal" element={<AdminJournal />} />
                 <Route path="diagnostics" element={<AdminDiagnostics />} />
@@ -245,6 +252,7 @@ function TheLibrary() {
         </div>
         </MusicProvider>
         </MusicMarksProvider>
+        </RequestsProvider>
         </NotesProvider>
         </AttentionProvider>
         </LiveLine>

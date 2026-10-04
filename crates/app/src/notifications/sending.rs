@@ -28,6 +28,8 @@ pub enum Kind {
     NewContent,
     /// What a deletion did.
     Deletion,
+    /// A title asked for, and what became of it.
+    Request,
 }
 
 impl Kind {
@@ -37,6 +39,7 @@ impl Kind {
             Self::Maintenance => "maintenance",
             Self::NewContent => "new_content",
             Self::Deletion => "deletion",
+            Self::Request => "request",
         }
     }
 
@@ -46,6 +49,7 @@ impl Kind {
             "maintenance" => Some(Self::Maintenance),
             "new_content" => Some(Self::NewContent),
             "deletion" => Some(Self::Deletion),
+            "request" => Some(Self::Request),
             _ => None,
         }
     }
@@ -80,6 +84,24 @@ pub struct SeriesArrived {
     pub episodes: usize,
 }
 
+/// What happened to a title asked for.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "what", rename_all = "snake_case")]
+pub enum RequestNews {
+    /// An account asked for it, told to the administrators.
+    Asked {
+        by: String,
+        /// The seasons asked for; none for a film or a whole series.
+        seasons: Vec<i32>,
+    },
+    Accepted,
+    Refused {
+        answer: String,
+    },
+    /// It is in a library now.
+    Added,
+}
+
 /// What a notification says, kept as it is and translated when shown. A
 /// message is written by the administrator in one language for everybody.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,6 +131,10 @@ pub enum Said {
         /// to lose them.
         checked_gone: Option<usize>,
     },
+    Request {
+        title: String,
+        news: RequestNews,
+    },
 }
 
 impl Said {
@@ -118,6 +144,7 @@ impl Said {
             Self::Maintenance { .. } => Kind::Maintenance,
             Self::NewContent { .. } => Kind::NewContent,
             Self::Deletion { .. } => Kind::Deletion,
+            Self::Request { .. } => Kind::Request,
         }
     }
 }
@@ -282,7 +309,7 @@ pub async fn send(state: &AppState, outgoing: Outgoing) -> Result<Vec<Notificati
 mod tests {
     use super::*;
     use crate::notifications::live::follow;
-    use crate::notifications::testing::a_server;
+    use crate::an_empty_server;
     use melyxar_core::user::Permissions;
 
     fn hello() -> Said {
@@ -298,14 +325,14 @@ mod tests {
             serde_json::to_value(hello()).expect("written"),
             serde_json::json!({ "kind": "message", "title": "Hello", "text": "A word." })
         );
-        for kind in [Kind::Message, Kind::Maintenance, Kind::NewContent, Kind::Deletion] {
+        for kind in [Kind::Message, Kind::Maintenance, Kind::NewContent, Kind::Deletion, Kind::Request] {
             assert_eq!(Kind::parse(kind.as_str()), Some(kind));
         }
     }
 
     #[tokio::test]
     async fn each_account_keeps_and_sees_what_it_chose_and_a_mandatory_one_reaches_all() {
-        let (_held, state) = a_server().await;
+        let (_held, state) = an_empty_server().await;
         let database = state.database();
         let admin = database
             .create_user("admin", None, &Permissions::administrator())
@@ -367,7 +394,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_library_is_heard_about_by_who_may_read_it_and_did_not_say_otherwise() {
-        let (_held, state) = a_server().await;
+        let (_held, state) = an_empty_server().await;
         let database = state.database();
         let films = database
             .create_library("Films", melyxar_core::library::LibraryKind::Movies, "fr", &[])

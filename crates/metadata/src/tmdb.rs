@@ -24,6 +24,10 @@ const BASE_URL: &str = "https://api.themoviedb.org/3";
 /// serves are ours to choose and do not change under us.
 const IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p/original";
 
+/// Where the provider keeps a small copy of each picture, for a page that
+/// shows many of them straight from the provider.
+const SMALL_IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p/w342";
+
 /// How long fetching one picture may take.
 ///
 /// Longer than a question, since a backdrop is a few hundred kilobytes, but
@@ -52,6 +56,7 @@ pub struct TmdbProvider {
     api_key: String,
     base_url: String,
     image_base_url: String,
+    small_image_base_url: String,
 }
 
 impl TmdbProvider {
@@ -69,6 +74,7 @@ impl TmdbProvider {
             api_key: api_key.into(),
             base_url: BASE_URL.to_string(),
             image_base_url: IMAGE_BASE_URL.to_string(),
+            small_image_base_url: SMALL_IMAGE_BASE_URL.to_string(),
         })
     }
 
@@ -79,9 +85,11 @@ impl TmdbProvider {
         self
     }
 
-    /// Points the pictures somewhere else, for the same reason.
+    /// Points the pictures somewhere else, for the same reason, their small
+    /// copies with them.
     pub fn with_image_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.image_base_url = base_url.into();
+        self.small_image_base_url = self.image_base_url.clone();
         self
     }
 
@@ -239,6 +247,10 @@ impl MetadataProvider for TmdbProvider {
 
     fn image_url(&self, path: &str) -> String {
         format!("{}{}", self.image_base_url, path)
+    }
+
+    fn small_image_url(&self, path: &str) -> String {
+        format!("{}{}", self.small_image_base_url, path)
     }
 
     async fn fetch_image(&self, path: &str) -> Result<Vec<u8>> {
@@ -1391,6 +1403,17 @@ mod tests {
             provider.image_url("/poster.jpg"),
             "https://image.tmdb.org/t/p/original/poster.jpg"
         );
+    }
+
+    #[test]
+    fn a_page_showing_many_pictures_straight_from_the_provider_asks_for_small_copies() {
+        let provider = TmdbProvider::new("key").expect("a client");
+        assert_eq!(
+            provider.small_image_url("/poster.jpg"),
+            "https://image.tmdb.org/t/p/w342/poster.jpg"
+        );
+        let elsewhere = provider.with_image_base_url("http://pictures.invalid");
+        assert_eq!(elsewhere.small_image_url("/poster.jpg"), "http://pictures.invalid/poster.jpg");
     }
 
     #[test]

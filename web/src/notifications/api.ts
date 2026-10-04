@@ -12,7 +12,7 @@ import type { Picture } from "../api";
 export type Level = "ok" | "attention" | "trouble" | "news";
 
 /** The kinds an account chooses about. */
-export type ChoosableKind = "new_content" | "message" | "deletion";
+export type ChoosableKind = "new_content" | "message" | "deletion" | "request";
 
 export type Kind = ChoosableKind | "maintenance";
 
@@ -36,7 +36,15 @@ export type Said =
       film_titles: string[];
       series: SeriesArrived[];
     }
-  | { kind: "deletion"; titles: string[]; works: number; checked_gone: number | null };
+  | { kind: "deletion"; titles: string[]; works: number; checked_gone: number | null }
+  | { kind: "request"; title: string; news: RequestNews };
+
+/** What happened to a title asked for. */
+export type RequestNews =
+  | { what: "asked"; by: string; seasons: number[] }
+  | { what: "accepted" }
+  | { what: "refused"; answer: string }
+  | { what: "added" };
 
 /** One notification kept for this account. */
 export interface Note {

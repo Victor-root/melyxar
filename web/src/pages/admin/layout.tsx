@@ -28,6 +28,7 @@ import {
   JournalIcon,
   PeopleIcon,
   PlaybackIcon,
+  RequestIcon,
   ShieldIcon,
   SlidersIcon,
   SummaryIcon,
@@ -67,6 +68,7 @@ const SECTIONS: SectionGroup[] = [
       { path: "devices", icon: DeviceIcon, label: "admin.devices" },
       { path: "security", icon: ShieldIcon, label: "admin.security" },
       { path: "notifications", icon: BellIcon, label: "admin.notifications" },
+      { path: "requests", icon: RequestIcon, label: "admin.requests" },
     ],
   },
   {
