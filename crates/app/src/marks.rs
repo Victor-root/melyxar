@@ -137,7 +137,7 @@ pub async fn record_position(
 ///
 /// The runtime a provider gave describes the film; what decides whether
 /// someone reached the end is the file they are actually watching.
-async fn longest_version(state: &AppState, work_id: WorkId) -> Result<Option<Millis>> {
+pub(crate) async fn longest_version(state: &AppState, work_id: WorkId) -> Result<Option<Millis>> {
     let database = state.database();
     let mut longest = None;
     for source in database.sources_of_work(work_id).await? {
