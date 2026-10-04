@@ -782,6 +782,6 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 - Il **accepte, refuse (avec un mot) ou marque comme ajouté.** Quand un titre demandé arrive sur le serveur et est identifié, la demande peut passer à « ajouté » toute seule et le demandeur est prévenu.
 - Les administrateurs reçoivent une **notification** pour les nouvelles demandes, avec les mêmes réglages que les autres.
 
-**À régler au moment de coder.** Le détail de la demande d'une série (saisons demandées, saisons déjà présentes), ce qui arrive à une demande quand le titre apparaît sans que l'administrateur l'ait traitée, et comment plusieurs comptes qui demandent le même titre sont regroupés.
+**Réglé au moment de coder** (voir le README des décisions). Une série se demande entière ou par saisons ; une saison absente d'une série présente peut être demandée. Un titre qui arrive sans décision de l'administrateur passe à « ajouté » de lui-même. Chaque compte fait sa demande, et l'administrateur les voit regroupées par titre, une décision valant pour tout le groupe. L'interrupteur et le droit de demander se règlent sur la page « Demandes » de l'administration.
 
-**Quand.** Pas planifié. Dépend du système de notifications (section 34).
+**Quand.** En cours.
