@@ -77,19 +77,22 @@ function theWave(): string {
 const WAVE = theWave();
 
 /**
- * Something is happening, and nobody knows how long it will take.
- *
- * Indeterminate on purpose: the server can say how much of a film it has
- * ready, but not how long the rest will take, and a bar that fills at an
- * unknown rate promises something nobody can keep.
+ * Something is happening. Without a `percent`, nobody knows how long it will
+ * take and the ring turns. With one, the wave is lit that far round from the
+ * top, and goes no further than what was measured.
  */
-export function Spinner() {
+export function Spinner({ percent }: { percent?: number }) {
+  const known = percent !== undefined;
+  const lit = known ? Math.min(A_WHOLE_TURN, Math.max(0, percent)) : 0;
   return (
     <svg
-      className="player-spinner"
+      className={`player-spinner${known ? " player-spinner-known" : ""}`}
       viewBox={`0 0 ${BOX} ${BOX}`}
       role="progressbar"
-      aria-valuetext=""
+      aria-valuemin={known ? 0 : undefined}
+      aria-valuemax={known ? A_WHOLE_TURN : undefined}
+      aria-valuenow={known ? Math.round(lit) : undefined}
+      aria-valuetext={known ? undefined : ""}
       focusable="false"
     >
       <circle className="player-spinner-track" cx={BOX / 2} cy={BOX / 2} r={RADIUS} />
@@ -97,6 +100,7 @@ export function Spinner() {
         className="player-spinner-wave"
         d={WAVE}
         pathLength={A_WHOLE_TURN}
+        style={known ? { strokeDasharray: `${lit} ${A_WHOLE_TURN - lit}` } : undefined}
       />
     </svg>
   );

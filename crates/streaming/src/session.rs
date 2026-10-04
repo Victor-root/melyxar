@@ -158,6 +158,9 @@ pub struct Preparation {
     pub ready: u32,
     /// How many make a comfortable start.
     pub wanted: u32,
+    /// How much of the first segment of the run is written, from nought to
+    /// one: the part of the wait a player cannot start before.
+    pub first_written: f64,
     /// What the tool at work is doing this second, when one is at work.
     pub producing: Option<Producing>,
 }
@@ -234,6 +237,25 @@ fn step_for(ready: u32, wanted: u32) -> PreparationStep {
         PreparationStep::Producing
     }
 }
+
+/// How much of a segment `length` long a tool has written once it has got
+/// `reached` into its run, from nought to one.
+///
+/// A picture carried over untouched lets the run begin a little early, so the
+/// tool can say it is past the length before the segment is closed: held
+/// short of whole until the folder says it is.
+fn written_of(reached: Millis, length: Millis, closed: bool) -> f64 {
+    if closed {
+        return 1.0;
+    }
+    if length.get() <= 0 {
+        return 0.0;
+    }
+    (reached.get() as f64 / length.get() as f64).clamp(0.0, ALMOST_WHOLE)
+}
+
+/// The most a segment not yet closed is said to be written.
+const ALMOST_WHOLE: f64 = 0.99;
 
 /// Whether a segment file holds whole boxes from its beginning to its end.
 ///
@@ -612,17 +634,19 @@ impl Session {
             running.as_mut().map(|at_work| {
                 (
                     at_work.from,
+                    at_work.reached(),
                     at_work.pictures_a_second(),
                     at_work.speed(),
                     at_work.process.has_exited(),
                 )
             })
         };
-        let Some((from, pictures_a_second, speed, tool_gone)) = at_work else {
+        let Some((from, reached, pictures_a_second, speed, tool_gone)) = at_work else {
             return Preparation {
                 step: PreparationStep::Starting,
                 ready: 0,
                 wanted: self.enough_from(self.where_the_viewer_starts()),
+                first_written: 0.0,
                 producing: None,
             };
         };
@@ -639,6 +663,11 @@ impl Session {
             step: step_for(ready, wanted),
             ready,
             wanted,
+            first_written: written_of(
+                reached,
+                self.playlist.duration_of(from).unwrap_or(Millis::new(0)),
+                ready > 0,
+            ),
             // Nothing until the tool has spoken, and nothing once it has
             // finished. A rate of nothing is what a tool that has not started
             // looks like, and the last rate a tool gave before it reached the
@@ -2121,6 +2150,21 @@ mod tests {
             PreparationStep::Ready,
             "nothing left to wait for is not a wait"
         );
+    }
+
+    #[test]
+    fn the_first_segment_is_written_as_far_as_the_tool_has_got() {
+        let four_seconds = Millis::new(4_000);
+        assert_eq!(written_of(Millis::new(0), four_seconds, false), 0.0);
+        assert_eq!(written_of(Millis::new(1_000), four_seconds, false), 0.25);
+        assert_eq!(
+            written_of(Millis::new(4_600), four_seconds, false),
+            ALMOST_WHOLE,
+            "a run begun early is not done before the folder says so"
+        );
+        assert_eq!(written_of(Millis::new(-40), four_seconds, false), 0.0);
+        assert_eq!(written_of(Millis::new(1_000), four_seconds, true), 1.0);
+        assert_eq!(written_of(Millis::new(0), Millis::new(0), false), 0.0);
     }
 
     #[tokio::test]

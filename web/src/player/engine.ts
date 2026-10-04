@@ -72,10 +72,11 @@ const SEGMENT_PATIENCE = 40_000;
 /**
  * How often the server is asked where the preparation has got to.
  *
- * A segment lasts four seconds and is produced faster than that, so a look
- * every second is often enough to move and rare enough to cost nothing.
+ * Its answer moves the number a viewer watches, and a segment is often
+ * written in about a second: four looks a second let the number climb
+ * through it rather than jump. Each costs the server a few file checks.
  */
-const PREPARATION_EVERY = 1_000;
+const PREPARATION_EVERY = 250;
 
 /**
  * How often the server is told somebody still has the film open.
@@ -463,7 +464,7 @@ export function usePlayback({
      A change here means a fresh element rather than a new address on the old
      one, because the two are fed in ways that cannot be swapped. */
   const pictureKey = plan === null ? null : canBePlayedAsItIs(plan) ? "file" : (stream?.id ?? null);
-  const { loadingPercent, resetLoadingStage, enterLoadingStage } = useLoading(
+  const { loadingPercent, resetLoadingStage, enterLoadingStage, noteWritten, watchCarrying } = useLoading(
     stream?.id ?? null,
     readyPicture,
     pictureKey,
@@ -605,13 +606,13 @@ export function usePlayback({
       api
         .preparation(name, controller.signal)
         .then((seen) => {
-          if (seen.step === "producing") {
-            enterLoadingStage(name, "producing");
-          } else if (seen.step === "ready" || seen.ready_seconds >= seen.wanted_seconds) {
-            // What this browser asked for exists on the server now. What is
-            // left of the wait from here on is getting it from there to here,
-            // which this same server cannot see and has nothing to add about.
+          noteWritten(seen.first_written);
+          if (seen.first_written >= 1) {
+            // The piece the browser needs first exists on the server now. What
+            // is left of the wait is getting it here, which the browser counts.
             enterLoadingStage(name, "produced");
+          } else if (seen.step !== "starting") {
+            enterLoadingStage(name, "producing");
           }
         })
         .catch(() => {
@@ -626,7 +627,7 @@ export function usePlayback({
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [stream?.id, readyPicture, pictureKey]);
+  }, [stream?.id, readyPicture, pictureKey, noteWritten, enterLoadingStage]);
 
   /* Feeding the segments in.
 
@@ -769,6 +770,17 @@ export function usePlayback({
       // a slow link and then sit there for as long as the real first piece,
       // holding several seconds of picture and sound, took to follow it.
       let firstPieceArrived = false;
+      // Its bytes counted as they arrive, which is the last real wait before
+      // the picture.
+      let firstPieceAsked = false;
+      feed.on(Library.Events.FRAG_LOADING, (_event, loading) => {
+        if (firstPieceAsked || typeof loading.frag.sn !== "number") {
+          return;
+        }
+        firstPieceAsked = true;
+        const stats = loading.frag.stats;
+        watchCarrying(() => (stats.total > 0 ? stats.loaded / stats.total : 0));
+      });
       feed.on(Library.Events.FRAG_LOADED, (_event, loaded) => {
         if (firstPieceArrived || typeof loaded.frag.sn !== "number") {
           return;

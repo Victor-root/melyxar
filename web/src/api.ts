@@ -1828,6 +1828,8 @@ export interface Preparation {
   /** How many seconds make a comfortable start, which near the end of a film
    *  is whatever is left of it. */
   wanted_seconds: number;
+  /** How much of the first piece a player needs is written, from 0 to 1. */
+  first_written: number;
   /** How hard the machine is working on this film, while it is working. */
   producing: Producing | null;
 }
