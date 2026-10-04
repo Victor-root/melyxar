@@ -81,6 +81,7 @@ export const FINDABLE: FindableSection[] = [
         "nav.search",
         "nav.favourites",
         "nav.watch_later",
+        "requests.title",
         "nav.notifications",
         "home.scan",
         "nav.administration",

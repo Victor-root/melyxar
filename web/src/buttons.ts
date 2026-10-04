@@ -12,6 +12,7 @@ export const EVERY_HEADER_BUTTON: HeaderButton[] = [
   "watch_later",
   "collections",
   "playlists",
+  "requests",
   "notifications",
   "scan",
   "administration",
@@ -30,6 +31,20 @@ export const IN_THE_BAR_AT_FIRST: HeaderButton[] = [
 
 /** What only an administrator has any use for, offered to nobody else. */
 export const FOR_ADMINISTRATORS: HeaderButton[] = ["scan", "administration"];
+
+/** The buttons this account has any use for: what only an administrator
+ *  uses is nowhere for anybody else, and requests are offered only to an
+ *  account that may make them. */
+export function offeredButtons(
+  buttons: readonly HeaderButton[],
+  who: { administrator: boolean; mayRequest: boolean },
+): HeaderButton[] {
+  return buttons.filter(
+    (button) =>
+      (who.administrator || !FOR_ADMINISTRATORS.includes(button)) &&
+      (who.mayRequest || button !== "requests"),
+  );
+}
 
 /** Buttons read from a list that may be old, doubled or partial: each known
  *  one once, the unknown dropped. */

@@ -1,13 +1,12 @@
 /*
  * The requests, on a page of their own for an account that may make them:
- * looking a title up to ask for it, and the requests it made. Reached from
- * the account's menu, by a line that shows only while requests are on and
+ * looking a title up to ask for it, and the requests it made. Reached from a
+ * button of the bar at the top, which shows only while requests are on and
  * this account may ask.
  */
 
 import { NavLink } from "react-router-dom";
 import { PageBackdrop } from "../components/backdrop";
-import { RequestIcon } from "../icons";
 import { useSettings } from "../settings";
 import { MyRequests } from "./mine";
 import { AskSearch } from "./search";
@@ -57,21 +56,5 @@ export function RequestsPage({ view }: { view: "ask" | "mine" }) {
         {view === "ask" ? <AskSearch /> : <MyRequests />}
       </main>
     </>
-  );
-}
-
-/** The line of the account's menu that leads here, while this account may
- *  ask. */
-export function RequestsLine() {
-  const { t } = useSettings();
-  const { access } = useRequests();
-  if (!access?.may_ask) {
-    return null;
-  }
-  return (
-    <NavLink to="/requests" className="header-menu-line">
-      <RequestIcon size={16} />
-      {t("requests.title")}
-    </NavLink>
   );
 }
