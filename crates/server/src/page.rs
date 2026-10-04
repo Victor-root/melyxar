@@ -210,6 +210,12 @@ enum Seen {
         over_ms: u32,
         pictures_shown: u32,
         pictures_dropped: u32,
+        /// Seconds of film the browser holds in all, behind and ahead.
+        #[serde(default)]
+        held_seconds: Option<f64>,
+        /// What the page weighs in memory, where the browser says.
+        #[serde(default)]
+        page_memory_mb: Option<f64>,
     },
     /// How far the picture on the screen stood from the clock the sound runs
     /// on, over a stretch of playing.
@@ -873,6 +879,8 @@ async fn what_the_page_saw(
             over_ms,
             pictures_shown,
             pictures_dropped,
+            held_seconds,
+            page_memory_mb,
         } => tracing::debug!(
             session,
             source,
@@ -880,6 +888,8 @@ async fn what_the_page_saw(
             over_ms,
             pictures_shown,
             pictures_dropped,
+            held_seconds,
+            page_memory_mb,
             "the browser dropped pictures without ever losing the clock"
         ),
         Seen::PictureAndSound {

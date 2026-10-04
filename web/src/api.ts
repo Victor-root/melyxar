@@ -1218,6 +1218,10 @@ export type PageFact =
       over_ms: number;
       pictures_shown: number;
       pictures_dropped: number;
+      /** Seconds of film the browser holds in all, behind and ahead. */
+      held_seconds: number;
+      /** What the page weighs in memory, where the browser says. */
+      page_memory_mb: number | null;
     }
   | {
       saw: "picture_and_sound";

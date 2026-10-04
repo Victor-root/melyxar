@@ -154,7 +154,8 @@ impl PreparationStep {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Preparation {
     pub step: PreparationStep,
-    /// Segments on the disk, counted from where the tool was started.
+    /// Segments on the disk, counted from where the tool was started, up to
+    /// `wanted`.
     pub ready: u32,
     /// How many make a comfortable start.
     pub wanted: u32,
@@ -652,13 +653,17 @@ impl Session {
         };
 
         // Counted as a run rather than a total: a segment on its own with a
-        // hole before it does not let a film start.
+        // hole before it does not let a film start. And no further than what
+        // makes a comfortable start, which is all anyone reads off it: a tool
+        // working far ahead of the viewer leaves hundreds of segments behind
+        // it, and checking each of them on every look made the answer slower
+        // the longer a film had played.
+        let wanted = self.enough_from(from);
         let mut ready = 0;
-        while self.finished_being_written(from + ready).await {
+        while ready < wanted && self.finished_being_written(from + ready).await {
             ready += 1;
         }
 
-        let wanted = self.enough_from(from);
         Preparation {
             step: step_for(ready, wanted),
             ready,
