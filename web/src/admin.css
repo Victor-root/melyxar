@@ -322,6 +322,12 @@
   gap: var(--gap);
 }
 
+/* The server says where a task stands every second or so: the bar glides from
+   one answer to the next rather than stepping. */
+.job-card-progress .meter-fill {
+  transition: width 1s linear;
+}
+
 .job-card-progress .meter {
   flex: 1 1 auto;
 }

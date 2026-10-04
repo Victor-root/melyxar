@@ -393,6 +393,7 @@ pub(crate) async fn read_the_key_frames_of(
                         &analyser,
                         source_id,
                         asked_to_stop,
+                        &handle,
                     )
                     .await;
                     handle.advance(1).await;
@@ -734,6 +735,7 @@ async fn read_one_film_for_its_key_frames(
     analyser: &std::path::Path,
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
+    handle: &JobHandle,
 ) -> HowItWasRead {
     let Ok(Some(source)) = database.playable_source(source_id).await else {
         return HowItWasRead::NotAtAll;
@@ -745,7 +747,17 @@ async fn read_one_film_for_its_key_frames(
     let (read, how) = match melyxar_container::key_frames(&source.path).await {
         Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
         None => (
-            melyxar_ffmpeg::probe::key_frames(analyser, &source.path, asked_to_stop).await,
+            melyxar_ffmpeg::probe::key_frames_reporting(
+                analyser,
+                &source.path,
+                asked_to_stop,
+                &|position| {
+                    if let Some(length) = source.duration.filter(|length| length.get() > 0) {
+                        handle.element_at(position.get() as f64 / length.get() as f64);
+                    }
+                },
+            )
+            .await,
             HowItWasRead::ByReadingItThrough,
         ),
     };

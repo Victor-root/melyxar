@@ -22,7 +22,7 @@ import { refusalOf, useTold } from "./asking";
 import type { Job, Library } from "./api";
 
 /** How often the server is asked while it is busy. */
-const WHILE_BUSY_MS = 1500;
+const WHILE_BUSY_MS = 1000;
 
 /** How long after something was started here the server is still asked at
  *  the fast beat, for work that has not begun by the first answer: a scan

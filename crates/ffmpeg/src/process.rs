@@ -121,16 +121,19 @@ pub(crate) async fn output_of(
     }
 }
 
-/// The same, telling `counted` how many bytes the tool has written to its
-/// standard output so far, as they come.
+/// The same, telling the caller how far along the tool is while it goes.
 ///
-/// For a reading whose output is one byte for each thing it makes, which is
-/// the only way to know how far along it is: the tool says nothing of how far
-/// through the file it has read.
-pub(crate) async fn output_counting(
+/// `on_stdout` is given what the tool writes as it comes, for a tool whose
+/// listing says where in the file it has got to. `on_position` is given where
+/// the tool says it has got to in its output, when it was asked for its
+/// progress on its error output (`-progress pipe:2`); those lines are then
+/// kept out of what the tool said, so a failure is reported with its own words
+/// only.
+pub(crate) async fn output_streaming(
     mut builder: TokioCommand,
     mut asked_to_stop: AskedToStop,
-    counted: &(dyn Fn(u64) + Sync),
+    on_stdout: &(dyn Fn(&[u8]) + Sync),
+    on_position: &(dyn Fn(Millis) + Sync),
 ) -> Result<std::process::Output> {
     use tokio::io::AsyncReadExt;
 
@@ -145,27 +148,38 @@ pub(crate) async fn output_counting(
         .kill_on_drop(true);
 
     let mut child = builder.spawn()?;
-    let (Some(mut stdout), Some(mut stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let (Some(mut stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         return Err(FfmpegError::Spawn(std::io::Error::other("no pipe to read")));
     };
     let reading = async {
         let written = async {
             let mut all = Vec::new();
-            let mut chunk = [0_u8; 4096];
+            let mut chunk = [0_u8; 8192];
             loop {
                 let read = stdout.read(&mut chunk).await?;
                 if read == 0 {
                     break;
                 }
+                on_stdout(&chunk[..read]);
                 all.extend_from_slice(&chunk[..read]);
-                counted(all.len() as u64);
             }
             Ok::<_, std::io::Error>(all)
         };
         let said = async {
-            let mut all = Vec::new();
-            stderr.read_to_end(&mut all).await?;
-            Ok::<_, std::io::Error>(all)
+            let mut kept = Vec::new();
+            let mut current = Progress::default();
+            let mut lines = BufReader::new(stderr).lines();
+            while let Some(line) = lines.next_line().await? {
+                if is_progress_line(&line) {
+                    if absorb_progress_line(&mut current, &line).is_some() {
+                        on_position(current.position);
+                    }
+                    continue;
+                }
+                kept.extend_from_slice(line.as_bytes());
+                kept.push(b'\n');
+            }
+            Ok::<_, std::io::Error>(kept)
         };
         let (stdout, stderr) = tokio::try_join!(written, said)?;
         let status = child.wait().await?;
@@ -180,6 +194,27 @@ pub(crate) async fn output_counting(
         () = asked_to_stop.happens() => Err(FfmpegError::GivenUp),
         output = reading => Ok(output?),
     }
+}
+
+/// Whether a line of the error output is one of the tool's progress lines.
+fn is_progress_line(line: &str) -> bool {
+    const KEYS: [&str; 13] = [
+        "frame",
+        "fps",
+        "bitrate",
+        "total_size",
+        "out_time_us",
+        "out_time_ms",
+        "out_time",
+        "dup_frames",
+        "drop_frames",
+        "speed",
+        "progress",
+        "stream_0_0_q",
+        "stream_0_1_q",
+    ];
+    line.split_once('=')
+        .is_some_and(|(key, _)| KEYS.contains(&key.trim()))
 }
 
 /// How far along the tool reports being.
@@ -412,6 +447,14 @@ mod tests {
     use super::*;
     use crate::command::{AudioOutput, Input, Output, VideoOutput, WhereToCut};
     use crate::ToolPaths;
+
+    #[test]
+    fn the_progress_lines_are_told_apart_from_what_the_tool_complains_of() {
+        assert!(is_progress_line("out_time_us=5000000"));
+        assert!(is_progress_line("progress=continue"));
+        assert!(!is_progress_line("Error while decoding stream #0:0"));
+        assert!(!is_progress_line("title=out_time"));
+    }
 
     #[test]
     fn a_progress_block_is_only_reported_once_it_is_complete() {
