@@ -23,13 +23,13 @@ async fn tell(state: &AppState, title: &str, news: RequestNews, level: Level, to
     }
 }
 
-/// Tells the administrators an account asked for a title, all but the one
-/// who asked.
+/// Tells the administrators an account asked for a title, the one who asked
+/// included when it is one: it may be the only administrator.
 pub(super) async fn asked(state: &AppState, request: &TitleRequest) {
     let administrators = match state.database().list_users().await {
         Ok(users) => users
             .into_iter()
-            .filter(|user| user.permissions.is_administrator && user.id != request.user_id)
+            .filter(|user| user.permissions.is_administrator)
             .map(|user| user.id)
             .collect(),
         Err(error) => {
