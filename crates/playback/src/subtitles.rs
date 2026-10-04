@@ -175,6 +175,7 @@ mod tests {
             },
             added_at: now(),
             tracks,
+            open_groups_of_pictures: false,
         }
     }
 

@@ -127,6 +127,9 @@ pub enum Reason {
     /// The client cannot switch tracks inside a file it plays directly, so
     /// choosing another one means rebuilding the stream.
     NonDefaultTrackSelected,
+    /// The picture is built in open groups and would go to the client in
+    /// pieces, where a browser loses a picture at the start of every piece.
+    OpenGroupsInPieces,
 }
 
 /// What to do with each stream.
@@ -248,6 +251,39 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         video_action
     };
 
+    // The container only matters when nothing else already forces a rebuild.
+    let container = effective_container(source);
+    let container_supported = container
+        .as_deref()
+        .is_some_and(|container| request.profile.supports_container(container));
+
+    // Picking a track other than the default means the client would have to
+    // switch inside the container, which browsers cannot do.
+    let track_choice_forces_rebuild = !request.profile.can_switch_tracks_in_container
+        && chose_a_non_default_track(source, audio, request);
+
+    // A picture copied into pieces rather than handed over as the file. One
+    // built in open groups is rebuilt then: a browser fed it in pieces loses a
+    // picture at the start of every piece, once a second on a disc. Not one of
+    // wide gamut colour, which a rebuild would bring down to standard range: a
+    // lost picture now and then costs less than the colour of the whole film.
+    let goes_in_pieces = audio_action == StreamAction::Transcode
+        || !container_supported
+        || track_choice_forces_rebuild
+        || delivery != SubtitleDelivery::None;
+    let video_action = match video {
+        Some((_, details))
+            if video_action == StreamAction::Copy
+                && goes_in_pieces
+                && source.open_groups_of_pictures
+                && details.hdr.is_none() =>
+        {
+            reasons.push(Reason::OpenGroupsInPieces);
+            StreamAction::Transcode
+        }
+        _ => video_action,
+    };
+
     // The colour last, because whether the picture is rebuilt anyway is part
     // of the answer: a picture rebuilt for any reason comes out of standard
     // range, and can only keep its colours by having them converted.
@@ -272,17 +308,6 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         (Some(max), Some((_, details))) if details.visible_height() > max => Some(max),
         _ => None,
     };
-
-    // The container only matters when nothing else already forces a rebuild.
-    let container = effective_container(source);
-    let container_supported = container
-        .as_deref()
-        .is_some_and(|container| request.profile.supports_container(container));
-
-    // Picking a track other than the default means the client would have to
-    // switch inside the container, which browsers cannot do.
-    let track_choice_forces_rebuild = !request.profile.can_switch_tracks_in_container
-        && chose_a_non_default_track(source, audio, request);
 
     let method = if video_action == StreamAction::Transcode {
         PlaybackMethod::FullTranscode
@@ -769,6 +794,7 @@ mod tests {
             },
             added_at: now(),
             tracks,
+            open_groups_of_pictures: false,
         }
     }
 
@@ -813,6 +839,70 @@ mod tests {
         assert_eq!(decision.audio, StreamAction::Copy);
         assert_eq!(decision.reasons, vec![Reason::EverythingSupported]);
         assert!(!decision.method.is_expensive());
+    }
+
+    /// A disc copied as it is: open groups, and a sound the browser does not
+    /// read, so the picture would go to it in pieces.
+    fn a_disc_with(hdr: Option<HdrFormat>, sound: &str) -> MediaSource {
+        let mut film = source(
+            "matroska,webm",
+            vec![
+                video_track(0, "h264", 1080, hdr),
+                audio_track(1, sound, 2, true),
+            ],
+        );
+        film.open_groups_of_pictures = true;
+        film
+    }
+
+    #[test]
+    fn a_picture_in_open_groups_is_rebuilt_rather_than_sent_in_pieces() {
+        let profile = ClientProfile::conservative_browser();
+        let decision = decide(&a_disc_with(None, "ac3"), &request(&profile));
+
+        assert_eq!(decision.method, PlaybackMethod::FullTranscode);
+        assert_eq!(decision.video, StreamAction::Transcode);
+        assert!(decision.reasons.contains(&Reason::OpenGroupsInPieces));
+    }
+
+    #[test]
+    fn a_picture_in_open_groups_handed_over_as_the_file_is_left_alone() {
+        let profile = ClientProfile::conservative_browser();
+        let mut film = source(
+            "mov,mp4,m4a",
+            vec![
+                video_track(0, "h264", 1080, None),
+                audio_track(1, "aac", 2, true),
+            ],
+        );
+        film.open_groups_of_pictures = true;
+        let decision = decide(&film, &request(&profile));
+
+        assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+        assert_eq!(decision.reasons, vec![Reason::EverythingSupported]);
+    }
+
+    #[test]
+    fn a_picture_in_closed_groups_is_still_copied_into_pieces() {
+        let profile = ClientProfile::conservative_browser();
+        let mut film = a_disc_with(None, "ac3");
+        film.open_groups_of_pictures = false;
+        let decision = decide(&film, &request(&profile));
+
+        assert_eq!(decision.method, PlaybackMethod::TranscodeAudio);
+        assert_eq!(decision.video, StreamAction::Copy);
+        assert!(!decision.reasons.contains(&Reason::OpenGroupsInPieces));
+    }
+
+    #[test]
+    fn a_wide_gamut_picture_in_open_groups_keeps_its_colour() {
+        // Rebuilt, it would come down to standard range: a picture lost now
+        // and then costs less than the colour of the whole film.
+        let profile = showing_wide_gamut("h264", &[Curve::Pq]);
+        let decision = decide(&a_disc_with(Some(HdrFormat::Hdr10), "ac3"), &request(&profile));
+
+        assert_eq!(decision.video, StreamAction::Copy, "{:?}", decision.reasons);
+        assert!(!decision.reasons.contains(&Reason::OpenGroupsInPieces));
     }
 
     #[test]
