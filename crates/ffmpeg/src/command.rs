@@ -788,6 +788,12 @@ impl Command {
                 push!("fmp4");
                 push!("-hls_fmp4_init_filename");
                 args.push(file_name_of(initialisation));
+                // No segment index. Writing one moves the key picture that
+                // opens an open group onto the time of the picture after it,
+                // and the browser drops one of the two: a picture lost at
+                // every segment of most discs.
+                push!("-hls_segment_options");
+                push!("movflags=+skip_sidx");
                 push!("-hls_segment_filename");
                 args.push(pattern.clone().into_os_string());
                 push!("-start_number");
@@ -1721,6 +1727,13 @@ mod tests {
         let args = arguments(&command);
         let index = position(&args, "-start_number").expect("a start number is present");
         assert_eq!(args[index + 1], "312");
+    }
+
+    #[test]
+    fn segments_carry_no_index_that_would_move_an_open_group() {
+        let args = arguments(&segments_of(Input::new("/media/film.mkv")));
+        let index = position(&args, "-hls_segment_options").expect("segment options are given");
+        assert_eq!(args[index + 1], "movflags=+skip_sidx");
     }
 
     /// A stream to a browser, the shape every test below is about.

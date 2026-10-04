@@ -348,10 +348,9 @@ pub(crate) async fn read_the_key_frames_of(
         "reading the films of this library for where their picture can be started"
     );
 
-    let tools = tools.clone();
+    let analyser = tools.ffprobe.clone();
     let mut read = 0;
     let mut from_their_own_index = 0;
-    let mut already_known = 0;
     let mut still_waiting = waiting;
     loop {
         if handle.is_cancelled() {
@@ -369,7 +368,7 @@ pub(crate) async fn read_the_key_frames_of(
             break;
         }
 
-        let tools = tools.clone();
+        let analyser = analyser.clone();
         let owned_database = database.clone();
         let owned_handle = handle.clone();
         // Bounded like the analysis of a scan: this is the disk from end to
@@ -378,7 +377,7 @@ pub(crate) async fn read_the_key_frames_of(
             batch,
             state.config().limits.concurrent_probes,
             move |source_id| {
-                let tools = tools.clone();
+                let analyser = analyser.clone();
                 let database = owned_database.clone();
                 let handle = owned_handle.clone();
                 let asked_to_stop = asked_to_stop.clone();
@@ -391,7 +390,7 @@ pub(crate) async fn read_the_key_frames_of(
                     }
                     let how = read_one_film_for_its_key_frames(
                         &database,
-                        &tools,
+                        &analyser,
                         source_id,
                         asked_to_stop,
                         &handle,
@@ -411,10 +410,6 @@ pub(crate) async fn read_the_key_frames_of(
         from_their_own_index += done
             .iter()
             .filter(|how| **how == HowItWasRead::FromItsOwnIndex)
-            .count();
-        already_known += done
-            .iter()
-            .filter(|how| **how == HowItWasRead::AlreadyKnown)
             .count();
 
         // What is left is asked for again rather than worked out from what the
@@ -437,8 +432,7 @@ pub(crate) async fn read_the_key_frames_of(
             library = library.name,
             read,
             from_their_own_index,
-            by_reading_them_through = read - from_their_own_index - already_known,
-            only_for_how_their_picture_is_built = already_known,
+            by_reading_them_through = read - from_their_own_index,
             "the films of this library were read for where their picture can be started"
         );
     }
@@ -727,9 +721,6 @@ enum HowItWasRead {
     FromItsOwnIndex,
     /// The film had to be handed to the analyser and read from end to end.
     ByReadingItThrough,
-    /// Where it can be started was already known; only how its picture is
-    /// built was read.
-    AlreadyKnown,
 }
 
 /// Reads one film, and says whether it gave up anything usable.
@@ -739,13 +730,9 @@ enum HowItWasRead {
 /// bytes where reading the film through costs the whole file. What carries no
 /// index this server can read is read through, which is the answer that is
 /// always available, and the two answer exactly the same thing.
-///
-/// Then how its picture is built, which is kept beside it and is what the
-/// film waits on when where it can be started was read before that question
-/// was asked.
 async fn read_one_film_for_its_key_frames(
     database: &Database,
-    tools: &melyxar_ffmpeg::ToolPaths,
+    analyser: &std::path::Path,
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
     handle: &JobHandle,
@@ -757,109 +744,6 @@ async fn read_one_film_for_its_key_frames(
         return HowItWasRead::NotAtAll;
     }
 
-    let how = match database.key_frames_of(source_id).await {
-        Ok(Some(_)) => HowItWasRead::AlreadyKnown,
-        Ok(None) => {
-            read_where_it_can_be_started(
-                database,
-                &tools.ffprobe,
-                &source,
-                asked_to_stop,
-                handle,
-            )
-            .await
-        }
-        Err(error) => {
-            tracing::warn!(error = %error, "where a film can be started could not be looked up");
-            HowItWasRead::NotAtAll
-        }
-    };
-    if how == HowItWasRead::NotAtAll {
-        return how;
-    }
-    match read_how_its_picture_is_built(database, &tools.ffmpeg, &source).await {
-        true => how,
-        false => HowItWasRead::NotAtAll,
-    }
-}
-
-/// How long a stretch is read to say how a picture is built.
-///
-/// Long enough to hold several groups of pictures of any film made to be
-/// watched, short enough to cost a moment beside reading where it can be
-/// started.
-const BUILD_READ_OVER_SECONDS: u32 = 20;
-
-/// Reads whether a film's picture is built in open groups, and keeps it.
-///
-/// From a third of the way in rather than from the beginning, which on a disc
-/// is often a logo or a card built differently from the film itself. A codec
-/// whose parts this does not know is kept as not open: no browser reads one
-/// of those, so its picture is rebuilt anyway.
-async fn read_how_its_picture_is_built(
-    database: &Database,
-    encoder: &std::path::Path,
-    source: &melyxar_database::playback::PlayableSource,
-) -> bool {
-    let tracks = match database.tracks_of_source(source.id).await {
-        Ok(tracks) => tracks,
-        Err(error) => {
-            tracing::warn!(error = %error, "the tracks of a film could not be looked up");
-            return false;
-        }
-    };
-    let from = source
-        .duration
-        .map_or(melyxar_core::time::Millis::ZERO, |length| {
-            melyxar_core::time::Millis::new(length.get() / 3)
-        });
-    let open = match crate::playback::codec_of(&tracks) {
-        None => false,
-        Some(codec) => match melyxar_ffmpeg::picture_build::picture_build(
-            encoder,
-            &source.path,
-            from,
-            BUILD_READ_OVER_SECONDS,
-            &codec,
-        )
-        .await
-        {
-            Ok(build) => build.is_some_and(|build| build.with_leading_pictures > 0),
-            Err(error) => {
-                tracing::warn!(
-                    file = %name_of_file(&source.path),
-                    error = %error,
-                    "how the picture of this film is built could not be read"
-                );
-                return false;
-            }
-        },
-    };
-    if open {
-        tracing::debug!(
-            file = %name_of_file(&source.path),
-            "this film's picture is built in open groups, so it is rebuilt whenever it would \
-             go in pieces"
-        );
-    }
-    match database.store_open_groups(source.id, open).await {
-        Ok(()) => true,
-        Err(error) => {
-            tracing::warn!(error = %error, "how a film's picture is built could not be kept");
-            false
-        }
-    }
-}
-
-/// Reads where one film's picture can be started, and keeps it.
-async fn read_where_it_can_be_started(
-    database: &Database,
-    analyser: &std::path::Path,
-    source: &melyxar_database::playback::PlayableSource,
-    asked_to_stop: AskedToStop,
-    handle: &JobHandle,
-) -> HowItWasRead {
-    let source_id = source.id;
     let (read, how) = match melyxar_container::key_frames(&source.path).await {
         Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
         None => (
