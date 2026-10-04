@@ -89,6 +89,33 @@ describe("what a notification says", () => {
     });
   });
 
+  it("tells the administrators who asked for which seasons, and takes them to the requests", () => {
+    const said = sayNote(
+      a({ kind: "request", title: "Salt Road", news: { what: "asked", by: "Sam", seasons: [0, 2] } }),
+      t,
+      "en",
+    );
+    expect(said).toEqual({
+      title: 'notes.request_asked {"by":"Sam","title":"Salt Road"}',
+      detail: 'work.specials, work.season {"number":2}',
+      to: "/admin/requests",
+    });
+  });
+
+  it("tells the account what became of its request, and opens the title once here", () => {
+    const refused = sayNote(
+      a({ kind: "request", title: "Ash", news: { what: "refused", answer: "Not to be found" } }),
+      t,
+      "en",
+    );
+    expect(refused.detail).toBe("Not to be found");
+    expect(refused.to).toBe("/requests/mine");
+    const added = sayNote(a({ kind: "request", title: "Ash", news: { what: "added" } }), t, "en");
+    expect(added.to).toBe("/work/w");
+    const gone = sayNote(a({ kind: "request", title: "Ash", news: { what: "added" } }, { work_id: null }), t, "en");
+    expect(gone.to).toBe("/requests/mine");
+  });
+
   it("says something even of what it cannot read", () => {
     expect(sayNote(a(null), t, "en").title).toBe("notes.unreadable");
   });

@@ -10,6 +10,7 @@ import { refusalOf, useAsked } from "../asking";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../components/panel";
 import { BellIcon, FolderIcon, PeopleIcon } from "../icons";
 import { refusalKey } from "../i18n";
+import { useRequests } from "../requests/store";
 import { useSettings } from "../settings";
 import { notesApi } from "./api";
 import type { Audience, Channels, ChoosableKind, ForEveryAccount, Level, Written } from "./api";
@@ -187,6 +188,7 @@ export function AdminNotifications() {
   const { t } = useSettings();
   const toast = useToast();
   const asked = useAsked((signal) => notesApi.forEveryAccount(signal), []);
+  const { access } = useRequests();
   const [held, setHeld] = useState<ForEveryAccount | null>(null);
   const shown = held ?? asked.answer;
 
@@ -221,11 +223,17 @@ export function AdminNotifications() {
       {shown && (
         <>
           <Panel icon={PeopleIcon} title={t("notes.defaults")} lead={t("notes.defaults_why")}>
-            {shown.defaults.map((one) => (
-              <Setting key={one.kind} label={t(`notes.kind.${one.kind}`)}>
-                <ChannelSwitches kind={one.kind} channels={one} onChange={(channels) => setDefault(one.kind, channels)} />
-              </Setting>
-            ))}
+            {shown.defaults
+              .filter((one) => one.kind !== "request" || access?.enabled)
+              .map((one) => (
+                <Setting key={one.kind} label={t(`notes.kind.${one.kind}`)}>
+                  <ChannelSwitches
+                    kind={one.kind}
+                    channels={one}
+                    onChange={(channels) => setDefault(one.kind, channels)}
+                  />
+                </Setting>
+              ))}
           </Panel>
           <Panel icon={FolderIcon} title={t("notes.announcing")} lead={t("notes.announcing_why")}>
             {shown.libraries.length === 0 && <p className="panel-say">{t("notes.announcing_none")}</p>}

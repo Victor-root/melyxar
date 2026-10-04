@@ -15,7 +15,7 @@ use crate::{AppState, Result};
 
 /// The kinds an account may choose about, in the order they are listed. A
 /// maintenance is not one of them: nobody may switch it off.
-pub const CHOOSABLE: [Kind; 3] = [Kind::NewContent, Kind::Message, Kind::Deletion];
+pub const CHOOSABLE: [Kind; 4] = [Kind::NewContent, Kind::Message, Kind::Deletion, Kind::Request];
 
 /// Minutes in a day, the clock the quiet hours are read on.
 const A_DAY_IN_MINUTES: i32 = 24 * 60;

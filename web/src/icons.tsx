@@ -238,6 +238,18 @@ export function BellIcon(props: IconProps) {
   );
 }
 
+/** A frame of film with a plus in its corner, for asking for a title the
+ *  server does not hold. */
+export function RequestIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13 4.6H5.6a2 2 0 0 0-2 2v10.8a2 2 0 0 0 2 2h12.8a2 2 0 0 0 2-2V12" />
+      <path d="M3.6 9h3.2M3.6 15h3.2M17.2 15h3.2" />
+      <path d="M18.4 2.6v6.2M15.3 5.7h6.2" />
+    </Icon>
+  );
+}
+
 /* -------------------------------------------------------------------------
  * Moving about
  * ---------------------------------------------------------------------- */

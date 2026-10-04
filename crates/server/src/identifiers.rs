@@ -6,7 +6,7 @@
 
 use melyxar_core::id::{
     CollectionId, DeviceId, LibraryId, MediaSourceId, NotificationId, PersonId, PlaybackClientId,
-    PlaylistId, TrackId, UserId, WorkId,
+    PlaylistId, RequestId, TrackId, UserId, WorkId,
 };
 
 use crate::error::Result;
@@ -66,4 +66,8 @@ pub(crate) fn parse_account(value: &str) -> Result<UserId> {
 
 pub(crate) fn parse_notification(value: &str) -> Result<NotificationId> {
     parse(value, "notification")
+}
+
+pub(crate) fn parse_request(value: &str) -> Result<RequestId> {
+    parse(value, "request")
 }

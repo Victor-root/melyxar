@@ -38,6 +38,7 @@ pub mod pictures;
 pub mod playback;
 pub mod playlists;
 pub mod preferences;
+pub mod requests;
 pub mod routes;
 pub mod security;
 pub mod speech;

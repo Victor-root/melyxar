@@ -17,6 +17,7 @@ pub mod lrclib;
 pub mod musicbrainz;
 pub mod omdb;
 pub mod opensubtitles;
+pub mod pointed;
 pub mod provider;
 pub mod speech_models;
 pub mod tmdb;

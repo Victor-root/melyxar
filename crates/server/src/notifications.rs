@@ -47,7 +47,7 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Serialize)]
 pub(crate) struct NotificationView {
     id: String,
-    /// message, maintenance, new_content, deletion.
+    /// message, maintenance, new_content, deletion, request.
     kind: String,
     /// ok, attention, trouble, news.
     level: String,

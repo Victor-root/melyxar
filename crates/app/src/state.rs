@@ -63,6 +63,8 @@ struct Inner {
     schedule: crate::schedule::Running,
     /// Where what changes in each account's notifications is told from.
     notifications: crate::notifications::live::Outbox,
+    /// Where every page is told the title requests moved.
+    requests: crate::requests::live::Moved,
 }
 
 impl AppState {
@@ -126,6 +128,7 @@ impl AppState {
                 folder_watch: crate::folder_watch::FolderWatch::default(),
                 schedule: crate::schedule::Running::default(),
                 notifications: crate::notifications::live::Outbox::default(),
+                requests: crate::requests::live::Moved::default(),
             }),
         }
     }
@@ -148,6 +151,10 @@ impl AppState {
 
     pub(crate) fn notifications(&self) -> &crate::notifications::live::Outbox {
         &self.inner.notifications
+    }
+
+    pub(crate) fn requests(&self) -> &crate::requests::live::Moved {
+        &self.inner.requests
     }
 
     pub(crate) fn journal(&self) -> &crate::activity::Journal {

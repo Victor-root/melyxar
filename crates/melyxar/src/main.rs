@@ -505,6 +505,9 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     // its time, and what was read a year ago forgotten.
     let rounds = melyxar_app::notifications::rounds::keep_making_the_rounds(&state);
 
+    // The titles asked for that arrived, and the accounts that asked told.
+    let arrivals = melyxar_app::requests::rounds::keep_watching_for_arrivals(&state);
+
     // What the machine spends, for the curves of the administration. Only a
     // server has anybody to show them to.
     let measuring = melyxar_app::measures::keep_measuring(&state);
@@ -538,6 +541,7 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     sweeper.abort();
     upkeep.abort();
     rounds.abort();
+    arrivals.abort();
     measuring.abort();
     watching.abort();
     folders.abort();

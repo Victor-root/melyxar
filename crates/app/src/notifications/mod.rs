@@ -14,10 +14,8 @@ pub mod messages;
 pub mod news;
 pub mod rounds;
 mod sending;
-#[cfg(test)]
-mod testing;
 
-pub use sending::{send, Audience, Kind, Level, Outgoing, Said, SeriesArrived};
+pub use sending::{send, Audience, Kind, Level, Outgoing, RequestNews, Said, SeriesArrived};
 
 use melyxar_core::id::WorkId;
 use melyxar_database::images::StoredImage;

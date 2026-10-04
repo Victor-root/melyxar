@@ -379,7 +379,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_settled_arrival_is_announced_once_to_who_may_read_it() {
-        let (_held, state) = crate::notifications::testing::a_server().await;
+        let (_held, state) = crate::an_empty_server().await;
         let database = state.database();
         let films = database
             .create_library("Films", LibraryKind::Movies, "fr", &[])

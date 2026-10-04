@@ -42,7 +42,7 @@ pub type Result<T> = std::result::Result<T, ProviderError>;
 /// A provider keeps films and series apart and answers a different road for
 /// each. Everything above this line is the same question asked twice, which is
 /// why the rules that read an answer never learn which one it was.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Catalogue {
     Films,
     Series,
@@ -191,6 +191,24 @@ pub struct Details {
     pub season_lengths: Vec<SeasonLength>,
 }
 
+impl Details {
+    /// The work as a search would have answered it, for an identifier asked
+    /// about rather than a name. Nothing to rank it against: it is the only
+    /// answer.
+    pub fn as_candidate(&self, catalogue: Catalogue) -> Candidate {
+        Candidate {
+            external_id: self.external_id.clone(),
+            catalogue,
+            title: self.title.clone(),
+            original_title: self.original_title.clone(),
+            release_year: self.release_year,
+            overview: self.overview.clone(),
+            poster_path: self.poster_path.clone(),
+            popularity: 0.0,
+        }
+    }
+}
+
 /// One season of a series, with the episodes under it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SeasonDetails {
@@ -320,6 +338,13 @@ pub trait MetadataProvider: Send + Sync {
     /// The provider owns the shape of its addresses, so the caller passes the
     /// path it was given back rather than assembling one.
     fn image_url(&self, path: &str) -> String;
+
+    /// The address of a small copy of a picture, for a page showing many
+    /// straight from the provider. The picture itself, for a provider that
+    /// keeps no smaller copy.
+    fn small_image_url(&self, path: &str) -> String {
+        self.image_url(path)
+    }
 
     /// Fetches a picture the provider named.
     fn fetch_image(&self, path: &str) -> impl Future<Output = Result<Vec<u8>>> + Send;

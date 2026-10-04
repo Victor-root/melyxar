@@ -71,13 +71,13 @@ pub fn keep_making_the_rounds(state: &AppState) -> tokio::task::JoinHandle<()> {
 mod tests {
     use super::*;
     use crate::notifications::live::follow;
-    use crate::notifications::testing::a_server;
+    use crate::an_empty_server;
     use crate::notifications::{send, Audience, Level, Outgoing, Said};
     use melyxar_core::user::Permissions;
 
     #[tokio::test]
     async fn a_maintenance_is_recalled_near_its_time_and_taken_away_after() {
-        let (_held, state) = a_server().await;
+        let (_held, state) = an_empty_server().await;
         let user = state
             .database()
             .create_user("somebody", None, &Permissions::viewer())

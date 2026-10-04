@@ -1,5 +1,6 @@
 //! The live line of every page: what changes in the account's
-//! notifications, told the moment it changes; and for an administrator, what
+//! notifications, told the moment it changes; that the title requests moved;
+//! and for an administrator, what
 //! is written in the activity journal and what is being watched, sent again
 //! the moment it changes when the page shows it.
 //!
@@ -52,6 +53,7 @@ struct Following {
     /// account is asked about again before every word.
     who: melyxar_core::id::UserId,
     notified: broadcast::Receiver<News>,
+    requests: watch::Receiver<u64>,
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
     administration: Option<Administration>,
@@ -117,6 +119,7 @@ async fn line(
     let following = Following {
         who: who.id,
         notified: melyxar_app::notifications::live::follow(&state),
+        requests: melyxar_app::requests::live::follow(&state),
         administration,
         closing: melyxar_app::watching::closing(&state),
         state,
@@ -133,6 +136,8 @@ enum Word {
     Written,
     Playing,
     Notified(Box<News>),
+    /// The title requests moved: the page reads again what it shows of them.
+    Requests,
     /// The page fell behind and some changes were lost: it reads its
     /// notifications again.
     Missed,
@@ -157,6 +162,10 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                     Err(broadcast::error::RecvError::Lagged(_)) => Word::Missed,
                     Err(broadcast::error::RecvError::Closed) => return None,
                 },
+                moved = following.requests.changed() => {
+                    moved.ok()?;
+                    Word::Requests
+                }
                 // Only whether it closed is kept: what it hands back may not
                 // be held across what the other branches wait on.
                 () = async {
@@ -182,6 +191,7 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                 let (name, data) = change_word(&news.change);
                 Event::default().event(name).json_data(data)
             }
+            Word::Requests => Ok(Event::default().event("requests").data("moved")),
             Word::Missed => Event::default()
                 .event("notifications_missed")
                 .json_data(serde_json::Value::Null),
