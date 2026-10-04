@@ -317,7 +317,8 @@
 .bell-all {
   display: block;
   padding: 10px;
-  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  border-radius: var(--radius-control);
   color: var(--accent-bright);
   font-size: 13px;
   font-weight: 600;
