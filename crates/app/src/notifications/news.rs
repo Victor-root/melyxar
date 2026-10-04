@@ -3,8 +3,9 @@
 //! Read from when each work was added rather than told by the scan, which
 //! knows nothing of notifications: what a library added since its last
 //! announcement is announced once nothing has been added for a while and
-//! nothing of it still waits for a name. A file replaced or a film named
-//! again keeps its work, and the day it was added, so neither is news.
+//! nothing of it still waits for a name or for the readings a film gets as it
+//! arrives. A file replaced or a film named again keeps its work, and the day
+//! it was added, so neither is news.
 
 use std::collections::HashMap;
 
@@ -172,6 +173,7 @@ pub async fn announce(state: &AppState) -> Result<()> {
 
 async fn announce_at(state: &AppState, now: Timestamp) -> Result<()> {
     let database = state.database();
+    let libraries = database.list_libraries().await?;
     for library in announcing(state).await? {
         // A library met for the first time was added after the
         // notifications were: its first import is news.
@@ -189,6 +191,13 @@ async fn announce_at(state: &AppState, now: Timestamp) -> Result<()> {
         let Verdict::Settled { until, announced } = weigh(&arrivals, latest, now) else {
             continue;
         };
+        // Told only once the readings a film gets as it arrives are done: the
+        // announcement sends people to a film that is ready to be played.
+        if let Some(whole) = libraries.iter().find(|one| one.id == library.id)
+            && crate::upkeep::is_still_taking_in(state, whole).await?
+        {
+            continue;
+        }
         let readers = readers_of(state, library.id).await?;
         for (accounts, theirs) in by_what_they_may_watch(&readers, &announced) {
             let (said, shown) = said_of(&library, &theirs);
@@ -432,6 +441,67 @@ mod tests {
             .await
             .expect("looked");
         assert_eq!(kept().await.expect("read").len(), 1, "announced once");
+    }
+
+    #[tokio::test]
+    async fn an_arrival_waits_for_the_readings_it_gets_as_it_arrives() {
+        use melyxar_core::job::{JobKind, JobPriority, JobState};
+
+        let (_held, state) = crate::an_empty_server().await;
+        let database = state.database();
+        let films = database
+            .create_library("Films", LibraryKind::Movies, "fr", &[])
+            .await
+            .expect("library")
+            .id;
+        let reader = database
+            .create_user("reader", None, &Permissions::viewer())
+            .await
+            .expect("account")
+            .id;
+        let film = database
+            .create_work(films, WorkKind::Movie, "Amber Field", "amber field", None)
+            .await
+            .expect("film");
+        database
+            .apply_identification(film.id, &named("Amber Field"), false)
+            .await
+            .expect("named");
+        let poster = StoredImage {
+            owner_kind: "work".to_string(),
+            owner_id: film.id.to_db_string(),
+            image_kind: "poster".to_string(),
+            relative_path: "works/amber/poster-400.webp".to_string(),
+            width: Some(400),
+            height: Some(600),
+            fingerprint: "amber".to_string(),
+            dominant_color: None,
+        };
+        database
+            .replace_images("work", &film.id.to_db_string(), "poster", &[poster])
+            .await
+            .expect("poster");
+
+        let target = films.to_string();
+        let reading = database
+            .create_job(JobKind::ReadKeyFrames, JobPriority::BACKGROUND, Some(&target))
+            .await
+            .expect("job");
+        let settled = film.added_at + QUIET_FOR + time::Duration::seconds(1);
+        announce_at(&state, settled).await.expect("looked");
+        assert!(
+            database.notifications_of(reader, None, 10).await.expect("read").is_empty(),
+            "the film is still being read for where a jump can land"
+        );
+
+        database
+            .finish_job(reading.id, JobState::Succeeded, None)
+            .await
+            .expect("finished");
+        announce_at(&state, settled + time::Duration::minutes(1))
+            .await
+            .expect("looked");
+        assert_eq!(database.notifications_of(reader, None, 10).await.expect("read").len(), 1);
     }
 
     fn named(title: &str) -> IdentifiedWork {
