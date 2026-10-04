@@ -337,7 +337,7 @@ function Film({
             climbing there would be a number lying about what is left. */}
         {rebuilt && movingPicture !== pictureKey && !failed && (
           <div className="player-working">
-            <Spinner />
+            <Spinner percent={loadingPercent} />
             <p className="player-notice player-notice-bare">
               {t("player.preparing_percent", { percent: Math.round(loadingPercent) })}
             </p>

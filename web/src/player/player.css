@@ -1295,6 +1295,13 @@
   animation: player-spinner-sweep 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* A ring that knows how far it has got stands still and fills from the top,
+   by what was measured and no further. */
+.player-spinner-known,
+.player-spinner-known .player-spinner-wave {
+  animation: none;
+}
+
 /* Two turns of its own against one of the sweep, which is what keeps the lit
    piece from starting in the same place twice running. */
 @keyframes player-spinner-turn {

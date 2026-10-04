@@ -873,6 +873,10 @@ struct PreparationView {
     /// How many seconds make a comfortable start from where the tool was set
     /// going, which near the end of a film is whatever is left of it.
     wanted_seconds: f64,
+    /// How much of the first piece a player needs is written, from nought to
+    /// one. The real measure of the wait a viewer sits through: a player
+    /// starts the instant that piece is whole.
+    first_written: f64,
     /// How hard the machine is working on this film, while it is working.
     ///
     /// Sent from here rather than from the plan because it is the one thing
@@ -906,6 +910,7 @@ fn preparation_view(seen: &Preparation) -> PreparationView {
         step: seen.step.as_str(),
         ready_seconds: of(seen.ready),
         wanted_seconds: of(seen.wanted),
+        first_written: seen.first_written,
         producing: seen.producing.map(producing_view),
     }
 }
@@ -1810,6 +1815,7 @@ mod tests {
             step: PreparationStep::Reading,
             ready: 0,
             wanted: 6,
+            first_written: 0.0,
             producing: None,
         });
         assert!(
@@ -1821,6 +1827,7 @@ mod tests {
             step: PreparationStep::Producing,
             ready: 2,
             wanted: 6,
+            first_written: 0.0,
             producing: Some(Producing {
                 pictures_a_second: 38.4,
                 speed: 1.6,
@@ -1843,10 +1850,12 @@ mod tests {
             step: PreparationStep::Producing,
             ready: 2,
             wanted: 6,
+            first_written: 0.5,
             producing: None,
         });
         assert_eq!(seen.ready_seconds, 2.0 * SEGMENT_DURATION.as_seconds_f64());
         assert_eq!(seen.wanted_seconds, 6.0 * SEGMENT_DURATION.as_seconds_f64());
+        assert_eq!(seen.first_written, 0.5);
     }
 
     #[test]

@@ -2,31 +2,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 
 /*
- * How far there is left to wait, told as one number.
+ * How far there is left to wait, told as one number, and only ever from what
+ * has really been measured: nothing here is a clock guessing.
  *
- * Built from real moments rather than guessed at. Every one of the stages
- * below is something that genuinely happens once, in this order, on the way
- * to a film playing: a session is asked for, hls.js reads the playlist, the
- * server produces what the very first piece needs, that piece reaches this
- * browser, and the browser reads enough of it to know it has a film. Where two
- * of those are seconds apart the number climbs quickly; where one of them is
- * a slow link labouring over a few megabytes it climbs slowly and keeps
- * climbing, because it is still waiting on that one real thing and says so
- * rather than promising an end it cannot see.
+ * Read on a real film, the wait is almost entirely one thing: the server
+ * writing the first piece of film the browser needs, then that piece crossing
+ * the network. The browser shows the picture the instant it has read it. Both
+ * are measured as they happen: the server says how much of that piece is
+ * written, from what the tool producing it reports, and the browser counts
+ * the bytes of it arriving. The few moments around them (a session opened,
+ * the playlist read) are real events that each move the number a little.
  *
- * Between one stage and the next, nothing new is known yet, so the number
- * creeps toward the next stage's floor rather than sitting still: reaching
- * that floor exactly is what waits for the real event, and the creep only
- * ever approaches it, never reaches or passes it uninvited. A stage that
- * turns out to take far longer than usual still only ever creeps toward the
- * same ceiling, however long it takes to get there.
+ * The number shown glides toward what was measured, so a reading every
+ * quarter of a second reads as a steady climb, and never goes past it or back.
  *
- * Every step is written to Melyxar's own journal, under the `page` tag, with
- * how long the stage before it took: the one thing this cannot know on its
- * own is whether a minute on a slow link is normal or a sign that something
- * is actually stuck, and reading that needs a real connection to try it on,
- * not a guess made here. A console open on the machine watching the film is
- * not something to rely on; the journal is read from wherever the server is.
+ * Every stage is written to Melyxar's own journal, under the `page` tag, with
+ * how long the stage before it took: that is what tells a slow link from
+ * something actually stuck, read from wherever the server is.
  */
 export type LoadingStage =
   | "opening"
@@ -47,44 +39,61 @@ const LOADING_STAGES: LoadingStage[] = [
   "done",
 ];
 
-/** Where the number sits the instant each stage is reached. */
+/** The stretch the server writing the first piece fills. */
+const WRITING_FROM = 8;
+/** The stretch that piece crossing the network fills, up to the browser
+ *  having it whole. */
+const CARRYING_FROM = 85;
+const CARRYING_TO = 98;
+
+/** Where each stage puts the number, at the least. */
 const LOADING_FLOOR: Record<LoadingStage, number> = {
   opening: 0,
-  // A session is asked for.
-  session_opened: 6,
-  // hls.js has read the playlist and knows what to ask for next.
-  manifest_parsed: 14,
-  // The server has said it is actively writing the piece this browser needs.
-  producing: 24,
-  // That piece exists on the server now; what is left is getting it here.
-  produced: 58,
-  // It has arrived and been read. What is left is the browser noticing.
-  first_fragment_loaded: 90,
+  session_opened: 3,
+  manifest_parsed: 6,
+  producing: WRITING_FROM,
+  produced: CARRYING_FROM,
+  first_fragment_loaded: CARRYING_TO,
   done: 100,
 };
 
-/**
- * How many milliseconds a stage is expected to take, roughly, before the
- * number climbing through it starts to visibly slow down.
- *
- * A first guess rather than a measurement, and said so where it is used: the
- * two that matter most, `producing` and `produced`, are exactly the two a
- * slow link or a slow disk stretches furthest, and are the two worth
- * correcting first from what the console actually shows.
- */
-const LOADING_TAU_MS: Record<Exclude<LoadingStage, "done">, number> = {
-  opening: 400,
-  session_opened: 1200,
-  manifest_parsed: 900,
-  producing: 3500,
-  produced: 3200,
-  first_fragment_loaded: 350,
-};
+/** What is known of the wait at one instant. */
+export interface Measured {
+  stage: LoadingStage;
+  /** How much of the first piece the server has written, from 0 to 1. */
+  written: number;
+  /** How much of it has reached this browser, from 0 to 1. */
+  carried: number;
+}
+
+/** The number all of that is worth. */
+export function percentOf({ stage, written, carried }: Measured): number {
+  const share = (from: number, to: number, part: number) =>
+    from + (to - from) * Math.min(1, Math.max(0, part));
+  return Math.max(
+    LOADING_FLOOR[stage],
+    written > 0 ? share(WRITING_FROM, CARRYING_FROM, written) : 0,
+    written >= 1 || carried > 0 ? share(CARRYING_FROM, CARRYING_TO, carried) : 0,
+  );
+}
+
+/** One step of the number shown toward what was measured. */
+export function glideToward(shown: number, measured: number): number {
+  if (measured <= shown) {
+    return shown;
+  }
+  const next = shown + (measured - shown) * GLIDE;
+  return measured - next < 0.2 ? measured : next;
+}
+
+/** How much of the way to what was measured one step covers. */
+const GLIDE = 0.3;
+
+/** How often the number shown takes a step. */
+const STEP_EVERY = 80;
 
 /** A line in Melyxar's own journal, when there is a session to write it
- *  against: before one exists there is nothing yet worth a line. Written only
- *  at the server's own debug level, the same as every other fact a page tells
- *  the journal, so it says nothing at all unless it is asked to. */
+ *  against. Written only at the server's own debug level. */
 function tellTheJournalOfAStage(session: string | null, stage: LoadingStage, afterMs: number): void {
   if (!session) {
     return;
@@ -92,8 +101,7 @@ function tellTheJournalOfAStage(session: string | null, stage: LoadingStage, aft
   api
     .tellTheJournal({ session, saw: "loading_stage", stage, after_ms: Math.round(afterMs) })
     .catch(() => {
-      // A line that did not arrive is a line the journal never had to begin
-      // with: nothing here is worth troubling a viewer over.
+      // A line that did not arrive is not worth troubling a viewer over.
     });
 }
 
@@ -103,23 +111,9 @@ export function isLater(stage: LoadingStage, than: LoadingStage): boolean {
 }
 
 /**
- * The number shown after `elapsedMs` in a stage: from the stage's floor
- * toward the next one's, approaching it and never quite reaching it, since
- * reaching it is what the next real stage is for, not a clock running out.
- */
-export function percentAt(stage: LoadingStage, elapsedMs: number): number {
-  if (stage === "done") {
-    return LOADING_FLOOR.done;
-  }
-  const next = LOADING_STAGES[LOADING_STAGES.indexOf(stage) + 1];
-  const floor = LOADING_FLOOR[stage];
-  const ceiling = LOADING_FLOOR[next];
-  return ceiling - (ceiling - floor) * Math.exp(-elapsedMs / LOADING_TAU_MS[stage]);
-}
-
-/**
- * The number itself, where it stands, and the two ways it is moved: started
- * over for a session opened from nothing, and carried on to a later stage.
+ * The number itself, and what moves it: started over for a session opened
+ * from nothing, a later stage reached, the server's account of the first
+ * piece, and that piece arriving.
  *
  * `stream` is the session being waited on, and the number runs for as long
  * as the picture it will show, `pictureKey`, is not yet the one ready.
@@ -129,63 +123,69 @@ export function useLoading(
   readyPicture: string | null,
   pictureKey: string | null,
 ) {
-  /** How far there is left to wait, shown while the picture is not there. */
   const [loadingPercent, setLoadingPercent] = useState(0);
-  /* Which of the real moments on the way to a playing film has been reached,
-     and when, in the browser's own clock rather than the wall clock: what
-     matters is how long a stage has been sat in, not what time it is. */
-  const loadingStage = useRef<LoadingStage>("opening");
-  const loadingStageSince = useRef(0);
+  const measured = useRef<Measured>({ stage: "opening", written: 0, carried: 0 });
+  /* When the current stage began, in the browser's own clock: what the
+     journal is told is how long a stage was sat in. */
+  const stageSince = useRef(0);
+  /* Reads how much of the first piece has arrived, while it is arriving. */
+  const carriedNow = useRef<(() => number) | null>(null);
 
-  /* Starts over from nothing, for a session opened from nothing: a viewer
-     changing quality mid film is not owed the tail end of the last session's
-     progress carried into this one. */
   const resetLoadingStage = useCallback(() => {
-    loadingStage.current = "opening";
-    loadingStageSince.current = performance.now();
-    setLoadingPercent(LOADING_FLOOR.opening);
+    measured.current = { stage: "opening", written: 0, carried: 0 };
+    carriedNow.current = null;
+    stageSince.current = performance.now();
+    setLoadingPercent(0);
   }, []);
 
-  /* Moved on to a later stage, and only ever a later one: a message from a
-     session already left behind, or one that arrived after a further one,
-     must not walk the number backwards.
-
-     Told to the journal against the session this is happening for, when
-     there is one to name: a viewer with a slow connection can be asked to
-     copy a line out of a console, but the journal is there whether or not
-     anybody thought to open one before the film started. */
+  /* Only ever a later stage: a message from a session already left behind
+     must not walk the number backwards. */
   const enterLoadingStage = useCallback((session: string | null, stage: LoadingStage) => {
-    if (!isLater(stage, loadingStage.current)) {
+    if (!isLater(stage, measured.current.stage)) {
       return;
     }
     const now = performance.now();
-    tellTheJournalOfAStage(session, stage, now - loadingStageSince.current);
-    loadingStage.current = stage;
-    loadingStageSince.current = now;
-    setLoadingPercent(LOADING_FLOOR[stage]);
+    tellTheJournalOfAStage(session, stage, now - stageSince.current);
+    measured.current = { ...measured.current, stage };
+    stageSince.current = now;
+    if (stage === "done") {
+      setLoadingPercent(100);
+    }
   }, []);
 
-  /* The number itself, moved along between one real stage and the next.
-     Ticked on a plain timer rather than redrawn only when a stage changes,
-     because a number that only ever jumps between six fixed points does not
-     read as something happening; a number that keeps creeping does, which is
-     the one thing a viewer watching it is actually asking it for. Run for as
-     long as the notice above it is shown and not a moment longer. */
+  /* The server's account of the first piece. Never less than before: a tool
+     set going again counts its piece from nothing, and the viewer has not
+     lost what was already waited through. */
+  const noteWritten = useCallback((written: number) => {
+    measured.current = {
+      ...measured.current,
+      written: Math.max(measured.current.written, written),
+    };
+  }, []);
+
+  /* Handed a way to read the first piece arriving, once it starts to. */
+  const watchCarrying = useCallback((read: () => number) => {
+    carriedNow.current = read;
+  }, []);
+
   useEffect(() => {
     if (!stream || readyPicture === pictureKey) {
       return;
     }
-    const tick = () => {
-      const stage = loadingStage.current;
-      if (stage === "done") {
+    const step = () => {
+      const now = measured.current;
+      if (now.stage === "done") {
         return;
       }
-      setLoadingPercent(percentAt(stage, performance.now() - loadingStageSince.current));
+      const carried = carriedNow.current?.() ?? 0;
+      measured.current = { ...now, carried: Math.max(now.carried, carried) };
+      const target = percentOf(measured.current);
+      setLoadingPercent((shown) => glideToward(shown, target));
     };
-    tick();
-    const timer = window.setInterval(tick, 120);
+    step();
+    const timer = window.setInterval(step, STEP_EVERY);
     return () => window.clearInterval(timer);
   }, [stream, readyPicture, pictureKey]);
 
-  return { loadingPercent, resetLoadingStage, enterLoadingStage };
+  return { loadingPercent, resetLoadingStage, enterLoadingStage, noteWritten, watchCarrying };
 }
