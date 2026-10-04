@@ -11,7 +11,7 @@ import { useToast } from "../notifications/toasts";
 import { readableDate, seasonsNamed } from "../readable";
 import { useSettings } from "../settings";
 import type { RequestState, TitleRequest } from "./api";
-import { TitleCard } from "./card";
+import { TitleCard, titleAddress } from "./card";
 import { useRequests } from "./store";
 
 /** The colour each state wears. */
@@ -31,7 +31,13 @@ function MyRequest({ request }: { request: TitleRequest }) {
       toast({ state: "trouble", title: t("requests.not_withdrawn"), detail: t(refusalAbout(error, "requests")) }),
     );
   return (
-    <TitleCard catalogue={request.catalogue} title={request.title} year={request.year} poster={request.poster}>
+    <TitleCard
+      catalogue={request.catalogue}
+      title={request.title}
+      year={request.year}
+      poster={request.poster}
+      to={titleAddress(request.catalogue, request.tmdb_id)}
+    >
       <div className="request-standing">
         <span className={`state-pill ${STATE_COLOUR[request.state]}`}>{t(`requests.state.${request.state}`)}</span>
         <span className="request-when">{readableDate(request.created_at, language)}</span>

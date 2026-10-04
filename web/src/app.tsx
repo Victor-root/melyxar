@@ -21,6 +21,7 @@ import { MyNotifications } from "./notifications/settings";
 import { AdminRequests } from "./requests/admin";
 import { RequestsPage } from "./requests/page";
 import { RequestsProvider } from "./requests/store";
+import { RequestTitlePage } from "./requests/title";
 import { NotesProvider } from "./notifications/store";
 import { LiveLine } from "./live";
 import { Header } from "./components/header";
@@ -214,6 +215,7 @@ function TheLibrary() {
               <Route path="/notifications" element={<NotesPage />} />
               <Route path="/requests" element={<RequestsPage view="ask" />} />
               <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
+              <Route path="/requests/title/:catalogue/:id" element={<RequestTitlePage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />
                 <Route path="libraries" element={<AdminLibraries />} />

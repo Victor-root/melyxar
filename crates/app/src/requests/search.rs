@@ -17,6 +17,9 @@ use crate::AppState;
 /// The most answers a search gives.
 const ANSWERS_AT_MOST: usize = 30;
 
+/// How wide the posters of a list are asked for, in pixels.
+pub const POSTER_WIDTH: u32 = 342;
+
 /// A title as the libraries hold it, for one account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Held {
@@ -91,12 +94,12 @@ async fn candidates<P: MetadataProvider>(
 
 /// What the libraries hold of some titles, and the requests waiting on
 /// them, catalogue by catalogue.
-struct Standing {
+pub(super) struct Standing {
     held: HashMap<(Catalogue, String), HeldTitle>,
     open: HashMap<(Catalogue, String), Vec<TitleRequest>>,
 }
 
-async fn standing_of(state: &AppState, found: &[Candidate]) -> Result<Standing> {
+pub(super) async fn standing_of(state: &AppState, found: &[Candidate]) -> Result<Standing> {
     let database = state.database();
     let mut standing = Standing {
         held: HashMap::new(),
@@ -140,27 +143,39 @@ pub async fn look_for<P: MetadataProvider>(
     found.retain(|one| seen.insert((one.catalogue, one.external_id.clone())));
     found.truncate(ANSWERS_AT_MOST);
 
-    let mut standing = standing_of(state, &found).await?;
+    let standing = standing_of(state, &found).await?;
     Ok(found
         .into_iter()
-        .map(|candidate| {
-            let key = (candidate.catalogue, candidate.external_id.clone());
-            let open = standing.open.remove(&key).unwrap_or_default();
-            Found {
-                poster: candidate.poster_path.as_deref().map(|path| provider.small_image_url(path)),
-                held: standing.held.get(&key).map(|held| Held {
-                    work_id: who
-                        .permissions
-                        .may_access_library(held.library_id)
-                        .then_some(held.work_id),
-                    seasons: held.seasons.clone(),
-                }),
-                asked_by: open.len(),
-                mine: open.iter().find(|one| one.user_id == who.id).map(|one| one.id),
-                candidate,
-            }
-        })
+        .map(|candidate| found_from(candidate, &standing, who, provider.as_ref()))
         .collect())
+}
+
+/// An answer, with where it stands among what the libraries hold and what
+/// was asked for.
+pub(super) fn found_from<P: MetadataProvider>(
+    candidate: Candidate,
+    standing: &Standing,
+    who: &User,
+    provider: &P,
+) -> Found {
+    let key = (candidate.catalogue, candidate.external_id.clone());
+    let open = standing.open.get(&key).map(Vec::as_slice).unwrap_or_default();
+    Found {
+        poster: candidate
+            .poster_path
+            .as_deref()
+            .map(|path| provider.image_url_at(path, POSTER_WIDTH)),
+        held: standing.held.get(&key).map(|held| Held {
+            work_id: who
+                .permissions
+                .may_access_library(held.library_id)
+                .then_some(held.work_id),
+            seasons: held.seasons.clone(),
+        }),
+        asked_by: open.len(),
+        mine: open.iter().find(|one| one.user_id == who.id).map(|one| one.id),
+        candidate,
+    }
 }
 
 /// The seasons of a series the provider knows, and which are held.

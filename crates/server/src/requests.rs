@@ -8,10 +8,11 @@
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
+use melyxar_app::metadata::MetadataProvider;
 use melyxar_app::requests::access::Asker;
 use melyxar_app::requests::asking::Asking;
 use melyxar_app::requests::deciding::Waiting;
-use melyxar_app::requests::search::{Found, SeasonChoice};
+use melyxar_app::requests::search::{Found, SeasonChoice, POSTER_WIDTH};
 use melyxar_app::requests::{catalogue_of, word_of, Catalogue, Decision, TitleRequest};
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
@@ -28,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/requests/access", get(access))
         .route("/api/v1/requests/search", get(search))
         .route("/api/v1/requests/series/{id}/seasons", get(seasons))
+        .route("/api/v1/requests/title/{catalogue}/{id}", get(title))
         .route("/api/v1/system/requests", get(for_the_administrator))
         .route("/api/v1/system/requests/enabled", put(switch))
         .route("/api/v1/system/requests/askers/{id}", put(allow))
@@ -41,9 +43,8 @@ fn parse_catalogue(word: &str) -> Result<Catalogue> {
 /// The full address of a poster the provider named, when there is a
 /// provider to say it.
 fn poster_of(state: &AppState, path: Option<&str>) -> Option<String> {
-    use melyxar_app::metadata::MetadataProvider;
     let provider = state.metadata_provider()?;
-    path.map(|path| provider.small_image_url(path))
+    path.map(|path| provider.image_url_at(path, POSTER_WIDTH))
 }
 
 #[derive(Debug, Serialize)]
@@ -147,6 +148,116 @@ fn found_view(found: Found) -> FoundView {
         asked_by: found.asked_by,
         mine: found.mine.map(|id| id.to_string()),
     }
+}
+
+/// How wide the poster and the backdrop of a title's own page are asked for.
+const BIG_POSTER_WIDTH: u32 = 780;
+const BACKDROP_WIDTH: u32 = 1280;
+
+#[derive(Debug, Serialize)]
+struct PersonView {
+    name: String,
+    /// Who they played, for an actor.
+    character: Option<String>,
+    photo: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CrewView {
+    name: String,
+    role: String,
+}
+
+#[derive(Debug, Serialize)]
+struct TitleView {
+    /// The same answer a search gives, which is what asking for it starts from.
+    found: FoundView,
+    tagline: Option<String>,
+    imdb_id: Option<String>,
+    release_date: Option<String>,
+    end_date: Option<String>,
+    runtime_minutes: Option<i64>,
+    rating: Option<f64>,
+    age_rating: Option<String>,
+    genres: Vec<String>,
+    studios: Vec<String>,
+    collection: Option<String>,
+    big_poster: Option<String>,
+    backdrop: Option<String>,
+    /// Where each trailer can be watched, the official ones first.
+    trailers: Vec<String>,
+    cast: Vec<PersonView>,
+    crew: Vec<CrewView>,
+    /// For a series, every season the provider knows.
+    seasons: Vec<SeasonView>,
+}
+
+async fn title(
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Path((catalogue, id)): Path<(String, String)>,
+    Query(asked): Query<Language>,
+) -> Result<Json<TitleView>> {
+    let provider = provider_of(&state)?;
+    let described = melyxar_app::requests::title::describe(
+        &state,
+        &provider,
+        &who,
+        parse_catalogue(&catalogue)?,
+        &id,
+        &asked.language,
+    )
+    .await?;
+    let details = described.details;
+    let picture = |path: &Option<String>, width: u32| {
+        path.as_deref().map(|path| provider.image_url_at(path, width))
+    };
+    let (actors, crew): (Vec<_>, Vec<_>) = details
+        .credits
+        .iter()
+        .partition(|credit| credit.role == "actor");
+    let mut trailers: Vec<_> = details.trailers.iter().collect();
+    trailers.sort_by_key(|trailer| !trailer.is_official);
+    Ok(Json(TitleView {
+        found: found_view(described.found),
+        tagline: details.tagline.clone(),
+        imdb_id: details.imdb_id.clone(),
+        release_date: details.release_date.clone(),
+        end_date: details.end_date.clone(),
+        runtime_minutes: details.runtime.map(|runtime| runtime.get() / 60_000),
+        rating: details.community_rating,
+        age_rating: details.age_rating_label.clone(),
+        genres: details.genres.clone(),
+        studios: details.studios.clone(),
+        collection: details.collection.as_ref().map(|collection| collection.name.clone()),
+        big_poster: picture(&details.poster_path, BIG_POSTER_WIDTH),
+        backdrop: picture(&details.backdrop_path, BACKDROP_WIDTH),
+        trailers: trailers.iter().filter_map(|trailer| trailer.watch_url()).collect(),
+        cast: actors
+            .iter()
+            .map(|credit| PersonView {
+                name: credit.name.clone(),
+                character: credit.character.clone(),
+                photo: picture(&credit.photo_path, POSTER_WIDTH),
+            })
+            .collect(),
+        crew: crew
+            .iter()
+            .map(|credit| CrewView {
+                name: credit.name.clone(),
+                role: credit.role.clone(),
+            })
+            .collect(),
+        seasons: described
+            .seasons
+            .into_iter()
+            .map(|season| SeasonView {
+                number: season.number,
+                episodes: season.episodes,
+                held: season.held,
+            })
+            .collect(),
+    }))
 }
 
 async fn search(

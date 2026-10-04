@@ -24,9 +24,9 @@ const BASE_URL: &str = "https://api.themoviedb.org/3";
 /// serves are ours to choose and do not change under us.
 const IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p/original";
 
-/// Where the provider keeps a small copy of each picture, for a page that
-/// shows many of them straight from the provider.
-const SMALL_IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p/w342";
+/// Where the provider keeps scaled copies of each picture, by width, for a
+/// page that shows them straight from the provider.
+const SCALED_IMAGE_BASE_URL: &str = "https://image.tmdb.org/t/p";
 
 /// How long fetching one picture may take.
 ///
@@ -56,7 +56,9 @@ pub struct TmdbProvider {
     api_key: String,
     base_url: String,
     image_base_url: String,
-    small_image_base_url: String,
+    /// Absent once the pictures are pointed elsewhere, which keeps no scaled
+    /// copies.
+    scaled_image_base_url: Option<String>,
 }
 
 impl TmdbProvider {
@@ -74,7 +76,7 @@ impl TmdbProvider {
             api_key: api_key.into(),
             base_url: BASE_URL.to_string(),
             image_base_url: IMAGE_BASE_URL.to_string(),
-            small_image_base_url: SMALL_IMAGE_BASE_URL.to_string(),
+            scaled_image_base_url: Some(SCALED_IMAGE_BASE_URL.to_string()),
         })
     }
 
@@ -85,11 +87,11 @@ impl TmdbProvider {
         self
     }
 
-    /// Points the pictures somewhere else, for the same reason, their small
+    /// Points the pictures somewhere else, for the same reason, their scaled
     /// copies with them.
     pub fn with_image_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.image_base_url = base_url.into();
-        self.small_image_base_url = self.image_base_url.clone();
+        self.scaled_image_base_url = None;
         self
     }
 
@@ -249,8 +251,11 @@ impl MetadataProvider for TmdbProvider {
         format!("{}{}", self.image_base_url, path)
     }
 
-    fn small_image_url(&self, path: &str) -> String {
-        format!("{}{}", self.small_image_base_url, path)
+    fn image_url_at(&self, path: &str, width: u32) -> String {
+        match &self.scaled_image_base_url {
+            Some(base) => format!("{base}/w{width}{path}"),
+            None => self.image_url(path),
+        }
     }
 
     async fn fetch_image(&self, path: &str) -> Result<Vec<u8>> {
@@ -1406,14 +1411,14 @@ mod tests {
     }
 
     #[test]
-    fn a_page_showing_many_pictures_straight_from_the_provider_asks_for_small_copies() {
+    fn a_page_showing_pictures_straight_from_the_provider_asks_for_scaled_copies() {
         let provider = TmdbProvider::new("key").expect("a client");
         assert_eq!(
-            provider.small_image_url("/poster.jpg"),
+            provider.image_url_at("/poster.jpg", 342),
             "https://image.tmdb.org/t/p/w342/poster.jpg"
         );
         let elsewhere = provider.with_image_base_url("http://pictures.invalid");
-        assert_eq!(elsewhere.small_image_url("/poster.jpg"), "http://pictures.invalid/poster.jpg");
+        assert_eq!(elsewhere.image_url_at("/poster.jpg", 342), "http://pictures.invalid/poster.jpg");
     }
 
     #[test]

@@ -339,10 +339,10 @@ pub trait MetadataProvider: Send + Sync {
     /// path it was given back rather than assembling one.
     fn image_url(&self, path: &str) -> String;
 
-    /// The address of a small copy of a picture, for a page showing many
-    /// straight from the provider. The picture itself, for a provider that
-    /// keeps no smaller copy.
-    fn small_image_url(&self, path: &str) -> String {
+    /// The address of a copy of a picture scaled to about this width, for a
+    /// page showing pictures straight from the provider. The picture itself,
+    /// for a provider that keeps no scaled copies.
+    fn image_url_at(&self, path: &str, _width: u32) -> String {
         self.image_url(path)
     }
 
