@@ -108,14 +108,15 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
   const { t } = useSettings();
   const { id, state, sticky, shownForMs } = toast;
   const poster = useShownPicture(toast.poster ?? []);
+  const staysFor = shownForMs ?? STAYS_FOR_MS[state];
 
   useEffect(() => {
     if (sticky) {
       return;
     }
-    const timer = window.setTimeout(() => onGone(id), shownForMs ?? STAYS_FOR_MS[state]);
+    const timer = window.setTimeout(() => onGone(id), staysFor);
     return () => window.clearTimeout(timer);
-  }, [id, state, sticky, shownForMs, onGone]);
+  }, [id, sticky, staysFor, onGone]);
 
   const Mark = MARKS[state];
   const words = (
@@ -159,6 +160,11 @@ function ToastCard({ toast, onGone }: { toast: Shown; onGone: (id: number) => vo
       >
         <CloseIcon size={16} />
       </button>
+      {!sticky && (
+        <span className="toast-time" aria-hidden="true">
+          <span className="toast-time-left" style={{ animationDuration: `${staysFor}ms` }} />
+        </span>
+      )}
     </div>
   );
 }

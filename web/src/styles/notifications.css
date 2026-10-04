@@ -15,6 +15,8 @@
   top: calc(var(--header-height) - 8px);
   right: var(--gutter);
   z-index: 110;
+  /* The wash of the accent over the glass, the bar's own. */
+  --toast-glow: color-mix(in srgb, var(--accent) 22%, transparent);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -27,6 +29,8 @@
    and lit by a halo, whatever the word says. What it says is carried by its
    mark, in the colour of its level. */
 .toast {
+  position: relative;
+  overflow: hidden;
   pointer-events: auto;
   display: flex;
   align-items: flex-start;
@@ -35,13 +39,12 @@
   padding: 14px 12px 14px 14px;
   border-radius: var(--radius-panel);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  --toast-glow: color-mix(in srgb, var(--accent) 14%, transparent);
   background:
     linear-gradient(var(--toast-glow), var(--toast-glow)),
-    var(--surface-raised);
+    var(--header-glass);
   backdrop-filter: blur(18px);
   box-shadow:
-    var(--shadow-raised),
+    var(--shadow-card),
     0 0 14px 2px var(--accent-glow);
   animation: toast-in var(--calm) var(--ease);
 }
@@ -77,6 +80,35 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
+/* The time it has left, drawn as the line that says how far in a film is on
+   its tile, run backwards: full when the word arrives, empty when it goes. */
+.toast-time {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.toast-time-left {
+  display: block;
+  height: 100%;
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: toast-time-runs linear forwards;
+}
+
+@keyframes toast-time-runs {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0;
+  }
+}
+
 .toast-link {
   color: inherit;
   text-decoration: none;
@@ -92,7 +124,9 @@
   padding: 4px 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: var(--radius-pill);
-  background: var(--surface-raised);
+  background:
+    linear-gradient(var(--toast-glow), var(--toast-glow)),
+    var(--header-glass);
   box-shadow: 0 0 14px 2px var(--accent-glow);
   backdrop-filter: blur(18px);
   color: var(--text-soft);
