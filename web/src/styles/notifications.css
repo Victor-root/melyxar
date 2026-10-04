@@ -100,6 +100,11 @@
   animation: toast-time-runs linear forwards;
 }
 
+/* Stopped where it stands while the word is being read. */
+.toast-held .toast-time-left {
+  animation-play-state: paused;
+}
+
 @keyframes toast-time-runs {
   from {
     width: 100%;
@@ -180,9 +185,10 @@
     color var(--quick) var(--ease);
 }
 
-.toast-close:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+.toast-close:hover,
+.toast-close:focus-visible {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-bright);
 }
 
 @keyframes toast-in {
@@ -270,10 +276,6 @@
   cursor: pointer;
 }
 
-.bell-seen:hover {
-  background: var(--surface-hover);
-}
-
 .bell-title {
   color: var(--text-soft);
   font-size: 11px;
@@ -324,8 +326,15 @@
   text-decoration: none;
 }
 
-.bell-all:hover {
-  background: var(--surface-hover);
+.bell-all:hover,
+.bell-all:focus-visible,
+.notes-list-more.notes-older:hover,
+.notes-list-more.notes-older:focus-visible,
+.bell-seen:hover,
+.bell-seen:focus-visible {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -347,8 +356,18 @@
   border-radius: var(--radius-control);
 }
 
-.note:hover {
-  background: var(--surface-hover);
+/* The line under the hand in the accent, rimmed with it, as in every list of
+   the bar. */
+.note:hover,
+.note:has(.note-open:focus-visible) {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.note-open:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: -2px;
+  border-radius: var(--radius-control);
 }
 
 .note-open {
@@ -429,9 +448,10 @@
   cursor: pointer;
 }
 
-.note-action:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+.note-action:hover,
+.note-action:focus-visible {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent-bright);
 }
 
 .notes-none {
@@ -444,6 +464,7 @@
 .notes-older {
   display: block;
   width: 100%;
+  border-radius: var(--radius-control);
   padding: 8px;
   border: none;
   background: none;

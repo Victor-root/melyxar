@@ -131,7 +131,7 @@ export function NoteList() {
         ))}
       </ul>
       {more && (
-        <button type="button" className="notes-older" onClick={only(loadOlder)}>
+        <button type="button" className="notes-older notes-list-more" onClick={only(loadOlder)}>
           {t("notes.older")}
         </button>
       )}
