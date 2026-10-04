@@ -1087,7 +1087,8 @@ export type PageChangeKind =
   | "box_resized"
   | "fullscreen"
   | "tab_hidden"
-  | "tab_shown";
+  | "tab_shown"
+  | "piece_added";
 
 /** One such change, and when, from the first picture. */
 export interface PageChange {
