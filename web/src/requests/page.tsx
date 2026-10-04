@@ -30,17 +30,30 @@ export function RequestsPage({ view }: { view: "ask" | "mine" }) {
     <>
       <PageBackdrop />
       <main className="page requests-page">
-        <div className="section-head">
-          <h1>{t("requests.title")}</h1>
+        <div className="browse-head">
+          <div className="section-head">
+            <h1>{t("requests.title")}</h1>
+          </div>
+          <div className="browse-bar">
+            <nav className="browse-piece music-tabs" aria-label={t("requests.title")}>
+              {(
+                [
+                  ["/requests", "requests.tab_ask", true],
+                  ["/requests/mine", "requests.tab_mine", false],
+                ] as const
+              ).map(([to, name, end]) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => `music-tab${isActive ? " music-tab-on" : ""}`}
+                >
+                  {t(name)}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
         </div>
-        <nav className="request-tabs" aria-label={t("requests.title")}>
-          <NavLink to="/requests" end className="request-tab">
-            {t("requests.tab_ask")}
-          </NavLink>
-          <NavLink to="/requests/mine" className="request-tab">
-            {t("requests.tab_mine")}
-          </NavLink>
-        </nav>
         {view === "ask" ? <AskSearch /> : <MyRequests />}
       </main>
     </>
