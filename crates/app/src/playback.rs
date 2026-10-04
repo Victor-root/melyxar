@@ -1006,7 +1006,7 @@ fn says_it_is_cut(tracks: &[Track]) -> bool {
 }
 
 /// What the picture of a film is written in, when it holds one.
-fn codec_of(tracks: &[Track]) -> Option<String> {
+pub(crate) fn codec_of(tracks: &[Track]) -> Option<String> {
     tracks.iter().find_map(|track| match &track.kind {
         melyxar_core::media::TrackKind::Video(details) => Some(details.codec.to_lowercase()),
         _ => None,
