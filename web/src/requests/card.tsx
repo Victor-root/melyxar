@@ -4,6 +4,7 @@
  * them whatever the screen has to say of it or do with it.
  */
 
+import { useState } from "react";
 import type { ReactNode } from "react";
 import { FilmIcon } from "../icons";
 import { useSettings } from "../settings";
@@ -25,11 +26,14 @@ export function TitleCard({
   children?: ReactNode;
 }) {
   const { t } = useSettings();
+  /* A poster the provider does not hand over leaves the mark of a title
+     without one, never a broken picture. */
+  const [failed, setFailed] = useState(false);
   return (
     <article className="request-card">
       <span className="request-poster">
-        {poster ? (
-          <img src={poster} alt="" loading="lazy" decoding="async" />
+        {poster && !failed ? (
+          <img src={poster} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
         ) : (
           <FilmIcon size={28} />
         )}

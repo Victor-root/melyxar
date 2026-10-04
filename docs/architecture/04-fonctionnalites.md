@@ -784,4 +784,4 @@ Les méthodes de repliement sont des **jeux de coefficients appliqués par un fi
 
 **Réglé au moment de coder** (voir le README des décisions). Une série se demande entière ou par saisons ; une saison absente d'une série présente peut être demandée. Un titre qui arrive sans décision de l'administrateur passe à « ajouté » de lui-même. Chaque compte fait sa demande, et l'administrateur les voit regroupées par titre, une décision valant pour tout le groupe. L'interrupteur et le droit de demander se règlent sur la page « Demandes » de l'administration.
 
-**Quand.** En cours.
+**Quand.** Livré pour le navigateur.
