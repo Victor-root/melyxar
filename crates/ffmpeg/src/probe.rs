@@ -355,6 +355,17 @@ pub async fn key_frames(
     media: &Path,
     asked_to_stop: AskedToStop,
 ) -> Result<Vec<Millis>> {
+    key_frames_reporting(analyser, media, asked_to_stop, &|_| {}).await
+}
+
+/// The same, telling `on_position` how far into the film the listing has got,
+/// as it comes: the time of the last packet listed.
+pub async fn key_frames_reporting(
+    analyser: &Path,
+    media: &Path,
+    asked_to_stop: AskedToStop,
+    on_position: &(dyn Fn(Millis) + Sync),
+) -> Result<Vec<Millis>> {
     let mut builder = TokioCommand::new(analyser);
     builder
         .args([
@@ -369,7 +380,25 @@ pub async fn key_frames(
             "csv=p=0",
         ])
         .arg(media);
-    let output = crate::process::output_of(builder, asked_to_stop).await?;
+    // The last line heard so far is whole only up to its newline: what comes
+    // after it waits for the rest of its line.
+    let heard = std::sync::Mutex::new(String::new());
+    let output = crate::process::output_streaming(
+        builder,
+        asked_to_stop,
+        &|chunk| {
+            let mut heard = heard.lock().expect("held for no longer than a line");
+            heard.push_str(&String::from_utf8_lossy(chunk));
+            if let Some(end) = heard.rfind('\n') {
+                if let Some(position) = last_position_in(&heard[..end]) {
+                    on_position(position);
+                }
+                heard.drain(..=end);
+            }
+        },
+        &|_| {},
+    )
+    .await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("analyser", &output));
@@ -388,6 +417,15 @@ pub async fn key_frames(
         );
     }
     Ok(found)
+}
+
+/// The time of the last packet in a listing that has one.
+fn last_position_in(listing: &str) -> Option<Millis> {
+    listing
+        .lines()
+        .rev()
+        .find_map(|line| seconds_to_ms(line.split_once(',')?.0))
+        .map(Millis::new)
 }
 
 /// What a listing held, for a film that gave no starting point at all.
@@ -556,6 +594,16 @@ mod tests {
     }
 
     #[test]
+    fn how_far_a_listing_has_got_is_the_time_of_its_last_timed_packet() {
+        assert_eq!(
+            last_position_in("0.000000,K_\n4.004000,__\n8.008000,K_"),
+            Some(Millis::new(8_008))
+        );
+        assert_eq!(last_position_in("1.5,K_\n,__"), Some(Millis::new(1_500)));
+        assert_eq!(last_position_in(""), None);
+    }
+
+    #[test]
     fn key_frames_come_back_in_order_and_only_once_each() {
         // A container can list a packet before the one it follows, and
         // everything downstream walks these in order.
@@ -637,9 +685,16 @@ mod tests {
         assert!(made.status.success());
 
         let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
-        let found = key_frames(&tools.ffprobe, &source, AskedToStop::never())
-            .await
-            .expect("a film says where it can be started");
+        let furthest = std::sync::atomic::AtomicI64::new(0);
+        let found = key_frames_reporting(&tools.ffprobe, &source, AskedToStop::never(), &|position| {
+            furthest.fetch_max(position.get(), std::sync::atomic::Ordering::Relaxed);
+        })
+        .await
+        .expect("a film says where it can be started");
+        assert!(
+            furthest.load(std::sync::atomic::Ordering::Relaxed) >= 30_000,
+            "the listing said how far into the film it had got"
+        );
 
         assert!(
             found.len() >= 4,

@@ -20,6 +20,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use melyxar_core::thumbnails::{Layout, Thumbnails};
+use melyxar_core::time::Millis;
 use tokio::process::Command as TokioCommand;
 
 use crate::process::AskedToStop;
@@ -127,11 +128,11 @@ pub fn sheet_at(into: &Path, number: u32) -> std::path::PathBuf {
     into.join(format!("{number:04}.jpg"))
 }
 
-/// What follows a reading while it goes: whether it is called off, and how
-/// many thumbnails there are so far, which is how far along it is.
+/// What follows a reading while it goes: whether it is called off, and how far
+/// into the film it has got, as the tool says it.
 pub struct Watch<'a> {
     pub asked_to_stop: AskedToStop,
-    pub on_counted: &'a (dyn Fn(u32) + Sync),
+    pub on_position: &'a (dyn Fn(Millis) + Sync),
 }
 
 impl Watch<'static> {
@@ -139,7 +140,7 @@ impl Watch<'static> {
     pub fn quietly(asked_to_stop: AskedToStop) -> Self {
         Self {
             asked_to_stop,
-            on_counted: &|_| {},
+            on_position: &|_| {},
         }
     }
 }
@@ -165,6 +166,10 @@ pub async fn make(
     watch: Watch<'_>,
 ) -> Result<Thumbnails> {
     let mut builder = TokioCommand::new(&tools.ffmpeg);
+    // Asked to say how far it has got, on its error output: nothing else of
+    // the reading says it, and a film of two hours is a long time to say
+    // nothing.
+    builder.args(["-progress", "pipe:2", "-nostats"]);
     builder.args(arguments(
         source,
         into,
@@ -172,9 +177,12 @@ pub async fn make(
         tone_map,
         standing_pictures_only,
     ));
-    let output = crate::process::output_counting(builder, watch.asked_to_stop, &|bytes| {
-        (watch.on_counted)(u32::try_from(bytes).unwrap_or(u32::MAX));
-    })
+    let output = crate::process::output_streaming(
+        builder,
+        watch.asked_to_stop,
+        &|_| {},
+        watch.on_position,
+    )
     .await?;
 
     if !output.status.success() {
@@ -396,7 +404,7 @@ mod tests {
 
         let into = directory.path().join("thumbnails");
         std::fs::create_dir_all(&into).expect("a folder to write in");
-        let told = std::sync::atomic::AtomicU32::new(0);
+        let told = std::sync::atomic::AtomicI64::new(0);
         let made = make(
             &tools,
             &film,
@@ -411,17 +419,16 @@ mod tests {
             false,
             Watch {
                 asked_to_stop: AskedToStop::never(),
-                on_counted: &|counted| told.store(counted, std::sync::atomic::Ordering::Relaxed),
+                on_position: &|position| told.store(position.get(), std::sync::atomic::Ordering::Relaxed),
             },
         )
         .await
         .expect("the tool accepted the command");
 
         assert_eq!(made.counted, 3, "nought, ten and twenty seconds");
-        assert_eq!(
-            told.load(std::sync::atomic::Ordering::Relaxed),
-            3,
-            "the reading said how many there were as they came"
+        assert!(
+            told.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            "the reading said how far into the film it had got"
         );
         assert_eq!(made.sheets, 1);
         assert_eq!(made.height, 90);

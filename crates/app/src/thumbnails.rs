@@ -196,14 +196,11 @@ pub async fn make_for(
         .await
         .map_err(AppError::Directory)?;
 
-    // How many there will be, worked out from the length of the film: the
-    // reading says how many it has made, and this is what that is told against.
-    let expected = source
-        .duration
-        .map_or(0.0, |length| length.get() as f64 / layout.every.get().max(1) as f64);
-    let how_far = move |counted: u32| {
-        if expected >= 1.0 {
-            on_progress(f64::from(counted) / expected);
+    // How far into the film the reading has got, told against how long it is.
+    let length = source.duration.map_or(0, Millis::get);
+    let how_far = move |position: Millis| {
+        if length > 0 {
+            on_progress(position.get() as f64 / length as f64);
         }
     };
 
@@ -221,7 +218,7 @@ pub async fn make_for(
         true,
         Watch {
             asked_to_stop: asked_to_stop.clone(),
-            on_counted: &how_far,
+            on_position: &how_far,
         },
     )
     .await;
@@ -239,7 +236,7 @@ pub async fn make_for(
             false,
             Watch {
                 asked_to_stop,
-                on_counted: &how_far,
+                on_position: &how_far,
             },
         )
         .await;
