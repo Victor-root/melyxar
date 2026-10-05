@@ -118,6 +118,12 @@
     0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+/* The picture a tile is on a phone, which has no fan. Drawn there and
+   nowhere else: see the style sheet for narrow screens. */
+.band-cover {
+  display: none;
+}
+
 /*
  * The fan of posters a way in is made of.
  *
