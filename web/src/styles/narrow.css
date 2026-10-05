@@ -135,30 +135,120 @@
     margin-left: 0;
   }
 
-  /* The ways in side by side in a row that is pulled sideways, as the rows
-     under it are, instead of one on top of the other. The next one shows at
-     the edge, which is what says there is one. */
+  /*
+   * The ways in as small tiles, two to a line, and the next ones under them.
+   *
+   * Not the wide tile shrunk: a fan of five posters standing on water has
+   * nothing to say at this size. Each one is a wide panel with its name at
+   * the foot and the newest two covers of its library cropped against its
+   * far edge, fading into the panel behind the name.
+   */
   .band {
-    --band-air: 24px;
-    --band-side-air: min(var(--band-air), var(--gutter));
+    --band-gap: 10px;
 
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding: var(--band-air) var(--band-side-air) var(--gap-tight);
-    margin: calc(var(--band-air) * -1) calc(var(--band-side-air) * -1)
-      calc(var(--gap-section) - var(--gap-tight));
-    scrollbar-width: none;
-    scroll-snap-type: x proximity;
-    scroll-padding-inline: var(--band-side-air);
-  }
-
-  .band::-webkit-scrollbar {
-    display: none;
+    gap: var(--band-gap);
+    margin-bottom: var(--gap-wide);
+    will-change: auto;
   }
 
   .band-tile {
-    flex: 0 0 min(78vw, 300px);
+    flex: 0 0 calc((100% - var(--band-gap)) / 2);
     max-width: none;
-    scroll-snap-align: start;
+    aspect-ratio: 2 / 1;
+    padding: 0 8px 8px 10px;
+    border-radius: var(--radius-control);
+    box-shadow: none;
+  }
+
+  /* What stood the fan on water, or lit it, has no place on a tile this
+     size. */
+  .band-water,
+  .band-posters.band-mirror,
+  .band-pile.band-mirror,
+  .band-ghost,
+  .band-halo,
+  .band-record {
+    display: none;
+  }
+
+  /* The newest two, side by side along the far edge, cut to the height of
+     the tile and faded into the panel on the side the name is on. */
+  .band-posters,
+  .band-pile {
+    inset: 0 0 0 40%;
+    display: flex;
+    gap: 2px;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 38%);
+    mask-image: linear-gradient(to right, transparent, #000 38%);
+  }
+
+  .band-posters > :nth-child(n + 3),
+  .band-pile > :nth-child(n + 3) {
+    display: none;
+  }
+
+  .band-posters > .band-poster,
+  .band-pile > .band-print {
+    position: static;
+    flex: 1 1 0;
+    height: 100%;
+    aspect-ratio: auto;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transform: none;
+    translate: none;
+    scale: none;
+  }
+
+  .band-poster::after {
+    display: none;
+  }
+
+  .band-poster-initial {
+    font-size: 20px;
+  }
+
+  /* The name, over the panel's own colour where the covers fade out, and
+     the way in at the foot. */
+  .band-tile::after {
+    background: linear-gradient(
+      to right,
+      color-mix(in srgb, var(--surface-deep) 78%, transparent),
+      transparent 70%
+    );
+  }
+
+  .band-words {
+    min-height: 0;
+    padding-bottom: 2px;
+  }
+
+  .band-name {
+    gap: 5px;
+    font-size: 14px;
+  }
+
+  .band-name > svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Up in the corner, off the name, and solid so it reads over any cover. */
+  .band-arrow {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+    color: var(--accent-contrast);
+  }
+
+  .band-arrow > svg {
+    width: 14px;
+    height: 14px;
   }
 }
