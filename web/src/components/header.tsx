@@ -543,6 +543,10 @@ export function Header({
             and there is only one: this end is what you press, the other is
             where you are. */}
         <div className="header-piece header-side" ref={side} data-folded={folded || undefined}>
+          {/* The buttons of the bar in one box, which on a phone is pulled
+              sideways when they are more than the width allows. Everywhere
+              else it takes no room of its own. */}
+          <div className="header-buttons">
           {/* What the server is doing, and only while it is doing it. It is
               the one thing here that is news rather than a way to somewhere:
               a scan that started ten minutes ago and is still going is worth
@@ -648,6 +652,7 @@ export function Header({
             }
             return <Place key={button} place={button} inTheMenu={false} />;
           })}
+          </div>
 
           {/* The few results the field offers on its own, drawn at the end of
               the page for the same reason the menus are: a panel frosting

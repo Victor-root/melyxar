@@ -531,6 +531,11 @@
   padding-left: var(--gap-tight);
 }
 
+/* The box the buttons of the bar stand in: no box at all, here. */
+.header-buttons {
+  display: contents;
+}
+
 /* The arrow that puts the buttons away: a phone's, nothing wider draws it. */
 .header-fold {
   display: none;

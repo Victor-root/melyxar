@@ -261,6 +261,30 @@
     display: none;
   }
 
+  /* More buttons than the width has room for are reached by pulling them
+     sideways, while the arrow and the account stay where they are. */
+  .header-side {
+    min-width: 0;
+  }
+
+  .header-start {
+    flex: none;
+  }
+
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+
+  .header-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
   /* The way back takes no more room from the edge than the other pieces. */
   .header-start-back {
     margin-left: 0;
