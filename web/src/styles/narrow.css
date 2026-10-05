@@ -66,3 +66,82 @@
     display: none;
   }
 }
+
+/*
+ * Phones. Only here do the rules below apply: a wider window keeps what it
+ * was given above.
+ */
+@media (max-width: 600px) {
+  /* The bar of the top stands almost against the edge of the screen, where a
+     thumb reaches it and a small screen cannot spare the air. Every page
+     starts below it, so every page follows. */
+  :root {
+    --header-height: 54px;
+    /* Tall enough for the words and the way through the five, which have
+       the whole width and no corner of their own to share. */
+    --hero-height: clamp(360px, 56dvh, 480px);
+  }
+
+  /* A thin line over the page that shows while it moves and goes a moment
+     after, in the accent: a thumb has no use for a bar it cannot catch, and
+     a bar that stays is a strip of colour down the picture. */
+  .scrollbar {
+    width: 3px;
+    pointer-events: none;
+  }
+
+  .scrollbar-long {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms var(--ease);
+  }
+
+  .scrollbar-long[data-active] {
+    opacity: 1;
+    transition-duration: 80ms;
+  }
+
+  .scrollbar-mark {
+    border-width: 0;
+  }
+
+  /* The way through the five goes under the words, in the middle, instead of
+     over the buttons in the corner. The words keep that room clear. */
+  .hero-steps {
+    left: 0;
+    right: 0;
+    bottom: var(--gap);
+    justify-content: center;
+  }
+
+  .hero-words {
+    padding-bottom: calc(38px + 2 * var(--gap));
+  }
+
+  /* The ways in side by side in a row that is pulled sideways, as the rows
+     under it are, instead of one on top of the other. The next one shows at
+     the edge, which is what says there is one. */
+  .band {
+    --band-air: 24px;
+    --band-side-air: min(var(--band-air), var(--gutter));
+
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: var(--band-air) var(--band-side-air) var(--gap-tight);
+    margin: calc(var(--band-air) * -1) calc(var(--band-side-air) * -1)
+      calc(var(--gap-section) - var(--gap-tight));
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--band-side-air);
+  }
+
+  .band::-webkit-scrollbar {
+    display: none;
+  }
+
+  .band-tile {
+    flex: 0 0 min(78vw, 300px);
+    max-width: none;
+    scroll-snap-align: start;
+  }
+}
