@@ -47,8 +47,13 @@ function roomAtTheSide(track: HTMLElement): number {
 export function Row({
   children,
   opensOn,
+  single,
 }: {
   children: ReactNode;
+  /** One card at a time on a phone, in the middle, with an arrow on each
+      side: for the rows whose cards are big enough to be read one by one.
+      Everywhere wider it is a row like the others. */
+  single?: boolean;
   /** The card, counted from nought, the row is brought to when it arrives:
       the one a page is about, among the ones around it. The one before it
       stays in view, so it reads as a place in a run rather than as the
@@ -196,7 +201,9 @@ export function Row({
   };
 
   return (
-    <div className={`row${canGoBack ? " row-more-back" : ""}${canGoOn ? " row-more-on" : ""}`}>
+    <div
+      className={`row${single ? " row-single" : ""}${canGoBack ? " row-more-back" : ""}${canGoOn ? " row-more-on" : ""}`}
+    >
       {canGoBack && (
         <button
           className="row-arrow row-arrow-back"
