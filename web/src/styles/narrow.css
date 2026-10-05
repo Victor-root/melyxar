@@ -115,9 +115,34 @@
     display: none;
   }
 
-  .hero-steps {
-    bottom: var(--gap);
+  /* The banner is the picture, its facts and one square in the corner that
+     opens the work: no buttons, no drawn title, no badges. */
+  .hero-buttons,
+  .hero-badges,
+  .hero-title-drawn {
+    display: none;
+  }
+
+  .hero-info {
+    position: absolute;
     right: var(--gap);
+    bottom: var(--gap);
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--text);
+  }
+
+  /* Beside the square, level with its middle. */
+  .hero-steps {
+    bottom: calc(var(--gap) + 15px);
+    right: calc(var(--gap) * 2 + 36px);
   }
 
   .hero-dots {
@@ -142,7 +167,7 @@
   }
 
   .hero-words {
-    padding-bottom: calc(var(--gap) * 2 + 8px);
+    padding-bottom: calc(var(--gap) * 2 + 36px);
   }
 
   .header-inner {
