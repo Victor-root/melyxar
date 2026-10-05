@@ -999,6 +999,34 @@
   height: var(--music-bar-height);
   padding: 0 var(--player-inset) 6px;
   color: var(--text);
+  animation: music-bar-rise 180ms var(--ease) backwards;
+}
+
+/* It comes up from the foot of the window as it fades in, and goes back down
+   the same way: opacity and transform only, on the one box. */
+.music-bar-leaving {
+  animation: music-bar-sink 180ms var(--ease) forwards;
+  pointer-events: none;
+}
+
+@keyframes music-bar-rise {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@keyframes music-bar-sink {
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-bar-dock {
+    animation: none;
+  }
 }
 
 /* Part of the page, so in the colours of the theme it is read in: the
