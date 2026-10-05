@@ -73,10 +73,13 @@
  */
 @media (max-width: 600px) {
   /* The bar of the top stands almost against the edge of the screen, where a
-     thumb reaches it and a small screen cannot spare the air. Every page
-     starts below it, so every page follows. */
+     thumb reaches it and a small screen cannot spare the air. The same air
+     at the top and at both sides, which is why the band it is drawn in is
+     its pieces and that air twice over. Every page starts below it, so every
+     page follows. */
   :root {
-    --header-height: 54px;
+    --header-edge: 6px;
+    --header-height: calc(var(--header-piece) + 2 * var(--header-edge));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
     --hero-height: clamp(360px, 56dvh, 480px);
@@ -123,9 +126,13 @@
     padding-bottom: calc(var(--gap) * 2 + 8px);
   }
 
-  /* The two pieces nearer the edges of the screen they stand at. */
   .header-inner {
-    padding: 0 6px;
+    padding: 0 var(--header-edge);
+  }
+
+  /* The way back takes no more room from the edge than the other pieces. */
+  .header-start-back {
+    margin-left: 0;
   }
 
   /* The ways in side by side in a row that is pulled sideways, as the rows
