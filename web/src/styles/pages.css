@@ -12,6 +12,17 @@
   flex-direction: column;
 }
 
+/* The frame the box is seen through. It does not move, so whatever is laid
+   over the whole view, the fade at the foot above the music player, is laid
+   here: on the box that scrolls it would be drawn again on every frame of a
+   scroll, the page losing a frame in three. */
+.shell-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* It scrolls without a bar of the browser's own, because a bar of the
    browser's own keeps a strip of the window to itself and everything in
    here is cut off before that strip: a banner meant to run to both edges of

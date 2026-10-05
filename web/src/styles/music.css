@@ -22,6 +22,7 @@
   gap: 2px;
   min-width: 0;
   overflow-x: auto;
+  will-change: scroll-position;
   scrollbar-width: none;
   cursor: grab;
 }
@@ -222,6 +223,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Scrolled by the graphics card, for the reason given on the box the page
+     scrolls in. */
+  will-change: scroll-position;
   /* Not the bar of the page: thinner than it. */
   --scrollbar-width: 7px;
 }
@@ -962,7 +966,7 @@
   padding-bottom: var(--music-bar-height);
 }
 
-:root[data-music-bar] .shell-scroll {
+:root[data-music-bar] .shell-view {
   mask-image: var(--music-bar-fade);
   -webkit-mask-image: var(--music-bar-fade);
 }
@@ -1377,6 +1381,7 @@
   margin: 0;
   padding: 0;
   overflow-y: auto;
+  will-change: scroll-position;
   overscroll-behavior: contain;
   list-style: none;
 }
