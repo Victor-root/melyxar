@@ -210,18 +210,18 @@
 
 
   .hero-dots {
-    gap: 6px;
+    gap: 7px;
   }
 
   .hero-dot {
-    width: 5px;
-    height: 5px;
-    opacity: 0.55;
+    width: 7px;
+    height: 7px;
+    opacity: 0.6;
   }
 
   .hero-dot-on {
-    width: 14px;
-    opacity: 0.85;
+    width: 18px;
+    opacity: 0.9;
   }
 
   /* The title says where it leads, so the words after it are room the title
