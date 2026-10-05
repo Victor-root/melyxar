@@ -7,13 +7,18 @@
  * The page
  * ----------------------------------------------------------------------- */
 
+/* The bar of the tab stands a little nearer the search under it. */
+.requests-page .browse-head {
+  margin-bottom: var(--gap-tight);
+}
+
 .request-search {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 820px;
-  margin: var(--gap) auto 0;
-  padding: 0 24px;
+  max-width: 620px;
+  margin: 0 auto var(--gap-wide);
+  padding: 0 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   background: var(--panel-glass);
@@ -29,21 +34,13 @@
 .request-search input {
   flex: 1;
   min-width: 0;
-  padding: 20px 0;
+  padding: 12px 0;
   border: 0;
   outline: none;
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 19px;
-}
-
-.request-hint {
-  max-width: 820px;
-  margin: 10px auto var(--gap-wide);
-  padding-left: 24px;
-  color: var(--text-faint);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 /* --------------------------------------------------------------------------
@@ -54,6 +51,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
   gap: var(--gap);
+}
+
+/* The rows of suggestions stand closer than the sections of other pages. */
+.requests-page .section {
+  margin-bottom: var(--gap-wide);
 }
 
 /* A card in a row of suggestions: as wide as one of the grid of answers. */

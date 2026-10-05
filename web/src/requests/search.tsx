@@ -52,7 +52,7 @@ export function AskSearch() {
           setParameters(typed.trim() ? { query: typed.trim() } : {}, { replace: true });
         }}
       >
-        <SearchIcon size={26} />
+        <SearchIcon size={20} />
         <input
           type="search"
           autoFocus
@@ -62,7 +62,6 @@ export function AskSearch() {
           aria-label={t("requests.search_placeholder")}
         />
       </form>
-      <p className="request-hint">{t("requests.search_hint")}</p>
       {found.failure && <p className="notice">{t(refusalAbout(found.failure, "requests"))}</p>}
       {words && found.answer?.length === 0 && !found.waiting && (
         <p className="notice">{t("requests.nothing_found")}</p>
