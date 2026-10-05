@@ -405,4 +405,101 @@
     width: 14px;
     height: 14px;
   }
+
+  /*
+   * The notifications as a sheet let down from the top of the screen, over
+   * the whole width, as a phone's own do: a title with the way out above, the
+   * list under it that scrolls, and a handle at the foot that is pulled up.
+   * What is behind it is dimmed.
+   */
+  .bell-list {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    width: auto;
+    max-height: 82dvh;
+    padding: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 0 0 24px 24px;
+    box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--app-ground) 55%, transparent);
+    animation: bell-sheet-in var(--calm) var(--ease);
+  }
+
+  .bell-list .notes {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .bell-sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: calc(var(--safe-top, 0px) + 14px) 14px 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: inherit;
+    backdrop-filter: blur(18px);
+  }
+
+  .bell-sheet-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-contrast);
+  }
+
+  .bell-sheet-title {
+    flex: 1 1 auto;
+    font-size: 17px;
+    font-weight: 650;
+  }
+
+  .bell-sheet-close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: var(--text-soft);
+  }
+
+  .bell-handle {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    place-items: center;
+    flex: none;
+    height: 32px;
+    border-top: 1px solid var(--border);
+    background: inherit;
+    touch-action: none;
+  }
+
+  .bell-handle > span {
+    width: 44px;
+    height: 5px;
+    border-radius: var(--radius-pill);
+    background: var(--border-strong);
+  }
+}
+
+@keyframes bell-sheet-in {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bell-list {
+    animation: none;
+  }
 }

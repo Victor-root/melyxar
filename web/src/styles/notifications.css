@@ -280,6 +280,13 @@
 
 /* Points are sentences, and a sentence cut short is a point half said. Over
    the words of the corner while it is open: it is what is being read. */
+/* The title and the handle of the sheet a phone opens: see the style sheet
+   for narrow screens. */
+.bell-sheet-head,
+.bell-handle {
+  display: none;
+}
+
 .bell-list {
   z-index: 111;
   width: min(340px, calc(100vw - 24px));
