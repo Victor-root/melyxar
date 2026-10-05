@@ -127,31 +127,31 @@
     padding-bottom: var(--gap);
   }
 
-  /* The facts under the synopsis, before the buttons. */
-  .hero-facts {
-    order: 1;
-  }
-
-  .hero-buttons {
-    order: 2;
-  }
-
-  .progress-line {
-    order: 3;
+  /* No synopsis: the drawn title stands above the facts, then the buttons.
+     Every piece is at the foot of the banner, in this order. */
+  .hero-overview {
+    display: none;
   }
 
   .hero-title-drawn {
-    position: absolute;
-    top: calc(var(--header-height) + var(--gap-tight));
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: center;
+    order: 1;
   }
 
   .hero-title-drawn img {
     max-height: 52px;
     max-width: 62%;
+  }
+
+  .hero-facts {
+    order: 2;
+  }
+
+  .hero-buttons {
+    order: 3;
+  }
+
+  .progress-line {
+    order: 4;
   }
 
   /* Smaller than the large buttons, and kept on one line, so both fit
