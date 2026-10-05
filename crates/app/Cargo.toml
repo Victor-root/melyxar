@@ -25,6 +25,7 @@ melyxar-streaming = { workspace = true }
 melyxar-system = { workspace = true }
 melyxar-tags = { workspace = true }
 time = { workspace = true }
+futures-util = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

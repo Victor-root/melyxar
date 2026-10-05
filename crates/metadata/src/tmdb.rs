@@ -12,7 +12,7 @@ use melyxar_core::work::SeasonLength;
 use serde::Deserialize;
 
 use crate::provider::{
-    Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
+    Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, Genre, MetadataProvider,
     OfferedPicture, PersonDetails, PictureKind, ProviderError, Result, SeasonDetails, Trailer,
 };
 
@@ -386,7 +386,46 @@ impl MetadataProvider for TmdbProvider {
                     .map(|raw| candidate_from(raw, Catalogue::Series))
             }))
     }
+
+    async fn genres(&self, catalogue: Catalogue, language: &str) -> Result<Vec<Genre>> {
+        let listed: GenreList = self
+            .get(
+                &format!("/genre/{}/list", road_of(catalogue)),
+                &[("language", language.to_string())],
+            )
+            .await?;
+        Ok(genres_from(listed))
+    }
+
+    async fn popular(
+        &self,
+        catalogue: Catalogue,
+        genre_id: Option<&str>,
+        language: &str,
+    ) -> Result<Vec<Candidate>> {
+        let mut query = vec![
+            ("language", language.to_string()),
+            ("sort_by", "popularity.desc".to_string()),
+            ("include_adult", "false".to_string()),
+            // A work few people rated is popular only by accident.
+            ("vote_count.gte", MOST_OBSCURE_VOTES.to_string()),
+        ];
+        if let Some(genre_id) = genre_id {
+            query.push(("with_genres", genre_id.to_string()));
+        }
+        let found: SearchResponse = self
+            .get(&format!("/discover/{}", road_of(catalogue)), &query)
+            .await?;
+        Ok(found
+            .results
+            .into_iter()
+            .map(|raw| candidate_from(raw, catalogue))
+            .collect())
+    }
 }
+
+/// The fewest votes a work needs to be suggested.
+const MOST_OBSCURE_VOTES: u32 = 200;
 
 /// A failure reduced to something worth logging.
 ///
@@ -408,6 +447,29 @@ fn short_reason(error: &impl std::error::Error) -> String {
 struct SearchResponse {
     #[serde(default)]
     results: Vec<RawMovie>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GenreList {
+    #[serde(default)]
+    genres: Vec<RawGenre>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawGenre {
+    id: i64,
+    name: String,
+}
+
+fn genres_from(listed: GenreList) -> Vec<Genre> {
+    listed
+        .genres
+        .into_iter()
+        .map(|raw| Genre {
+            id: raw.id.to_string(),
+            name: raw.name,
+        })
+        .collect()
 }
 
 /// What a work is called on other sites.
@@ -1262,6 +1324,20 @@ mod tests {
         assert_eq!(candidates[0].title, "Quiet Harbour");
         assert_eq!(candidates[0].release_year, Some(2019));
         assert_eq!(candidates[1].overview, None, "an empty text is no text");
+    }
+
+    #[test]
+    fn a_list_of_genres_keeps_each_with_its_identifier_as_text() {
+        let listed: GenreList =
+            serde_json::from_str(r#"{"genres": [{"id": 27, "name": "Horreur"}, {"id": 53, "name": "Thriller"}]}"#)
+                .expect("the answer parses");
+        assert_eq!(
+            genres_from(listed),
+            vec![
+                Genre { id: "27".to_string(), name: "Horreur".to_string() },
+                Genre { id: "53".to_string(), name: "Thriller".to_string() },
+            ]
+        );
     }
 
     #[test]

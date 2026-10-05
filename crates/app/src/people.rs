@@ -114,7 +114,7 @@ mod tests {
     use melyxar_core::work::WorkKind;
     use melyxar_database::metadata::{CreditRecord, IdentifiedWork};
     use melyxar_metadata::provider::{
-        Candidate, Catalogue, Details, OfferedPicture, PersonDetails, ProviderError,
+        Candidate, Catalogue, Details, Genre, OfferedPicture, PersonDetails, ProviderError,
         Result as Answer, SeasonDetails,
     };
     use std::path::PathBuf;
@@ -187,6 +187,14 @@ mod tests {
         }
 
         async fn by_imdb_id(&self, _: &str, _: &str) -> Answer<Option<Candidate>> {
+            Err(nothing_else())
+        }
+
+        async fn genres(&self, _: Catalogue, _: &str) -> Answer<Vec<Genre>> {
+            Err(nothing_else())
+        }
+
+        async fn popular(&self, _: Catalogue, _: Option<&str>, _: &str) -> Answer<Vec<Candidate>> {
             Err(nothing_else())
         }
     }

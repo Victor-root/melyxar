@@ -63,6 +63,13 @@ impl Catalogue {
     }
 }
 
+/// One genre the provider sorts works into.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Genre {
+    pub id: String,
+    pub name: String,
+}
+
 /// A work the provider thinks the name might be about.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Candidate {
@@ -378,6 +385,23 @@ pub trait MetadataProvider: Send + Sync {
         imdb_id: &str,
         language: &str,
     ) -> impl Future<Output = Result<Option<Candidate>>> + Send;
+
+    /// The genres the provider sorts one catalogue's works into, named in the
+    /// language asked for.
+    fn genres(
+        &self,
+        catalogue: Catalogue,
+        language: &str,
+    ) -> impl Future<Output = Result<Vec<Genre>>> + Send;
+
+    /// The most popular works of one catalogue, narrowed to one genre when
+    /// one is named: what is worth suggesting to somebody who watches it.
+    fn popular(
+        &self,
+        catalogue: Catalogue,
+        genre_id: Option<&str>,
+        language: &str,
+    ) -> impl Future<Output = Result<Vec<Candidate>>> + Send;
 }
 
 #[cfg(test)]

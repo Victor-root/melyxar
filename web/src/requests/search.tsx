@@ -3,6 +3,7 @@
  * whole, answered by the provider, films and series together. Each answer
  * says whether it is here already, asked for already, or free to ask for.
  * The words stay in the address, so coming back finds the same answers.
+ * While nothing is typed, the page shows suggestions instead of staying empty.
  */
 
 import { useEffect, useState } from "react";
@@ -13,26 +14,11 @@ import { useSettings } from "../settings";
 import { requestsApi } from "./api";
 import type { Found } from "./api";
 import { AskDialog } from "./ask";
-import { TitleCard, titleAddress } from "./card";
-import { StandingBar } from "./standing-bar";
+import { Answer } from "./answer";
+import { Suggestions } from "./suggestions";
 
 /** How long typing rests before the provider is asked. */
 const ASKED_AFTER_MS = 450;
-
-function Answer({ found, onAsk }: { found: Found; onAsk: () => void }) {
-  return (
-    <TitleCard
-      catalogue={found.catalogue}
-      title={found.title}
-      year={found.year}
-      poster={found.poster}
-      overview={found.overview}
-      to={titleAddress(found.catalogue, found.tmdb_id)}
-    >
-      <StandingBar found={found} onAsk={onAsk} />
-    </TitleCard>
-  );
-}
 
 export function AskSearch() {
   const { t, language } = useSettings();
@@ -86,6 +72,7 @@ export function AskSearch() {
           <Answer key={`${one.catalogue}:${one.tmdb_id}`} found={one} onAsk={() => setAsking(one)} />
         ))}
       </div>
+      {!words && <Suggestions />}
       {asking && <AskDialog found={asking} onClose={() => setAsking(null)} />}
     </>
   );
