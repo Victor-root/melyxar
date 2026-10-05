@@ -110,7 +110,7 @@ function ListenedList({ title, songs, onPlay }: { title: string; songs: Song[]; 
     <section className="music-listened-column">
       <RowHead title={title} />
       <div className="music-listened-list">
-        <SongList songs={songs} numbered="place" showAlbum={false} onPlay={onPlay} />
+        <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={onPlay} />
       </div>
     </section>
   );

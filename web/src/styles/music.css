@@ -207,6 +207,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gap-wide);
+  /* Closer to the row above than a section usually is. */
+  margin-top: calc(-1 * var(--gap));
 }
 
 .music-listened-column {
@@ -220,6 +222,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* Not the bar of the page: thinner than it. */
+  --scrollbar-width: 5px;
 }
 
 /* --------------------------------------------------------------------------
