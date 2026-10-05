@@ -129,6 +129,7 @@ export function SongList({
   numbered,
   showAlbum = true,
   hideArtists,
+  menuOnly,
   first = 0,
   onPlay,
   moreFor,
@@ -140,6 +141,9 @@ export function SongList({
   /** Left out of each line when they are the album's own: an album page
       does not repeat its artist on every song. */
   hideArtists?: string;
+  /** Every action but the heart goes into the menu of the line, whatever the
+      room: the name keeps all of it. */
+  menuOnly?: boolean;
   /** The place of the first line in the whole list. */
   first?: number;
   /** Plays the list from the line pressed. */
@@ -150,7 +154,8 @@ export function SongList({
   const { t } = useSettings();
   const { song: playingNow, playing, toggle } = useMusic();
   const list = useRef<HTMLOListElement>(null);
-  const inline = useActionsThatFit(list, showAlbum);
+  const fit = useActionsThatFit(list, showAlbum);
+  const inline = menuOnly ? 0 : fit;
   const gone = useGoneSongs();
   return (
     <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}`}>
