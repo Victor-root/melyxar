@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Library } from "../api";
+import { BandCover } from "../components/band";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, KindIcon } from "../icons";
 import { nameOfKind, whereAKindLeads } from "../libraries";
@@ -53,6 +54,7 @@ export function MusicBandTile({ libraries, albums }: { libraries: Library[]; alb
             <KindIcon kind="music" />
           </span>
           <span className="band-halo" aria-hidden="true" />
+          <BandCover pictures={fan[0].cover} />
           <Fan fan={fan} mirror />
           <Fan fan={fan} records={woken} />
         </>

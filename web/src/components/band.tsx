@@ -27,7 +27,7 @@
 
 import { Fragment } from "react";
 import { Link } from "react-router-dom";
-import type { Card, Home, Library, LibraryKind } from "../api";
+import type { Card, Home, Library, LibraryKind, Picture } from "../api";
 import { useShownPicture } from "./picture";
 import { nameOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
@@ -217,6 +217,7 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
             <KindIcon kind={shelf.kind} />
           </span>
           <span className="band-halo" aria-hidden="true" />
+          <BandCover pictures={fan[0].wide.length > 0 ? fan[0].wide : fan[0].poster} />
           {/* What somebody filmed or photographed has no poster and never
               will: it is wide, and it is theirs. So it is not a fan of
               posters but a pile of prints, standing on the same water. */}
@@ -248,6 +249,30 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
         <ChevronRightIcon size={18} />
       </span>
     </Link>
+  );
+}
+
+/** What the tile is on a phone, where there is no fan: the newest work's
+ *  wide picture over the whole of it, as the banner has one behind its words.
+ *  Not drawn, and so not fetched, anywhere else. */
+export function BandCover({ pictures }: { pictures: Picture[] }) {
+  const { picture, itDidNotLoad } = useShownPicture(pictures);
+  if (!picture) {
+    return null;
+  }
+  return (
+    <span className="band-cover" aria-hidden="true">
+      <img
+        src={picture.src}
+        srcSet={picture.srcSet || undefined}
+        sizes="50vw"
+        alt=""
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onError={itDidNotLoad}
+      />
+    </span>
   );
 }
 

@@ -136,16 +136,18 @@
   }
 
   /*
-   * The ways in as small tiles, two to a line, and the next ones under them.
+   * The ways in as small tiles, two to a line, the next ones under them and
+   * a last one left on its own in the middle of its line.
    *
    * Not the wide tile shrunk: a fan of five posters standing on water has
-   * nothing to say at this size. Each one is a wide panel with its name at
-   * the foot and the newest two covers of its library cropped against its
-   * far edge, fading into the panel behind the name.
+   * nothing to say at this size. Each one is the wide picture of the newest
+   * work of its library over the whole tile, as the banner has one behind
+   * its words, with the name at the foot.
    */
   .band {
     --band-gap: 10px;
 
+    justify-content: center;
     gap: var(--band-gap);
     margin-bottom: var(--gap-wide);
     will-change: auto;
@@ -158,64 +160,42 @@
     padding: 0 8px 8px 10px;
     border-radius: var(--radius-control);
     box-shadow: none;
+    /* Over a picture whatever the theme, so the words are the light kind. */
+    color: var(--on-app-ground);
   }
 
-  /* What stood the fan on water, or lit it, has no place on a tile this
-     size. */
+  /* The fan, the pile, the water and everything that lit or reflected them
+     have no place on a tile this size. */
   .band-water,
-  .band-posters.band-mirror,
-  .band-pile.band-mirror,
-  .band-ghost,
-  .band-halo,
-  .band-record {
-    display: none;
-  }
-
-  /* The newest two, side by side along the far edge, cut to the height of
-     the tile and faded into the panel on the side the name is on. */
   .band-posters,
-  .band-pile {
-    inset: 0 0 0 40%;
-    display: flex;
-    gap: 2px;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 38%);
-    mask-image: linear-gradient(to right, transparent, #000 38%);
-  }
-
-  .band-posters > :nth-child(n + 3),
-  .band-pile > :nth-child(n + 3) {
+  .band-pile,
+  .band-ghost,
+  .band-halo {
     display: none;
   }
 
-  .band-posters > .band-poster,
-  .band-pile > .band-print {
-    position: static;
-    flex: 1 1 0;
+  .band-cover {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    display: block;
+    background: var(--tile-color);
+  }
+
+  .band-cover img {
+    width: 100%;
     height: 100%;
-    aspect-ratio: auto;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
-    transform: none;
-    translate: none;
-    scale: none;
+    object-fit: cover;
   }
 
-  .band-poster::after {
-    display: none;
-  }
-
-  .band-poster-initial {
-    font-size: 20px;
-  }
-
-  /* The name, over the panel's own colour where the covers fade out, and
-     the way in at the foot. */
+  /* The ground under the name: dark at the foot, where it stands, and gone
+     before the middle so the picture is what the tile is. */
   .band-tile::after {
     background: linear-gradient(
-      to right,
-      color-mix(in srgb, var(--surface-deep) 78%, transparent),
-      transparent 70%
+      to top,
+      color-mix(in srgb, var(--app-ground) 88%, transparent),
+      color-mix(in srgb, var(--app-ground) 30%, transparent) 48%,
+      transparent 78%
     );
   }
 
