@@ -26,7 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** How long the bar stays after the page last moved, on a screen where it
  *  only shows while somebody is scrolling. */
-const STAYS_MS = 700;
+const STAYS_MS = 350;
 
 /** The shortest the mark is ever drawn. A page of many screens would
  *  otherwise leave a few points of colour nobody can catch with a pointer. */
