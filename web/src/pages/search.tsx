@@ -17,6 +17,7 @@ import {
   useMusicFound,
 } from "../music/search";
 import { useSettings } from "../settings";
+import { useTabPage } from "../tab-page";
 
 export function SearchPage({ libraries }: { libraries: Library[] }) {
   const { t } = useSettings();
@@ -24,6 +25,8 @@ export function SearchPage({ libraries }: { libraries: Library[] }) {
   const words = parameters.get("search") ?? "";
   const scope = musicScopeOf(parameters.get("in") ?? "", libraries);
   const found = useMusicFound(words, scope.looks, scope.library);
+  /* The grid names the tab itself, except where only music is looked for. */
+  useTabPage(scope.only ? t("nav.search") : null);
 
   if (scope.only) {
     return (

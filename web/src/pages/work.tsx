@@ -70,6 +70,7 @@ import { cutOut, sheetUrlOf, sheetUrls } from "../player/thumbnail";
 import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
+import { useTabPage } from "../tab-page";
 
 /** As many of the cast as the server prepares faces for: past this the names
  *  would show with an initial where the others have a picture. */
@@ -94,6 +95,8 @@ export function WorkPage() {
     previousEpisode,
     playEpisode,
   } = screen;
+
+  useTabPage(work?.title);
 
   /* Escape goes back, which is what a remote control and a keyboard both
      expect after opening something. Not while something is being watched: the

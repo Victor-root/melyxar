@@ -21,6 +21,7 @@ import type { Catalogue, TitlePerson } from "./api";
 import { AskDialog } from "./ask";
 import { StandingBar } from "./standing-bar";
 import { useRequests } from "./store";
+import { useTabPage } from "../tab-page";
 
 /** How many of the cast are shown. */
 const FACES_SHOWN = 18;
@@ -68,6 +69,7 @@ export function RequestTitlePage() {
      title without one, never a broken picture. */
   const [posterFailed, setPosterFailed] = useState(false);
   const [backdropFailed, setBackdropFailed] = useState(false);
+  useTabPage(title.answer?.found.title);
 
   if (access === null) {
     return null;
