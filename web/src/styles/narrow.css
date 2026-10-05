@@ -127,6 +127,19 @@
     padding-bottom: var(--gap);
   }
 
+  /* The facts under the synopsis, before the buttons. */
+  .hero-facts {
+    order: 1;
+  }
+
+  .hero-buttons {
+    order: 2;
+  }
+
+  .progress-line {
+    order: 3;
+  }
+
   .hero-title-drawn {
     position: absolute;
     top: calc(var(--header-height) + var(--gap-tight));
