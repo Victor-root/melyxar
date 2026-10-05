@@ -198,6 +198,31 @@
 }
 
 /* --------------------------------------------------------------------------
+ * The songs listened to, two lists side by side
+ * ----------------------------------------------------------------------- */
+
+/* Its height is the screen's own, written by the page: each list scrolls in
+   its box and the page under them has nothing left to scroll. */
+.music-listened {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap-wide);
+}
+
+.music-listened-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.music-listened-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* --------------------------------------------------------------------------
  * Songs as wide tiles
  * ----------------------------------------------------------------------- */
 
