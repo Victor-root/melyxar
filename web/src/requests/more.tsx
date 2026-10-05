@@ -1,11 +1,13 @@
 /*
  * Many more titles of one shelf of suggestions: the most popular of a
  * catalogue, in a genre when one is named, a page at a time as far as the
- * provider goes. Reached from "see more" under a shelf.
+ * provider goes, the next one read as the end of the list comes near.
+ * Reached from "see more" under a shelf.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { useReachEnd } from "../components/reach-end";
 import { useSettings } from "../settings";
 import { Answer } from "./answer";
 import { requestsApi } from "./api";
@@ -37,6 +39,12 @@ function MoreList({ catalogue, genre, name }: { catalogue: Catalogue; genre: str
   const [ended, setEnded] = useState(false);
   const [waiting, setWaiting] = useState(true);
   const [asking, setAsking] = useState<Found | null>(null);
+  const end = useRef<HTMLDivElement>(null);
+  const readNext = useCallback(() => setPage((was) => was + 1), []);
+
+  // The next page is read as the end comes near, one at a time, and the end
+  // is watched again once a page is in, in case the list is still short.
+  useReachEnd(end, waiting || ended ? null : readNext, 800);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -53,6 +61,7 @@ function MoreList({ catalogue, genre, name }: { catalogue: Catalogue; genre: str
       })
       .catch(() => {
         if (!stop.signal.aborted) {
+          setEnded(true);
           setWaiting(false);
         }
       });
@@ -70,13 +79,7 @@ function MoreList({ catalogue, genre, name }: { catalogue: Catalogue; genre: str
           <Answer key={`${one.catalogue}:${one.tmdb_id}`} found={one} onAsk={() => setAsking(one)} />
         ))}
       </div>
-      {!ended && (
-        <div className="request-more-foot">
-          <button type="button" className="button" disabled={waiting} onClick={() => setPage((was) => was + 1)}>
-            {t("requests.load_more")}
-          </button>
-        </div>
-      )}
+      <div ref={end} />
       {asking && <AskDialog found={asking} onClose={() => setAsking(null)} />}
     </>
   );

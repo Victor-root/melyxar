@@ -14,6 +14,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
+import { useReachEnd } from "../components/reach-end";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
 import { useLibraryVersion } from "../libraries";
@@ -356,22 +357,7 @@ function Lettered<T>({
   const end = useRef<HTMLDivElement>(null);
   const { loadMore, more } = paged;
 
-  useEffect(() => {
-    const target = end.current;
-    if (!target || !more) {
-      return;
-    }
-    const watcher = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          loadMore();
-        }
-      },
-      { rootMargin: "800px" },
-    );
-    watcher.observe(target);
-    return () => watcher.disconnect();
-  }, [loadMore, more]);
+  useReachEnd(end, more ? loadMore : null, 800);
 
   /* Where the letter last jumped to begins, marked in the list itself, and
      kept until another letter is chosen or the list is read another way. */

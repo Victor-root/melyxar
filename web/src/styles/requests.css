@@ -62,12 +62,6 @@
   margin-bottom: var(--gap-wide);
 }
 
-.request-more-foot {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--gap-wide);
-}
-
 .request-card {
   position: relative;
   display: flex;
