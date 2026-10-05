@@ -20,8 +20,9 @@ export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: nu
     if (!element || !scroller) {
       return;
     }
-    const foot = parseFloat(getComputedStyle(element.closest(".page") ?? scroller).paddingBottom) || 0;
+    const page = element.closest(".page") ?? scroller;
     const measure = () => {
+      const foot = parseFloat(getComputedStyle(page).paddingBottom) || 0;
       const top = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
       element.style.height = `${roomBelow(scroller.clientHeight, top, foot, least)}px`;
     };
