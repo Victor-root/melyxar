@@ -202,6 +202,18 @@
   left: calc(100% + 4px);
 }
 
+/* The chevron leans towards the row it moves rather than standing in the
+   middle of the margin, nearer the cards than the edge of the screen. */
+.row:not(.row-single) > .row-arrow-back {
+  justify-items: end;
+  padding-right: 6px;
+}
+
+.row:not(.row-single) > .row-arrow-on {
+  justify-items: start;
+  padding-left: 6px;
+}
+
 /* Nothing to hover on a touch screen, and a finger swipes the row anyway. */
 @media (hover: none) {
   .row-arrow {
