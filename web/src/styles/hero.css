@@ -262,6 +262,11 @@
   background: var(--accent);
 }
 
+/* The way to the page of a work on a phone, where the buttons are gone. */
+.hero-info {
+  display: none;
+}
+
 /* Where it is in the five, and the two ways through them, together in the
    bottom corner: an arrow halfway down the banner stands between somebody
    and the words they are reading. */
