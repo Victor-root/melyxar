@@ -571,10 +571,11 @@
   }
 
   /* Only the card in the middle shows: the next one waits behind the
-     arrow, out of sight, and comes in as the row is pulled. The cut is the
-     width of the gap beside the card, so the next one is just out of it. */
+     arrow, out of sight, and comes in as the row is pulled. The cut is a few
+     points wider than the card, so what is lit round the next one, which
+     reaches into the gap, stays out of it. */
   .row.row-single > .row-track {
-    clip-path: inset(0 calc(var(--single-side) - var(--gap)));
+    clip-path: inset(0 calc(var(--single-side) - 4px));
   }
 
   /* The cut leaves no room to grow or to glow in: the card under a finger
