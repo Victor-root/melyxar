@@ -226,6 +226,9 @@
   /* Scrolled by the graphics card, for the reason given on the box the page
      scrolls in. */
   will-change: scroll-position;
+  /* Reaching either end of a list stops there: the wheel carried on into the
+     page, which moved under the pointer that was reading the list. */
+  overscroll-behavior: contain;
   /* Not the bar of the page: thinner than it. */
   --scrollbar-width: 7px;
 }
