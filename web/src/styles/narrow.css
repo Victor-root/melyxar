@@ -514,6 +514,19 @@
     border-radius: var(--radius-pill);
     background: var(--border-strong);
   }
+
+  /* The rows are pulled by a finger, so they have no arrows to leave room
+     for in the margin: they run out to the edges of the screen, where the
+     cards are cut by the edge itself and not a little before it. */
+  .row-more-back > .row-track,
+  .row-more-on > .row-track,
+  .row-more-back.row-more-on > .row-track {
+    clip-path: none;
+  }
+
+  .row-arrow {
+    display: none;
+  }
 }
 
 @keyframes bell-sheet-in {
