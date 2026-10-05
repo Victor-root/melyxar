@@ -246,8 +246,22 @@
     width: 26px;
   }
 
-  /* A finger leaves the hover behind where it pressed: closed again, the
-     account goes back to its own colour rather than staying lit. */
+  /* A finger leaves the hover behind where it pressed: closed again, a
+     button of the bar goes back to its own colour rather than staying lit.
+     It is lit for as long as what it opened is open. */
+  .header-icon:hover:not(:disabled):not(.header-link-on) {
+    color: var(--text);
+  }
+
+  .header-icon.header-link-on {
+    color: var(--accent-bright);
+  }
+
+  .header-link:hover:not(.header-link-on):not(.active) {
+    background: none;
+    color: var(--text-soft);
+  }
+
   .header-account > .header-link:hover:not(.header-link-on) {
     color: var(--text);
   }
