@@ -527,6 +527,57 @@
   .row-arrow {
     display: none;
   }
+
+  /*
+   * The rows of one card: the card in the middle of the screen, the next one
+   * not yet showing, and an arrow on each side to go to it. A finger pulls
+   * the row all the same and it comes to rest on a card.
+   */
+  .row-single {
+    --single-side: 44px;
+  }
+
+  .row-single > .row-track {
+    padding-inline: var(--single-side);
+    gap: var(--gap);
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--single-side);
+  }
+
+  .row-single > .row-track > *,
+  .row-single > .row-track > .card-lying {
+    flex: 0 0 100%;
+    scroll-snap-align: center;
+  }
+
+  /* Over the room kept on each side of the card, level with the picture. */
+  .row-single > .row-arrow {
+    top: var(--row-air);
+    bottom: auto;
+    display: grid;
+    width: var(--single-side);
+    height: calc((100vw - 2 * var(--single-side)) * 9 / 16);
+  }
+
+  .row-single > .row-arrow > svg {
+    width: 28px;
+  }
+
+  /* Only the card in the middle shows: the next one waits behind the
+     arrow, out of sight, and comes in as the row is pulled. */
+  .row.row-single > .row-track {
+    clip-path: inset(0 var(--single-side));
+  }
+
+  .row-single > .row-arrow-back {
+    right: auto;
+    left: calc(var(--gutter) * -1);
+  }
+
+  .row-single > .row-arrow-on {
+    right: calc(var(--gutter) * -1);
+    left: auto;
+  }
 }
 
 @keyframes bell-sheet-in {

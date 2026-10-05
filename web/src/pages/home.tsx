@@ -140,7 +140,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       <section className="section">
         <RowHead mark={<EyeIcon size={24} />} title={t("home.carry_on")} />
         <InOrder cards={home.carry_on}>
-          <Row>
+          <Row single>
             {home.carry_on.map((card) => (
               <Card
                 key={card.id}
@@ -164,7 +164,7 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       <section className="section">
         <RowHead mark={<BinocularsIcon size={24} />} title={t("home.up_next")} />
         <InOrder cards={home.up_next}>
-          <Row>
+          <Row single>
             {home.up_next.map((card) => (
               <Card
                 key={card.id}
