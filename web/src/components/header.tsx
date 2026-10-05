@@ -209,6 +209,13 @@ export function Header({
   /* Whether the buttons of the bar are put away behind the arrow beside the
      account, which a phone offers and nothing wider draws. */
   const [folded, setFolded] = useState(true);
+  /* How wide the buttons are when all of them are shown, in points, so that
+     the room they take can be grown from nothing to that and back by a
+     transition on its own width: the width of a box that is sized by what is
+     in it cannot be moved between two sizes, and the box jumped to full width
+     while its contents unfolded inside it. */
+  const buttons = useRef<HTMLDivElement>(null);
+  const [buttonsWidth, setButtonsWidth] = useState<number | null>(null);
 
   /* Where the piece at the left end stops and how wide the one at the right
      end is, written on the page: the first as wide as the server's name and
@@ -480,6 +487,21 @@ export function Header({
     mayRequest: access?.may_ask === true,
   }).filter((button) => button !== "scan" || libraries.length > 0);
 
+  const offeredNames = offered.join(",");
+  useLayoutEffect(() => {
+    const track = buttons.current;
+    if (!track) {
+      return;
+    }
+    const measure = () => setButtonsWidth(Math.ceil(track.scrollWidth));
+    measure();
+    const watching = new ResizeObserver(measure);
+    for (const child of Array.from(track.children)) {
+      watching.observe(child);
+    }
+    return () => watching.disconnect();
+  }, [offeredNames, administrator]);
+
   /* The press that starts a scan, on the bar or in the menu. Nothing to
      start while something is already running, and the bar is saying so
      meanwhile. */
@@ -545,8 +567,11 @@ export function Header({
           {/* The buttons of the bar in one box, which on a phone is pulled
               sideways when they are more than the width allows. Everywhere
               else it takes no room of its own. */}
-          <div className="header-buttons">
-            <div className="header-buttons-track">
+          <div
+            className="header-buttons"
+            style={buttonsWidth === null ? undefined : { ["--buttons-width" as string]: `${buttonsWidth}px` }}
+          >
+            <div className="header-buttons-track" ref={buttons}>
           {/* Everything anybody can press, one icon each, in the order this
               account put them; those it moved into its menu are drawn there
               instead. A menu of five entries opened by one press is five
