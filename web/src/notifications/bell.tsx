@@ -46,8 +46,15 @@ function Count({ count, levels, line }: { count: number; levels: Level[]; line?:
   );
 }
 
-/** How far up the handle has to be pulled to put the sheet away. */
-const PULL_TO_CLOSE = 30;
+/** How far up the handle has to be pulled to put the sheet away, at most: a
+ *  short sheet goes with a third of its height. */
+const PULL_TO_CLOSE = 120;
+
+/** How far a finger may wander on the handle and still be pressing it. */
+const PRESS_SLACK = 6;
+
+/** How long the sheet takes to go, or to come back, once let go of. */
+const LETS_GO_MS = 180;
 
 /**
  * The bell of the bar: how many things wait, in the colour of the gravest,
@@ -62,8 +69,9 @@ export function Bell({ administrator }: { administrator: boolean }) {
   const { jobs } = useRunning();
   const looked = administrator ? (points ?? []) : [];
   const onAPhone = useMediaQuery(PHONE);
-  /* Where a finger went down on the handle, to tell a pull up from a press. */
-  const pulled = useRef<number | null>(null);
+  /* The pull in progress on the handle: where the finger went down and the
+     sheet it is moving. */
+  const pulled = useRef<{ from: number; sheet: HTMLElement; moved: boolean } | null>(null);
 
   return (
     <Dropdown
@@ -155,23 +163,69 @@ export function Bell({ administrator }: { administrator: boolean }) {
       <Link to="/notifications" className="bell-all">
         {t("notes.see_all")}
       </Link>
-      {/* The handle at the foot of the sheet: pulled up or pressed, it puts
-          the sheet away, as any press in the list does. */}
+      {/* The handle at the foot of the sheet: held and pulled up, the sheet
+          follows the finger and goes if it was pulled far enough; pressed, it
+          goes at once, as any press in the list does. */}
       <button
         type="button"
         className="bell-handle"
         aria-label={t("modal.close")}
         onPointerDown={(event) => {
-          pulled.current = event.clientY;
+          const sheet = event.currentTarget.closest<HTMLElement>(".bell-list");
+          if (!sheet) {
+            return;
+          }
+          event.currentTarget.setPointerCapture(event.pointerId);
+          sheet.style.animation = "none";
+          sheet.style.transition = "none";
+          pulled.current = { from: event.clientY, sheet, moved: false };
+        }}
+        onPointerMove={(event) => {
+          const pull = pulled.current;
+          if (!pull) {
+            return;
+          }
+          const up = Math.min(0, event.clientY - pull.from);
+          pull.moved = pull.moved || up < -PRESS_SLACK;
+          pull.sheet.style.transform = `translateY(${up}px)`;
         }}
         onPointerUp={(event) => {
-          if (pulled.current !== null && event.clientY < pulled.current - PULL_TO_CLOSE) {
-            event.currentTarget.click();
+          const pull = pulled.current;
+          if (!pull) {
+            return;
           }
-          pulled.current = null;
+          const handle = event.currentTarget;
+          const up = event.clientY - pull.from;
+          pull.sheet.style.transition = `transform ${LETS_GO_MS}ms ease-out`;
+          if (up < -Math.min(PULL_TO_CLOSE, pull.sheet.offsetHeight * 0.3)) {
+            pull.sheet.style.transform = "translateY(-100%)";
+            /* The click the browser sends after this is the end of the pull
+               and is swallowed; the one that shuts the sheet is sent once it
+               has gone. */
+            pull.moved = true;
+            window.setTimeout(() => {
+              pulled.current = null;
+              handle.click();
+            }, LETS_GO_MS);
+            return;
+          }
+          pull.sheet.style.transform = "";
         }}
         onPointerCancel={() => {
+          const pull = pulled.current;
           pulled.current = null;
+          if (pull) {
+            pull.sheet.style.transition = `transform ${LETS_GO_MS}ms ease-out`;
+            pull.sheet.style.transform = "";
+          }
+        }}
+        onClick={(event) => {
+          /* The press that ends a pull is not a press on the handle. */
+          const pull = pulled.current;
+          pulled.current = null;
+          if (pull?.moved) {
+            event.stopPropagation();
+          }
         }}
       >
         <span aria-hidden="true" />
