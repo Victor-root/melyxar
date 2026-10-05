@@ -326,6 +326,9 @@ body {
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* A touch screen flashes a blue box over whatever is pressed. Every
+     pressable thing here already answers a press on its own. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 /*
