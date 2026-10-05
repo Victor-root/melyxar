@@ -5,7 +5,7 @@
  * way to many more. Each is asked for the same way as an answer of a search.
  */
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useAsked } from "../asking";
 import { RowHead } from "../components/row";
 import { useSettings } from "../settings";
@@ -13,6 +13,27 @@ import { Answer } from "./answer";
 import { requestsApi } from "./api";
 import type { Catalogue, Found } from "./api";
 import { AskDialog } from "./ask";
+
+/** How many lines of tiles a shelf shows. */
+const LINES = 2;
+
+/** How many tiles stand on a line of the grid, read from the grid itself so
+ *  that a shelf shows two whole lines whatever the width. */
+function useTilesPerLine(grid: React.RefObject<HTMLDivElement | null>): number {
+  const [tiles, setTiles] = useState(1);
+  useLayoutEffect(() => {
+    const element = grid.current;
+    if (!element) {
+      return;
+    }
+    const read = () => setTiles(Math.max(1, getComputedStyle(element).gridTemplateColumns.split(" ").length));
+    read();
+    const watcher = new ResizeObserver(read);
+    watcher.observe(element);
+    return () => watcher.disconnect();
+  }, [grid]);
+  return tiles;
+}
 
 /** Where seeing more of a shelf leads. */
 export function moreAddress(catalogue: Catalogue, genreId: string | null, genre: string | null): string {
@@ -23,6 +44,18 @@ export function moreAddress(catalogue: Catalogue, genreId: string | null, genre:
   }
   const text = parameters.toString();
   return `/requests/more/${catalogue}${text ? `?${text}` : ""}`;
+}
+
+function ShelfGrid({ items, onAsk }: { items: Found[]; onAsk: (found: Found) => void }) {
+  const grid = useRef<HTMLDivElement>(null);
+  const tiles = useTilesPerLine(grid);
+  return (
+    <div ref={grid} className="request-grid">
+      {items.slice(0, tiles * LINES).map((one) => (
+        <Answer key={`${one.catalogue}:${one.tmdb_id}`} found={one} onAsk={() => onAsk(one)} />
+      ))}
+    </div>
+  );
 }
 
 export function Suggestions() {
@@ -44,11 +77,7 @@ export function Suggestions() {
           >
             <span className="request-kind">{t(`requests.catalogue.${shelf.catalogue}`)}</span>
           </RowHead>
-          <div className="request-grid request-two-lines">
-            {shelf.items.map((one) => (
-              <Answer key={`${one.catalogue}:${one.tmdb_id}`} found={one} onAsk={() => setAsking(one)} />
-            ))}
-          </div>
+          <ShelfGrid items={shelf.items} onAsk={setAsking} />
         </section>
       ))}
       {asking && <AskDialog found={asking} onClose={() => setAsking(null)} />}

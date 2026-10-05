@@ -58,19 +58,6 @@
   margin-bottom: var(--gap-wide);
 }
 
-/* Two lines of a shelf, however many titles stand on a line: what does not
-   fit the first two rows is given no height at all and clipped. */
-.request-two-lines {
-  grid-template-rows: auto auto;
-  grid-auto-rows: 0;
-  row-gap: 0;
-  overflow: hidden;
-}
-
-.request-two-lines > .request-card {
-  margin-bottom: var(--gap);
-}
-
 .request-more-head {
   margin-bottom: var(--gap-wide);
 }
