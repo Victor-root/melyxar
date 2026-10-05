@@ -144,6 +144,121 @@ export function heldUpByTheMainThread(previous: Drawn | undefined, frame: number
   return previous !== undefined && heldFor(previous) > frame * ROOM_TO_SPARE;
 }
 
+/** A stretch of time. */
+export interface Span {
+  from: number;
+  to: number;
+}
+
+/** The frames drawn while the page was in view: a tab put in the background
+ *  stops drawing, and the first frame after it reads as one enormous stall. */
+export function framesInView(frames: Drawn[], away: Span[]): Drawn[] {
+  return frames.filter(
+    (drawn) => !away.some((span) => span.from < drawn.at && span.to > drawn.at - drawn.gap),
+  );
+}
+
+/** Something the person did, or the page set moving, at one moment. */
+export interface Doing {
+  at: number;
+  what: string;
+}
+
+/** The latest of some entries, in order of time, at or before a moment. */
+export function latestBefore<T extends { at: number }>(entries: T[], at: number): T | null {
+  let low = 0;
+  let high = entries.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (entries[middle].at <= at) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low > 0 ? entries[low - 1] : null;
+}
+
+/** What went on between two moments, and in the `within` before the first:
+ *  each doing once, the latest ones when there are more than `most`. */
+export function doingsAround(
+  doings: Doing[],
+  from: number,
+  to: number,
+  within: number,
+  most: number,
+): string[] {
+  const kinds: string[] = [];
+  for (const doing of doings) {
+    if (doing.at >= from - within && doing.at <= to && !kinds.includes(doing.what)) {
+      kinds.push(doing.what);
+    }
+  }
+  return kinds.slice(-most);
+}
+
+/** One event the page took a while to answer, as the browser describes it. */
+export interface Timed {
+  startTime: number;
+  duration: number;
+  processingStart: number;
+  processingEnd: number;
+}
+
+/** Where the time of an event went: before the page's handlers ran, in them,
+ *  and from the end of them until the next frame was drawn. */
+export function eventParts(timed: Timed): { waited: number; handling: number; drawing: number } {
+  return {
+    waited: Math.max(0, timed.processingStart - timed.startTime),
+    handling: Math.max(0, timed.processingEnd - timed.processingStart),
+    drawing: Math.max(0, timed.startTime + timed.duration - timed.processingEnd),
+  };
+}
+
+/** An event the page was slow to answer. */
+export interface Slow extends Timed {
+  name: string;
+  what: string;
+}
+
+/** Events on one element this close in time are one hand movement: a hover
+ *  is a dozen events, all waiting for the same frame. */
+const ONE_MOVEMENT_MS = 100;
+
+/** The browser rounds the time of an event to eight milliseconds. */
+const ROUNDING_MS = 8;
+
+/** The slow events with those of one movement on one element made one: named
+ *  by all their types, timed from the first, which waited the longest, and
+ *  handled from the first handler's start to the last one's end. */
+export function slowMoments(slow: Slow[]): Slow[] {
+  const moments: Slow[] = [];
+  const endOf = (one: Slow) => one.startTime + one.duration;
+  for (const one of [...slow].sort((a, b) => a.startTime - b.startTime)) {
+    let moment: Slow | undefined;
+    for (
+      let at = moments.length - 1;
+      at >= 0 && one.startTime - moments[at].startTime <= ONE_MOVEMENT_MS;
+      at -= 1
+    ) {
+      if (moments[at].what === one.what && Math.abs(endOf(moments[at]) - endOf(one)) <= ROUNDING_MS) {
+        moment = moments[at];
+        break;
+      }
+    }
+    if (!moment) {
+      moments.push({ ...one });
+    } else {
+      if (!moment.name.split(", ").includes(one.name)) {
+        moment.name = `${moment.name}, ${one.name}`;
+      }
+      moment.processingStart = Math.min(moment.processingStart, one.processingStart);
+      moment.processingEnd = Math.max(moment.processingEnd, one.processingEnd);
+    }
+  }
+  return moments;
+}
+
 /** The frames drawn while something moved: those that came no later than
  *  `within` after one of the moments it moved, which are in order. */
 export function framesWhile(frames: Drawn[], moments: number[], within: number): Drawn[] {
