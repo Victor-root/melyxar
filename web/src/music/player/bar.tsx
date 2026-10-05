@@ -22,22 +22,19 @@ import { namesOf } from "../tiles";
 import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
-import { useMusic } from "./player";
+import { BAR_LEAVES_MS, useMusic } from "./player";
 import { BehindThePlayer } from "./spectrum";
-
-/** How long the bar takes to leave, which is what its way out lasts. */
-const LEAVE_MS = 180;
 
 export function MusicBar() {
   const { t } = useSettings();
   const music = useMusic();
   const nowPlaying = useNowPlayingPage();
   const film = useIsAFilmOnScreen();
-  const shown = music.song !== null && !film;
+  const shown = music.song !== null && !film && !music.stopping;
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   /* It goes down the way it came up when the music stops, still showing the
      last song; a film takes the screen at once, so it simply goes. */
-  const leaving = useLeaving(shown, !film, reduced ? 0 : LEAVE_MS);
+  const leaving = useLeaving(shown, !film, reduced ? 0 : BAR_LEAVES_MS);
   // Room kept at the foot of the pages, so the bar never hides the end of
   // one. Kept until the bar has left: taken away as it starts to go down,
   // the whole page was laid out and drawn again during its way out.

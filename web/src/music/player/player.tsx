@@ -46,6 +46,11 @@ import { MediaSessionPosition, useMediaSession } from "./session";
 import { useTabs } from "./tabs";
 import type { Command } from "./tabs";
 
+/** How long the bar takes to go down when the music stops. What is let go of
+ *  with the music waits until it has: done at the click, it held the first
+ *  frame of the bar's way out for four frames, which read as a stutter. */
+export const BAR_LEAVES_MS = 180;
+
 export interface Music {
   queue: Queue;
   /** The song playing or paused, if there is one. */
@@ -59,6 +64,8 @@ export interface Music {
   toggle: () => void;
   /** Stops for good: the queue goes, and the bar with it. */
   stop: () => void;
+  /** Stopped, and the bar on its way out: the queue goes once it has. */
+  stopping: boolean;
   next: () => void;
   previous: () => void;
   seek: (seconds: number) => void;
@@ -191,6 +198,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [preferences, setPreferencesHere] = useState<MusicPreferences | null>(null);
   const [playing, setPlaying] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const stopsLater = useRef(0);
+  useEffect(() => () => window.clearTimeout(stopsLater.current), []);
   const [loudness, setLoudness] = useState<Loudness>(storedLoudness);
   const song = current(queue);
 
@@ -571,13 +581,27 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     wantsToPlay.current = false;
   }, [live, letGoOfTheNext]);
 
+  /* Silent at once and the bar set on its way out; the rest once it is gone,
+     unless something was played again meanwhile. */
   const stop = useCallback(() => {
-    letGoOfTheSound();
-    setPlaying(false);
-    setWaiting(false);
-    setQueue(EMPTY);
-    time.set({ position: 0, length: 0 });
-  }, [letGoOfTheSound]);
+    const queueAtTheStop = queueNow.current;
+    const audio = live();
+    audio.pause();
+    wantsToPlay.current = false;
+    setStopping(true);
+    window.clearTimeout(stopsLater.current);
+    stopsLater.current = window.setTimeout(() => {
+      setStopping(false);
+      if (queueNow.current !== queueAtTheStop || !live().paused) {
+        return;
+      }
+      letGoOfTheSound();
+      setPlaying(false);
+      setWaiting(false);
+      setQueue(EMPTY);
+      time.set({ position: 0, length: 0 });
+    }, BAR_LEAVES_MS);
+  }, [live, letGoOfTheSound]);
 
   stopNow.current = stop;
 
@@ -769,6 +793,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       play: sent("play", commands.play),
       toggle: sentBare("toggle", commands.toggle),
       stop: sentBare("stop", commands.stop),
+      stopping,
       next: sentBare("next", commands.next),
       previous: sentBare("previous", commands.previous),
       seek: sent("seek", commands.seek),
@@ -784,7 +809,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [queue, song, playing, waiting, loudness, commands, run, preferences, setPreferences]);
+  }, [queue, song, playing, waiting, stopping, loudness, commands, run, preferences, setPreferences]);
 
   useMediaSession(music);
 
