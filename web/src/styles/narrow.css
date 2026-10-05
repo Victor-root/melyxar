@@ -221,6 +221,20 @@
     padding: 0 var(--header-edge);
   }
 
+  /* No rule beside the account: the arrow stands there instead, and folds
+     the buttons of the bar away or brings them back. */
+  .header-account::before {
+    display: none;
+  }
+
+  .header-fold {
+    display: inline-flex;
+  }
+
+  .header-side[data-folded] > :not(.header-account):not(.header-fold) {
+    display: none;
+  }
+
   /* The way back takes no more room from the edge than the other pieces. */
   .header-start-back {
     margin-left: 0;

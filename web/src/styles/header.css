@@ -530,6 +530,11 @@
   padding-left: var(--gap-tight);
 }
 
+/* The arrow that puts the buttons away: a phone's, nothing wider draws it. */
+.header-fold {
+  display: none;
+}
+
 /* A rule between who is here and everything that is not. The two ends of
    this piece do different jobs, and a hairline says so where a gap of air
    was only saying that the icons had run out. */
