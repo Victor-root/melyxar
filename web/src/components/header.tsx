@@ -57,6 +57,8 @@ import { PHONE, useMediaQuery } from "../media-query";
 import type { Headroom } from "../headroom";
 import {
   BackIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ClockIcon,
   CollectionIcon,
   PlaylistIcon,
@@ -205,6 +207,9 @@ export function Header({
   const branding = useBranding();
   const start = useRef<HTMLDivElement>(null);
   const side = useRef<HTMLDivElement>(null);
+  /* Whether the buttons of the bar are put away behind the arrow beside the
+     account, which a phone offers and nothing wider draws. */
+  const [folded, setFolded] = useState(false);
 
   /* Where the piece at the left end stops and how wide the one at the right
      end is, written on the page: the first as wide as the server's name and
@@ -537,7 +542,7 @@ export function Header({
             Three of them read as three decisions about what goes with what,
             and there is only one: this end is what you press, the other is
             where you are. */}
-        <div className="header-piece header-side" ref={side}>
+        <div className="header-piece header-side" ref={side} data-folded={folded || undefined}>
           {/* What the server is doing, and only while it is doing it. It is
               the one thing here that is news rather than a way to somewhere:
               a scan that started ten minutes ago and is still going is worth
@@ -712,6 +717,16 @@ export function Header({
             * when it is wanted, which is what stops a bar of eight icons
             * reading as eight things somebody is expected to know.
             */}
+          <button
+            type="button"
+            className="header-icon header-fold"
+            aria-label={t(folded ? "nav.bar_show" : "nav.bar_hide")}
+            aria-expanded={!folded}
+            onClick={() => setFolded((was) => !was)}
+          >
+            {folded ? <ChevronLeftIcon size={20} /> : <ChevronRightIcon size={20} />}
+          </button>
+
           <Dropdown
             className="header-account"
             reachable
