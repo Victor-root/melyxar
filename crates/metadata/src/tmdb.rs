@@ -401,10 +401,19 @@ impl MetadataProvider for TmdbProvider {
         &self,
         catalogue: Catalogue,
         genre_id: Option<&str>,
+        released_by: &str,
         page: u32,
         language: &str,
     ) -> Result<Vec<Candidate>> {
         let mut query = vec![
+            // The two catalogues date a release under different words.
+            (
+                match catalogue {
+                    Catalogue::Films => "primary_release_date.lte",
+                    Catalogue::Series => "first_air_date.lte",
+                },
+                released_by.to_string(),
+            ),
             ("language", language.to_string()),
             ("page", page.to_string()),
             ("sort_by", "popularity.desc".to_string()),

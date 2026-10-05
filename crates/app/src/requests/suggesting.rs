@@ -21,6 +21,17 @@ const SHELVES: usize = 3;
 /// The most titles one shelf holds.
 const TITLES_PER_SHELF: usize = 18;
 
+/// How old a title has to be to be suggested, in days: six months. A title
+/// that recent is often not to be had anywhere yet, and asking for it only
+/// piles up requests nobody can answer.
+const OLD_ENOUGH_DAYS: i64 = 183;
+
+/// The day a title must have come out on or before to be suggested, written
+/// year, month, day.
+fn released_by(now: melyxar_core::time::Timestamp) -> String {
+    (now - time::Duration::days(OLD_ENOUGH_DAYS)).date().to_string()
+}
+
 /// One row of suggestions.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shelf {
@@ -125,11 +136,12 @@ pub async fn suggestions<P: MetadataProvider>(
         .collect();
     let picks = picks(&taste, &lists, shown_in);
 
+    let cutoff = released_by(melyxar_core::time::now());
     let mut taken: Vec<Taken> = Vec::new();
     if picks.is_empty() {
         let (films, series) = tokio::join!(
-            provider.popular(Catalogue::Films, None, 1, shown_in),
-            provider.popular(Catalogue::Series, None, 1, shown_in),
+            provider.popular(Catalogue::Films, None, &cutoff, 1, shown_in),
+            provider.popular(Catalogue::Series, None, &cutoff, 1, shown_in),
         );
         for (catalogue, candidates) in [(Catalogue::Films, films?), (Catalogue::Series, series?)] {
             taken.push(Taken { genre: None, genre_id: None, catalogue, candidates });
@@ -138,7 +150,7 @@ pub async fn suggestions<P: MetadataProvider>(
         let answers = join_all(
             picks
                 .iter()
-                .map(|pick| provider.popular(pick.catalogue, Some(&pick.genre_id), 1, shown_in)),
+                .map(|pick| provider.popular(pick.catalogue, Some(&pick.genre_id), &cutoff, 1, shown_in)),
         )
         .await;
         for (pick, answer) in picks.into_iter().zip(answers) {
@@ -209,7 +221,13 @@ pub async fn more<P: MetadataProvider>(
 ) -> Result<Vec<Found>> {
     access::require(state, who).await?;
     let candidates = provider
-        .popular(catalogue, genre_id, page.max(1), provider_language(language))
+        .popular(
+            catalogue,
+            genre_id,
+            &released_by(melyxar_core::time::now()),
+            page.max(1),
+            provider_language(language),
+        )
         .await?;
     let standing = standing_of(state, &candidates).await?;
     Ok(not_held(candidates, &standing, who, provider.as_ref()))
@@ -288,6 +306,12 @@ mod tests {
         let picked = picks(&taste, &lists, "en");
         assert_eq!(picked.len(), 2);
         assert_eq!(picked[0].catalogue, Catalogue::Series);
+    }
+
+    #[test]
+    fn a_title_has_to_be_six_months_old() {
+        let now = time::macros::datetime!(2026-10-05 12:00 UTC);
+        assert_eq!(released_by(now), "2026-04-05");
     }
 
     #[tokio::test]
