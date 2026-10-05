@@ -207,8 +207,8 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gap-wide);
-  /* Closer to the row above than a section usually is. */
-  margin-top: calc(-1 * var(--gap));
+  /* Only a gap from the row above, not a whole space between sections. */
+  margin-top: calc(var(--gap) - var(--gap-section));
 }
 
 .music-listened-column {
