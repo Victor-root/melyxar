@@ -283,25 +283,25 @@
   }
 
   /* Put away and brought back as the search field is opened and shut: the
-     room they take grows from nothing and shrinks to it over the same
-     time and on the same curve, while they fade. Folded, they cannot be
-     reached either, once they have gone. */
+     room they take grows from nothing to what they need and shrinks back
+     over the same time and on the same curve, while they fade. Folded, they
+     cannot be reached either, once they have gone. */
   .header-buttons {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: block;
+    width: var(--buttons-width, auto);
     min-width: 0;
     transition:
-      grid-template-columns var(--calm) var(--ease),
+      width var(--calm) var(--ease),
       opacity var(--quick) var(--ease);
   }
 
   .header-side[data-folded] .header-buttons {
-    grid-template-columns: 0fr;
+    width: 0;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transition:
-      grid-template-columns var(--calm) var(--ease),
+      width var(--calm) var(--ease),
       opacity var(--quick) var(--ease),
       visibility 0s linear var(--calm);
   }
@@ -310,6 +310,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
+    width: 100%;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
