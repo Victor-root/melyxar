@@ -105,8 +105,13 @@
     border-width: 0;
   }
 
-  /* The way through the five goes under the words, in the middle, instead of
-     over the buttons in the corner. The words keep that room clear. */
+  /* A finger turns the banner over, so the arrows go and only where it is
+     in the five is left, under the words and in the middle. The words keep
+     that room clear. */
+  .hero-step {
+    display: none;
+  }
+
   .hero-steps {
     left: 0;
     right: 0;
@@ -115,7 +120,12 @@
   }
 
   .hero-words {
-    padding-bottom: calc(38px + 2 * var(--gap));
+    padding-bottom: calc(var(--gap) * 2 + 8px);
+  }
+
+  /* The two pieces nearer the edges of the screen they stand at. */
+  .header-inner {
+    padding: 0 6px;
   }
 
   /* The ways in side by side in a row that is pulled sideways, as the rows

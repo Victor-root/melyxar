@@ -33,6 +33,9 @@
 
   position: relative;
   margin: 0;
+  /* Left to the browser: the page scrolls up and down, and a finger drawn
+     across turns the banner over, which the banner itself listens for. */
+  touch-action: pan-y;
   /* Large enough to be the thing somebody meets, short enough that the first
      row under it is on the screen at the same time: a banner that fills the
      window is a banner that hides the library behind it. The height itself,
