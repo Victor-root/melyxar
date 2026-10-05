@@ -195,58 +195,62 @@ function TheLibrary() {
         <MusicProvider>
         <div className="shell">
           <Header libraries={libraries.all} scrolling={scrolling} />
-          <div className="shell-scroll" ref={scrolling}>
-            <Routes>
-              <Route path="/" element={<HomePage libraries={libraries.all} />} />
-              <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
-              <Route path="/music/album/:id" element={<MusicAlbumPage />} />
-              <Route path="/music/album/:id/tags" element={<TagEditorPage />} />
-              <Route path="/music/playlist/:id" element={<MusicPlaylistPage />} />
-              <Route path="/music/artist/:id" element={<MusicArtistPage />} />
-              <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
-              {/* The same grid, narrowed to what this account marked: a view of the
-                  library rather than a library of its own. */}
-              <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
-              <Route path="/watch-later" element={<LibraryPage libraries={libraries.all} />} />
-              <Route path="/work/:id" element={<WorkPage />} />
-              <Route path="/person/:id" element={<PersonPage />} />
-              <Route path="/collections" element={<CollectionsPage />} />
-              <Route path="/collection/:id" element={<CollectionPage />} />
-              <Route path="/playlists" element={<PlaylistsPage />} />
-              <Route path="/playlist/:id" element={<PlaylistPage />} />
-              <Route path="/notifications" element={<NotesPage />} />
-              <Route path="/requests" element={<RequestsPage view="ask" />} />
-              <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
-              <Route path="/requests/more/:catalogue" element={<RequestsPage view="more" />} />
-              <Route path="/requests/title/:catalogue/:id" element={<RequestTitlePage />} />
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminOverview />} />
-                <Route path="libraries" element={<AdminLibraries />} />
-                <Route path="metadata" element={<AdminMetadata />} />
-                <Route path="playback" element={<AdminPlayback />} />
-                <Route path="transcoding" element={<AdminTranscoding />} />
-                <Route path="users" element={<AdminUsers />} />
-                <Route path="devices" element={<AdminDevices />} />
-                <Route path="security" element={<AdminSecurity />} />
-                <Route path="notifications" element={<AdminNotifications />} />
-                <Route path="requests" element={<AdminRequests />} />
-                <Route path="tasks" element={<AdminTasks />} />
-                <Route path="journal" element={<AdminJournal />} />
-                <Route path="diagnostics" element={<AdminDiagnostics />} />
-                <Route path="settings" element={<AdminSettings />} />
-              </Route>
-              <Route path="/settings" element={<MySettingsLayout />}>
-                <Route index element={<MyProfile />} />
-                <Route path="appearance" element={<MyAppearance />} />
-                <Route path="home" element={<MyHomePage />} />
-                <Route path="playback" element={<MyPlayback />} />
-                <Route path="music" element={<MyMusic />} />
-                <Route path="subtitles" element={<MySubtitles />} />
-                <Route path="notifications" element={<MyNotifications />} />
-                <Route path="about" element={<MyAbout />} />
-              </Route>
-              <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
-            </Routes>
+          {/* The frame the page is seen through, which stays still while the
+              page moves in it: what fades it at the foot is worn here. */}
+          <div className="shell-view">
+            <div className="shell-scroll" ref={scrolling}>
+              <Routes>
+                <Route path="/" element={<HomePage libraries={libraries.all} />} />
+                <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
+                <Route path="/music/album/:id" element={<MusicAlbumPage />} />
+                <Route path="/music/album/:id/tags" element={<TagEditorPage />} />
+                <Route path="/music/playlist/:id" element={<MusicPlaylistPage />} />
+                <Route path="/music/artist/:id" element={<MusicArtistPage />} />
+                <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
+                {/* The same grid, narrowed to what this account marked: a view of the
+                    library rather than a library of its own. */}
+                <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />
+                <Route path="/watch-later" element={<LibraryPage libraries={libraries.all} />} />
+                <Route path="/work/:id" element={<WorkPage />} />
+                <Route path="/person/:id" element={<PersonPage />} />
+                <Route path="/collections" element={<CollectionsPage />} />
+                <Route path="/collection/:id" element={<CollectionPage />} />
+                <Route path="/playlists" element={<PlaylistsPage />} />
+                <Route path="/playlist/:id" element={<PlaylistPage />} />
+                <Route path="/notifications" element={<NotesPage />} />
+                <Route path="/requests" element={<RequestsPage view="ask" />} />
+                <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
+                <Route path="/requests/more/:catalogue" element={<RequestsPage view="more" />} />
+                <Route path="/requests/title/:catalogue/:id" element={<RequestTitlePage />} />
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<AdminOverview />} />
+                  <Route path="libraries" element={<AdminLibraries />} />
+                  <Route path="metadata" element={<AdminMetadata />} />
+                  <Route path="playback" element={<AdminPlayback />} />
+                  <Route path="transcoding" element={<AdminTranscoding />} />
+                  <Route path="users" element={<AdminUsers />} />
+                  <Route path="devices" element={<AdminDevices />} />
+                  <Route path="security" element={<AdminSecurity />} />
+                  <Route path="notifications" element={<AdminNotifications />} />
+                  <Route path="requests" element={<AdminRequests />} />
+                  <Route path="tasks" element={<AdminTasks />} />
+                  <Route path="journal" element={<AdminJournal />} />
+                  <Route path="diagnostics" element={<AdminDiagnostics />} />
+                  <Route path="settings" element={<AdminSettings />} />
+                </Route>
+                <Route path="/settings" element={<MySettingsLayout />}>
+                  <Route index element={<MyProfile />} />
+                  <Route path="appearance" element={<MyAppearance />} />
+                  <Route path="home" element={<MyHomePage />} />
+                  <Route path="playback" element={<MyPlayback />} />
+                  <Route path="music" element={<MyMusic />} />
+                  <Route path="subtitles" element={<MySubtitles />} />
+                  <Route path="notifications" element={<MyNotifications />} />
+                  <Route path="about" element={<MyAbout />} />
+                </Route>
+                <Route path="*" element={<main className="page"><p className="notice">{t("error.not_found")}</p></main>} />
+              </Routes>
+            </div>
           </div>
 
           {/* Outside the box it belongs to, because a bar drawn inside it
