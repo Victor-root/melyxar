@@ -47,7 +47,9 @@
   font-weight: 650;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  /* A long name, a graphics card's, goes onto a second line rather than out
+     of its box. */
+  overflow-wrap: anywhere;
 }
 
 .stat-note {
