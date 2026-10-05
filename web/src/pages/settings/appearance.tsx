@@ -172,6 +172,8 @@ function TopBar() {
     t,
     headerHides,
     setHeaderHides,
+    headerHidesOnPhone,
+    setHeaderHidesOnPhone,
     headerButtons,
     setHeaderButtons,
     buttonsInTheBar,
@@ -200,6 +202,13 @@ function TopBar() {
     >
       <Setting label={t("settings.header_hides")} why={t("settings.header_hides_why")}>
         <Toggle label={t("settings.header_hides")} checked={headerHides} onChange={setHeaderHides} />
+      </Setting>
+      <Setting label={t("settings.header_hides_phone")} why={t("settings.header_hides_phone_why")}>
+        <Toggle
+          label={t("settings.header_hides_phone")}
+          checked={headerHidesOnPhone}
+          onChange={setHeaderHidesOnPhone}
+        />
       </Setting>
       <Sortable
         items={offered}

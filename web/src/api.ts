@@ -1786,6 +1786,8 @@ export interface ViewerPreferences {
   banner_fills_the_screen: boolean;
   /** Whether the bar at the top slides away while a page is read down. */
   header_hides_on_scroll: boolean;
+  /** The same on a phone, chosen apart. */
+  header_hides_on_scroll_phone: boolean;
   /** Every button of the bar and of the account's menu, in the order both
    *  show them, and those shown on the bar. */
   header_buttons: HeaderButton[];

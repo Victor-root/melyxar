@@ -66,6 +66,8 @@ struct PreferencesView {
     banner_fills_the_screen: bool,
     /// Whether the bar at the top slides away while a page is read down.
     header_hides_on_scroll: bool,
+    /// The same on a phone, chosen apart.
+    header_hides_on_scroll_phone: bool,
     /// Every button of the bar and of the account's menu, in the order both
     /// show them, and those shown on the bar.
     header_buttons: Vec<&'static str>,
@@ -143,6 +145,8 @@ struct PreferencesBody {
     banner_fills_the_screen: Option<bool>,
     #[serde(default)]
     header_hides_on_scroll: Option<bool>,
+    #[serde(default)]
+    header_hides_on_scroll_phone: Option<bool>,
     #[serde(default)]
     header_buttons: Option<Vec<String>>,
     #[serde(default)]
@@ -254,6 +258,9 @@ async fn write(
     }
     if let Some(hides) = body.header_hides_on_scroll {
         chosen.header_hides_on_scroll = hides;
+    }
+    if let Some(hides) = body.header_hides_on_scroll_phone {
+        chosen.header_hides_on_scroll_phone = hides;
     }
     if let Some(buttons) = body.header_buttons {
         chosen.header_buttons = buttons_named(&buttons)?;
@@ -415,6 +422,7 @@ async fn view(
         banner_at_random: chosen.banner_at_random,
         banner_fills_the_screen: chosen.banner_fills_the_screen,
         header_hides_on_scroll: chosen.header_hides_on_scroll,
+        header_hides_on_scroll_phone: chosen.header_hides_on_scroll_phone,
         header_buttons: chosen
             .header_buttons
             .iter()

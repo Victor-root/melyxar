@@ -56,7 +56,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.subtitle_mode, p.theme_mode, p.accent_color, p.custom_css, p.volume,
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
-     p.banner_fills_the_screen, p.header_hides_on_scroll, p.header_buttons,
+     p.banner_fills_the_screen, p.header_hides_on_scroll,
+     p.header_hides_on_scroll_phone, p.header_buttons,
      p.buttons_in_the_bar, p.backdrop, p.backdrop_light,
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
@@ -399,7 +400,8 @@ impl Database {
                 accent_color = ?,
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
-                banner_fills_the_screen = ?, header_hides_on_scroll = ?, header_buttons = ?,
+                banner_fills_the_screen = ?, header_hides_on_scroll = ?,
+                header_hides_on_scroll_phone = ?, header_buttons = ?,
                 buttons_in_the_bar = ?, backdrop = ?, backdrop_light = ?,
                 hidden_at_the_door = ?, home_order = ?, home_sections = ?,
                 hidden_home_sections = ?, step_back_seconds = ?,
@@ -424,6 +426,7 @@ impl Database {
         .bind(preferences.banner_at_random)
         .bind(preferences.banner_fills_the_screen)
         .bind(preferences.header_hides_on_scroll)
+        .bind(preferences.header_hides_on_scroll_phone)
         .bind(written_buttons(&preferences.header_buttons))
         .bind(written_buttons(&preferences.buttons_in_the_bar))
         .bind(preferences.backdrop.as_str())
@@ -572,7 +575,7 @@ async fn write_an_account(
                                        volume, downmix_method, downmix_gain,
                                        banner_height, banner_cut, banner_shown, banner_at_random,
                                        banner_fills_the_screen, header_hides_on_scroll,
-                                       hidden_at_the_door, home_order, step_back_seconds,
+                                       header_hides_on_scroll_phone, hidden_at_the_door, home_order, step_back_seconds,
                                        step_on_seconds, wide_gamut, subtitle_mode,
                                        home_sections, hidden_home_sections,
                                        resume_rewind_seconds, resume_min_percent,
@@ -581,7 +584,7 @@ async fn write_an_account(
                                        header_buttons, buttons_in_the_bar, backdrop,
                                        backdrop_light)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -596,6 +599,7 @@ async fn write_an_account(
     .bind(preferences.banner_at_random)
     .bind(preferences.banner_fills_the_screen)
     .bind(preferences.header_hides_on_scroll)
+    .bind(preferences.header_hides_on_scroll_phone)
     .bind(preferences.hidden_at_the_door)
     .bind(written_order(&preferences.home_order))
     .bind(preferences.step_back_seconds)
@@ -707,6 +711,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_at_random: row.try_get("banner_at_random")?,
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
+            header_hides_on_scroll_phone: row.try_get("header_hides_on_scroll_phone")?,
             header_buttons: read_buttons(&row.try_get::<String, _>("header_buttons")?),
             buttons_in_the_bar: read_buttons(&row.try_get::<String, _>("buttons_in_the_bar")?),
             backdrop: Backdrop::parse(&row.try_get::<String, _>("backdrop")?).unwrap_or_default(),
@@ -1272,6 +1277,7 @@ mod tests {
             banner_at_random: true,
             banner_fills_the_screen: true,
             header_hides_on_scroll: false,
+            header_hides_on_scroll_phone: false,
             header_buttons: vec![HeaderButton::WatchLater],
             buttons_in_the_bar: vec![HeaderButton::Search],
             backdrop: Backdrop::None,
@@ -1324,6 +1330,7 @@ mod tests {
         assert!(loaded.preferences.banner_at_random);
         assert!(loaded.preferences.banner_fills_the_screen);
         assert!(!loaded.preferences.header_hides_on_scroll);
+        assert!(!loaded.preferences.header_hides_on_scroll_phone);
         assert_eq!(loaded.preferences.header_buttons[0], HeaderButton::WatchLater);
         assert_eq!(loaded.preferences.buttons_in_the_bar, vec![HeaderButton::Search]);
         assert_eq!(loaded.preferences.backdrop, Backdrop::None);

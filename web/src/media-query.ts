@@ -5,6 +5,9 @@
 
 import { useEffect, useState } from "react";
 
+/** A phone, which is where the style sheet for narrow screens takes over. */
+export const PHONE = "(max-width: 600px)";
+
 export function useMediaQuery(query: string): boolean {
   const [holds, setHolds] = useState(() => window.matchMedia(query).matches);
   useEffect(() => {
