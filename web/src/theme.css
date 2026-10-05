@@ -87,6 +87,9 @@
      the dark ground whatever the theme, so an icon on a phone does not
      change colour at nightfall with the system's theme. */
   --app-ground: #0c0d10;
+  /* The light that shows on that ground, the same in both themes: the glints
+     of a record, which is black whatever the theme. */
+  --on-app-ground: #f2f4f8;
   /* The pale border of a photo print, the same paper whatever the theme. */
   --print-edge: #f2eee6;
 
