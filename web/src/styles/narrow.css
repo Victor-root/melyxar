@@ -424,6 +424,7 @@
     padding: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
+    border: 0;
     border-radius: 0 0 24px 24px;
     box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--app-ground) 55%, transparent);
     animation: bell-sheet-in var(--calm) var(--ease);
@@ -478,7 +479,7 @@
     display: grid;
     place-items: center;
     flex: none;
-    height: 32px;
+    height: 40px;
     border-top: 1px solid var(--border);
     background: inherit;
     touch-action: none;
