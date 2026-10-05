@@ -537,7 +537,7 @@
 }
 
 /* The arrow that puts the buttons away: a phone's, nothing wider draws it. */
-.header-fold {
+.header-icon.header-fold {
   display: none;
 }
 

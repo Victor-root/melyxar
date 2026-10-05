@@ -241,7 +241,7 @@
   }
 
   /* Close to the account it belongs with. */
-  .header-fold {
+  .header-icon.header-fold {
     display: inline-flex;
     width: 26px;
   }
