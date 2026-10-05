@@ -533,8 +533,15 @@
    * not yet showing, and an arrow on each side to go to it. A finger pulls
    * the row all the same and it comes to rest on a card.
    */
+  /* The two rows that stand side by side where there is room are one under
+     the other here, each over the whole width, whatever they hold: a card
+     that is a whole row wide has no width of its own to be sized by. */
+  .rows-together > .section {
+    flex: 1 1 100%;
+  }
+
   .row-single {
-    --single-side: 44px;
+    --single-side: 30px;
   }
 
   .row-single > .row-track {
@@ -560,7 +567,7 @@
   }
 
   .row-single > .row-arrow > svg {
-    width: 28px;
+    width: 22px;
   }
 
   /* Only the card in the middle shows: the next one waits behind the
