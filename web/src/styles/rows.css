@@ -20,8 +20,25 @@
      wider than it: a phone's narrow margin gives what it has, and the
      screen's edge does the rest. */
   --row-side-air: min(var(--row-air), var(--gutter));
+  /* Which ends of the row have more beyond them, and so fade. */
+  --more-back: 0;
+  --more-on: 0;
+  /* Where the fade of an end begins, counted from the edge of the row, and
+     how long it is. */
+  --fade-lead: var(--row-side-air);
+  --fade-length: 64px;
 
   position: relative;
+}
+
+/* The room the track keeps for the focus ring, for a card grown under the
+   pointer and for the light it gives off, all of which a hidden overflow
+   would otherwise clip, taken back by a margin of the same size. It is here
+   rather than on the track because the track scrolls: a fade worn by a box
+   that scrolls is painted again at every frame, one worn by this still frame
+   is not. */
+.row-view {
+  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--gap-tight) * -1);
 }
 
 .row-track {
@@ -31,10 +48,7 @@
   /* Scrolled by the graphics card, for the reason given on the box the page
      scrolls in. */
   will-change: scroll-position;
-  /* Room for the focus ring, for a card grown under the pointer and for the
-     light it gives off, all of which a hidden overflow would otherwise clip. */
   padding: var(--row-air) var(--row-side-air) var(--gap-tight);
-  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--gap-tight) * -1);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag
@@ -134,16 +148,48 @@
    So on a side with more to see, the row is cut level with the heading's
    edge, where the next card reads as going on beyond it. A clip, which
    moves nothing and stops the pointer too. */
-.row-more-back > .row-track {
+.row-more-back .row-track {
   clip-path: inset(0 0 0 var(--row-side-air));
 }
 
-.row-more-on > .row-track {
+.row-more-on .row-track {
   clip-path: inset(0 var(--row-side-air) 0 0);
 }
 
-.row-more-back.row-more-on > .row-track {
+.row-more-back.row-more-on .row-track {
   clip-path: inset(0 var(--row-side-air));
+}
+
+.row-more-back {
+  --more-back: 1;
+}
+
+.row-more-on {
+  --more-on: 1;
+}
+
+/* The cards give way at an end that has more beyond it the way what reaches
+   the player of music does, in the same shape: holding almost full strength
+   at first and letting go faster the nearer the edge. An end with nothing
+   beyond it has no stops to speak of, and a row with nothing beyond either
+   wears no fade at all. */
+.row-more-back .row-view,
+.row-more-on .row-view {
+  --back-at: calc(var(--more-back) * var(--fade-lead));
+  --on-at: calc(100% - var(--more-on) * var(--fade-lead));
+  mask-image: linear-gradient(
+    to right,
+    transparent var(--back-at),
+    color-mix(in srgb, #000 24%, transparent) calc(var(--back-at) + var(--more-back) * var(--fade-length) * 0.25),
+    color-mix(in srgb, #000 56%, transparent) calc(var(--back-at) + var(--more-back) * var(--fade-length) * 0.53),
+    color-mix(in srgb, #000 88%, transparent) calc(var(--back-at) + var(--more-back) * var(--fade-length) * 0.78),
+    #000 calc(var(--back-at) + var(--more-back) * var(--fade-length)),
+    #000 calc(var(--on-at) - var(--more-on) * var(--fade-length)),
+    color-mix(in srgb, #000 88%, transparent) calc(var(--on-at) - var(--more-on) * var(--fade-length) * 0.78),
+    color-mix(in srgb, #000 56%, transparent) calc(var(--on-at) - var(--more-on) * var(--fade-length) * 0.53),
+    color-mix(in srgb, #000 24%, transparent) calc(var(--on-at) - var(--more-on) * var(--fade-length) * 0.25),
+    transparent var(--on-at)
+  );
 }
 
 /* Outside the row, in the page's own margin, and clear of the four pixels

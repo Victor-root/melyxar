@@ -518,10 +518,17 @@
   /* The rows are pulled by a finger, so they have no arrows to leave room
      for in the margin: they run out to the edges of the screen, where the
      cards are cut by the edge itself and not a little before it. */
-  .row-more-back > .row-track,
-  .row-more-on > .row-track,
-  .row-more-back.row-more-on > .row-track {
+  .row-more-back .row-track,
+  .row-more-on .row-track,
+  .row-more-back.row-more-on .row-track {
     clip-path: none;
+  }
+
+  /* The fade begins at the very edge there, and is shorter on a small
+     screen. */
+  .row {
+    --fade-lead: 0px;
+    --fade-length: 40px;
   }
 
   .row-arrow {
@@ -544,15 +551,15 @@
     --single-side: 30px;
   }
 
-  .row-single > .row-track {
+  .row-single .row-track {
     padding-inline: var(--single-side);
     gap: var(--gap);
     scroll-snap-type: x mandatory;
     scroll-padding-inline: var(--single-side);
   }
 
-  .row-single > .row-track > *,
-  .row-single > .row-track > .card-lying {
+  .row-single .row-track > *,
+  .row-single .row-track > .card-lying {
     flex: 0 0 100%;
     scroll-snap-align: center;
   }
@@ -570,11 +577,16 @@
     width: 22px;
   }
 
+  /* A row of one card has its own cut, and no fade over the next card. */
+  .row-single .row-view {
+    mask-image: none;
+  }
+
   /* Only the card in the middle shows: the next one waits behind the
      arrow, out of sight, and comes in as the row is pulled. The cut is a few
      points wider than the card, so what is lit round the next one, which
      reaches into the gap, stays out of it. */
-  .row.row-single > .row-track {
+  .row.row-single .row-track {
     clip-path: inset(0 calc(var(--single-side) - 4px));
   }
 
