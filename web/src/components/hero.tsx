@@ -315,17 +315,6 @@ export function Hero({ items }: { items: HeroItem[] }) {
         <HeroProgress item={shown} />
       </div>
 
-      {/* The way to the page of the work, as a square in the corner: all that
-          is left of the two buttons on a phone, which draws nothing else. Not
-          drawn anywhere else. */}
-      <Link
-        className="hero-info"
-        to={`/work/${shown.id}`}
-        aria-label={t("home.hero.open")}
-      >
-        <InfoIcon size={20} />
-      </Link>
-
       {/* Where it is in the five and the two ways to move through them, in
           one place at the bottom corner. Over the picture rather than over
           the words, and never again across the middle of the banner, where
