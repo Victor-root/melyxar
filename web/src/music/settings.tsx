@@ -128,6 +128,13 @@ export function MyMusic() {
             onChange={(resume_queue) => change({ resume_queue })}
           />
         </Setting>
+        <Setting label={t("settings.music_close_when_done")} why={t("settings.music_close_when_done_why")}>
+          <Toggle
+            label={t("settings.music_close_when_done")}
+            checked={preferences.close_when_done}
+            onChange={(close_when_done) => change({ close_when_done })}
+          />
+        </Setting>
         <Setting label={t("settings.music_spectrum")} why={t("settings.music_spectrum_why")}>
           <Toggle
             label={t("settings.music_spectrum")}

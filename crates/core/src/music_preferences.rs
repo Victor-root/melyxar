@@ -159,6 +159,9 @@ pub struct MusicPreferences {
     /// Whether the queue left in a closed tab is there again on the next
     /// visit.
     pub resume_queue: bool,
+    /// Whether the bar of the player closes when the last song of the queue
+    /// has ended, rather than staying on screen with nothing left to play.
+    pub close_when_done: bool,
     /// The most a song may weigh on its way, in kilobits a second. A heavier
     /// one is converted down to it; nothing means every song as it is.
     pub max_bitrate_kbps: Option<u32>,
@@ -183,6 +186,7 @@ impl Default for MusicPreferences {
         Self {
             film_on_screen: FilmOnScreen::default(),
             resume_queue: true,
+            close_when_done: true,
             max_bitrate_kbps: None,
             volume_mode: VolumeMode::default(),
             crossfade_seconds: 0,

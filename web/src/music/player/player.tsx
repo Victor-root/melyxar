@@ -143,6 +143,7 @@ export function useMusicTime(): Time {
 export const DEFAULT_PREFERENCES: MusicPreferences = {
   film_on_screen: "stop",
   resume_queue: true,
+  close_when_done: true,
   max_bitrate_kbps: null,
   volume_mode: "track",
   crossfade_seconds: 0,
@@ -324,6 +325,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   volumeModeNow.current = volumeMode;
   const crossfadeNow = useRef(DEFAULT_PREFERENCES.crossfade_seconds);
   crossfadeNow.current = preferences?.crossfade_seconds ?? DEFAULT_PREFERENCES.crossfade_seconds;
+  const closeWhenDone = useRef(DEFAULT_PREFERENCES.close_when_done);
+  closeWhenDone.current = preferences?.close_when_done ?? DEFAULT_PREFERENCES.close_when_done;
+  const stopNow = useRef<() => void>(() => {});
   useEffect(() => {
     const through = graph.current;
     if (through && song && !fading.current) {
@@ -448,6 +452,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         // The last second is rounded away by the clock: a song that has
         // ended shows its whole length played.
         time.set({ ...time.now, position: time.now.length, loaded: time.now.length });
+        if (closeWhenDone.current) {
+          stopNow.current();
+        }
         return;
       }
       wantsToPlay.current = true;
@@ -571,6 +578,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setQueue(EMPTY);
     time.set({ position: 0, length: 0 });
   }, [letGoOfTheSound]);
+
+  stopNow.current = stop;
 
   const pause = useCallback(() => live().pause(), [live]);
   const resume = useCallback(() => {

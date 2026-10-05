@@ -13,7 +13,7 @@ impl Database {
     /// What this account chose, or the defaults while it has chosen nothing.
     pub async fn music_preferences(&self, user: UserId) -> Result<MusicPreferences> {
         let row = sqlx::query(
-            "SELECT film_on_screen, resume_queue, max_bitrate_kbps, volume_mode, crossfade_seconds,
+            "SELECT film_on_screen, resume_queue, close_when_done, max_bitrate_kbps, volume_mode, crossfade_seconds,
                     tag_preview, spectrum, spectrum_amplitude, skip_back_seconds, skip_on_seconds,
                     hidden_tabs
                FROM music_preferences WHERE user_id = ?",
@@ -28,6 +28,7 @@ impl Database {
             film_on_screen: FilmOnScreen::parse(&row.try_get::<String, _>("film_on_screen")?)
                 .unwrap_or_default(),
             resume_queue: row.try_get("resume_queue")?,
+            close_when_done: row.try_get("close_when_done")?,
             max_bitrate_kbps: row
                 .try_get::<Option<i64>, _>("max_bitrate_kbps")?
                 .and_then(|kbps| u32::try_from(kbps).ok()),
@@ -59,13 +60,14 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO music_preferences
-                (user_id, film_on_screen, resume_queue, max_bitrate_kbps, volume_mode,
-                 crossfade_seconds, tag_preview, spectrum, spectrum_amplitude, skip_back_seconds,
-                 skip_on_seconds, hidden_tabs)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (user_id, film_on_screen, resume_queue, close_when_done, max_bitrate_kbps,
+                 volume_mode, crossfade_seconds, tag_preview, spectrum, spectrum_amplitude,
+                 skip_back_seconds, skip_on_seconds, hidden_tabs)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (user_id) DO UPDATE SET
                 film_on_screen = excluded.film_on_screen,
                 resume_queue = excluded.resume_queue,
+                close_when_done = excluded.close_when_done,
                 max_bitrate_kbps = excluded.max_bitrate_kbps,
                 volume_mode = excluded.volume_mode,
                 crossfade_seconds = excluded.crossfade_seconds,
@@ -79,6 +81,7 @@ impl Database {
         .bind(user.to_db_string())
         .bind(chosen.film_on_screen.as_str())
         .bind(chosen.resume_queue)
+        .bind(chosen.close_when_done)
         .bind(chosen.max_bitrate_kbps.map(i64::from))
         .bind(chosen.volume_mode.as_str())
         .bind(i64::from(chosen.crossfade_seconds))
@@ -163,6 +166,7 @@ mod tests {
         let chosen = MusicPreferences {
             film_on_screen: FilmOnScreen::Pause,
             resume_queue: false,
+            close_when_done: false,
             max_bitrate_kbps: Some(128),
             volume_mode: VolumeMode::Album,
             crossfade_seconds: 6,
