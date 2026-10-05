@@ -11,9 +11,11 @@
 
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import type { LaidOver } from "../../scrolling";
 
-/** The mark the step of the history carries while the page is open. */
-interface Marked {
+/** The mark the step of the history carries while the page is open. It lays
+ *  the page over the one under it, which therefore stays where it was. */
+interface Marked extends LaidOver {
   nowPlaying?: boolean;
 }
 
@@ -23,7 +25,7 @@ export function useNowPlayingPage() {
   const marked = (location.state as Marked | null)?.nowPlaying === true;
 
   const open = useCallback(
-    () => navigate({ pathname: location.pathname, search: location.search }, { state: { nowPlaying: true } satisfies Marked }),
+    () => navigate({ pathname: location.pathname, search: location.search }, { state: { nowPlaying: true, laidOver: true } satisfies Marked }),
     [navigate, location.pathname, location.search],
   );
   /* Back, since the step it was opened with is the one behind. */
