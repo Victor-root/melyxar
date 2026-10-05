@@ -122,9 +122,17 @@
     display: none;
   }
 
+  /* Everything on the middle line, the dots under the buttons. */
   .hero-words {
     justify-content: flex-end;
-    padding-bottom: var(--gap);
+    align-items: center;
+    text-align: center;
+    padding-bottom: calc(var(--gap) + 20px);
+  }
+
+  .hero-facts,
+  .progress-line {
+    justify-content: center;
   }
 
   /* No synopsis: the drawn title stands above the facts, then the buttons.
@@ -159,7 +167,8 @@
   .hero-buttons {
     flex-wrap: nowrap;
     gap: 8px;
-    max-width: calc(100% - 78px);
+    justify-content: center;
+    max-width: 100%;
   }
 
   .hero-buttons .button-large {
@@ -177,10 +186,12 @@
     flex: none;
   }
 
-  /* At the far right, level with the middle of the buttons. */
+  /* Under the buttons, in the middle. */
   .hero-steps {
-    bottom: calc(var(--gap) + 15px);
-    right: var(--gap);
+    left: 0;
+    right: 0;
+    bottom: var(--gap);
+    justify-content: center;
   }
 
   .hero-dots {
