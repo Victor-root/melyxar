@@ -271,9 +271,6 @@
     padding-left: 0;
   }
 
-  .header-side[data-folded] > :not(.header-account):not(.header-fold) {
-    display: none;
-  }
 
   /* More buttons than the width has room for are reached by pulling them
      sideways, while the arrow and the account stay where they are. */
@@ -285,7 +282,31 @@
     flex: none;
   }
 
+  /* Put away and brought back as the search field is opened and shut: the
+     room they take grows from nothing and shrinks to it over the same
+     time and on the same curve, while they fade. Folded, they cannot be
+     reached either, once they have gone. */
   .header-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 0;
+    transition:
+      grid-template-columns var(--calm) var(--ease),
+      opacity var(--quick) var(--ease);
+  }
+
+  .header-side[data-folded] .header-buttons {
+    grid-template-columns: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      grid-template-columns var(--calm) var(--ease),
+      opacity var(--quick) var(--ease),
+      visibility 0s linear var(--calm);
+  }
+
+  .header-buttons-track {
     display: flex;
     align-items: center;
     gap: 2px;
@@ -295,9 +316,10 @@
     overscroll-behavior-x: contain;
   }
 
-  .header-buttons::-webkit-scrollbar {
+  .header-buttons-track::-webkit-scrollbar {
     display: none;
   }
+
 
   /* The way back takes no more room from the edge than the other pieces. */
   .header-start-back {
@@ -502,5 +524,12 @@
 @media (prefers-reduced-motion: reduce) {
   .bell-list {
     animation: none;
+  }
+}
+
+@media (max-width: 600px) and (prefers-reduced-motion: reduce) {
+  .header-buttons,
+  .header-side[data-folded] .header-buttons {
+    transition: none;
   }
 }
