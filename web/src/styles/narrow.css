@@ -122,16 +122,21 @@
     display: none;
   }
 
-  /* Everything on the middle line, the dots under the buttons. */
   .hero-words {
     justify-content: flex-end;
-    align-items: center;
-    text-align: center;
-    padding-bottom: calc(var(--gap) + 20px);
+    padding-bottom: var(--gap);
   }
 
-  .hero-facts,
-  .progress-line {
+  /* The slogan, the drawn title and the facts on the middle line; the
+     buttons and the dots keep their sides. */
+  .hero-tagline,
+  .hero-facts {
+    text-align: center;
+    justify-content: center;
+  }
+
+  .hero-title-drawn {
+    display: flex;
     justify-content: center;
   }
 
@@ -167,8 +172,7 @@
   .hero-buttons {
     flex-wrap: nowrap;
     gap: 8px;
-    justify-content: center;
-    max-width: 100%;
+    max-width: calc(100% - 78px);
   }
 
   .hero-buttons .button-large {
@@ -186,12 +190,10 @@
     flex: none;
   }
 
-  /* Under the buttons, in the middle. */
+  /* At the far right, level with the middle of the buttons. */
   .hero-steps {
-    left: 0;
-    right: 0;
-    bottom: var(--gap);
-    justify-content: center;
+    bottom: calc(var(--gap) + 15px);
+    right: var(--gap);
   }
 
   .hero-dots {
