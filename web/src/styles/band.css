@@ -355,21 +355,21 @@
     conic-gradient(
       from 0deg,
       transparent 0 8deg,
-      color-mix(in srgb, var(--text) 50%, transparent) 24deg,
+      color-mix(in srgb, var(--on-app-ground) 50%, transparent) 24deg,
       transparent 44deg 300deg,
-      color-mix(in srgb, var(--text) 32%, transparent) 322deg,
+      color-mix(in srgb, var(--on-app-ground) 32%, transparent) 322deg,
       transparent 342deg
     ),
     /* The grooves. */
     repeating-radial-gradient(
       circle,
       transparent 0 2px,
-      color-mix(in srgb, var(--text) 7%, transparent) 2px 3px
+      color-mix(in srgb, var(--on-app-ground) 7%, transparent) 2px 3px
     ),
     var(--app-ground);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--text) 16%, transparent),
-    inset 0 2px 3px -1px color-mix(in srgb, var(--text) 30%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--on-app-ground) 16%, transparent),
+    inset 0 2px 3px -1px color-mix(in srgb, var(--on-app-ground) 30%, transparent);
   translate: 0 calc(-32% * var(--open));
   transition: translate var(--calm) var(--ease);
 }
