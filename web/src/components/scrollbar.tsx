@@ -24,6 +24,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** How long the bar stays after the page last moved, on a screen where it
+ *  only shows while somebody is scrolling. */
+const STAYS_MS = 700;
+
 /** The shortest the mark is ever drawn. A page of many screens would
  *  otherwise leave a few points of colour nobody can catch with a pointer. */
 const SHORTEST = 38;
@@ -100,6 +104,17 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
       }
     };
 
+    /* Said on the bar for as long as the page is moving and a moment after:
+       a phone shows it that way and nowhere else, which is a matter for the
+       style sheet, so every screen keeps it up to date at the cost of one
+       timer. */
+    let leaves = 0;
+    const lit = () => {
+      track.current?.setAttribute("data-active", "");
+      window.clearTimeout(leaves);
+      leaves = window.setTimeout(() => track.current?.removeAttribute("data-active"), STAYS_MS);
+    };
+
     const sizes = new ResizeObserver(draw);
     const watch = () => {
       sizes.disconnect();
@@ -112,9 +127,12 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
     const swapped = new MutationObserver(watch);
     swapped.observe(box, { childList: true });
     box.addEventListener("scroll", soon, { passive: true });
+    box.addEventListener("scroll", lit, { passive: true });
 
     return () => {
       box.removeEventListener("scroll", soon);
+      box.removeEventListener("scroll", lit);
+      window.clearTimeout(leaves);
       sizes.disconnect();
       swapped.disconnect();
       if (asked) {
