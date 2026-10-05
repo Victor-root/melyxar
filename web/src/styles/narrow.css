@@ -182,10 +182,14 @@
     background: var(--tile-color);
   }
 
+  /* Cut where the banner's picture is cut, from the same number: the one
+     that was found to let any picture through, and the one an account sets
+     for itself. */
   .band-cover img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center var(--where-a-band-is-cut);
   }
 
   /* The ground under the name: dark at the foot, where it stands, and gone
