@@ -37,7 +37,6 @@ import {
 import type { Card, HeaderButton, Library, LibraryKind } from "../api";
 import { api, pictureSet } from "../api";
 import { wasAbandoned } from "../asking";
-import { outOfAHundred } from "../readable";
 import { useRunning, useStartScan } from "../running";
 import { refusalKey } from "../i18n";
 import { useAccount } from "../account";
@@ -547,19 +546,6 @@ export function Header({
               sideways when they are more than the width allows. Everywhere
               else it takes no room of its own. */}
           <div className="header-buttons">
-          {/* What the server is doing, and only while it is doing it. It is
-              the one thing here that is news rather than a way to somewhere:
-              a scan that started ten minutes ago and is still going is worth
-              a glance from any screen, and a glance is not something anybody
-              should have to open a menu for. */}
-          {administrator && jobs.length > 0 && (
-            <Link className="header-busy" to="/admin/tasks">
-              <span className="header-busy-mark" aria-hidden="true" />
-              {t(`jobs.${jobs[0].kind}`)}
-              {jobs[0].ratio !== null && ` ${outOfAHundred(jobs[0].ratio)} %`}
-            </Link>
-          )}
-
           {/* Everything anybody can press, one icon each, in the order this
               account put them; those it moved into its menu are drawn there
               instead. A menu of five entries opened by one press is five

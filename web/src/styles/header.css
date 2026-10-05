@@ -580,34 +580,6 @@
   color: var(--text);
 }
 
-/* What the server is doing, in the bar, where the button that started it was.
-   Shaped like the button it replaces so the bar does not jump. */
-.header-busy {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gap-tight);
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* A steady dot, not a blinking one. The bar is glass blurred over the page
-   that scrolls under it, and anything animating inside it makes the browser
-   blur again on every frame, which a laptop's integrated graphics pay for in
-   lost frames while scrolling, for as long as work is running. The figure
-   beside it, which moves on its own, is what says it is going. */
-.header-busy-mark {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--accent-bright);
-}
-
 /* The one piece at the right hand end, holding what the server is doing,
    what anybody can press, and who is here. It was three, and three pieces
    read as three decisions about what belongs with what: there is one, which

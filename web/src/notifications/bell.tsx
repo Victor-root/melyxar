@@ -2,6 +2,8 @@ import { Link, NavLink } from "react-router-dom";
 import { BellIcon, TickIcon } from "../icons";
 import { Dropdown } from "../components/dropdown";
 import { sayPoint } from "../pages/admin/activity";
+import { JobCard } from "../pages/admin/tasks";
+import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import type { Level } from "./api";
 import { pieOf } from "./pie";
@@ -13,15 +15,23 @@ import { useNotes } from "./store";
  * How many things wait, and the kinds among them: the unread notifications,
  * and for an administrator the points deserving a look.
  */
-function useWaiting(administrator: boolean): { count: number; levels: Level[] } {
+function useWaiting(administrator: boolean): { count: number; levels: Level[]; working: boolean } {
   const { notes, unread } = useNotes();
   const { points } = useAttention();
+  const { jobs } = useRunning();
   const looked = administrator ? (points ?? []) : [];
   const levels: Level[] = [
     ...notes.filter((note) => !note.read).map((note) => note.level),
     ...looked.map((point) => point.state),
   ];
-  return { count: unread + looked.length, levels };
+  return { count: unread + looked.length, levels, working: administrator && jobs.length > 0 };
+}
+
+/** Said on the bell while the server is at work, which only an administrator
+ *  is told: a dot, apart from the count, since work is not something to be
+ *  read but something going on. */
+function Busy() {
+  return <span className="bell-busy" aria-hidden="true" />;
 }
 
 /** The number of things that wait, on a background of the colour of what
@@ -43,7 +53,8 @@ export function Bell({ administrator }: { administrator: boolean }) {
   const { t, language } = useSettings();
   const { points, markSeen } = useAttention();
   const { unread, markRead } = useNotes();
-  const { count, levels } = useWaiting(administrator);
+  const { count, levels, working } = useWaiting(administrator);
+  const { jobs } = useRunning();
   const looked = administrator ? (points ?? []) : [];
 
   return (
@@ -60,10 +71,26 @@ export function Bell({ administrator }: { administrator: boolean }) {
       label={
         <>
           <BellIcon size={24} />
+          {working && <Busy />}
           {count > 0 && <Count count={count} levels={levels} />}
         </>
       }
     >
+      {/* The work the server is doing, each piece as a notification of its own
+          with its bar, which fills in as the work does. Only for an
+          administrator, who is the one it concerns. */}
+      {working && (
+        <>
+          <span className="bell-head">
+            <span className="bell-title">{t("jobs.running")}</span>
+          </span>
+          {jobs.map((job) => (
+            <Link key={job.id} to="/admin/tasks" className="header-menu-line bell-job">
+              <JobCard job={job} />
+            </Link>
+          ))}
+        </>
+      )}
       {looked.length > 0 && (
         <>
           {/* Marking them seen sits with the title rather than under the
@@ -118,11 +145,12 @@ export function Bell({ administrator }: { administrator: boolean }) {
  */
 export function BellLine({ administrator }: { administrator: boolean }) {
   const { t } = useSettings();
-  const { count, levels } = useWaiting(administrator);
+  const { count, levels, working } = useWaiting(administrator);
   return (
     <NavLink to="/notifications" className="header-menu-line">
       <BellIcon size={16} />
       {t("nav.notifications")}
+      {working && <Busy />}
       {count > 0 && <Count count={count} levels={levels} line />}
     </NavLink>
   );

@@ -180,7 +180,7 @@ const STATE_OF: Record<
 };
 
 /** One piece of work, running or finished. */
-function JobCard({ job, onCancel }: { job: Job; onCancel?: () => void }) {
+export function JobCard({ job, onCancel }: { job: Job; onCancel?: () => void }) {
   const { t } = useSettings();
   const state = STATE_OF[job.state];
 

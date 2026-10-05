@@ -231,6 +231,47 @@
   pointer-events: none;
 }
 
+/* The dot of work going on, on the shoulder the count is not on. A steady
+   dot and not a blinking one: the bar is glass blurred over a page that
+   scrolls, and anything animating inside it makes the browser blur again on
+   every frame. */
+.bell-busy {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: 0 0 0 2px var(--surface-deep);
+  pointer-events: none;
+}
+
+/* In the account's menu, the same dot at the end of the line, before the
+   count when there is one. */
+.header-menu-line .bell-busy {
+  position: static;
+  flex: none;
+  margin-left: auto;
+}
+
+.header-menu-line .bell-busy + .bell-count-line {
+  margin-left: 8px;
+}
+
+/* A piece of work in the list, read like a notification: its name and pass,
+   its bar and what is being done, over the whole width. */
+.bell-job {
+  display: block;
+  white-space: normal;
+}
+
+.bell-job .job-card {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
 /* In the account's menu, at the end of its line rather than on a shoulder. */
 .bell-count-line {
   position: static;
