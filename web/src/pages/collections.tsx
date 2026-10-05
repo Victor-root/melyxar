@@ -19,11 +19,13 @@ import { refusalKey } from "../i18n";
 import { useLeave } from "../leaving";
 import { useMarks } from "../marks";
 import { useSettings } from "../settings";
+import { useTabPage } from "../tab-page";
 
 export function CollectionsPage() {
   const { t } = useSettings();
   const { rowsMoved } = useMarks();
   const asked = useAsked((signal) => api.collections(signal), [rowsMoved], "collections");
+  useTabPage(t("nav.collections"));
 
   return (
     <>
@@ -65,6 +67,7 @@ export function CollectionPage() {
     id ? `collection:${id}` : undefined,
   );
   const collection = asked.answer;
+  useTabPage(collection?.name);
 
   if (asked.failure) {
     return (

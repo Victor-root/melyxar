@@ -15,6 +15,7 @@ import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
 import { useReachEnd } from "../components/reach-end";
+import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
 import { useLibraryVersion } from "../libraries";
@@ -40,6 +41,7 @@ const SONG_ORDERS: SongOrder[] = ["title", "album", "added"];
 
 export function MusicLibraryPage({ library }: { library: Library }) {
   const [params, setParams] = useSearchParams();
+  useTabPage(library.name);
   const { preferences } = useMusic();
   const shown = shownTabs(preferences.hidden_tabs);
   const tab = openTab(params.get("tab"), shown);

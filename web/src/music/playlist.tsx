@@ -28,6 +28,7 @@ import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { SongMenuButton } from "./song-menu";
 import { PlaylistCover, namesOf } from "./tiles";
+import { useTabPage } from "../tab-page";
 
 /** A song of the playlist, with a name of its own on the page: the same song
  *  may be in it twice. */
@@ -43,6 +44,7 @@ export function MusicPlaylistPage() {
   const player = useMusic();
   const { playlistsAt, playlistsHaveMoved } = useMusicMarks();
   const [playlist, setPlaylist] = useState<MusicPlaylistPage | null>(null);
+  useTabPage(playlist?.name);
   const [lines, setLines] = useState<Line[]>([]);
   const [failed, setFailed] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);

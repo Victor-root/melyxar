@@ -10,10 +10,12 @@ import { TickIcon } from "../icons";
 import { useSettings } from "../settings";
 import { NoteList } from "./list";
 import { useNotes } from "./store";
+import { useTabPage } from "../tab-page";
 
 export function NotesPage() {
   const { t } = useSettings();
   const { unread, markRead } = useNotes();
+  useTabPage(t("nav.notifications"));
   return (
     <>
       <PageBackdrop />

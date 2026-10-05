@@ -20,6 +20,7 @@ import { FilmIcon, SeriesIcon } from "../icons";
 import { readableDay, todayOf, yearsBetween } from "../readable";
 import { useSettings } from "../settings";
 import { PageBackdrop } from "../components/backdrop";
+import { useTabPage } from "../tab-page";
 
 export function PersonPage() {
   const { id } = useParams();
@@ -30,6 +31,7 @@ export function PersonPage() {
     id ? `person:${id}` : undefined,
   );
   const person = asked.waiting ? null : asked.answer;
+  useTabPage(person?.name);
 
   if (asked.failure) {
     return (

@@ -18,11 +18,13 @@ import { useKeptState } from "./keeping";
 import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { AlbumTile, ArtistPicture } from "./tiles";
+import { useTabPage } from "../tab-page";
 
 export function MusicArtistPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
   const [artist, setArtist] = useKeptState<ArtistPage | null>(`artist|${id}`, null);
+  useTabPage(artist?.name);
   const [failed, setFailed] = useState(false);
   /* Read again whenever its library moves: an album filed, a cover found. */
   const version = useLibraryVersion(artist?.library);

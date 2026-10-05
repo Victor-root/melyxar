@@ -12,10 +12,12 @@ import { MyRequests } from "./mine";
 import { MoreTitles } from "./more";
 import { AskSearch } from "./search";
 import { useRequests } from "./store";
+import { useTabPage } from "../tab-page";
 
 export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
   const { t } = useSettings();
   const { access } = useRequests();
+  useTabPage(t("requests.title"));
   if (access === null) {
     return null;
   }

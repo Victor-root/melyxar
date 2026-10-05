@@ -19,6 +19,7 @@ import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
+import { useTabPage } from "../tab-page";
 
 export function LibraryPage({
   libraries,
@@ -45,6 +46,19 @@ export function LibraryPage({
   const cards = useMemo(() => (keeps ? read.filter(keeps) : read), [read, keeps]);
   const library = libraries.find((entry) => entry.id === narrowing.library);
   const shape = cardShapeOf(library?.kind ?? narrowing.kind);
+  useTabPage(
+    favourites
+      ? t("nav.favourites")
+      : watchLater
+        ? t("nav.watch_later")
+        : library
+          ? library.name
+          : narrowing.kind
+            ? nameOfKind(narrowing.kind, libraries, t)
+            : search
+              ? t("nav.search")
+              : null,
+  );
   /* What somebody filmed themselves is never waiting for a name, so there is
      nothing to narrow to. */
   const awaitsNames = library?.kind !== "home_media" && narrowing.kind !== "home_media";

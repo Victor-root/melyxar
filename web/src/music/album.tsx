@@ -21,6 +21,7 @@ import { ShuffleIcon } from "./player/icons";
 import { useMusic } from "./player/player";
 import { SongList } from "./songs";
 import { AlbumCover, namesOf } from "./tiles";
+import { useTabPage } from "../tab-page";
 
 export function MusicAlbumPage() {
   const { t } = useSettings();
@@ -33,6 +34,7 @@ export function MusicAlbumPage() {
   const version = useLibraryVersion(album?.library);
   const inLibrary = useLibraries().all.find((library) => library.id === album?.library);
   const [failed, setFailed] = useState(false);
+  useTabPage(album?.title);
 
   useEffect(() => {
     const stop = new AbortController();

@@ -24,11 +24,13 @@ import { useLeave } from "../leaving";
 import { useMarks } from "../marks";
 import { howLong } from "../readable";
 import { useSettings } from "../settings";
+import { useTabPage } from "../tab-page";
 
 export function PlaylistsPage() {
   const { t } = useSettings();
   const { rowsMoved } = useMarks();
   const asked = useAsked((signal) => api.playlists(signal), [rowsMoved], "playlists");
+  useTabPage(t("nav.playlists"));
 
   return (
     <>
@@ -69,6 +71,7 @@ export function PlaylistPage() {
     id ? `playlist:${id}` : undefined,
   );
   const playlist = asked.answer;
+  useTabPage(playlist?.name);
   /* The titles as this page holds them: moved and taken out at once, and
      put back if the server refuses. */
   const [cards, setCards] = useState<CardData[]>([]);

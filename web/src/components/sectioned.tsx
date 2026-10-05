@@ -17,6 +17,7 @@ import type { IconProps } from "../icons";
 import { useMasonry } from "../masonry";
 import { useFindOnArrival } from "./finding";
 import { useSettings } from "../settings";
+import { useTabPage } from "../tab-page";
 import { PageBackdrop } from "./backdrop";
 
 export interface Section {
@@ -74,6 +75,7 @@ export function Sectioned({
     every.find(
       (section) => section.path !== "" && location.pathname.startsWith(`${base}/${section.path}`),
     ) ?? every[0];
+  useTabPage(`${t(place)} · ${t(here.label)}`);
 
   return (
     <div className="sectioned">
