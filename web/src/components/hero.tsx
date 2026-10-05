@@ -100,6 +100,12 @@ function roomLeftOver(box: HTMLElement, text: HTMLElement): number {
   return room - (parseFloat(around.rowGap) || 0) * others.length;
 }
 
+/** How far a finger has to travel sideways to turn the banner over, and how
+ *  much more sideways than up it has to be: a page being scrolled is not a
+ *  banner being turned. */
+const SWIPE_FAR = 50;
+const SWIPE_FLAT = 1.5;
+
 export function Hero({ items }: { items: HeroItem[] }) {
   const { t } = useSettings();
   /* Where the banner stood and whether a hand had stopped it, kept for this
@@ -192,6 +198,33 @@ export function Hero({ items }: { items: HeroItem[] }) {
     setAt((to + items.length) % items.length);
   };
 
+  /* A finger drawn across the banner turns it over, to the left for the next
+     and to the right for the one before. Where the finger went down is all
+     that is kept: the page itself is left to the browser, which keeps the
+     vertical scrolling and gives this the sideways one. */
+  const touched = useRef<{ x: number; y: number } | null>(null);
+  const swipe = {
+    onPointerDown: (event: React.PointerEvent) => {
+      touched.current =
+        many && event.pointerType === "touch" ? { x: event.clientX, y: event.clientY } : null;
+    },
+    onPointerUp: (event: React.PointerEvent) => {
+      const from = touched.current;
+      touched.current = null;
+      if (!from) {
+        return;
+      }
+      const across = event.clientX - from.x;
+      const up = event.clientY - from.y;
+      if (Math.abs(across) >= SWIPE_FAR && Math.abs(across) >= Math.abs(up) * SWIPE_FLAT) {
+        go(across < 0 ? at + 1 : at - 1);
+      }
+    },
+    onPointerCancel: () => {
+      touched.current = null;
+    },
+  };
+
   return (
     <section
       className="hero"
@@ -199,6 +232,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
       aria-label={t("home.hero")}
       onPointerEnter={() => setHeld(true)}
       onFocusCapture={() => setHeld(true)}
+      {...swipe}
     >
       {/* Every one of them is drawn, and only the one in front is shown: the
           next picture is then already in the browser when the banner moves
