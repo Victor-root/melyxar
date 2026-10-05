@@ -8,27 +8,38 @@
  * list the moment its heart goes out.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { useLibraryVersion } from "../libraries";
+import { useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Found, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import { useMusic } from "./player/player";
 import { useKeptState } from "./keeping";
+import { useRoomBelow } from "./room-below";
 import { MusicFound, foundAny } from "./search";
 import { SongTiles } from "./song-tiles";
+import { SongList } from "./songs";
 import { AlbumTile, PlaylistTile } from "./tiles";
 
 /** As many albums as the row of the newest on the home page. */
 const NEWEST = 20;
+
+/** The width from which the two listened lists stand side by side, each
+ *  scrolling in its own box. */
+const SIDE_BY_SIDE = "(min-width: 1000px)";
+
+/** The least a list is let shrink to, on a screen too short to give it more. */
+const LEAST_LIST = 280;
 
 export function ForYouTab({ library }: { library: string }) {
   const { t } = useSettings();
   const version = useLibraryVersion(library);
   const { listenedAt } = useMusicMarks();
   const player = useMusic();
+  const wide = useMediaQuery(SIDE_BY_SIDE);
   const [newest, setNewest] = useKeptState<Album[] | null>(`for-you|newest|${library}`, null);
   const [lately, setLately] = useKeptState<Song[]>(`for-you|lately|${library}`, []);
   const [most, setMost] = useKeptState<Song[]>(`for-you|most|${library}`, []);
@@ -64,9 +75,44 @@ export function ForYouTab({ library }: { library: string }) {
           </Row>
         </section>
       )}
-      <Listened title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
-      <Listened title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+      {wide ? (
+        <ListenedColumns>
+          <ListenedList title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
+          <ListenedList title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+        </ListenedColumns>
+      ) : (
+        <>
+          <Listened title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
+          <Listened title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+        </>
+      )}
     </div>
+  );
+}
+
+/** The two lists side by side, as tall as the screen has room for under the
+ *  rest of the page. */
+function ListenedColumns({ children }: { children: React.ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  useRoomBelow(box, LEAST_LIST);
+  return (
+    <div ref={box} className="music-listened">
+      {children}
+    </div>
+  );
+}
+
+function ListenedList({ title, songs, onPlay }: { title: string; songs: Song[]; onPlay: (index: number) => void }) {
+  if (songs.length === 0) {
+    return null;
+  }
+  return (
+    <section className="music-listened-column">
+      <RowHead title={title} />
+      <div className="music-listened-list">
+        <SongList songs={songs} numbered="place" showAlbum={false} onPlay={onPlay} />
+      </div>
+    </section>
   );
 }
 
