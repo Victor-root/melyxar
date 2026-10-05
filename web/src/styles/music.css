@@ -123,6 +123,15 @@
   margin-bottom: var(--gap);
 }
 
+/* Where the tabs stand in the bar at the top, the first row of For you
+   rises a little towards them: the room left under the bar was more than
+   its heading needed. */
+@media (min-width: 1360px) {
+  .music-for-you {
+    margin-top: calc(-1 * var(--gap));
+  }
+}
+
 /* The count follows the sort rather than standing at the far end, where
    the rail of letters stands over it. */
 .music-bar {
