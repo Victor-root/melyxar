@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isThere, pageOf, remember } from "./scrolling";
+import { isThere, keepsThePage, pageOf, remember, stepOf } from "./scrolling";
 
 describe("remember", () => {
   it("keeps the latest place of a page, most recent last", () => {
@@ -42,5 +42,25 @@ describe("pageOf", () => {
   it("names the same page the same way", () => {
     const at = { key: "k1", pathname: "/search", search: "?q=harbour" };
     expect(pageOf(at)).toEqual(pageOf({ ...at }));
+  });
+});
+
+describe("keepsThePage", () => {
+  const step = (address: string, laidOver = false) => ({ address, laidOver });
+
+  it("leaves the page where it is when something opens or closes over it", () => {
+    expect(keepsThePage(step("/music"), step("/music", true))).toBe(true);
+    expect(keepsThePage(step("/music", true), step("/music"))).toBe(true);
+  });
+
+  it("treats any other step as a page of its own", () => {
+    expect(keepsThePage(step("/music"), step("/music"))).toBe(false);
+    expect(keepsThePage(step("/music"), step("/films", true))).toBe(false);
+    expect(keepsThePage(step("/music", true), step("/films"))).toBe(false);
+  });
+
+  it("reads the mark from the state of a location", () => {
+    expect(stepOf({ pathname: "/a", search: "?b", state: { laidOver: true } })).toEqual(step("/a?b", true));
+    expect(stepOf({ pathname: "/a", search: "", state: null })).toEqual(step("/a"));
   });
 });

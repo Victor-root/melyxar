@@ -70,6 +70,35 @@ export function pageOf(location: { key: string; pathname: string; search: string
   return `${location.key} ${location.pathname}${location.search}`;
 }
 
+/** A step of the history as far as scrolling is concerned: its address, and
+ *  whether it only lays something over the page under it. */
+export interface Step {
+  address: string;
+  laidOver: boolean;
+}
+
+/** The mark a step of the history carries when it lays something over the
+ *  page rather than opening another: the page of what is playing. */
+export interface LaidOver {
+  laidOver?: boolean;
+}
+
+/** What a location says of itself as a step. */
+export function stepOf(location: { pathname: string; search: string; state: unknown }): Step {
+  return {
+    address: `${location.pathname}${location.search}`,
+    laidOver: (location.state as LaidOver | null)?.laidOver === true,
+  };
+}
+
+/** Whether going from one step to the next leaves the page where it is:
+ *  something laid over it opening or closing, on the same address. Treated as
+ *  a new page, it was sent to the top while the thing over it faded in, and
+ *  the top of the page flashed through. */
+export function keepsThePage(before: Step, now: Step): boolean {
+  return before.address === now.address && (before.laidOver || now.laidOver);
+}
+
 /** Keeps one more place, the most recent last, forgetting the oldest past the
  *  number kept. */
 export function remember(
@@ -133,6 +162,7 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
   const location = useLocation();
   const how = useNavigationType();
   const page = useRef(pageOf(location));
+  const was = useRef(stepOf(location));
   const places = useRef<Map<string, Place>>(readStored());
 
   /* The box, as soon as there is one. The interface holds its screen back
@@ -173,7 +203,13 @@ export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
 
   useLayoutEffect(() => {
     page.current = pageOf(location);
+    const now = stepOf(location);
+    const kept = keepsThePage(was.current, now);
+    was.current = now;
     const box = scroller.current;
+    if (kept) {
+      return;
+    }
     if (!box) {
       return;
     }
