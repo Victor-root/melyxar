@@ -149,6 +149,7 @@ impl MetadataProvider for StandIn {
         &self,
         catalogue: Catalogue,
         genre_id: Option<&str>,
+        _released_by: &str,
         page: u32,
         _language: &str,
     ) -> Result<Vec<Candidate>> {
