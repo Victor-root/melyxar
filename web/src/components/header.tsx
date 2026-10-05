@@ -209,7 +209,7 @@ export function Header({
   const side = useRef<HTMLDivElement>(null);
   /* Whether the buttons of the bar are put away behind the arrow beside the
      account, which a phone offers and nothing wider draws. */
-  const [folded, setFolded] = useState(false);
+  const [folded, setFolded] = useState(true);
 
   /* Where the piece at the left end stops and how wide the one at the right
      end is, written on the page: the first as wide as the server's name and

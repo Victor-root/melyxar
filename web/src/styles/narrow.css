@@ -227,8 +227,15 @@
     display: none;
   }
 
+  /* Close to the account it belongs with. */
   .header-fold {
     display: inline-flex;
+    width: 26px;
+  }
+
+  .header-account {
+    margin-left: 0;
+    padding-left: 0;
   }
 
   .header-side[data-folded] > :not(.header-account):not(.header-fold) {
