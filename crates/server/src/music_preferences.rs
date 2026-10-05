@@ -32,6 +32,9 @@ struct MusicPreferencesView {
     /// stop or pause.
     film_on_screen: String,
     resume_queue: bool,
+    /// Absent from what an older screen sends, which keeps the bar closing.
+    #[serde(default = "shown")]
+    close_when_done: bool,
     /// Nothing for every song as it is.
     max_bitrate_kbps: Option<u32>,
     /// off, track or album.
@@ -82,6 +85,7 @@ fn answer(chosen: &MusicPreferences) -> Json<MusicPreferencesView> {
     Json(MusicPreferencesView {
         film_on_screen: chosen.film_on_screen.as_str().to_string(),
         resume_queue: chosen.resume_queue,
+        close_when_done: chosen.close_when_done,
         max_bitrate_kbps: chosen.max_bitrate_kbps,
         volume_mode: chosen.volume_mode.as_str().to_string(),
         crossfade_seconds: chosen.crossfade_seconds,
@@ -126,6 +130,7 @@ fn chosen_from(body: &MusicPreferencesView) -> Result<MusicPreferences> {
             ServerError::invalid_input("a film either stops the music or pauses it")
         })?,
         resume_queue: body.resume_queue,
+        close_when_done: body.close_when_done,
         max_bitrate_kbps: body.max_bitrate_kbps.map(bounded_ceiling),
         volume_mode: VolumeMode::parse(&body.volume_mode).ok_or_else(|| {
             ServerError::invalid_input("songs are levelled off, by track or by album")
@@ -207,6 +212,7 @@ mod tests {
         let chosen = chosen_from(&MusicPreferencesView {
             film_on_screen: "pause".to_string(),
             resume_queue: false,
+            close_when_done: false,
             max_bitrate_kbps: Some(9000),
             volume_mode: "album".to_string(),
             crossfade_seconds: 60,
@@ -222,6 +228,7 @@ mod tests {
             panic!("a choice that exists is read");
         };
         assert_eq!(chosen.film_on_screen, FilmOnScreen::Pause);
+        assert!(!chosen.close_when_done, "a bar left open stays open");
         assert_eq!(chosen.max_bitrate_kbps, Some(320));
         assert_eq!(chosen.volume_mode, VolumeMode::Album);
         assert_eq!(chosen.crossfade_seconds, LONGEST_CROSSFADE_SECONDS);
@@ -235,6 +242,7 @@ mod tests {
             chosen_from(&MusicPreferencesView {
                 film_on_screen: "louder".to_string(),
                 resume_queue: true,
+                close_when_done: true,
                 max_bitrate_kbps: None,
                 volume_mode: "track".to_string(),
                 crossfade_seconds: 0,

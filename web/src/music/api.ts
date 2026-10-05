@@ -94,6 +94,8 @@ export interface Found {
 export interface MusicPreferences {
   film_on_screen: "stop" | "pause";
   resume_queue: boolean;
+  /** Whether the bar of the player closes when the last song has ended. */
+  close_when_done: boolean;
   /** Nothing for every song as it is. */
   max_bitrate_kbps: number | null;
   volume_mode: VolumeMode;
