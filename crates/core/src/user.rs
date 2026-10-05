@@ -671,6 +671,9 @@ pub struct Preferences {
     /// Whether the bar at the top slides away while a page is read down, and
     /// comes back at the first move up.
     pub header_hides_on_scroll: bool,
+    /// The same, on a phone, where the bar costs the page far more of its
+    /// window: chosen apart from the larger screens.
+    pub header_hides_on_scroll_phone: bool,
     /// The buttons of the bar and of the account's menu, in the order both
     /// show them. Always every button, once each.
     pub header_buttons: Vec<HeaderButton>,
@@ -737,6 +740,7 @@ impl Default for Preferences {
             banner_at_random: false,
             banner_fills_the_screen: false,
             header_hides_on_scroll: true,
+            header_hides_on_scroll_phone: true,
             header_buttons: HeaderButton::every().to_vec(),
             buttons_in_the_bar: HeaderButton::in_the_bar_at_first().to_vec(),
             backdrop: Backdrop::default(),

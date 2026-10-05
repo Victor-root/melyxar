@@ -53,6 +53,7 @@ import { useSettings } from "../settings";
 import { isSectioned } from "./sectioned";
 import { Face } from "./face";
 import { headroomAt } from "../headroom";
+import { PHONE, useMediaQuery } from "../media-query";
 import type { Headroom } from "../headroom";
 import {
   BackIcon,
@@ -164,7 +165,8 @@ export function Header({
   /** The box the page scrolls in, which is what the bar steps aside for. */
   scrolling: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { t, headerHides, headerButtons, buttonsInTheBar } = useSettings();
+  const { t, headerHides, headerHidesOnPhone, headerButtons, buttonsInTheBar } = useSettings();
+  const onAPhone = useMediaQuery(PHONE);
   const navigate = useNavigate();
   const location = useLocation();
   const [parameters] = useSearchParams();
@@ -190,7 +192,7 @@ export function Header({
      is pinned under the bar, and a bar that slid away would leave a hole of
      its own height over it. */
   const sectioned = isSectioned(location.pathname);
-  const out = useHeadroom(scrolling, headerHides && !sectioned);
+  const out = useHeadroom(scrolling, (onAPhone ? headerHidesOnPhone : headerHides) && !sectioned);
   const field = useRef<HTMLInputElement>(null);
   /* Set by whatever opens the field, so the cursor goes into it once it is
      there: moved into the menu, the field is not drawn at all until then. */

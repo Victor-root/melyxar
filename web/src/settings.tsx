@@ -49,6 +49,7 @@ const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
 const STORED_BANNER_SHOWN = "melyxar.banner.shown";
 const STORED_HEADER_HIDES = "melyxar.header.hides";
+const STORED_HEADER_HIDES_PHONE = "melyxar.header.hides.phone";
 const STORED_HEADER_BUTTONS = "melyxar.header.buttons";
 const STORED_BUTTONS_IN_THE_BAR = "melyxar.header.in_the_bar";
 const STORED_BACKDROP = "melyxar.backdrop";
@@ -111,6 +112,9 @@ interface Settings {
       comes back at the first move up. */
   headerHides: boolean;
   setHeaderHides: (hides: boolean) => void;
+  /** The same on a phone, chosen apart from the larger screens. */
+  headerHidesOnPhone: boolean;
+  setHeaderHidesOnPhone: (hides: boolean) => void;
   /** Every button of the bar and of the account's menu, in the order both
       show them. */
   headerButtons: HeaderButton[];
@@ -204,6 +208,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [headerHides, setHeaderHidesState] = useState(
     () => safeRead(STORED_HEADER_HIDES) !== "no",
+  );
+  const [headerHidesOnPhone, setHeaderHidesOnPhoneState] = useState(
+    () => safeRead(STORED_HEADER_HIDES_PHONE) !== "no",
   );
   const [headerButtons, setHeaderButtonsState] = useState(() =>
     buttonOrder(storedList(STORED_HEADER_BUTTONS)),
@@ -347,6 +354,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ header_hides_on_scroll: hides });
   }, []);
 
+  const setHeaderHidesOnPhone = useCallback((hides: boolean) => {
+    safeWrite(STORED_HEADER_HIDES_PHONE, hides ? "yes" : "no");
+    setHeaderHidesOnPhoneState(hides);
+    tellTheServer({ header_hides_on_scroll_phone: hides });
+  }, []);
+
   const setHeaderButtons = useCallback((buttons: HeaderButton[]) => {
     safeWrite(STORED_HEADER_BUTTONS, buttons.join(","));
     setHeaderButtonsState(buttons);
@@ -415,6 +428,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setBannerShownState(chosen.banner_shown);
     safeWrite(STORED_HEADER_HIDES, chosen.header_hides_on_scroll ? "yes" : "no");
     setHeaderHidesState(chosen.header_hides_on_scroll);
+    safeWrite(STORED_HEADER_HIDES_PHONE, chosen.header_hides_on_scroll_phone ? "yes" : "no");
+    setHeaderHidesOnPhoneState(chosen.header_hides_on_scroll_phone);
     const order = buttonOrder(chosen.header_buttons);
     safeWrite(STORED_HEADER_BUTTONS, order.join(","));
     setHeaderButtonsState(order);
@@ -453,6 +468,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       bannerKept,
       headerHides,
       setHeaderHides,
+      headerHidesOnPhone,
+      setHeaderHidesOnPhone,
       headerButtons,
       setHeaderButtons,
       buttonsInTheBar,
@@ -488,6 +505,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       bannerKept,
       headerHides,
       setHeaderHides,
+      headerHidesOnPhone,
+      setHeaderHidesOnPhone,
       headerButtons,
       setHeaderButtons,
       buttonsInTheBar,
