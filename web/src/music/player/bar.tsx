@@ -38,16 +38,13 @@ export function MusicBar() {
   /* It goes down the way it came up when the music stops, still showing the
      last song; a film takes the screen at once, so it simply goes. */
   const leaving = useLeaving(shown, !film, reduced ? 0 : LEAVE_MS);
-  const last = useRef(music.song);
-  if (music.song) {
-    last.current = music.song;
-  }
-
   // Room kept at the foot of the pages, so the bar never hides the end of
-  // one.
+  // one. Kept until the bar has left: taken away as it starts to go down,
+  // the whole page was laid out and drawn again during its way out.
+  const there = shown || leaving;
   useEffect(() => {
     const root = document.documentElement;
-    if (shown) {
+    if (there) {
       root.dataset.musicBar = "";
     } else {
       delete root.dataset.musicBar;
@@ -55,7 +52,13 @@ export function MusicBar() {
     return () => {
       delete root.dataset.musicBar;
     };
-  }, [shown]);
+  }, [there]);
+  const last = useRef(music.song);
+  if (music.song) {
+    last.current = music.song;
+  }
+
+
 
   const song = shown ? music.song : last.current;
   if ((!shown && !leaving) || !song) {
