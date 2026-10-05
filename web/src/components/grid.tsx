@@ -8,10 +8,11 @@
  * right at every width without a single measurement being hard coded.
  */
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { ReactNode } from "react";
 import { PicturesAhead, useFetchingAhead } from "./card";
 import type { CardShape } from "./card";
+import { useReachEnd } from "./reach-end";
 
 interface GridProps {
   children: ReactNode;
@@ -31,22 +32,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
 
   // The next page is fetched when the end comes into view rather than when the
   // viewer hits the bottom, so the grid grows before it runs out.
-  useEffect(() => {
-    const target = sentinel.current;
-    if (!target || !onReachEnd || !hasMore) {
-      return;
-    }
-    const watcher = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          onReachEnd();
-        }
-      },
-      { rootMargin: "600px" },
-    );
-    watcher.observe(target);
-    return () => watcher.disconnect();
-  }, [onReachEnd, hasMore]);
+  useReachEnd(sentinel, hasMore ? (onReachEnd ?? null) : null, 600);
 
   const onKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const container = grid.current;
