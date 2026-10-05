@@ -12,16 +12,21 @@
  * the page of what is playing.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Picture } from "../../api";
 import { useShownPicture } from "../../components/picture";
+import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
 import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
+import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
 import { BehindThePlayer } from "./spectrum";
+
+/** How long the bar takes to leave, which is what its way out lasts. */
+const LEAVE_MS = 180;
 
 export function MusicBar() {
   const { t } = useSettings();
@@ -29,6 +34,14 @@ export function MusicBar() {
   const nowPlaying = useNowPlayingPage();
   const film = useIsAFilmOnScreen();
   const shown = music.song !== null && !film;
+  const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
+  /* It goes down the way it came up when the music stops, still showing the
+     last song; a film takes the screen at once, so it simply goes. */
+  const leaving = useLeaving(shown, !film, reduced ? 0 : LEAVE_MS);
+  const last = useRef(music.song);
+  if (music.song) {
+    last.current = music.song;
+  }
 
   // Room kept at the foot of the pages, so the bar never hides the end of
   // one.
@@ -44,13 +57,13 @@ export function MusicBar() {
     };
   }, [shown]);
 
-  if (!shown || !music.song) {
+  const song = shown ? music.song : last.current;
+  if ((!shown && !leaving) || !song) {
     return null;
   }
-  const song = music.song;
 
   return (
-    <div className="music-bar-dock" role="region" aria-label={t("music.player")}>
+    <div className={`music-bar-dock${leaving ? " music-bar-leaving" : ""}`} role="region" aria-label={t("music.player")}>
       <BehindThePlayer />
       <Rail music={music} />
       <div className="music-bar-row">
