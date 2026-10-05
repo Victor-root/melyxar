@@ -360,10 +360,12 @@ function HomeSkeleton() {
         {[0, 1].map((row) => (
           <section className="section" key={row}>
             <div className="skeleton skeleton-heading" />
-            <div className="row-track">
-              {[0, 1, 2, 3, 4, 5, 6].map((card) => (
-                <div className="skeleton skeleton-card" key={card} />
-              ))}
+            <div className="row-view">
+              <div className="row-track">
+                {[0, 1, 2, 3, 4, 5, 6].map((card) => (
+                  <div className="skeleton skeleton-card" key={card} />
+                ))}
+              </div>
             </div>
           </section>
         ))}

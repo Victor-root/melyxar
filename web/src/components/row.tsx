@@ -214,14 +214,16 @@ export function Row({
         </button>
       )}
 
-      <div
-        className="row-track"
-        ref={track}
-        onScroll={measure}
-        onKeyDown={onKeyDown}
-        {...drag}
-      >
-        <PicturesAhead.Provider value={ahead}>{children}</PicturesAhead.Provider>
+      <div className="row-view">
+        <div
+          className="row-track"
+          ref={track}
+          onScroll={measure}
+          onKeyDown={onKeyDown}
+          {...drag}
+        >
+          <PicturesAhead.Provider value={ahead}>{children}</PicturesAhead.Provider>
+        </div>
       </div>
 
       {canGoOn && (
