@@ -28,6 +28,9 @@
   display: flex;
   gap: var(--gap);
   overflow-x: auto;
+  /* Scrolled by the graphics card, for the reason given on the box the page
+     scrolls in. */
+  will-change: scroll-position;
   /* Room for the focus ring, for a card grown under the pointer and for the
      light it gives off, all of which a hidden overflow would otherwise clip. */
   padding: var(--row-air) var(--row-side-air) var(--gap-tight);

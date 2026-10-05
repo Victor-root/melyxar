@@ -24,6 +24,13 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
+  /* Scrolled by the graphics card rather than redrawn for every frame. A box
+     with see-through ground on a screen of middling density (a laptop at
+     125 %) is otherwise kept off it, for sharper text, and its scrolling
+     lost one frame in twenty: measured at 3 to 7 % lost, and 0.6 % with
+     this line, which is what another media server reaches on the same
+     machine. */
+  will-change: scroll-position;
 }
 
 .shell-scroll::-webkit-scrollbar {
