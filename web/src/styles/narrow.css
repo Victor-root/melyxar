@@ -115,34 +115,59 @@
     display: none;
   }
 
-  /* The banner is the picture, its facts and one square in the corner that
-     opens the work: no buttons, no drawn title, no badges. */
-  .hero-buttons,
-  .hero-badges,
-  .hero-title-drawn {
+  /* The banner is the picture, its drawn title at the top, its facts, and
+     along the foot the two buttons with where it is in the five at the far
+     right. No badges. */
+  .hero-badges {
     display: none;
   }
 
-  .hero-info {
-    position: absolute;
-    right: var(--gap);
-    bottom: var(--gap);
-    z-index: 2;
-    display: grid;
-    place-items: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
-    border-radius: var(--radius-control);
-    background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
-    backdrop-filter: blur(8px);
-    color: var(--text);
+  .hero-words {
+    justify-content: flex-end;
+    padding-bottom: var(--gap);
   }
 
-  /* Beside the square, level with its middle. */
+  .hero-title-drawn {
+    position: absolute;
+    top: calc(var(--header-height) + var(--gap-tight));
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .hero-title-drawn img {
+    max-height: 52px;
+    max-width: 62%;
+  }
+
+  /* Smaller than the large buttons, and kept on one line, so both fit
+     beside the dots. */
+  .hero-buttons {
+    flex-wrap: nowrap;
+    gap: 8px;
+    max-width: calc(100% - 78px);
+  }
+
+  .hero-buttons .button-large {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 6px;
+    padding: 9px 14px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .hero-buttons .button-large > svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+  }
+
+  /* At the far right, level with the middle of the buttons. */
   .hero-steps {
     bottom: calc(var(--gap) + 15px);
-    right: calc(var(--gap) * 2 + 36px);
+    right: var(--gap);
   }
 
   .hero-dots {
@@ -164,10 +189,6 @@
      can have instead. */
   .section-all {
     display: none;
-  }
-
-  .hero-words {
-    padding-bottom: calc(var(--gap) * 2 + 36px);
   }
 
   .header-inner {
