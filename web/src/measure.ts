@@ -6,23 +6,31 @@
  * for the next load of the page, `melyxar.report()` writes down what it saw
  * and puts it away again. Armed, it notes every frame drawn, the long frames
  * of the main thread with what kept them busy, every picture and question
- * the page sent, where the page stood as it was scrolled, and what the
- * machine is. Nothing leaves the browser.
+ * the page sent, where the page stood as it was scrolled, what the person
+ * did and what the page set moving next to every late frame, the events the
+ * page was slow to answer, and what the machine is. Nothing leaves the
+ * browser.
  *
  * Armed through the storage of the tab rather than the page, so that it is
  * still armed after the reload that makes a load cold.
  */
 
 import { putOnTheClipboard } from "./clipboard";
-import type { Drawn, Pass, Scrolled } from "./measure-report";
+import { describe, noteDoings } from "./measure-doings";
+import type { Doing, Drawn, Pass, Scrolled, Slow, Span, Timed } from "./measure-report";
 import {
+  doingsAround,
+  eventParts,
   frameStats,
+  framesInView,
   framesLost,
   framesWhile,
   heldFor,
   heldUpByTheMainThread,
+  latestBefore,
   passesOf,
   percentile,
+  slowMoments,
 } from "./measure-report";
 
 const ARMED = "melyxar.measure";
@@ -36,6 +44,16 @@ const AROUND_MS = 120;
 /** How many of the worst frames are written out one by one. */
 const WORST_FRAMES = 40;
 
+/** How many things the person did are named beside a stalled frame. */
+const DOINGS_NAMED = 5;
+
+/** The browser reports an event only when it took this long to answer, which
+ *  is the shortest it allows. */
+const SLOW_EVENT_MS = 16;
+
+/** How many of the slowest events are written out one by one. */
+const SLOW_EVENTS = 15;
+
 /** A long frame of the main thread, as the browser describes it. */
 interface LongFrame {
   startTime: number;
@@ -47,6 +65,7 @@ interface LongFrame {
     invoker: string;
     sourceURL: string;
     sourceFunctionName: string;
+    sourceCharPosition: number;
     duration: number;
     forcedStyleAndLayoutDuration: number;
   }[];
@@ -65,6 +84,13 @@ interface Recording {
   sideways: number[];
   loaded: Loaded[];
   longFrames: LongFrame[];
+  /** What the person did and the page set moving, as it happened. */
+  doings: Doing[];
+  /** The page that was shown from each moment on. */
+  pages: Doing[];
+  /** When the page was out of view, where no frame is drawn. */
+  away: Span[];
+  slow: Slow[];
   largestPaint: number;
   shifts: number;
 }
@@ -93,7 +119,7 @@ export function setUpMeasuring() {
   if (armed) {
     begin();
     console.info(
-      "melyxar: measuring since this page loaded. Scroll, then run melyxar.report().",
+      "melyxar: measuring since this page loaded. Use the page as usual (scroll, hover, click, open pages), then run melyxar.report().",
     );
   }
 }
@@ -117,10 +143,15 @@ function begin() {
     sideways: [],
     loaded: [],
     longFrames: [],
+    doings: [],
+    pages: [{ at: 0, what: location.pathname }],
+    away: [],
+    slow: [],
     largestPaint: 0,
     shifts: 0,
   };
   recording = now;
+  const note = noteDoings(now.doings);
   performance.setResourceTimingBufferSize(5000);
 
   /* How long the main thread holds each frame, however short. The browser
@@ -138,9 +169,15 @@ function begin() {
   };
 
   let last = performance.now();
+  let page = location.pathname;
   const tick = (at: number) => {
     if (recording !== now) {
       return;
+    }
+    if (location.pathname !== page) {
+      page = location.pathname;
+      now.pages.push({ at, what: page });
+      note(at, `page ${page}`);
     }
     const turn = performance.now();
     const drawn: Drawn = { at, gap: at - last, before: Math.max(0, turn - at) };
@@ -167,6 +204,14 @@ function begin() {
     },
     { capture: true, passive: true },
   );
+  document.addEventListener("visibilitychange", () => {
+    const at = performance.now();
+    if (document.hidden) {
+      now.away.push({ from: at, to: Infinity });
+    } else if (now.away.length > 0) {
+      now.away[now.away.length - 1].to = at;
+    }
+  });
   document.addEventListener(
     "load",
     (event) => {
@@ -181,14 +226,35 @@ function begin() {
     { capture: true },
   );
 
-  const watch = (type: string, heard: (entries: PerformanceEntryList) => void) => {
+  const watch = (
+    type: string,
+    heard: (entries: PerformanceEntryList) => void,
+    options: { durationThreshold?: number } = {},
+  ) => {
     if (PerformanceObserver.supportedEntryTypes.includes(type)) {
       new PerformanceObserver((list) => heard(list.getEntries())).observe({
         type,
         buffered: true,
+        ...options,
       });
     }
   };
+  watch(
+    "event",
+    (entries) => {
+      for (const entry of entries as unknown as (Timed & { name: string; target: Node | null })[]) {
+        now.slow.push({
+          startTime: entry.startTime,
+          duration: entry.duration,
+          processingStart: entry.processingStart,
+          processingEnd: entry.processingEnd,
+          name: entry.name,
+          what: describe(entry.target),
+        });
+      }
+    },
+    { durationThreshold: SLOW_EVENT_MS },
+  );
   watch("long-animation-frame", (entries) =>
     now.longFrames.push(...(entries as unknown as LongFrame[])),
   );
@@ -262,6 +328,9 @@ function written(now: Recording): string {
 
   say("=== Melyxar smoothness report ===");
   say(`page ${location.pathname}, recorded for ${seconds(performance.now())}`);
+  if (now.pages.length > 1) {
+    say(`pages ${now.pages.map((one) => `${seconds(one.at)} ${one.what}`).join(", ")}`);
+  }
   say();
   say("--- machine ---");
   const nav = navigator as Navigator & {
@@ -356,68 +425,61 @@ function written(now: Recording): string {
 
   say();
   say("--- scrolling ---");
+  const shown = framesInView(now.frames, now.away);
   const passes = passesOf(now.scrolls);
-  const lastScrollBefore = (at: number) => {
-    let found: Scrolled | null = null;
-    for (const scrolled of now.scrolls) {
-      if (scrolled.at > at) {
-        break;
-      }
-      found = scrolled;
-    }
-    return found;
-  };
-  const whileScrolling = now.frames.filter((drawn) => {
-    const scrolled = lastScrollBefore(drawn.at);
+  const whileScrolling = shown.filter((drawn) => {
+    const scrolled = latestBefore(now.scrolls, drawn.at);
     return scrolled !== null && drawn.at - scrolled.at <= WHILE_SCROLLING_MS;
   });
   const passOf = (at: number): string => {
     const index = passes.findIndex((pass) => at >= pass.from && at <= pass.to + WHILE_SCROLLING_MS);
     return index < 0 ? "-" : `${index + 1}.${passes[index].direction}`;
   };
+  const pageOf = (at: number) => latestBefore(now.pages, at)?.what ?? location.pathname;
+
+  const mainThread = (frames: Drawn[]): string => {
+    const held = frames.map(heldFor);
+    const first = frames.map((drawn) => drawn.before);
+    const second = frames.map((drawn) => drawn.painting ?? 0);
+    return `main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)}, worst ${ms(held.length > 0 ? Math.max(...held) : 0)} (scroll and hand p50 ${percentile(first, 0.5).toFixed(1)}; work, style, layout, paint p50 ${percentile(second, 0.5).toFixed(1)}, p95 ${percentile(second, 0.95).toFixed(1)})`;
+  };
+  const framesLine = (frames: Drawn[]): string => {
+    const stats = frameStats(frames.map((drawn) => drawn.gap), frame);
+    return `${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | ${mainThread(frames)}`;
+  };
+
   const box = document.querySelector(".shell-scroll");
   say(
     `page ${box ? box.scrollHeight - box.clientHeight : "?"} points of scrolling, sideways scrolls of rows ${now.sideways.length}`,
   );
   passes.forEach((pass: Pass, index) => {
-    const inside = whileScrolling
-      .filter((drawn) => drawn.at >= pass.from && drawn.at <= pass.to + WHILE_SCROLLING_MS)
-      .map((drawn) => drawn.gap);
-    const stats = frameStats(inside, frame);
-    const held = whileScrolling
-      .filter((drawn) => drawn.at >= pass.from && drawn.at <= pass.to + WHILE_SCROLLING_MS)
-      .map(heldFor);
+    const inside = whileScrolling.filter(
+      (drawn) => drawn.at >= pass.from && drawn.at <= pass.to + WHILE_SCROLLING_MS,
+    );
     say(
-      `pass ${index + 1} ${pass.direction} ${pass.startTop} -> ${pass.endTop} from ${seconds(pass.from)} for ${seconds(pass.to - pass.from)}: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)}, worst ${ms(held.length > 0 ? Math.max(...held) : 0)}`,
+      `pass ${index + 1} ${pass.direction} ${Math.round(pass.startTop)} -> ${Math.round(pass.endTop)} from ${seconds(pass.from)} for ${seconds(pass.to - pass.from)}: ${framesLine(inside)}`,
     );
   });
 
   /* Rows scrolled sideways, which the passes above do not see: they only
      follow the page up and down. */
-  const sideways = framesWhile(now.frames, now.sideways, WHILE_SCROLLING_MS).filter(
-    (drawn) => !whileScrolling.includes(drawn),
+  const scrollingFrames = new Set(whileScrolling);
+  const sideways = framesWhile(shown, now.sideways, WHILE_SCROLLING_MS).filter(
+    (drawn) => !scrollingFrames.has(drawn),
   );
+  const sidewaysFrames = new Set(sideways);
   if (sideways.length > 0) {
-    const stats = frameStats(sideways.map((drawn) => drawn.gap), frame);
-    const held = sideways.map(heldFor);
     const arrived = now.loaded.filter((loaded) =>
       sideways.some((drawn) => loaded.at >= drawn.at - drawn.gap && loaded.at <= drawn.at),
     ).length;
-    say(
-      `rows sideways: ${stats.frames} frames, ${stats.lost} lost, ${stats.stalls} stalls, p50 ${stats.p50.toFixed(1)}, p95 ${stats.p95.toFixed(1)}, worst ${ms(stats.worst)} | main thread per frame p50 ${percentile(held, 0.5).toFixed(1)}, p95 ${percentile(held, 0.95).toFixed(1)} | pictures arrived meanwhile ${arrived}`,
-    );
+    say(`rows sideways: ${framesLine(sideways)} | pictures arrived meanwhile ${arrived}`);
   }
 
-  say();
-  say("--- worst frames while scrolling ---");
   const overlapping = (from: number, to: number) =>
     now.longFrames.filter((long) => long.startTime < to && long.startTime + long.duration > from);
-  const worst = [...whileScrolling]
-    .filter((drawn) => drawn.gap > frame * 1.5)
-    .sort((a, b) => b.gap - a.gap)
-    .slice(0, WORST_FRAMES)
-    .sort((a, b) => a.at - b.at);
-  for (const drawn of worst) {
+  /** What held a late frame: the main thread, or something else, and what the
+   *  person and the page were doing at the time. */
+  const whatHeld = (drawn: Drawn): string => {
     const from = drawn.at - drawn.gap;
     const busy = overlapping(from, drawn.at);
     const near = (at: number) => at >= from - AROUND_MS && at <= drawn.at;
@@ -440,8 +502,47 @@ function written(now: Recording): string {
               return `main ${ms(long.duration)} (script ${ms(script)}, render ${ms(render)}, style+layout ${ms(layout)})`;
             })
             .join(" + ");
+    const doing = doingsAround(now.doings, from, drawn.at, AROUND_MS, DOINGS_NAMED);
+    return `${main} | doing ${doing.length > 0 ? doing.join("; ") : "nothing noted"} | pictures arrived ${arrived}, answers ended ${ended}`;
+  };
+  const worstOf = (frames: Drawn[]): Drawn[] =>
+    frames
+      .filter((drawn) => drawn.gap > frame * 1.5)
+      .sort((a, b) => b.gap - a.gap)
+      .slice(0, WORST_FRAMES)
+      .sort((a, b) => a.at - b.at);
+
+  say();
+  say("--- worst frames while scrolling ---");
+  for (const drawn of worstOf([...whileScrolling, ...sideways])) {
+    const where = sidewaysFrames.has(drawn) ? "rows sideways" : `pass ${passOf(drawn.at)}`;
     say(
-      `${seconds(drawn.at)} pass ${passOf(drawn.at)} top ${lastScrollBefore(drawn.at)?.top ?? "?"}: ${ms(drawn.gap)} (${framesLost(drawn.gap, frame)} lost) | ${main} | pictures arrived ${arrived}, answers ended ${ended}`,
+      `${seconds(drawn.at)} ${where} top ${latestBefore(now.scrolls, drawn.at)?.top ?? "?"}: ${ms(drawn.gap)} (${framesLost(drawn.gap, frame)} lost) | ${whatHeld(drawn)}`,
+    );
+  }
+
+  /* Everything the passes above leave out: the pointer crossing cards, the
+     hero turning, a page opening, a menu unfolding. */
+  say();
+  say("--- everything else: frames drawn while nothing was scrolling ---");
+  const others = shown.filter((drawn) => !scrollingFrames.has(drawn) && !sidewaysFrames.has(drawn));
+  say(framesLine(others));
+  for (const drawn of worstOf(others)) {
+    say(
+      `${seconds(drawn.at)} page ${pageOf(drawn.at)}: ${ms(drawn.gap)} (${framesLost(drawn.gap, frame)} lost) | ${whatHeld(drawn)}`,
+    );
+  }
+
+  say();
+  say("--- slow answers to the hand ---");
+  const moments = slowMoments(now.slow);
+  say(
+    `${moments.length} movements of the hand took ${SLOW_EVENT_MS} ms or more to be drawn (the browser rounds to 8 ms)`,
+  );
+  for (const one of [...moments].sort((a, b) => b.duration - a.duration).slice(0, SLOW_EVENTS)) {
+    const parts = eventParts(one);
+    say(
+      `${seconds(one.startTime)} page ${pageOf(one.startTime)} ${one.name} on ${one.what}: ${ms(one.duration)} (waited ${ms(parts.waited)}, handlers ${ms(parts.handling)}, until drawn ${ms(parts.drawing)})`,
     );
   }
 
@@ -456,7 +557,7 @@ function written(now: Recording): string {
       .slice(0, 3)
       .map(
         (one) =>
-          `${one.invoker || "?"} ${one.sourceFunctionName || ""}@${one.sourceURL ? shortName(one.sourceURL) : "?"} ${ms(one.duration)}${one.forcedStyleAndLayoutDuration > 1 ? ` (forced layout ${ms(one.forcedStyleAndLayoutDuration)})` : ""}`,
+          `${one.invoker || "?"} ${one.sourceFunctionName || ""}@${one.sourceURL ? shortName(one.sourceURL) : "?"}${one.sourceCharPosition >= 0 ? ` char ${one.sourceCharPosition}` : ""} ${ms(one.duration)}${one.forcedStyleAndLayoutDuration > 1 ? ` (forced layout ${ms(one.forcedStyleAndLayoutDuration)})` : ""}`,
       )
       .join("; ");
     const layout = long.startTime + long.duration - (long.styleAndLayoutStart || long.startTime + long.duration);
