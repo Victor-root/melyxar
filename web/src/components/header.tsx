@@ -546,6 +546,7 @@ export function Header({
               sideways when they are more than the width allows. Everywhere
               else it takes no room of its own. */}
           <div className="header-buttons">
+            <div className="header-buttons-track">
           {/* Everything anybody can press, one icon each, in the order this
               account put them; those it moved into its menu are drawn there
               instead. A menu of five entries opened by one press is five
@@ -638,6 +639,7 @@ export function Header({
             }
             return <Place key={button} place={button} inTheMenu={false} />;
           })}
+            </div>
           </div>
 
           {/* The few results the field offers on its own, drawn at the end of

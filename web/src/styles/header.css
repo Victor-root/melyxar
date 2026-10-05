@@ -532,7 +532,8 @@
 }
 
 /* The box the buttons of the bar stand in: no box at all, here. */
-.header-buttons {
+.header-buttons,
+.header-buttons-track {
   display: contents;
 }
 
