@@ -223,7 +223,7 @@
   min-height: 0;
   overflow-y: auto;
   /* Not the bar of the page: thinner than it. */
-  --scrollbar-width: 5px;
+  --scrollbar-width: 7px;
 }
 
 /* --------------------------------------------------------------------------
