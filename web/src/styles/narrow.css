@@ -78,15 +78,8 @@
      its pieces and that air twice over. Every page starts below it, so every
      page follows. */
   :root {
-    /* What the system keeps for its own bars, which an installed application
-       drawn edge to edge shares the screen with: the clock and the icons
-       above, the gesture bar below. Nothing where the browser keeps the
-       window clear of them itself. */
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
     --header-edge: 6px;
-    --header-height: calc(var(--header-piece) + 2 * var(--header-edge) + var(--safe-top));
-    --music-bar-height: calc(100px + var(--safe-bottom));
+    --header-height: calc(var(--header-piece) + 2 * var(--header-edge));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
     --hero-height: clamp(360px, 56dvh, 480px);
@@ -134,15 +127,7 @@
   }
 
   .header-inner {
-    padding: var(--safe-top) var(--header-edge) 0;
-  }
-
-  .music-bar-dock {
-    padding-bottom: var(--safe-bottom);
-  }
-
-  .shell {
-    padding-bottom: var(--safe-bottom);
+    padding: 0 var(--header-edge);
   }
 
   /* The way back takes no more room from the edge than the other pieces. */
