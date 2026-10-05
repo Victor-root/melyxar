@@ -1570,6 +1570,7 @@ name = "melyxar-app"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "futures-util",
  "melyxar-auth",
  "melyxar-config",
  "melyxar-container",

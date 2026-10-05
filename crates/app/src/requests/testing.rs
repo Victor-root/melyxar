@@ -5,7 +5,7 @@ use melyxar_core::user::{Permissions, User};
 use melyxar_core::work::SeasonLength;
 use melyxar_metadata::provider::Result;
 use melyxar_metadata::{
-    Candidate, Catalogue, Details, MetadataProvider, OfferedPicture, PersonDetails, ProviderError,
+    Candidate, Catalogue, Details, Genre, MetadataProvider, OfferedPicture, PersonDetails, ProviderError,
     SeasonDetails,
 };
 
@@ -132,5 +132,25 @@ impl MetadataProvider for StandIn {
 
     async fn by_imdb_id(&self, _imdb_id: &str, _language: &str) -> Result<Option<Candidate>> {
         Ok(None)
+    }
+
+    /// The genres its titles carry, each known by its own name.
+    async fn genres(&self, catalogue: Catalogue, _language: &str) -> Result<Vec<Genre>> {
+        let mut names: Vec<&String> = self.of(catalogue).iter().flat_map(|details| &details.genres).collect();
+        names.sort();
+        names.dedup();
+        Ok(names
+            .into_iter()
+            .map(|name| Genre { id: name.clone(), name: name.clone() })
+            .collect())
+    }
+
+    async fn popular(&self, catalogue: Catalogue, genre_id: Option<&str>, _language: &str) -> Result<Vec<Candidate>> {
+        Ok(self
+            .of(catalogue)
+            .iter()
+            .filter(|details| genre_id.is_none_or(|genre| details.genres.iter().any(|one| one == genre)))
+            .map(|details| details.as_candidate(catalogue))
+            .collect())
     }
 }

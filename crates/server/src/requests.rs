@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/requests/{id}", axum::routing::delete(withdraw))
         .route("/api/v1/requests/access", get(access))
         .route("/api/v1/requests/search", get(search))
+        .route("/api/v1/requests/suggestions", get(suggestions))
         .route("/api/v1/requests/series/{id}/seasons", get(seasons))
         .route("/api/v1/requests/title/{catalogue}/{id}", get(title))
         .route("/api/v1/system/requests", get(for_the_administrator))
@@ -280,6 +281,35 @@ async fn search(
 #[derive(Debug, Deserialize)]
 struct Language {
     language: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ShelfView {
+    /// The genre it is taken from, nothing for what is popular whatever it is.
+    genre: Option<String>,
+    /// films or series, nothing for both together.
+    catalogue: Option<&'static str>,
+    items: Vec<FoundView>,
+}
+
+async fn suggestions(
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Query(asked): Query<Language>,
+) -> Result<Json<Vec<ShelfView>>> {
+    let provider = provider_of(&state)?;
+    let shelves =
+        melyxar_app::requests::suggesting::suggestions(&state, &provider, &who, &asked.language).await?;
+    Ok(Json(
+        shelves
+            .into_iter()
+            .map(|shelf| ShelfView {
+                genre: shelf.genre,
+                catalogue: shelf.catalogue.map(word_of),
+                items: shelf.found.into_iter().map(found_view).collect(),
+            })
+            .collect(),
+    ))
 }
 
 #[derive(Debug, Serialize)]

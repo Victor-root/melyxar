@@ -56,6 +56,12 @@
   gap: var(--gap);
 }
 
+/* A card in a row of suggestions: as wide as one of the grid of answers. */
+.row-track > .request-shelf-card {
+  flex: 0 0 min(420px, 85vw);
+  min-width: 0;
+}
+
 .request-card {
   position: relative;
   display: flex;

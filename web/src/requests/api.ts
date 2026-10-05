@@ -37,6 +37,16 @@ export interface Found {
   mine: string | null;
 }
 
+/** A row of titles to suggest: from a genre this account watches, or the
+    most popular of all. */
+export interface Shelf {
+  /** Nothing for what is popular whatever it is. */
+  genre: string | null;
+  /** Nothing for films and series together. */
+  catalogue: Catalogue | null;
+  items: Found[];
+}
+
 /** One season of a series, as it may be asked for. */
 export interface SeasonChoice {
   number: number;
@@ -130,6 +140,8 @@ export const requestsApi = {
       `/api/v1/requests/search?query=${encodeURIComponent(query)}&language=${language}`,
       signal,
     ),
+  suggestions: (language: string, signal?: AbortSignal) =>
+    get<Shelf[]>(`/api/v1/requests/suggestions?language=${language}`, signal),
   seasons: (tmdbId: string, language: string, signal?: AbortSignal) =>
     get<SeasonChoice[]>(
       `/api/v1/requests/series/${encodeURIComponent(tmdbId)}/seasons?language=${language}`,

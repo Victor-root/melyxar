@@ -1911,6 +1911,23 @@ mod tests {
                     candidate(&details.external_id, &details.title, details.release_year)
                 }))
         }
+
+        async fn genres(
+            &self,
+            _catalogue: Catalogue,
+            _language: &str,
+        ) -> melyxar_metadata::provider::Result<Vec<melyxar_metadata::Genre>> {
+            Ok(Vec::new())
+        }
+
+        async fn popular(
+            &self,
+            _catalogue: Catalogue,
+            _genre_id: Option<&str>,
+            _language: &str,
+        ) -> melyxar_metadata::provider::Result<Vec<Candidate>> {
+            Ok(Vec::new())
+        }
     }
 
     fn candidate(id: &str, title: &str, year: Option<i32>) -> Candidate {

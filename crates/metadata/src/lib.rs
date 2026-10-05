@@ -24,7 +24,7 @@ pub mod tmdb;
 pub mod translation_models;
 
 pub use provider::{
-    Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, MetadataProvider,
+    Candidate, Catalogue, Collection, Credit, Details, EpisodeDetails, Genre, MetadataProvider,
     OfferedPicture, PersonDetails, PictureKind, ProviderError, SeasonDetails, Trailer,
 };
 pub use omdb::OmdbClient;
