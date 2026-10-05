@@ -225,6 +225,25 @@ export function Hero({ items }: { items: HeroItem[] }) {
     },
   };
 
+  /* Where it is in the five, drawn twice for the two places it stands: in
+     the corner beside the arrows, and on a phone, which draws no arrows, at
+     the end of the row of buttons. Each is shown where it belongs and the
+     other not at all. */
+  const dots = (
+    <div className="hero-dots">
+      {items.map((item, rank) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`hero-dot${rank === at ? " hero-dot-on" : ""}`}
+          aria-label={item.title}
+          aria-current={rank === at}
+          onClick={() => go(rank)}
+        />
+      ))}
+    </div>
+  );
+
   return (
     <section
       className="hero"
@@ -309,6 +328,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
               {t("home.hero.open")}
             </Link>
           )}
+          {many && <div className="hero-dots-slot">{dots}</div>}
         </div>
 
         {/* How far in it already is, under the buttons that carry on with it. */}
@@ -330,18 +350,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
             <ChevronLeftIcon size={26} />
           </button>
 
-          <div className="hero-dots">
-            {items.map((item, rank) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`hero-dot${rank === at ? " hero-dot-on" : ""}`}
-                aria-label={item.title}
-                aria-current={rank === at}
-                onClick={() => go(rank)}
-              />
-            ))}
-          </div>
+          {dots}
 
           <button
             type="button"
