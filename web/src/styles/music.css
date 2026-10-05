@@ -983,6 +983,12 @@
   -webkit-mask-image: var(--music-bar-fade);
 }
 
+/* The lists listened to run down to the bar and fade into it like the rest of
+   the page, instead of ending sharply above the fade. */
+:root[data-music-bar] .page:has(.music-listened) {
+  padding-bottom: 0;
+}
+
 :root[data-music-bar] .toasts {
   bottom: calc(var(--music-bar-height) + var(--gutter));
 }
