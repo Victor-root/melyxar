@@ -396,10 +396,12 @@ pub trait MetadataProvider: Send + Sync {
 
     /// The most popular works of one catalogue, narrowed to one genre when
     /// one is named: what is worth suggesting to somebody who watches it.
+    /// Read a page at a time, the first being page one.
     fn popular(
         &self,
         catalogue: Catalogue,
         genre_id: Option<&str>,
+        page: u32,
         language: &str,
     ) -> impl Future<Output = Result<Vec<Candidate>>> + Send;
 }

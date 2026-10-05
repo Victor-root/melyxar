@@ -42,8 +42,9 @@ export interface Found {
 export interface Shelf {
   /** Nothing for what is popular whatever it is. */
   genre: string | null;
-  /** Nothing for films and series together. */
-  catalogue: Catalogue | null;
+  /** That genre at the provider, which seeing more asks the rest of. */
+  genre_id: string | null;
+  catalogue: Catalogue;
   items: Found[];
 }
 
@@ -142,6 +143,13 @@ export const requestsApi = {
     ),
   suggestions: (language: string, signal?: AbortSignal) =>
     get<Shelf[]>(`/api/v1/requests/suggestions?language=${language}`, signal),
+  popular: (catalogue: Catalogue, genre: string | null, page: number, language: string, signal?: AbortSignal) =>
+    get<Found[]>(
+      `/api/v1/requests/popular?catalogue=${catalogue}&page=${page}&language=${language}${
+        genre ? `&genre=${encodeURIComponent(genre)}` : ""
+      }`,
+      signal,
+    ),
   seasons: (tmdbId: string, language: string, signal?: AbortSignal) =>
     get<SeasonChoice[]>(
       `/api/v1/requests/series/${encodeURIComponent(tmdbId)}/seasons?language=${language}`,

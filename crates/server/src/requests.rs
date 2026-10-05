@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/requests/access", get(access))
         .route("/api/v1/requests/search", get(search))
         .route("/api/v1/requests/suggestions", get(suggestions))
+        .route("/api/v1/requests/popular", get(popular))
         .route("/api/v1/requests/series/{id}/seasons", get(seasons))
         .route("/api/v1/requests/title/{catalogue}/{id}", get(title))
         .route("/api/v1/system/requests", get(for_the_administrator))
@@ -287,9 +288,37 @@ struct Language {
 struct ShelfView {
     /// The genre it is taken from, nothing for what is popular whatever it is.
     genre: Option<String>,
-    /// films or series, nothing for both together.
-    catalogue: Option<&'static str>,
+    /// That genre at the provider, which "see more" asks the rest of.
+    genre_id: Option<String>,
+    catalogue: &'static str,
     items: Vec<FoundView>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Popular {
+    catalogue: String,
+    genre: Option<String>,
+    page: u32,
+    language: String,
+}
+
+async fn popular(
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Query(asked): Query<Popular>,
+) -> Result<Json<Vec<FoundView>>> {
+    let provider = provider_of(&state)?;
+    let found = melyxar_app::requests::suggesting::more(
+        &state,
+        &provider,
+        &who,
+        parse_catalogue(&asked.catalogue)?,
+        asked.genre.as_deref(),
+        asked.page,
+        &asked.language,
+    )
+    .await?;
+    Ok(Json(found.into_iter().map(found_view).collect()))
 }
 
 async fn suggestions(
@@ -305,7 +334,8 @@ async fn suggestions(
             .into_iter()
             .map(|shelf| ShelfView {
                 genre: shelf.genre,
-                catalogue: shelf.catalogue.map(word_of),
+                genre_id: shelf.genre_id,
+                catalogue: word_of(shelf.catalogue),
                 items: shelf.found.into_iter().map(found_view).collect(),
             })
             .collect(),

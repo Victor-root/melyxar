@@ -27,8 +27,9 @@ pub struct Shelf {
     /// The genre it is taken from, in the language asked for. Nothing for
     /// what is popular whatever it is.
     pub genre: Option<String>,
-    /// Nothing for a shelf of films and series together.
-    pub catalogue: Option<Catalogue>,
+    /// That genre at the provider, which "see more" asks the rest of.
+    pub genre_id: Option<String>,
+    pub catalogue: Catalogue,
     pub found: Vec<Found>,
 }
 
@@ -124,39 +125,45 @@ pub async fn suggestions<P: MetadataProvider>(
         .collect();
     let picks = picks(&taste, &lists, shown_in);
 
-    let mut shelves: Vec<(Option<String>, Option<Catalogue>, Vec<Candidate>)> = Vec::new();
+    let mut taken: Vec<Taken> = Vec::new();
     if picks.is_empty() {
         let (films, series) = tokio::join!(
-            provider.popular(Catalogue::Films, None, shown_in),
-            provider.popular(Catalogue::Series, None, shown_in),
+            provider.popular(Catalogue::Films, None, 1, shown_in),
+            provider.popular(Catalogue::Series, None, 1, shown_in),
         );
-        shelves.push((None, None, interleaved(films?, series?)));
+        for (catalogue, candidates) in [(Catalogue::Films, films?), (Catalogue::Series, series?)] {
+            taken.push(Taken { genre: None, genre_id: None, catalogue, candidates });
+        }
     } else {
         let answers = join_all(
             picks
                 .iter()
-                .map(|pick| provider.popular(pick.catalogue, Some(&pick.genre_id), shown_in)),
+                .map(|pick| provider.popular(pick.catalogue, Some(&pick.genre_id), 1, shown_in)),
         )
         .await;
         for (pick, answer) in picks.into_iter().zip(answers) {
-            shelves.push((Some(pick.name), Some(pick.catalogue), answer?));
+            taken.push(Taken {
+                genre: Some(pick.name),
+                genre_id: Some(pick.genre_id),
+                catalogue: pick.catalogue,
+                candidates: answer?,
+            });
         }
     }
 
-    let every: Vec<Candidate> = shelves
+    let every: Vec<Candidate> = taken
         .iter()
-        .flat_map(|(_, _, candidates)| candidates.iter().cloned())
+        .flat_map(|shelf| shelf.candidates.iter().cloned())
         .collect();
     let standing = standing_of(state, &every).await?;
-    Ok(shelves
+    Ok(taken
         .into_iter()
-        .map(|(genre, catalogue, candidates)| Shelf {
-            genre,
-            catalogue,
-            found: candidates
+        .map(|shelf| Shelf {
+            genre: shelf.genre,
+            genre_id: shelf.genre_id,
+            catalogue: shelf.catalogue,
+            found: not_held(shelf.candidates, &standing, who, provider.as_ref())
                 .into_iter()
-                .map(|candidate| found_from(candidate, &standing, who, provider.as_ref()))
-                .filter(|found| found.held.is_none())
                 .take(TITLES_PER_SHELF)
                 .collect(),
         })
@@ -164,19 +171,48 @@ pub async fn suggestions<P: MetadataProvider>(
         .collect())
 }
 
-/// Two lists, one title of each in turn.
-fn interleaved(films: Vec<Candidate>, series: Vec<Candidate>) -> Vec<Candidate> {
-    let mut films = films.into_iter();
-    let mut series = series.into_iter();
-    let mut both = Vec::new();
-    loop {
-        let (film, one) = (films.next(), series.next());
-        if film.is_none() && one.is_none() {
-            return both;
-        }
-        both.extend(film);
-        both.extend(one);
-    }
+/// What the provider answered for one shelf, before the titles held are left
+/// out.
+struct Taken {
+    genre: Option<String>,
+    genre_id: Option<String>,
+    catalogue: Catalogue,
+    candidates: Vec<Candidate>,
+}
+
+/// The titles of an answer the libraries do not hold, each with where it
+/// stands.
+fn not_held<P: MetadataProvider>(
+    candidates: Vec<Candidate>,
+    standing: &super::search::Standing,
+    who: &User,
+    provider: &P,
+) -> Vec<Found> {
+    candidates
+        .into_iter()
+        .map(|candidate| found_from(candidate, standing, who, provider))
+        .filter(|found| found.held.is_none())
+        .collect()
+}
+
+/// One page of the most popular titles of a catalogue, in a genre when one is
+/// named: what "see more" under a shelf opens. Past the last page there is
+/// nothing.
+pub async fn more<P: MetadataProvider>(
+    state: &AppState,
+    provider: &Arc<P>,
+    who: &User,
+    catalogue: Catalogue,
+    genre_id: Option<&str>,
+    page: u32,
+    language: &str,
+) -> Result<Vec<Found>> {
+    access::require(state, who).await?;
+    let candidates = provider
+        .popular(catalogue, genre_id, page.max(1), provider_language(language))
+        .await?;
+    let standing = standing_of(state, &candidates).await?;
+    Ok(not_held(candidates, &standing, who, provider.as_ref()))
 }
 
 #[cfg(test)]
@@ -254,28 +290,6 @@ mod tests {
         assert_eq!(picked[0].catalogue, Catalogue::Series);
     }
 
-    #[test]
-    fn two_lists_are_read_one_title_of_each_in_turn() {
-        let candidate = |id: &str| Candidate {
-            external_id: id.to_string(),
-            catalogue: Catalogue::Films,
-            title: id.to_string(),
-            original_title: None,
-            release_year: None,
-            overview: None,
-            poster_path: None,
-            popularity: 1.0,
-        };
-        let both = interleaved(
-            vec![candidate("f1"), candidate("f2"), candidate("f3")],
-            vec![candidate("s1")],
-        );
-        assert_eq!(
-            both.iter().map(|one| one.external_id.as_str()).collect::<Vec<_>>(),
-            vec!["f1", "s1", "f2", "f3"]
-        );
-    }
-
     #[tokio::test]
     async fn an_account_is_suggested_what_it_watches_without_what_is_here() {
         let (_held, state, viewer) = requests_on().await;
@@ -313,6 +327,7 @@ mod tests {
         let shelves = suggestions(&state, &provider, &viewer, "en").await.expect("suggested");
         assert_eq!(shelves.len(), 1);
         assert_eq!(shelves[0].genre.as_deref(), Some("Horror"));
+        assert_eq!(shelves[0].genre_id.as_deref(), Some("Horror"));
         assert_eq!(
             shelves[0].found.iter().map(|one| one.candidate.title.as_str()).collect::<Vec<_>>(),
             vec!["Scary"],
@@ -328,8 +343,26 @@ mod tests {
             series: vec![crate::requests::testing::a_series("3", "Long", &[])],
         });
         let shelves = suggestions(&state, &provider, &viewer, "en").await.expect("suggested");
-        assert_eq!(shelves.len(), 1);
-        assert_eq!(shelves[0].genre, None);
-        assert_eq!(shelves[0].found.len(), 3, "films and series together");
+        assert_eq!(shelves.len(), 2, "one shelf of films and one of series");
+        assert!(shelves.iter().all(|shelf| shelf.genre.is_none()));
+        assert_eq!(shelves[0].found.len(), 2);
+        assert_eq!(shelves[1].found.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn seeing_more_gives_a_page_of_a_genre_and_nothing_past_the_last() {
+        let (_held, state, viewer) = requests_on().await;
+        let mut scary = a_film("1", "Scary");
+        scary.genres = vec!["Horror".to_string()];
+        let provider = Arc::new(StandIn { films: vec![scary, a_film("2", "Funny")], series: Vec::new() });
+
+        let first = more(&state, &provider, &viewer, Catalogue::Films, Some("Horror"), 1, "en")
+            .await
+            .expect("read");
+        assert_eq!(first.iter().map(|one| one.candidate.title.as_str()).collect::<Vec<_>>(), vec!["Scary"]);
+        let second = more(&state, &provider, &viewer, Catalogue::Films, Some("Horror"), 2, "en")
+            .await
+            .expect("read");
+        assert!(second.is_empty());
     }
 }

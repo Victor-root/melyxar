@@ -217,6 +217,7 @@ function TheLibrary() {
               <Route path="/notifications" element={<NotesPage />} />
               <Route path="/requests" element={<RequestsPage view="ask" />} />
               <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
+              <Route path="/requests/more/:catalogue" element={<RequestsPage view="more" />} />
               <Route path="/requests/title/:catalogue/:id" element={<RequestTitlePage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverview />} />

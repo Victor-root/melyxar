@@ -9,10 +9,11 @@ import { NavLink } from "react-router-dom";
 import { PageBackdrop } from "../components/backdrop";
 import { useSettings } from "../settings";
 import { MyRequests } from "./mine";
+import { MoreTitles } from "./more";
 import { AskSearch } from "./search";
 import { useRequests } from "./store";
 
-export function RequestsPage({ view }: { view: "ask" | "mine" }) {
+export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
   const { t } = useSettings();
   const { access } = useRequests();
   if (access === null) {
@@ -53,7 +54,9 @@ export function RequestsPage({ view }: { view: "ask" | "mine" }) {
             </nav>
           </div>
         </div>
-        {view === "ask" ? <AskSearch /> : <MyRequests />}
+        {view === "ask" && <AskSearch />}
+        {view === "mine" && <MyRequests />}
+        {view === "more" && <MoreTitles />}
       </main>
     </>
   );
