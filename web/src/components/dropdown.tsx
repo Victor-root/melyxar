@@ -22,6 +22,7 @@ export function Dropdown({
   reachable,
   icon,
   listClassName,
+  placed = true,
   onOpen,
   children,
 }: {
@@ -36,6 +37,9 @@ export function Dropdown({
   icon?: string;
   /** What the list is, for one that holds more than short lines. */
   listClassName?: string;
+  /** Whether the list is put under what opened it. Said no where the style
+   *  sheet places it itself, as a sheet over the whole width on a phone. */
+  placed?: boolean;
   /** Told each time the list is opened. */
   onOpen?: () => void;
   children: React.ReactNode;
@@ -119,7 +123,7 @@ export function Dropdown({
           <div
             className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
             ref={list}
-            style={{ top: under.top, right: under.right }}
+            style={placed ? { top: under.top, right: under.right } : undefined}
             /* A press in the list leaves the focus where it was. Drawn at
                the end of the page, the list is outside what opened it, and
                a press taking the focus there read as leaving: the search

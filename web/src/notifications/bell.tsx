@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { BellIcon, TickIcon } from "../icons";
+import { BellIcon, CloseIcon, TickIcon } from "../icons";
+import { PHONE, useMediaQuery } from "../media-query";
 import { Dropdown } from "../components/dropdown";
 import { sayPoint } from "../pages/admin/activity";
 import { JobCard } from "../pages/admin/tasks";
@@ -44,6 +46,9 @@ function Count({ count, levels, line }: { count: number; levels: Level[]; line?:
   );
 }
 
+/** How far up the handle has to be pulled to put the sheet away. */
+const PULL_TO_CLOSE = 30;
+
 /**
  * The bell of the bar: how many things wait, in the colour of the gravest,
  * and on a press the points deserving an administrator's look, then this
@@ -56,12 +61,16 @@ export function Bell({ administrator }: { administrator: boolean }) {
   const { count, levels, working } = useWaiting(administrator);
   const { jobs } = useRunning();
   const looked = administrator ? (points ?? []) : [];
+  const onAPhone = useMediaQuery(PHONE);
+  /* Where a finger went down on the handle, to tell a pull up from a press. */
+  const pulled = useRef<number | null>(null);
 
   return (
     <Dropdown
       className="header-bell"
       icon={t("nav.notifications")}
       listClassName="bell-list"
+      placed={!onAPhone}
       /* Looked at, so read: what was new is told by the count that goes, and
          any of them can be put back as unread. */
       onOpen={() => {
@@ -76,6 +85,17 @@ export function Bell({ administrator }: { administrator: boolean }) {
         </>
       }
     >
+      {/* The title of the sheet a phone opens, with the way out: not drawn
+          anywhere else. */}
+      <div className="bell-sheet-head">
+        <span className="bell-sheet-icon">
+          <BellIcon size={20} />
+        </span>
+        <span className="bell-sheet-title">{t("nav.notifications")}</span>
+        <button type="button" className="bell-sheet-close" aria-label={t("modal.close")}>
+          <CloseIcon size={18} />
+        </button>
+      </div>
       {/* The work the server is doing, each piece as a notification of its own
           with its bar, which fills in as the work does. Only for an
           administrator, who is the one it concerns. */}
@@ -135,6 +155,27 @@ export function Bell({ administrator }: { administrator: boolean }) {
       <Link to="/notifications" className="bell-all">
         {t("notes.see_all")}
       </Link>
+      {/* The handle at the foot of the sheet: pulled up or pressed, it puts
+          the sheet away, as any press in the list does. */}
+      <button
+        type="button"
+        className="bell-handle"
+        aria-label={t("modal.close")}
+        onPointerDown={(event) => {
+          pulled.current = event.clientY;
+        }}
+        onPointerUp={(event) => {
+          if (pulled.current !== null && event.clientY < pulled.current - PULL_TO_CLOSE) {
+            event.currentTarget.click();
+          }
+          pulled.current = null;
+        }}
+        onPointerCancel={() => {
+          pulled.current = null;
+        }}
+      >
+        <span aria-hidden="true" />
+      </button>
     </Dropdown>
   );
 }
