@@ -303,6 +303,11 @@
   transform: scale(1.15);
 }
 
+/* Only a phone draws the dots here, in the row of buttons. */
+.hero-dots-slot {
+  display: none;
+}
+
 .hero-dots {
   display: flex;
   align-items: center;

@@ -155,16 +155,20 @@
     max-width: 62%;
   }
 
-  .hero-facts {
+  .hero-tagline {
     order: 2;
   }
 
-  .hero-buttons {
+  .hero-facts {
     order: 3;
   }
 
-  .progress-line {
+  .hero-buttons {
     order: 4;
+  }
+
+  .progress-line {
+    order: 5;
   }
 
   /* Smaller than the large buttons, and kept on one line, so both fit
@@ -172,7 +176,21 @@
   .hero-buttons {
     flex-wrap: nowrap;
     gap: 8px;
-    max-width: calc(100% - 78px);
+  }
+
+  /* The dots in what is left of the row after the buttons, in the middle of
+     it up to the edge of the screen rather than of the page. */
+  .hero-dots-slot {
+    display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
+    margin-left: -8px;
+    margin-right: calc(var(--gutter) * -1);
+  }
+
+  .hero-steps {
+    display: none;
   }
 
   .hero-buttons .button-large {
@@ -190,11 +208,6 @@
     flex: none;
   }
 
-  /* At the far right, level with the middle of the buttons. */
-  .hero-steps {
-    bottom: calc(var(--gap) + 15px);
-    right: var(--gap);
-  }
 
   .hero-dots {
     gap: 6px;
@@ -231,6 +244,12 @@
   .header-fold {
     display: inline-flex;
     width: 26px;
+  }
+
+  /* A finger leaves the hover behind where it pressed: closed again, the
+     account goes back to its own colour rather than staying lit. */
+  .header-account > .header-link:hover:not(.header-link-on) {
+    color: var(--text);
   }
 
   .header-account {
