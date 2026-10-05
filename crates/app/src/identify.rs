@@ -1924,6 +1924,7 @@ mod tests {
             &self,
             _catalogue: Catalogue,
             _genre_id: Option<&str>,
+            _page: u32,
             _language: &str,
         ) -> melyxar_metadata::provider::Result<Vec<Candidate>> {
             Ok(Vec::new())

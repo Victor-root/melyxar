@@ -194,7 +194,7 @@ mod tests {
             Err(nothing_else())
         }
 
-        async fn popular(&self, _: Catalogue, _: Option<&str>, _: &str) -> Answer<Vec<Candidate>> {
+        async fn popular(&self, _: Catalogue, _: Option<&str>, _: u32, _: &str) -> Answer<Vec<Candidate>> {
             Err(nothing_else())
         }
     }

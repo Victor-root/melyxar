@@ -58,10 +58,27 @@
   margin-bottom: var(--gap-wide);
 }
 
-/* A card in a row of suggestions: as wide as one of the grid of answers. */
-.row-track > .request-shelf-card {
-  flex: 0 0 min(420px, 85vw);
-  min-width: 0;
+/* Two lines of a shelf, however many titles stand on a line: what does not
+   fit the first two rows is given no height at all and clipped. */
+.request-two-lines {
+  grid-template-rows: auto auto;
+  grid-auto-rows: 0;
+  row-gap: 0;
+  overflow: hidden;
+}
+
+.request-two-lines > .request-card {
+  margin-bottom: var(--gap);
+}
+
+.request-more-head {
+  margin-bottom: var(--gap-wide);
+}
+
+.request-more-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--gap-wide);
 }
 
 .request-card {

@@ -401,10 +401,12 @@ impl MetadataProvider for TmdbProvider {
         &self,
         catalogue: Catalogue,
         genre_id: Option<&str>,
+        page: u32,
         language: &str,
     ) -> Result<Vec<Candidate>> {
         let mut query = vec![
             ("language", language.to_string()),
+            ("page", page.to_string()),
             ("sort_by", "popularity.desc".to_string()),
             ("include_adult", "false".to_string()),
             // A work few people rated is popular only by accident.

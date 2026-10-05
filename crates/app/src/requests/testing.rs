@@ -145,7 +145,16 @@ impl MetadataProvider for StandIn {
             .collect())
     }
 
-    async fn popular(&self, catalogue: Catalogue, genre_id: Option<&str>, _language: &str) -> Result<Vec<Candidate>> {
+    async fn popular(
+        &self,
+        catalogue: Catalogue,
+        genre_id: Option<&str>,
+        page: u32,
+        _language: &str,
+    ) -> Result<Vec<Candidate>> {
+        if page > 1 {
+            return Ok(Vec::new());
+        }
         Ok(self
             .of(catalogue)
             .iter()
