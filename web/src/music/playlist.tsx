@@ -25,7 +25,7 @@ import { minutesOf } from "./discs";
 import { Heart } from "./heart";
 import { useMusicMarks } from "./marks";
 import { ShuffleIcon } from "./player/icons";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { SongMenuButton } from "./song-menu";
 import { PlaylistCover, namesOf } from "./tiles";
 import { useTabPage } from "../tab-page";
@@ -41,7 +41,7 @@ export function MusicPlaylistPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const player = useMusic();
+  const player = useMusicControls();
   const { playlistsAt, playlistsHaveMoved } = useMusicMarks();
   const [playlist, setPlaylist] = useState<MusicPlaylistPage | null>(null);
   useTabPage(playlist?.name);

@@ -13,7 +13,7 @@ import { Row, RowHead } from "../components/row";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Found } from "./api";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { SongList } from "./songs";
 import { AlbumTile, ArtistTile, namesOf } from "./tiles";
 
@@ -114,7 +114,7 @@ export function useMusicFound(words: string, looks: boolean, library?: string): 
 
 export function MusicFound({ found }: { found: Found | null }) {
   const { t } = useSettings();
-  const player = useMusic();
+  const player = useMusicControls();
   if (!found || !foundAny(found)) {
     return null;
   }

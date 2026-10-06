@@ -16,7 +16,7 @@ import type { Album, ArtistPage } from "./api";
 import { Heart } from "./heart";
 import { useKeptState } from "./keeping";
 import { ShuffleIcon } from "./player/icons";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { AlbumTile, ArtistPicture } from "./tiles";
 import { useTabPage } from "../tab-page";
 
@@ -28,7 +28,7 @@ export function MusicArtistPage() {
   const [failed, setFailed] = useState(false);
   /* Read again whenever its library moves: an album filed, a cover found. */
   const version = useLibraryVersion(artist?.library);
-  const player = useMusic();
+  const player = useMusicControls();
   /* Asked for only when pressed: their songs are the whole of their work,
      and most visits to an artist never play all of it. */
   const [starting, setStarting] = useState(false);

@@ -44,7 +44,7 @@ import { SearchPage } from "./pages/search";
 import { CollectionPage, CollectionsPage } from "./pages/collections";
 import { PersonPage } from "./pages/person";
 import { PlaylistPage, PlaylistsPage } from "./pages/playlists";
-import { useKeptPlaces } from "./scrolling";
+import { KeptPlaces } from "./scrolling";
 import { WorkPage } from "./pages/work";
 import { AdminLayout, OverviewProvider } from "./pages/admin/layout";
 import { AdminOverview } from "./pages/admin/overview";
@@ -134,8 +134,6 @@ function TheLibrary() {
   /* The box the whole library scrolls in, held so the bar drawn over it can
      read where it stands. */
   const scrolling = useRef<HTMLDivElement>(null);
-  // Going back finds every page where it was left.
-  useKeptPlaces(scrolling);
 
   // Watched here, where the bar that starts the work and the pages that show
   // what it produced can both read it.
@@ -253,6 +251,9 @@ function TheLibrary() {
             </div>
           </div>
 
+          {/* Going back finds every page where it was left. After the box,
+              which it reads as soon as it is put in place. */}
+          <KeptPlaces scroller={scrolling} />
           {/* Outside the box it belongs to, because a bar drawn inside it
               would be cut off at the same edge everything else is. */}
           <ScrollBar holder={scrolling} />

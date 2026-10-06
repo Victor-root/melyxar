@@ -17,7 +17,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Found, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { useKeptState } from "./keeping";
 import { useRoomBelow } from "./room-below";
 import { MusicFound, foundAny } from "./search";
@@ -43,7 +43,7 @@ export function ForYouTab({ library }: { library: string }) {
   const { t } = useSettings();
   const version = useLibraryVersion(library);
   const { listenedAt } = useMusicMarks();
-  const player = useMusic();
+  const player = useMusicControls();
   const wide = useMediaQuery(SIDE_BY_SIDE);
   const phone = useMediaQuery(PHONE);
   const [newest, setNewest] = useKeptState<Album[] | null>(`for-you|newest|${library}`, null);

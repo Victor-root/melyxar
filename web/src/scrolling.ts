@@ -158,7 +158,14 @@ function store(places: Map<string, Place>) {
   }
 }
 
-export function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
+/** Keeps the places of the pages, on its own so that only it is drawn again
+ *  each time the history moves, not the whole interface it stands in. */
+export function KeptPlaces({ scroller }: { scroller: React.RefObject<HTMLElement | null> }) {
+  useKeptPlaces(scroller);
+  return null;
+}
+
+function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
   const location = useLocation();
   const how = useNavigationType();
   const page = useRef(pageOf(location));

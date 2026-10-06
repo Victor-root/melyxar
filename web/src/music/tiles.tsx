@@ -15,7 +15,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Artist, Credited, MusicPlaylist, Song } from "./api";
 import { useMusicMarks } from "./marks";
-import { useMusic } from "./player/player";
+import { useMusicControls, useMusicNow } from "./player/player";
 
 /** Whose album it is, as a line under its title. */
 export function useWhoseAlbum(): (album: Album) => string {
@@ -103,7 +103,12 @@ function Tile({
   owns?: (song: Song) => boolean;
 }) {
   const { t } = useSettings();
-  const player = useMusic();
+  const player = useMusicControls();
+  /* Whether a song of this tile's is playing or paused, and nothing more, so a
+     song starting draws again only the tiles it concerns. */
+  const state = useMusicNow((song, playing) =>
+    owns === undefined || song === null || !owns(song) ? "other" : playing ? "playing" : "paused",
+  );
   const marks = useMusicMarks();
   const { picture, itDidNotLoad } = useShownPicture(pictures);
   const ahead = useContext(PicturesAhead).now;
@@ -116,8 +121,8 @@ function Tile({
     event.stopPropagation();
     doing();
   };
-  const ours = owns !== undefined && player.song !== null && owns(player.song);
-  const going = ours && player.playing;
+  const ours = state !== "other";
+  const going = state === "playing";
   const play = () =>
     ours
       ? player.toggle()
