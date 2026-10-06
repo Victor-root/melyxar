@@ -1292,11 +1292,6 @@
   color: var(--text);
 }
 
-.music-now .player-top {
-  padding-bottom: 0;
-  background: none;
-}
-
 .music-now .player-bottom {
   position: relative;
   isolation: isolate;
@@ -1719,6 +1714,60 @@
     width: 46px;
   }
 
+  /* The left piece of the bar at the top, as every page has it, and what is
+     shown beside it. */
+  .music-now-header {
+    flex: none;
+    justify-content: flex-start;
+    padding: 0 var(--header-edge, var(--gutter));
+  }
+
+  .music-now-header .brand-name {
+    display: none;
+  }
+
+  .music-now-heading {
+    font-size: 1.2rem;
+    font-weight: 650;
+  }
+
+  /* The queue under the cover and the words of the song, side by side: each
+     the width of the screen, a swipe moving from one to the other and
+     coming to rest on one. Each scrolls on its own, under the thin bar of
+     the library. */
+  .music-now-pages {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    will-change: scroll-position;
+  }
+
+  .music-now-pages::-webkit-scrollbar,
+  .music-now-page::-webkit-scrollbar {
+    display: none;
+  }
+
+  .music-now-page {
+    flex: 0 0 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-wide);
+    padding: var(--gap) var(--gutter);
+    overflow-y: auto;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    scrollbar-width: none;
+    will-change: scroll-position;
+  }
+
+  .music-now-page:not(.music-now-page-queue) .music-now-queue {
+    flex: 1;
+  }
+
   .music-now-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
@@ -1762,6 +1811,12 @@
   .music-now .player-row {
     flex-wrap: wrap;
     justify-content: center;
+  }
+
+  /* The second line, the heart, the sound and the ways round the queue, in
+     the middle of its own line. */
+  .music-now .player-zone-bottom-right {
+    margin: 0 auto;
   }
 
   .music-now .player-seek-end {

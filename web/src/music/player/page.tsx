@@ -7,12 +7,15 @@
  * Closed, it gives back the page it was opened over, just as it was.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import type { Song } from "../api";
+import { ScrollBar } from "../../components/scrollbar";
+import { ServerMark } from "../../components/server-mark";
+import { BackIcon } from "../../icons";
 import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
-import { BackIcon } from "../../player/icons";
-import { ICON } from "../../player/sound";
+import { useBranding } from "../../player/logo";
 import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
@@ -34,6 +37,7 @@ export function MusicNowPlaying() {
   const nowPlaying = useNowPlayingPage();
   const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
+  const [onLyrics, setOnLyrics] = useState(false);
   const onAPhone = useMediaQuery("(max-width: 760px)");
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   const leaving = useLeaving(shown, song !== null && !film, reduced ? 0 : LEAVE_MS);
@@ -65,60 +69,33 @@ export function MusicNowPlaying() {
   return (
     <div className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <div className="music-now-glow" aria-hidden="true" />
-      {onAPhone && (
-        <div className="player-top">
-          <div className="player-zone player-zone-top-left">
-            <button type="button" className="player-button" onClick={close} aria-label={t("music.close_player")}>
-              <BackIcon size={ICON} />
-            </button>
-            <span className="player-title">{song.title}</span>
-          </div>
+      {onAPhone && <PhoneHeader title={t(onLyrics ? "music.lyrics" : "music.queue")} close={close} />}
+
+      {onAPhone ? (
+        <PhonePages song={song} close={close} onLyrics={setOnLyrics} />
+      ) : (
+        <div className="music-now-body">
+          <NowPlayingSong song={song} close={close} />
+
+          <nav className="music-now-tabs" aria-label={t("music.queue")}>
+            {(["queue", "lyrics"] as const).map((one) => (
+              <button
+                key={one}
+                type="button"
+                className={`music-tab${side === one ? " music-tab-on" : ""}`}
+                aria-current={side === one ? "true" : undefined}
+                onClick={() => setSide(one)}
+              >
+                {t(one === "queue" ? "music.queue" : "music.lyrics")}
+              </button>
+            ))}
+          </nav>
+
+          <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
+            {side === "lyrics" ? <LyricsPanel song={song.id} /> : <QueuePanel />}
+          </section>
         </div>
       )}
-
-      <div className="music-now-body">
-        <section className="music-now-playing">
-          <Cover pictures={song.cover} large />
-          <div className="music-now-words">
-            <h2>{song.title}</h2>
-            <p className="music-now-by">
-              {song.artists.map((artist, index) => (
-                <span key={artist.id}>
-                  {index > 0 && ", "}
-                  <Link to={`/music/artist/${artist.id}`} onClick={close}>
-                    {artist.name}
-                  </Link>
-                </span>
-              ))}
-            </p>
-            {song.album && (
-              <p className="music-now-album">
-                <Link to={`/music/album/${song.album.id}`} onClick={close}>
-                  {song.album.name}
-                </Link>
-              </p>
-            )}
-          </div>
-        </section>
-
-        <nav className="music-now-tabs" aria-label={t("music.queue")}>
-          {(["queue", "lyrics"] as const).map((one) => (
-            <button
-              key={one}
-              type="button"
-              className={`music-tab${side === one ? " music-tab-on" : ""}`}
-              aria-current={side === one ? "true" : undefined}
-              onClick={() => setSide(one)}
-            >
-              {t(one === "queue" ? "music.queue" : "music.lyrics")}
-            </button>
-          ))}
-        </nav>
-
-        <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
-          {side === "lyrics" ? <LyricsPanel song={song.id} /> : <QueuePanel />}
-        </section>
-      </div>
 
       {onAPhone && (
         <div className="player-bottom">
@@ -137,5 +114,116 @@ export function MusicNowPlaying() {
         </div>
       )}
     </div>
+  );
+}
+
+/** The cover large, then the name of the song, who plays it and the album. */
+function NowPlayingSong({ song, close }: { song: Song; close: () => void }) {
+  return (
+    <section className="music-now-playing">
+      <Cover pictures={song.cover} large />
+      <div className="music-now-words">
+        <h2>{song.title}</h2>
+        <p className="music-now-by">
+          {song.artists.map((artist, index) => (
+            <span key={artist.id}>
+              {index > 0 && ", "}
+              <Link to={`/music/artist/${artist.id}`} onClick={close}>
+                {artist.name}
+              </Link>
+            </span>
+          ))}
+        </p>
+        {song.album && (
+          <p className="music-now-album">
+            <Link to={`/music/album/${song.album.id}`} onClick={close}>
+              {song.album.name}
+            </Link>
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The left piece of the bar at the top, the one every page has, and the name
+ *  of what is shown beside it. */
+function PhoneHeader({ title, close }: { title: string; close: () => void }) {
+  const { t } = useSettings();
+  const branding = useBranding();
+  return (
+    <div className="header-inner music-now-header">
+      <div className="header-piece header-start header-start-back">
+        <button type="button" className="header-icon" onClick={close} title={t("music.close_player")} aria-label={t("music.close_player")}>
+          <BackIcon size={22} />
+        </button>
+        <Link className="brand" to="/" onClick={close}>
+          <ServerMark branding={branding} size={28} logoClassName="brand-logo" />
+        </Link>
+      </div>
+      <span className="music-now-heading">{title}</span>
+    </div>
+  );
+}
+
+/**
+ * On a phone, the queue under the cover and the words of the song are two
+ * pages side by side: a swipe to the right leaves only the words, a swipe
+ * back brings the cover and the queue again.
+ */
+function PhonePages({
+  song,
+  close,
+  onLyrics,
+}: {
+  song: Song;
+  close: () => void;
+  onLyrics: (shown: boolean) => void;
+}) {
+  const pager = useRef<HTMLDivElement>(null);
+  const queue = useRef<HTMLDivElement>(null);
+  const lyrics = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = pager.current;
+    if (!element || !lyrics.current) {
+      return;
+    }
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.target === lyrics.current && entry.isIntersecting) {
+            onLyrics(true);
+          } else if (entry.target === queue.current && entry.isIntersecting) {
+            onLyrics(false);
+          }
+        }
+      },
+      { root: element, threshold: 0.6 },
+    );
+    if (queue.current) {
+      watcher.observe(queue.current);
+    }
+    watcher.observe(lyrics.current);
+    return () => watcher.disconnect();
+  }, [onLyrics]);
+
+  return (
+    <>
+      <div className="music-now-pages" ref={pager}>
+        <div className="music-now-page music-now-page-queue" ref={queue}>
+          <NowPlayingSong song={song} close={close} />
+          <section className="music-now-queue">
+            <QueuePanel />
+          </section>
+        </div>
+        <div className="music-now-page" ref={lyrics}>
+          <section className="music-now-queue">
+            <LyricsPanel song={song.id} />
+          </section>
+        </div>
+      </div>
+      <ScrollBar holder={queue} />
+    </>
   );
 }
