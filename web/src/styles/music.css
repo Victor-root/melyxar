@@ -245,24 +245,40 @@
 /* On a phone the two lists are one, and the other is a swipe away: the names
    of both at the top, the one in view lit, and the lists side by side in a
    row that comes to rest on one of them. */
-.music-listened-titles {
-  gap: var(--gap);
+/* Two small buttons in a piece of the glass of the bar at the top, the one of
+   the list in view lit in the accent, and the name of that list beside
+   them. */
+.section-head:has(> .music-listened-switch) {
+  align-items: center;
+}
+
+.music-listened-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--header-glass);
 }
 
 .music-listened-title {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 28px;
   padding: 0;
-  text-align: left;
-  white-space: nowrap;
-  font-size: 18px;
   border: 0;
+  border-radius: var(--radius-pill);
   background: none;
-  color: var(--text-faint);
-  font: inherit;
-  transition: color var(--quick) var(--ease);
+  color: var(--text-soft);
+  transition:
+    background var(--quick) var(--ease),
+    color var(--quick) var(--ease);
 }
 
 .music-listened-title[data-on="yes"] {
-  color: var(--text);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .music-listened-pages {
