@@ -884,33 +884,6 @@
     padding-right: 22px;
   }
 
-  /* The name of a list and everything that reads it on one line that slides
-     sideways, a piece cut by the edge saying there is more. The page starts
-     nearer the bar at the top, and the room the glow of the pieces needs is
-     paid back by the margins so that it moves nothing. */
-  .page:not(.music-page) .browse-head {
-    flex-wrap: nowrap;
-    margin: calc(-1 * var(--gap) - var(--glass-glow-room) / 3)
-      calc(-1 * var(--gutter)) calc(var(--gap-wide) - var(--glass-glow-room) / 3);
-    padding: calc(var(--glass-glow-room) / 3) calc(var(--gutter) + 22px)
-      calc(var(--glass-glow-room) / 3) var(--gutter);
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .page:not(.music-page) .browse-head::-webkit-scrollbar {
-    display: none;
-  }
-
-  .page:not(.music-page) .browse-head > *,
-  .page:not(.music-page) .browse-bar,
-  .page:not(.music-page) .browse-piece {
-    flex: none;
-    flex-wrap: nowrap;
-    white-space: nowrap;
-  }
-
   /* Under the bar of the list at the top, which the rail would otherwise
      stand over. A finger slides along it, so the page must not take the
      movement for a scroll. */
