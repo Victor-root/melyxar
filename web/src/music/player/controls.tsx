@@ -20,7 +20,7 @@ import {
 import { previewPlace } from "../../player/seek";
 import { ICON, SoundControl } from "../../player/sound";
 import { useSettings } from "../../settings";
-import { useMusicMarks } from "../marks";
+import { useLiking } from "../marks";
 import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
 import { useNowPlayingPage } from "./opening";
 import { useMusicTime } from "./player";
@@ -124,8 +124,7 @@ export function Transport({
 
 export function HeartButton({ id }: { id: string }) {
   const { t } = useSettings();
-  const marks = useMusicMarks();
-  const liked = marks.liked(id);
+  const { liked, setLiked } = useLiking(id);
   const label = t(liked ? "card.unfavourite" : "card.favourite");
   return (
     <button
@@ -133,7 +132,7 @@ export function HeartButton({ id }: { id: string }) {
       className={`player-button${liked ? " player-button-lit" : ""}`}
       aria-pressed={liked}
       aria-label={label}
-      onClick={() => marks.setLiked(id, !liked)}
+      onClick={() => setLiked(!liked)}
     >
       <HeartIcon size={ICON} filled={liked} />
     </button>

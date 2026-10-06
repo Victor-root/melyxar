@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { MusicIcon, PlayAllIcon, PlaylistIcon, ProfileIcon } from "../icons";
+import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import type { Song } from "./api";
 import { AddToPlaylist } from "./add-to-playlist";
@@ -36,7 +36,7 @@ const OFF_THE_EDGE = 8;
  *  playlist and deleting open, to be drawn wherever the actions are. */
 export function useSongActions(songs: Song[], deletable = false): { actions: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
-  const navigate = useNavigate();
+  const navigate = useGoTo();
   const player = useMusicControls();
   const [adding, setAdding] = useState(false);
   const one = songs.length === 1 ? songs[0] : null;

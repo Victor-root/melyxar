@@ -20,9 +20,10 @@
 
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
+import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
@@ -145,7 +146,7 @@ export const Card = memo(function Card({
   here?: boolean;
 }) {
   const { t } = useSettings();
-  const navigate = useNavigate();
+  const navigate = useGoTo();
   const marks = useMarks();
   const ahead = useContext(PicturesAhead).now;
   /* A lying card is nearly twice as wide as it is tall and a poster is two

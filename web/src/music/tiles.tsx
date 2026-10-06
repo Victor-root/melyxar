@@ -5,16 +5,16 @@
  */
 
 import { memo, useContext, useState } from "react";
-import { Link } from "react-router-dom";
 import { PicturesAhead } from "../components/card";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, HeartIcon, PlayIcon } from "../icons";
 import { PauseIcon } from "../player/icons";
+import { QuietLink } from "../navigating";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Artist, Credited, MusicPlaylist, Song } from "./api";
-import { useMusicMarks } from "./marks";
+import { useLiking } from "./marks";
 import { useMusicControls, useMusicNow } from "./player/player";
 
 /** Whose album it is, as a line under its title. */
@@ -109,13 +109,13 @@ function Tile({
   const state = useMusicNow((song, playing) =>
     owns === undefined || song === null || !owns(song) ? "other" : playing ? "playing" : "paused",
   );
-  const marks = useMusicMarks();
+  const likes = useLiking(liking ?? "");
   const { picture, itDidNotLoad } = useShownPicture(pictures);
   const ahead = useContext(PicturesAhead).now;
   /* Made the first time the tile is reached, like the card of a film: a
      grid of thousands does not hold thousands of hidden buttons. */
   const [reached, setReached] = useState(false);
-  const liked = liking !== undefined && marks.liked(liking);
+  const liked = liking !== undefined && likes.liked;
   const stop = (doing: () => void) => (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -154,9 +154,9 @@ function Tile({
             {name.slice(0, 1)}
           </span>
         )}
-        <Link className="card-open" to={to} title={name} draggable={false}>
+        <QuietLink className="card-open" to={to} title={name} draggable={false}>
           <span className="visually-hidden">{name}</span>
-        </Link>
+        </QuietLink>
         {reached && (
           <div className="card-hover">
             <button
@@ -176,7 +176,7 @@ function Tile({
                   aria-pressed={liked}
                   aria-label={t(liked ? "card.unfavourite" : "card.favourite")}
                   title={t(liked ? "card.unfavourite" : "card.favourite")}
-                  onClick={stop(() => marks.setLiked(liking, !liked))}
+                  onClick={stop(() => likes.setLiked(!liked))}
                 >
                   <HeartIcon size={17} filled={liked} />
                 </button>
