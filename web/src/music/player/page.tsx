@@ -97,10 +97,10 @@ export function MusicNowPlaying() {
       {onAPhone && <PageDots page={phonePage} />}
 
       {onAPhone ? (
-        <PhonePages song={song} close={close} page={phonePage} onPage={setPhonePage} />
+        <PhonePages song={song} page={phonePage} onPage={setPhonePage} />
       ) : (
         <div className="music-now-body">
-          <NowPlayingSong song={song} close={close} />
+          <NowPlayingSong song={song} />
 
           <nav className="music-now-tabs" aria-label={t("music.queue")}>
             {(["queue", "lyrics"] as const).map((one) => (
@@ -144,7 +144,7 @@ export function MusicNowPlaying() {
 }
 
 /** The cover large, then the name of the song, who plays it and the album. */
-function NowPlayingSong({ song, close }: { song: Song; close: () => void }) {
+function NowPlayingSong({ song }: { song: Song }) {
   return (
     <section className="music-now-playing">
       <Cover pictures={song.cover} large />
@@ -154,7 +154,7 @@ function NowPlayingSong({ song, close }: { song: Song; close: () => void }) {
           {song.artists.map((artist, index) => (
             <span key={artist.id}>
               {index > 0 && ", "}
-              <Link to={`/music/artist/${artist.id}`} onClick={close}>
+              <Link to={`/music/artist/${artist.id}`} replace>
                 {artist.name}
               </Link>
             </span>
@@ -162,7 +162,7 @@ function NowPlayingSong({ song, close }: { song: Song; close: () => void }) {
         </p>
         {song.album && (
           <p className="music-now-album">
-            <Link to={`/music/album/${song.album.id}`} onClick={close}>
+            <Link to={`/music/album/${song.album.id}`} replace>
               {song.album.name}
             </Link>
           </p>
@@ -183,7 +183,7 @@ function PhoneHeader({ title, close }: { title: string; close: () => void }) {
         <button type="button" className="header-icon" onClick={close} title={t("music.close_player")} aria-label={t("music.close_player")}>
           <BackIcon size={22} />
         </button>
-        <Link className="brand" to="/" onClick={close}>
+        <Link className="brand" to="/" replace>
           <ServerMark branding={branding} size={28} logoClassName="brand-logo" />
         </Link>
       </div>
@@ -211,12 +211,10 @@ function PageDots({ page }: { page: number }) {
  */
 function PhonePages({
   song,
-  close,
   page,
   onPage,
 }: {
   song: Song;
-  close: () => void;
   page: number;
   onPage: (page: number) => void;
 }) {
@@ -275,7 +273,7 @@ function PhonePages({
           </section>
         </div>
         <div className="music-now-page music-now-page-song" ref={hold(1)}>
-          <NowPlayingSong song={song} close={close} />
+          <NowPlayingSong song={song} />
         </div>
         <div className="music-now-page music-now-page-words" ref={hold(2)}>
           <section className="music-now-queue">
