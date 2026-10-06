@@ -592,14 +592,14 @@
 /* The compact line of a phone: the play button, the cover, the name, the
    menu and the length, and nothing else. */
 .music-songs.music-songs-compact .music-song-full {
-  grid-template-columns: 24px 40px minmax(0, 1fr) 20px 4ch;
+  grid-template-columns: 30px 40px minmax(0, 1fr) 20px 4ch;
   column-gap: 8px;
   padding-inline: 0;
 }
 
 .music-songs-compact .music-song-toggle {
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   justify-self: start;
 }
 
