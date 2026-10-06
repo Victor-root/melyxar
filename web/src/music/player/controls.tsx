@@ -36,16 +36,18 @@ const KEY_STEP = 5;
 /** How wide the time shown over the bar is, for keeping it inside it. */
 const TIME_ACROSS = 64;
 
-export function PlayButton({ music }: { music: Music }) {
+/** The play and pause button. As a disc it is the one a song's line has at its
+ *  left while it is the one playing, only larger. */
+export function PlayButton({ music, disc = false }: { music: Music; disc?: boolean }) {
   const { t } = useSettings();
   return (
     <button
       type="button"
-      className={`player-button player-button-play${music.waiting ? " music-waiting" : ""}`}
+      className={`${disc ? "music-song-toggle music-song-toggle-lit" : "player-button player-button-play"}${music.waiting ? " music-waiting" : ""}`}
       onClick={music.toggle}
       aria-label={t(music.playing ? "music.pause" : "music.play")}
     >
-      {music.playing ? <PauseIcon size={PLAY_ICON} /> : <PlayIcon size={PLAY_ICON} />}
+      {music.playing ? <PauseIcon size={disc ? 26 : PLAY_ICON} /> : <PlayIcon size={disc ? 26 : PLAY_ICON} />}
     </button>
   );
 }
@@ -99,17 +101,20 @@ export function Transport({
   music,
   greyedWhenNone,
   withStop = true,
+  disc,
 }: {
   music: Music;
   greyedWhenNone?: boolean;
   /** Left out where the stop button stands elsewhere. */
   withStop?: boolean;
+  /** The play button drawn as a disc. */
+  disc?: boolean;
 }) {
   return (
     <>
       <SongStepButton music={music} back greyedWhenNone={greyedWhenNone} />
       <SecondsButton music={music} back />
-      <PlayButton music={music} />
+      <PlayButton music={music} disc={disc} />
       <SecondsButton music={music} back={false} />
       <SongStepButton music={music} back={false} greyedWhenNone={greyedWhenNone} />
       {withStop && <StopButton music={music} />}

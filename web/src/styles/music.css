@@ -693,13 +693,22 @@
   transform: scale(1.08);
 }
 
-.music-song-playing .music-song-toggle {
+.music-song-playing .music-song-toggle,
+.music-song-toggle-lit {
   background: var(--accent);
   color: var(--accent-contrast);
 }
 
-.music-song-playing .music-song-toggle:hover {
+.music-song-playing .music-song-toggle:hover,
+.music-song-toggle-lit:hover {
   background: var(--accent-bright);
+}
+
+/* The one at the foot of the page of what is playing: larger, and the same
+   disc. */
+.music-song-toggle-lit {
+  width: 52px;
+  height: 52px;
 }
 
 .music-song-cover {
