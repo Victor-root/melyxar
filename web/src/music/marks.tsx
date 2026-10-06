@@ -19,7 +19,6 @@ import { music } from "./api";
 
 export interface MusicMarks {
   liked: (id: string) => boolean;
-  setLiked: (id: string, liked: boolean) => void;
   /** Moves each time a listen is counted, for the rows of what was
       listened to to be read again. */
   listenedAt: number;
@@ -115,7 +114,7 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const marks = useMemo<MusicMarks>(
-    () => ({ liked: (id) => liked.has(id), setLiked, listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone }),
+    () => ({ liked: (id) => liked.has(id), listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone }),
     [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone],
   );
   return (
