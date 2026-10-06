@@ -661,32 +661,6 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: var(--accent-bright);
 }
 
-/* A finger has no pointer, and a card pressed stays "hovered" until the next
-   press elsewhere: it would stay grown, lit and ringed. Only a hand on the
-   keyboard or an open menu holds a card forward there. */
-@media (hover: none) {
-  .card:hover:not(:has(:focus-visible, [aria-expanded="true"])) {
-    transform: none;
-    z-index: auto;
-  }
-
-  .card:hover:not(:has(:focus-visible, [aria-expanded="true"])) .card-picture {
-    box-shadow: var(--shadow-tile);
-  }
-
-  .card:hover:not(:has(:focus-visible, [aria-expanded="true"])) .card-picture::after {
-    box-shadow: inset 0 0 0 1.5px transparent;
-  }
-
-  .card:hover:not(:has(:focus-visible, [aria-expanded="true"])) .card-progress {
-    background: rgba(0, 0, 0, 0.55);
-  }
-
-  .card:hover:not(:has(:focus-visible, [aria-expanded="true"])) .card-progress-done {
-    background: var(--accent);
-  }
-}
-
 /* What the card offers beyond pressing it: one of the bar's lists, lines
    and all. Drawn over the page, at the place the button was: a card clips
    what it holds, so a menu inside one comes out cut in half. */
