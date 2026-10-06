@@ -109,6 +109,12 @@ const QUICK_DEBOUNCE_MS = 200;
  *  its two pieces: the only things that read where those end. */
 const HEADS_CLEAR_OF_THE_BAR = ".page-head, .browse-head";
 
+/** The widths at which something rises into the band beside the bar, and
+ *  so reads where its pieces end. Narrower, nothing does, and writing it
+ *  only had the whole page styled again at the end of every movement of
+ *  the bar. */
+const HEADS_RISE_INTO_THE_BAND = "(min-width: 1280px)";
+
 /** How long the bar must stand still before the page as a whole is told where
  *  its pieces end. */
 const SETTLES_AFTER_MS = 150;
@@ -264,6 +270,7 @@ export function Header({
       return;
     }
     const root = document.documentElement;
+    const wide = window.matchMedia(HEADS_RISE_INTO_THE_BAND);
     const write = (target: HTMLElement, startEnd: string, sideWidth: string) => {
       target.style.setProperty("--header-start-end", startEnd);
       target.style.setProperty("--header-side-width", sideWidth);
@@ -274,25 +281,42 @@ export function Header({
        every frame: four tenths of a second of a second's animation, measured,
        on a screen where nothing read it. */
     let settle = 0;
+    const forget = () => {
+      window.clearTimeout(settle);
+      for (const target of [root, ...document.querySelectorAll<HTMLElement>(HEADS_CLEAR_OF_THE_BAR)]) {
+        target.style.removeProperty("--header-start-end");
+        target.style.removeProperty("--header-side-width");
+      }
+    };
     const measure = () => {
+      if (!wide.matches) {
+        return;
+      }
       const startEnd = `${left.getBoundingClientRect().right}px`;
       const sideWidth = `${right.getBoundingClientRect().width}px`;
       document.querySelectorAll<HTMLElement>(HEADS_CLEAR_OF_THE_BAR).forEach((head) => write(head, startEnd, sideWidth));
       window.clearTimeout(settle);
       settle = window.setTimeout(() => write(root, startEnd, sideWidth), SETTLES_AFTER_MS);
     };
-    write(root, `${left.getBoundingClientRect().right}px`, `${right.getBoundingClientRect().width}px`);
-    measure();
+    const reread = () => {
+      if (wide.matches) {
+        write(root, `${left.getBoundingClientRect().right}px`, `${right.getBoundingClientRect().width}px`);
+        measure();
+      } else {
+        forget();
+      }
+    };
+    reread();
     const watching = new ResizeObserver(measure);
     watching.observe(left);
     watching.observe(right);
     window.addEventListener("resize", measure);
+    wide.addEventListener("change", reread);
     return () => {
-      window.clearTimeout(settle);
       watching.disconnect();
       window.removeEventListener("resize", measure);
-      root.style.removeProperty("--header-start-end");
-      root.style.removeProperty("--header-side-width");
+      wide.removeEventListener("change", reread);
+      forget();
     };
   }, []);
   /* How much of the top of the page the bar covers right now, written on the
