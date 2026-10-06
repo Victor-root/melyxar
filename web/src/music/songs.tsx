@@ -5,16 +5,16 @@
  * into the menu of the line.
  */
 
-import { useLayoutEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { asClock } from "../clock";
 import { useShownPicture } from "../components/picture";
 import { HeartIcon, PlayIcon } from "../icons";
+import { QuietLink } from "../navigating";
 import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
-import { useGoneSongs, useMusicMarks } from "./marks";
+import { useGoneSongs, useLiking } from "./marks";
 import { PlayingWave } from "./playing-wave";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
@@ -27,7 +27,7 @@ function Artists({ artists }: { artists: Credited[] }) {
       {artists.map((artist, index) => (
         <span key={artist.id}>
           {index > 0 && ", "}
-          <Link to={`/music/artist/${artist.id}`}>{artist.name}</Link>
+          <QuietLink to={`/music/artist/${artist.id}`}>{artist.name}</QuietLink>
         </span>
       ))}
     </>
@@ -109,15 +109,14 @@ function Actions({
   heartInMenu: boolean;
 }) {
   const { t } = useSettings();
-  const marks = useMusicMarks();
+  const { liked, setLiked } = useLiking(song.id);
   const { actions, dialog } = useSongActions([song], true);
   const carried = actions.slice(0, inline);
-  const liked = marks.liked(song.id);
   const heart: MenuLine = {
     key: "heart",
     said: t(liked ? "card.unfavourite" : "card.favourite"),
     mark: <HeartIcon size={17} filled={liked} />,
-    act: () => marks.setLiked(song.id, !liked),
+    act: () => setLiked(!liked),
   };
   return (
     <span className="music-song-actions">
@@ -182,6 +181,13 @@ export function SongList({
      measure. */
   const inline = useActionsThatFit(list, showAlbum, !menuOnly);
   const gone = useGoneSongs();
+  /* One way to play for the whole list, the same from one drawing to the
+     next, so a line is drawn again only when its own song is. */
+  const playNow = useRef(onPlay);
+  useLayoutEffect(() => {
+    playNow.current = onPlay;
+  });
+  const play = useCallback((index: number) => playNow.current?.(index), []);
   return (
     <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}${compact ? " music-songs-compact" : ""}`}>
       {songs.map((song, index) =>
@@ -196,7 +202,7 @@ export function SongList({
             hideArtists={hideArtists}
             compact={compact}
             inline={inline}
-            onPlay={onPlay}
+            onPlay={onPlay ? play : undefined}
             extra={moreFor?.(index)}
           />
         ),
@@ -208,7 +214,7 @@ export function SongList({
 /** One line of a list. It watches on its own whether its song is the one
  *  playing, so a song starting or pausing draws two lines again, not every
  *  list on the screen. */
-function SongLine({
+const SongLine = memo(function SongLine({
   song,
   index,
   first,
@@ -293,7 +299,7 @@ function SongLine({
       </span>
       {showAlbum && (
         <span className="music-song-album">
-          {song.album && <Link to={`/music/album/${song.album.id}`}>{song.album.name}</Link>}
+          {song.album && <QuietLink to={`/music/album/${song.album.id}`}>{song.album.name}</QuietLink>}
         </span>
       )}
       <Actions song={song} inline={inline} extra={extra} heartInMenu={!!compact} />
@@ -304,4 +310,4 @@ function SongLine({
       )}
     </li>
   );
-}
+});

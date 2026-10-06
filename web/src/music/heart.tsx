@@ -5,12 +5,11 @@
 
 import { HeartIcon } from "../icons";
 import { useSettings } from "../settings";
-import { useMusicMarks } from "./marks";
+import { useLiking } from "./marks";
 
 export function Heart({ id, size = 18, className = "" }: { id: string; size?: number; className?: string }) {
   const { t } = useSettings();
-  const marks = useMusicMarks();
-  const liked = marks.liked(id);
+  const { liked, setLiked } = useLiking(id);
   const label = t(liked ? "card.unfavourite" : "card.favourite");
   return (
     <button
@@ -21,7 +20,7 @@ export function Heart({ id, size = 18, className = "" }: { id: string; size?: nu
       title={label}
       onClick={(event) => {
         event.stopPropagation();
-        marks.setLiked(id, !liked);
+        setLiked(!liked);
       }}
     >
       <HeartIcon size={size} filled={liked} />

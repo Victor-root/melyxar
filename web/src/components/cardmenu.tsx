@@ -21,12 +21,12 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Card } from "../api";
 import { useAccount } from "../account";
 import { refusalAbout } from "../asking";
 import { useMarks } from "../marks";
+import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
 import { DeleteDialog } from "./deletion";
@@ -292,7 +292,7 @@ export function CardMenu({
   onClose: () => void;
 }) {
   const { t } = useSettings();
-  const navigate = useNavigate();
+  const navigate = useGoTo();
   const { account } = useAccount();
   const marks = useMarks();
   const selection = useSelection();
