@@ -28,7 +28,7 @@ import { music } from "./api";
 import type { AlbumOrder, Genre, Initial, SongOrder } from "./api";
 import { FavouritesTab, ForYouTab, PlaylistsTab } from "./for-you";
 import { usePaged } from "./paging";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
@@ -45,7 +45,7 @@ const SONG_ORDERS: SongOrder[] = ["title", "album", "added"];
 export function MusicLibraryPage({ library }: { library: Library }) {
   const [params, setParams] = useSearchParams();
   useTabPage(library.name);
-  const { preferences } = useMusic();
+  const { preferences } = useMusicControls();
   const shown = shownTabs(preferences.hidden_tabs);
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
@@ -214,7 +214,7 @@ function SongsTab({ library, tools }: { library: string; tools: ReactNode }) {
     }
     setParams(next, { replace: true });
   };
-  const player = useMusic();
+  const player = useMusicControls();
   const songs = usePaged(`${library}|${order}|${descending}`, (offset, limit, signal) =>
     music.songs(library, order, descending, offset, limit, signal),
     version,

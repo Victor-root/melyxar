@@ -18,7 +18,7 @@ import { useGoneSongs, useMusicMarks } from "./marks";
 import { PlayingWave } from "./playing-wave";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
-import { useMusic } from "./player/player";
+import { useMusicControls, useMusicNow } from "./player/player";
 
 /** Who plays a song, each a way to their page. */
 function Artists({ artists }: { artists: Credited[] }) {
@@ -173,91 +173,130 @@ export function SongList({
   /** What the menu of a line offers beyond what every song's does. */
   moreFor?: (index: number) => MenuLine[];
 }) {
-  const { t } = useSettings();
-  const { song: playingNow, playing, toggle } = useMusic();
   const list = useRef<HTMLOListElement>(null);
   const fit = useActionsThatFit(list, showAlbum);
   const inline = menuOnly ? 0 : fit;
   const gone = useGoneSongs();
   return (
     <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}${compact ? " music-songs-compact" : ""}`}>
-      {songs.map((song, index) => {
-        if (gone.has(song.id)) {
-          return null;
-        }
-        const artists =
-          hideArtists !== undefined &&
-          song.artists.map((artist) => artist.name).join(", ") === hideArtists
-            ? []
-            : song.artists;
-        const current = playingNow?.id === song.id;
-        const pausing = current && playing;
-        const label = current ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: song.title });
-        return (
-          <li
-            className={`music-song music-song-full${current ? " music-song-playing" : ""}`}
+      {songs.map((song, index) =>
+        gone.has(song.id) ? null : (
+          <SongLine
             key={song.id}
-            data-index={first + index}
-            onClick={
-              compact
-                ? (event) => {
-                    const target = event.target as HTMLElement;
-                    /* Whatever a line holds that does something of its own, and
-                       what a menu opened from it draws elsewhere, is not a press
-                       on the line. */
-                    if (!event.currentTarget.contains(target) || target.closest("a, button")) {
-                      return;
-                    }
-                    if (current) {
-                      toggle();
-                    } else {
-                      onPlay?.(index);
-                    }
-                  }
-                : undefined
-            }
-          >
-            <span className="music-song-lead">
-              {(onPlay || current) && (
-                <button
-                  type="button"
-                  className="music-song-toggle"
-                  aria-label={label}
-                  title={label}
-                  onClick={() => (current ? toggle() : onPlay?.(index))}
-                >
-                  {pausing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-                </button>
-              )}
-            </span>
-            {!compact && (
-              <span className="music-song-number">
-                {current ? <PlayingWave playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
-              </span>
-            )}
-            <Cover song={song} />
-            <span className="music-song-words">
-              <span className="music-song-title">{song.title}</span>
-              {artists.length > 0 && (
-                <span className="music-song-artists">
-                  <Artists artists={artists} />
-                </span>
-              )}
-            </span>
-            {showAlbum && (
-              <span className="music-song-album">
-                {song.album && <Link to={`/music/album/${song.album.id}`}>{song.album.name}</Link>}
-              </span>
-            )}
-            <Actions song={song} inline={inline} extra={moreFor?.(index)} heartInMenu={!!compact} />
-            {!compact && (
-              <span className="music-song-length" title={t("music.length")}>
-                {song.seconds === null ? "" : asClock(song.seconds)}
-              </span>
-            )}
-          </li>
-        );
-      })}
+            song={song}
+            index={index}
+            first={first}
+            numbered={numbered}
+            showAlbum={showAlbum}
+            hideArtists={hideArtists}
+            compact={compact}
+            inline={inline}
+            onPlay={onPlay}
+            extra={moreFor?.(index)}
+          />
+        ),
+      )}
     </ol>
+  );
+}
+
+/** One line of a list. It watches on its own whether its song is the one
+ *  playing, so a song starting or pausing draws two lines again, not every
+ *  list on the screen. */
+function SongLine({
+  song,
+  index,
+  first,
+  numbered,
+  showAlbum,
+  hideArtists,
+  compact,
+  inline,
+  onPlay,
+  extra,
+}: {
+  song: Song;
+  index: number;
+  first: number;
+  numbered: "track" | "place";
+  showAlbum: boolean;
+  hideArtists?: string;
+  compact?: boolean;
+  inline: number;
+  onPlay?: (index: number) => void;
+  extra?: MenuLine[];
+}) {
+  const { t } = useSettings();
+  const { toggle } = useMusicControls();
+  const state = useMusicNow((now, playing) => (now?.id !== song.id ? "other" : playing ? "playing" : "paused"));
+  const current = state !== "other";
+  const playing = state === "playing";
+  const artists =
+    hideArtists !== undefined && song.artists.map((artist) => artist.name).join(", ") === hideArtists
+      ? []
+      : song.artists;
+  const label = current ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: song.title });
+  return (
+    <li
+      className={`music-song music-song-full${current ? " music-song-playing" : ""}`}
+      data-index={first + index}
+      onClick={
+        compact
+          ? (event) => {
+              const target = event.target as HTMLElement;
+              /* Whatever a line holds that does something of its own, and
+                 what a menu opened from it draws elsewhere, is not a press
+                 on the line. */
+              if (!event.currentTarget.contains(target) || target.closest("a, button")) {
+                return;
+              }
+              if (current) {
+                toggle();
+              } else {
+                onPlay?.(index);
+              }
+            }
+          : undefined
+      }
+    >
+      <span className="music-song-lead">
+        {(onPlay || current) && (
+          <button
+            type="button"
+            className="music-song-toggle"
+            aria-label={label}
+            title={label}
+            onClick={() => (current ? toggle() : onPlay?.(index))}
+          >
+            {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+          </button>
+        )}
+      </span>
+      {!compact && (
+        <span className="music-song-number">
+          {current ? <PlayingWave playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
+        </span>
+      )}
+      <Cover song={song} />
+      <span className="music-song-words">
+        <span className="music-song-title">{song.title}</span>
+        {artists.length > 0 && (
+          <span className="music-song-artists">
+            <Artists artists={artists} />
+          </span>
+        )}
+      </span>
+      {showAlbum && (
+        <span className="music-song-album">
+          {song.album && <Link to={`/music/album/${song.album.id}`}>{song.album.name}</Link>}
+        </span>
+      )}
+      <Actions song={song} inline={inline} extra={extra} heartInMenu={!!compact} />
+      {!compact && (
+        <span className="music-song-length" title={t("music.length")}>
+          {song.seconds === null ? "" : asClock(song.seconds)}
+        </span>
+      )}
+    </li>
   );
 }

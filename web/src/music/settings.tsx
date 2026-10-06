@@ -12,7 +12,7 @@ import { MusicIcon, NetworkIcon, PlaybackIcon, TagIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { MusicPreferences } from "./api";
 import { MUSIC_TABS } from "./tabs";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 
 /** The ceilings offered, heaviest first, in kilobits a second. The server
  *  holds any other between the lowest and the highest of them. */
@@ -71,7 +71,7 @@ function useSetOnceTheHandStops(saved: number, save: (value: number) => void): [
 
 export function MyMusic() {
   const { t } = useSettings();
-  const { preferences, setPreferences } = useMusic();
+  const { preferences, setPreferences } = useMusicControls();
   const { account } = useAccount();
   const change = (changes: Partial<MusicPreferences>) => {
     void setPreferences({ ...preferences, ...changes }).catch(() => {});

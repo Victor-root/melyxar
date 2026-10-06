@@ -18,7 +18,7 @@ import { Heart } from "./heart";
 import { useKeptState } from "./keeping";
 import { SongMenuButton } from "./song-menu";
 import { ShuffleIcon } from "./player/icons";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { SongList } from "./songs";
 import { AlbumCover, namesOf } from "./tiles";
 import { useTabPage } from "../tab-page";
@@ -26,7 +26,7 @@ import { useTabPage } from "../tab-page";
 export function MusicAlbumPage() {
   const { t } = useSettings();
   const { id = "" } = useParams();
-  const player = useMusic();
+  const player = useMusicControls();
   const { account } = useAccount();
   /* Read again whenever its library moves, which is how the album follows
      tags written into its files and a scan filing them anew. */

@@ -12,7 +12,7 @@ import { useSettings } from "../../settings";
 import { music as server } from "../api";
 import type { LyricLine, SongLyrics } from "../api";
 import { lineAt } from "./lyrics";
-import { useMusic, useMusicTime } from "./player";
+import { useMusicControls, useMusicTime } from "./player";
 
 export function LyricsPanel({ song }: { song: string }) {
   const { t } = useSettings();
@@ -50,7 +50,7 @@ export function LyricsPanel({ song }: { song: string }) {
 
 function Following({ lines }: { lines: LyricLine[] }) {
   const { position } = useMusicTime();
-  const { seek } = useMusic();
+  const { seek } = useMusicControls();
   /* A quarter of a second ahead: the time is read four times a second, and
      a line lit a moment late reads as one lit wrong. */
   const active = lineAt(lines, position * 1000 + 250);

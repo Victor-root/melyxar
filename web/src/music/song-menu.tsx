@@ -18,7 +18,7 @@ import type { Song } from "./api";
 import { AddToPlaylist } from "./add-to-playlist";
 import { useSongDeletion } from "./delete-song";
 import { QueueIcon } from "./player/icons";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 
 /** A line a screen adds to the menu. */
 export interface MenuLine {
@@ -37,7 +37,7 @@ const OFF_THE_EDGE = 8;
 export function useSongActions(songs: Song[], deletable = false): { actions: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const navigate = useNavigate();
-  const player = useMusic();
+  const player = useMusicControls();
   const [adding, setAdding] = useState(false);
   const one = songs.length === 1 ? songs[0] : null;
   const deletion = useSongDeletion(deletable ? songs : []);

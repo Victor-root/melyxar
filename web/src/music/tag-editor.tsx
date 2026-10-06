@@ -22,7 +22,7 @@ import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { EditedTags, PlannedTags, SongTags, TagsAsked } from "./api";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { albumFieldsOf, namesField, namesIn, numberOf, textOf, withAlbum } from "./tag-form";
 import type { AlbumFields } from "./tag-form";
 
@@ -73,7 +73,7 @@ export function TagEditorPage() {
   const { id = "" } = useParams();
   const leave = useLeave(`/music/album/${id}`);
   const toast = useToast();
-  const { preferences } = useMusic();
+  const { preferences } = useMusicControls();
   const { watch } = useRunning();
   const [songs, setSongs] = useState<SongFields[] | null>(null);
   const [album, setAlbum] = useState<AlbumFields>(albumFieldsOf(undefined));

@@ -12,12 +12,12 @@ import { PlayIcon } from "../icons";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import { ShuffleIcon } from "./player/icons";
-import { useMusic } from "./player/player";
+import { useMusicControls } from "./player/player";
 import { shuffleOffset } from "./queueing";
 
 export function LibraryTools({ library }: { library: Library }) {
   const { t } = useSettings();
-  const player = useMusic();
+  const player = useMusicControls();
   const [starting, setStarting] = useState(false);
 
   const start = async (shuffle: boolean) => {

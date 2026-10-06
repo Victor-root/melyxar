@@ -11,7 +11,7 @@
  * music plays is a list that stutters when scrolled.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
@@ -51,21 +51,15 @@ import type { Command } from "./tabs";
  *  frame of the bar's way out for four frames, which read as a stutter. */
 export const BAR_LEAVES_MS = 180;
 
-export interface Music {
-  queue: Queue;
-  /** The song playing or paused, if there is one. */
-  song: Song | null;
-  playing: boolean;
-  /** Waiting for the sound to arrive. */
-  waiting: boolean;
-  loudness: Loudness;
+/** What every page can ask of the player, the same from one song to the
+ *  next: a list or a tile reading only this is not drawn again when a song
+ *  starts or pauses. */
+export interface MusicControls {
   /** Plays these songs from the one at `index`, replacing the queue. */
   play: (songs: Song[], index: number, shuffle?: boolean) => void;
   toggle: () => void;
   /** Stops for good: the queue goes, and the bar with it. */
   stop: () => void;
-  /** Stopped, and the bar on its way out: the queue goes once it has. */
-  stopping: boolean;
   next: () => void;
   previous: () => void;
   seek: (seconds: number) => void;
@@ -86,6 +80,18 @@ export interface Music {
   setPreferences: (chosen: MusicPreferences) => Promise<void>;
 }
 
+export interface Music extends MusicControls {
+  queue: Queue;
+  /** The song playing or paused, if there is one. */
+  song: Song | null;
+  playing: boolean;
+  /** Waiting for the sound to arrive. */
+  waiting: boolean;
+  loudness: Loudness;
+  /** Stopped, and the bar on its way out: the queue goes once it has. */
+  stopping: boolean;
+}
+
 /** Where the song has got to, and how long it runs, in seconds. */
 export interface Time {
   position: number;
@@ -96,6 +102,28 @@ export interface Time {
 }
 
 const MusicContext = createContext<Music | null>(null);
+const ControlsContext = createContext<MusicControls | null>(null);
+
+/** The song playing or paused and whether it plays, for what only marks it:
+ *  each reads the little it needs, and is drawn again only when that does. */
+const now = {
+  song: null as Song | null,
+  playing: false,
+  listeners: new Set<() => void>(),
+  set(song: Song | null, playing: boolean) {
+    if (song !== this.song || playing !== this.playing) {
+      this.song = song;
+      this.playing = playing;
+      for (const listener of this.listeners) {
+        listener();
+      }
+    }
+  },
+  subscribe(listener: () => void) {
+    now.listeners.add(listener);
+    return () => now.listeners.delete(listener);
+  },
+};
 
 /** Where the song has got to, read only by what shows it. */
 const time = {
@@ -134,6 +162,20 @@ export function useMusic(): Music {
     throw new Error("the player of music is not in place");
   }
   return music;
+}
+
+export function useMusicControls(): MusicControls {
+  const controls = useContext(ControlsContext);
+  if (!controls) {
+    throw new Error("the player of music is not in place");
+  }
+  return controls;
+}
+
+/** What `pick` reads of the song playing, drawn again only when that
+ *  changes: it returns a plain value, never a new object. */
+export function useMusicNow<T>(pick: (song: Song | null, playing: boolean) => T): T {
+  return useSyncExternalStore(now.subscribe, () => pick(now.song, now.playing));
 }
 
 export function useMusicTime(): Time {
@@ -775,7 +817,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   }, [live, load, stop, pause, resume]);
   commandsNow.current = commands;
 
-  const music = useMemo<Music>(() => {
+  const controls = useMemo<MusicControls>(() => {
     /* A command of the interface, done by the tab that holds the sound. */
     const sent =
       <Args extends unknown[]>(name: Command, local: (...args: Args) => void) =>
@@ -785,15 +827,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
        nothing is sent without it. */
     const sentBare = (name: Command, local: () => void) => () => run(name, [], local);
     return {
-      queue,
-      song,
-      playing,
-      waiting,
-      loudness,
       play: sent("play", commands.play),
       toggle: sentBare("toggle", commands.toggle),
       stop: sentBare("stop", commands.stop),
-      stopping,
       next: sentBare("next", commands.next),
       previous: sentBare("previous", commands.previous),
       seek: sent("seek", commands.seek),
@@ -809,14 +845,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [queue, song, playing, waiting, stopping, loudness, commands, run, preferences, setPreferences]);
+  }, [commands, run, preferences, setPreferences]);
+
+  const music = useMemo<Music>(
+    () => ({ ...controls, queue, song, playing, waiting, loudness, stopping }),
+    [controls, queue, song, playing, waiting, loudness, stopping],
+  );
+  useLayoutEffect(() => now.set(song, playing), [song, playing]);
 
   useMediaSession(music);
 
   return (
-    <MusicContext.Provider value={music}>
-      {children}
-      <MediaSessionPosition song={song} />
-    </MusicContext.Provider>
+    <ControlsContext.Provider value={controls}>
+      <MusicContext.Provider value={music}>
+        {children}
+        <MediaSessionPosition song={song} />
+      </MusicContext.Provider>
+    </ControlsContext.Provider>
   );
 }
