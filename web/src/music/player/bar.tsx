@@ -23,6 +23,7 @@ import { HeartButton, PlayButton, QueueButton, Rail, Transport, Ways, Volume } f
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { BAR_LEAVES_MS, useMusic } from "./player";
+import { useNowPlayingCovers } from "./covering";
 import { BehindThePlayer } from "./spectrum";
 
 export function MusicBar() {
@@ -30,6 +31,7 @@ export function MusicBar() {
   const music = useMusic();
   const nowPlaying = useNowPlayingPage();
   const film = useIsAFilmOnScreen();
+  const covered = useNowPlayingCovers();
   const shown = music.song !== null && !film && !music.stopping;
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   /* It goes down the way it came up when the music stops, still showing the
@@ -64,7 +66,7 @@ export function MusicBar() {
 
   return (
     <div className={`music-bar-dock${leaving ? " music-bar-leaving" : ""}`} role="region" aria-label={t("music.player")}>
-      <BehindThePlayer />
+      <BehindThePlayer still={covered} />
       <Rail music={music} />
       <div className="music-bar-row">
         <button

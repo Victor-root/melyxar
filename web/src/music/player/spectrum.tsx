@@ -35,16 +35,27 @@ function useSongSpectrum(song: string): SongSpectrum | null {
 }
 
 /** The wave behind a player, when this account wants one and the song is
- *  there to draw it for. */
-export function BehindThePlayer() {
+ *  there to draw it for. Held still, as it was last drawn, while something
+ *  covers it. */
+export function BehindThePlayer({ still = false }: { still?: boolean }) {
   const { song, playing, preferences } = useMusic();
   if (!song || !preferences.spectrum) {
     return null;
   }
-  return <Spectrum song={song.id} playing={playing} amplitude={preferences.spectrum_amplitude / 100} />;
+  return <Spectrum song={song.id} playing={playing} still={still} amplitude={preferences.spectrum_amplitude / 100} />;
 }
 
-function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean; amplitude: number }) {
+function Spectrum({
+  song,
+  playing,
+  still,
+  amplitude,
+}: {
+  song: string;
+  playing: boolean;
+  still: boolean;
+  amplitude: number;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const spectrum = useSongSpectrum(song);
   const { position } = useMusicTime();
@@ -122,7 +133,7 @@ function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean
     };
 
     const start = () => {
-      if (!frame && !document.hidden) {
+      if (!frame && !document.hidden && !still) {
         frame = requestAnimationFrame(tick);
       }
     };
@@ -149,7 +160,7 @@ function Spectrum({ song, playing, amplitude }: { song: string; playing: boolean
       document.removeEventListener("visibilitychange", start);
       cancelAnimationFrame(frame);
     };
-  }, [playing, spectrum]);
+  }, [playing, spectrum, still]);
 
   return <canvas ref={canvas} className="music-bar-spectrum" aria-hidden="true" />;
 }
