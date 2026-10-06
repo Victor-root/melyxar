@@ -8,7 +8,7 @@
  * going back to the library finds it the way it was left.
  */
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
@@ -46,7 +46,9 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const [params, setParams] = useSearchParams();
   useTabPage(library.name);
   const { preferences } = useMusicControls();
-  const shown = shownTabs(preferences.hidden_tabs);
+  /* The same list from one drawing to the next: the bar of tabs measures
+     itself again whenever it is handed another. */
+  const shown = useMemo(() => shownTabs(preferences.hidden_tabs), [preferences.hidden_tabs]);
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
   const tools = <LibraryTools library={library} />;

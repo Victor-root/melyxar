@@ -8,28 +8,26 @@
  * and its leaving is never drawn empty.
  */
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function useLeaving(shown: boolean, canLinger: boolean, ms: number): boolean {
+  /* Noted while drawing rather than after, so the drawing where it is taken
+     off already says it is leaving: noted after, it was taken off the page
+     for one drawing and made again whole for the next. */
+  const [was, setWas] = useState(shown);
   const [leaving, setLeaving] = useState(false);
-  const wasShown = useRef(false);
-  useLayoutEffect(() => {
-    if (shown) {
-      wasShown.current = true;
-      setLeaving(false);
+  if (was !== shown) {
+    setWas(shown);
+    setLeaving(!shown && canLinger && ms > 0);
+  } else if (leaving && !canLinger) {
+    setLeaving(false);
+  }
+  useEffect(() => {
+    if (!leaving) {
       return;
     }
-    if (!wasShown.current || !canLinger || ms === 0) {
-      wasShown.current = false;
-      setLeaving(false);
-      return;
-    }
-    setLeaving(true);
-    const timer = setTimeout(() => {
-      wasShown.current = false;
-      setLeaving(false);
-    }, ms);
+    const timer = setTimeout(() => setLeaving(false), ms);
     return () => clearTimeout(timer);
-  }, [shown, canLinger, ms]);
+  }, [leaving, ms]);
   return leaving;
 }

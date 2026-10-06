@@ -1301,6 +1301,14 @@
   color: var(--text);
 }
 
+/* Once it covers the whole screen, what is under it is hidden: out of sight
+   already, it is then no longer drawn nor composed behind it. */
+:root[data-now-playing-covers] .shell > :not(.music-now),
+:root[data-now-playing-covers] .shell > :not(.music-now) .music-tabs-track,
+:root[data-now-playing-covers] body > .home-backdrop {
+  visibility: hidden;
+}
+
 /* The backdrop of the library is there from the start, not slowly coming up
    behind a page that has just opened. */
 .music-now .home-backdrop {

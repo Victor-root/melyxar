@@ -21,6 +21,7 @@ import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { HeartButton, Rail, StopButton, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
+import { setNowPlayingCovers } from "./covering";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { useMusic } from "./player";
@@ -51,6 +52,19 @@ export function MusicNowPlaying() {
   const onAPhone = useMediaQuery("(max-width: 760px)");
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   const leaving = useLeaving(shown, song !== null && !film, reduced ? 0 : LEAVE_MS);
+  /* On a phone the page covers the whole screen once it has faded in, and
+     until it starts to leave. */
+  const [arrived, setArrived] = useState(false);
+  const covers = onAPhone && shown && (arrived || reduced);
+  useEffect(() => {
+    if (!shown) {
+      setArrived(false);
+    }
+  }, [shown]);
+  useEffect(() => {
+    setNowPlayingCovers(covers);
+    return () => setNowPlayingCovers(false);
+  }, [covers]);
 
   const { marked, close, forget } = nowPlaying;
   useEffect(() => {
@@ -91,7 +105,18 @@ export function MusicNowPlaying() {
   }
 
   return (
-    <div ref={page} className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
+    <div
+      ref={page}
+      className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("music.now_playing")}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget && event.animationName === "music-now-fade") {
+          setArrived(true);
+        }
+      }}
+    >
       <PageBackdrop inPlace />
       {onAPhone && <PhoneHeader title={t(PHONE_PAGES[phonePage])} close={close} />}
       {onAPhone && <PageDots page={phonePage} />}
