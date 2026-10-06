@@ -1675,7 +1675,7 @@
 
   /* The cover stands as far from the foot of the bar as from its left edge. */
   .music-bar-dock .player-seek {
-    margin: 12px calc(var(--gap) * -1) 0;
+    margin: 0 calc(var(--gap) * -1);
   }
 
   /* The page gives way over a short stretch, and ends on the line of the song
@@ -1699,11 +1699,13 @@
 
   /* A little nearer the left edge, which looks as far as the foot is. */
   .music-bar-dock .music-bar-row {
-    margin-left: -2px;
+    margin: 8px 0 0 -2px;
   }
 
+  /* The line stands 4 points from the top, and the cover as far below it as it
+     is from the foot. */
   .music-bar-dock .player-rail {
-    height: 8px;
+    height: 12px;
   }
 
   .music-now-cover {
