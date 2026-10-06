@@ -613,10 +613,10 @@
   grid-template-columns: 40px 4ch 44px minmax(0, 1fr) auto 6ch;
 }
 
-/* The compact line of a phone: the play button, the cover, the name, the
-   menu and the length, and nothing else. */
+/* The compact line of a phone: the play button, the cover, the name and the
+   menu, and nothing else. */
 .music-songs.music-songs-compact .music-song-full {
-  grid-template-columns: 30px 40px minmax(0, 1fr) 20px 4ch;
+  grid-template-columns: 30px 40px minmax(0, 1fr) 20px;
   column-gap: 8px;
   /* The frame of the line playing reaches out beyond its words, which stay
      where the rest of the page's are. */

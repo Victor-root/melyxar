@@ -250,9 +250,11 @@ export function SongList({
               </span>
             )}
             <Actions song={song} inline={inline} extra={moreFor?.(index)} heartInMenu={!!compact} />
-            <span className="music-song-length" title={t("music.length")}>
-              {song.seconds === null ? "" : asClock(song.seconds)}
-            </span>
+            {!compact && (
+              <span className="music-song-length" title={t("music.length")}>
+                {song.seconds === null ? "" : asClock(song.seconds)}
+              </span>
+            )}
           </li>
         );
       })}
