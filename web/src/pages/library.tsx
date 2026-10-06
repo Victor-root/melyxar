@@ -9,6 +9,9 @@ import { api } from "../api";
 import type { Library } from "../api";
 import { Card } from "../components/card";
 import { InOrder } from "../components/in-order";
+import { LetterDrop } from "../components/letter-drop";
+import type { DropHandle } from "../components/letter-drop";
+import { useRailScrub } from "../components/rail-scrub";
 import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
@@ -180,6 +183,12 @@ export function LibraryPage({
     };
   }, [cards, showsLetters]);
   const lit = jumping ?? reading;
+  const drop = useRef<DropHandle>(null);
+  const scrub = useRailScrub((index) => {
+    if (filters) {
+      jumpTo(filters.initials[index].name);
+    }
+  }, drop);
 
   /* The cards made once for what the grid holds, so the letter lit beside it
      changing as the page is scrolled redraws the letters and nothing else.
@@ -331,17 +340,19 @@ export function LibraryPage({
             grid read by year or by rating is not in the order of its
             letters, so there is nowhere for one to lead. */}
         {showsLetters && (
+          <>
           <nav
             className="letters"
             aria-label={t("library.letters")}
             style={{ ["--letters" as string]: filters.initials.length }}
+            {...scrub.rail}
           >
-            {filters.initials.map((entry) => (
+            {filters.initials.map((entry, index) => (
               <button
                 key={entry.name}
                 type="button"
                 className={`letter${lit === entry.name ? " letter-on" : ""}`}
-                onClick={() => jumpTo(entry.name)}
+                onClick={() => scrub.press(index)}
                 title={t("library.count", { count: entry.works })}
                 aria-current={lit === entry.name ? "location" : undefined}
               >
@@ -349,6 +360,8 @@ export function LibraryPage({
               </button>
             ))}
           </nav>
+          <LetterDrop ref={drop} letters={filters.initials.map((entry) => entry.name.toUpperCase())} />
+          </>
         )}
       </div>
 
