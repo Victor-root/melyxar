@@ -784,6 +784,27 @@
   .music-tabs-arrow {
     display: none;
   }
+
+  /* The letters of the lists of music stand at the right of the screen as
+     they do on a wide one, rather than in a block above the list. */
+  .music-tab-content {
+    padding-right: calc(28px + 10px + var(--gap-wide));
+  }
+
+  .music-page .grid-with-letters {
+    flex-direction: row;
+  }
+
+  .music-page .letters {
+    --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
+    position: fixed;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-self: auto;
+    max-height: var(--letters-room);
+    padding: 6px 4px;
+  }
 }
 
 @keyframes bell-sheet-in {
