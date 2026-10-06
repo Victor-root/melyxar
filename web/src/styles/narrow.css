@@ -612,6 +612,37 @@
     right: calc(var(--gutter) * -1);
     left: auto;
   }
+
+  /* The tabs of the music library stand under the bar at the top without a
+     name over them or a glass of their own: the width of the screen, quiet,
+     the one lit being the one open. */
+  .music-page .browse-head .section-head {
+    display: none;
+  }
+
+  .music-page .browse-bar {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .browse-piece.music-tabs,
+  .browse-piece.music-tabs:hover,
+  .browse-piece.music-tabs:focus-within {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .music-tab {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+
+  .music-tabs-arrow {
+    display: none;
+  }
 }
 
 @keyframes bell-sheet-in {
