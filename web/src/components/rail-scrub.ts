@@ -12,12 +12,13 @@
  */
 
 import { useRef } from "react";
-import type { PointerEvent } from "react";
+import type { PointerEvent, RefObject } from "react";
+import type { DropHandle } from "./letter-drop";
 
 /** Put on each letter of the rail, with its place along it. */
 export const LETTER_ATTRIBUTE = "data-letter";
 
-export function useRailScrub(go: (index: number) => void) {
+export function useRailScrub(go: (index: number) => void, drop: RefObject<DropHandle | null>) {
   const touching = useRef(false);
   const last = useRef(-1);
 
@@ -28,9 +29,16 @@ export function useRailScrub(go: (index: number) => void) {
       return;
     }
     const index = Number(letter.getAttribute(LETTER_ATTRIBUTE));
+    drop.current?.move(index, event.clientY);
     if (index !== last.current) {
       last.current = index;
       go(index);
+    }
+  };
+
+  const release = () => {
+    if (touching.current) {
+      drop.current?.release();
     }
   };
 
@@ -48,6 +56,8 @@ export function useRailScrub(go: (index: number) => void) {
           follow(event);
         }
       },
+      onPointerUp: release,
+      onPointerCancel: release,
     },
     /** What a press of one letter does: a touch has already gone there. */
     press: (index: number) => {

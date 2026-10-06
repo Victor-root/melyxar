@@ -867,6 +867,84 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent-contrast);
 }
 
+/* The drop that follows a finger along the rail: a square with three round
+   corners and a point, turned to aim at the rail, the letter turned back
+   upright inside it. Only a touch ever shows it. */
+.letter-drop-place {
+  --drop-size: 84px;
+  --drop-y: 0px;
+  position: fixed;
+  z-index: 6;
+  top: 0;
+  right: 52px;
+  width: var(--drop-size);
+  height: var(--drop-size);
+  transform: translateY(var(--drop-y));
+  transition: transform 120ms ease-out;
+  pointer-events: none;
+}
+
+.letter-drop {
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 50% 0 50% 50%;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--accent) 22%, transparent),
+      color-mix(in srgb, var(--accent) 22%, transparent)
+    ),
+    var(--header-glass);
+  backdrop-filter: blur(22px);
+  box-shadow:
+    var(--shadow-card),
+    0 0 26px 2px var(--accent-glow);
+  overflow: hidden;
+  opacity: 0;
+  transform: rotate(45deg) scale(0.7);
+  transition:
+    opacity 180ms var(--ease),
+    transform 220ms var(--ease);
+}
+
+.letter-drop[data-shown="yes"] {
+  opacity: 1;
+  transform: rotate(45deg);
+}
+
+/* The letters fade out towards the top and the foot of the drop, so the
+   one in the middle is the one that reads. */
+.letter-drop-face {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  transform: rotate(-45deg);
+  mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent);
+}
+
+.letter-drop-reel {
+  transform: translateY(calc(var(--reel-at) * var(--drop-size) * -1));
+  transition: transform 180ms var(--ease);
+}
+
+.letter-drop-reel > span {
+  display: grid;
+  place-items: center;
+  height: var(--drop-size);
+  color: var(--text);
+  font-size: 54px;
+  font-weight: 800;
+  text-shadow: 0 0 18px var(--accent-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter-drop-place,
+  .letter-drop,
+  .letter-drop-reel {
+    transition: none;
+  }
+}
+
 /* Narrow: the letters go above the grid rather than beside it, where a column
    would leave the cards no room at all. */
 @media (max-width: 700px) {
