@@ -52,7 +52,7 @@ export function TabsBar({
     if (!element) {
       return;
     }
-    measure();
+    // Its first reading comes once the page is laid out, not by laying it out.
     const watcher = new ResizeObserver(measure);
     watcher.observe(element);
     for (const child of Array.from(element.children)) {

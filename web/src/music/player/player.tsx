@@ -23,7 +23,7 @@ import { formsPlayedHere } from "./forms";
 import { PREPARE_AHEAD_SECONDS, fadeBetween, handOverIn, secondsLeft } from "./handover";
 import { levelOf } from "./levelling";
 import { countsAsListened } from "./listening";
-import { rememberLoudness, rememberQueue, storedLoudness, storedQueue } from "./kept";
+import { rememberLoudness, rememberPlace, rememberQueue, storedLoudness, storedQueue } from "./kept";
 import type { Loudness } from "./kept";
 import {
   EMPTY,
@@ -594,16 +594,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   // every few seconds and as the page goes. Not before the last one was
   // taken up or let go, which would write an empty queue over it.
   const settled = preferences !== null;
+  const { songs, order, shuffle, repeat } = queue;
   useEffect(() => {
-    if (!settled) {
+    if (settled) {
+      rememberQueue(songs.length > 0 ? { songs, order, shuffle, repeat } : null);
+    }
+  }, [songs, order, shuffle, repeat, settled]);
+  useEffect(() => {
+    if (!settled || songs.length === 0) {
       return;
     }
-    const keep = () =>
-      rememberQueue(
-        queueNow.current.songs.length > 0
-          ? { ...queueNow.current, position: time.now.position }
-          : null,
-      );
+    const keep = () => rememberPlace({ at: queueNow.current.at, position: time.now.position });
     keep();
     const every = window.setInterval(keep, KEEP_EVERY_MS);
     window.addEventListener("pagehide", keep);
@@ -611,7 +612,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       window.clearInterval(every);
       window.removeEventListener("pagehide", keep);
     };
-  }, [queue, settled]);
+  }, [queue.at, songs, settled]);
 
   /* The sound let go of, the queue left as it is. */
   const letGoOfTheSound = useCallback(() => {

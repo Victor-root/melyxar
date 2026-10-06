@@ -91,9 +91,9 @@ export function Row({
     if (!element) {
       return;
     }
-    measure();
     // Both matter: the width changes when the window does, and what is in the
-    // row changes when a page finishes loading.
+    // row changes when a page finishes loading. Its first reading comes once
+    // the page is laid out, not by laying it out.
     const watcher = new ResizeObserver(measure);
     watcher.observe(element);
     for (const child of Array.from(element.children)) {
