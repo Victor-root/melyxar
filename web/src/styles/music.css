@@ -1056,7 +1056,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 100px;
+  --music-bar-height: 84px;
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
@@ -1632,7 +1632,7 @@
 
 @media (max-width: 760px) {
   :root {
-    --music-bar-height: 100px;
+    --music-bar-height: 84px;
   }
 
   .music-bar-dock {
@@ -1666,15 +1666,19 @@
     display: none;
   }
 
-  /* A fine line, a little lower than the thick bar was: the bar is only shown
-     here, so it needs no room to be caught in. */
+  /* A fine line, round at both ends: the bar is only shown here, so it needs
+     no room to be caught in. */
   .music-bar-dock {
-    --player-rail: 2px;
-    --player-rail-hovered: 2px;
+    --player-rail: 4px;
+    --player-rail-hovered: 4px;
   }
 
   .music-bar-dock .player-seek {
-    margin-top: 16px;
+    margin-top: 10px;
+  }
+
+  .music-bar-dock .music-bar-now .music-now-cover {
+    width: 52px;
   }
 
   .music-bar-dock .player-rail {
