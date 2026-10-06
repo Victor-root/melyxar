@@ -418,6 +418,12 @@ button.seen-mark:not(.seen-mark-on):hover {
     opacity: 0;
     pointer-events: none;
   }
+
+  /* In a row that is slid with a finger, the layer comes up under it with
+     its buttons whenever a card is touched: there it is left out. */
+  .row-track .card-hover {
+    display: none;
+  }
 }
 
 /* One disc of accent with a white triangle in it, and nothing else: no ring,
