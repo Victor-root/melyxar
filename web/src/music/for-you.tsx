@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
+import { FlameIcon, HistoryIcon } from "../icons";
 import { useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
@@ -83,8 +84,8 @@ export function ForYouTab({ library }: { library: string }) {
       {phone ? (
         <ListenedSwitch
           lists={[
-            { title: t("music.listened_lately"), songs: lately },
-            { title: t("music.listened_most"), songs: most },
+            { title: t("music.listened_lately"), mark: <HistoryIcon size={20} />, songs: lately },
+            { title: t("music.listened_most"), mark: <FlameIcon size={20} />, songs: most },
           ]}
           onPlay={(songs, index) => player.play(songs, index)}
         />
@@ -112,7 +113,7 @@ function ListenedSwitch({
   lists,
   onPlay,
 }: {
-  lists: { title: string; songs: Song[] }[];
+  lists: { title: string; mark: React.ReactNode; songs: Song[] }[];
   onPlay: (songs: Song[], index: number) => void;
 }) {
   const shown = lists.filter((list) => list.songs.length > 0);
@@ -149,19 +150,22 @@ function ListenedSwitch({
   return (
     <section className="section">
       <div className="section-head">
-        <h2 className="music-listened-titles">
+        <div className="music-listened-switch">
           {shown.map((list, at) => (
             <button
               key={list.title}
               type="button"
               className="music-listened-title"
               data-on={at === page ? "yes" : "no"}
+              aria-label={list.title}
+              title={list.title}
               onClick={() => pages.current[at]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
             >
-              {list.title}
+              {list.mark}
             </button>
           ))}
-        </h2>
+        </div>
+        <h2>{shown[Math.min(page, shown.length - 1)].title}</h2>
       </div>
       <div className="music-listened-pages" ref={track}>
         {shown.map((list, at) => (
