@@ -1828,7 +1828,7 @@
     justify-content: center;
   }
 
-  .music-now-page:not(.music-now-page-queue) .music-now-queue {
+  .music-now-page-words .music-now-queue {
     flex: 1;
   }
 

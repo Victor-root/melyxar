@@ -264,7 +264,7 @@ function PhonePages({
         <div className="music-now-page music-now-page-song" ref={hold(1)}>
           <NowPlayingSong song={song} close={close} />
         </div>
-        <div className="music-now-page" ref={hold(2)}>
+        <div className="music-now-page music-now-page-words" ref={hold(2)}>
           <section className="music-now-queue">
             <LyricsPanel song={song.id} />
           </section>
