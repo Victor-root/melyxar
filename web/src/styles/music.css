@@ -242,6 +242,46 @@
   --scrollbar-width: 7px;
 }
 
+/* On a phone the two lists are one, and the other is a swipe away: the names
+   of both at the top, the one in view lit, and the lists side by side in a
+   row that comes to rest on one of them. */
+.music-listened-titles {
+  gap: var(--gap-wide);
+}
+
+.music-listened-title {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font: inherit;
+  transition: color var(--quick) var(--ease);
+}
+
+.music-listened-title[data-on="yes"] {
+  color: var(--text);
+}
+
+.music-listened-pages {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  will-change: scroll-position;
+  scrollbar-width: none;
+}
+
+.music-listened-pages::-webkit-scrollbar {
+  display: none;
+}
+
+.music-listened-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
 /* --------------------------------------------------------------------------
  * Songs as wide tiles
  * ----------------------------------------------------------------------- */

@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { useLibraryVersion } from "../libraries";
-import { useMediaQuery } from "../media-query";
+import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album, Found, MusicPlaylist, Song } from "./api";
@@ -31,6 +31,10 @@ const NEWEST = 20;
  *  scrolling in its own box. */
 const SIDE_BY_SIDE = "(min-width: 1000px)";
 
+/** How many songs each of the two listened lists shows on a phone, where
+ *  they are one list to switch from the one to the other. */
+const LISTED_ON_PHONE = 8;
+
 /** The least a list is let shrink to, on a screen too short to give it more. */
 const LEAST_LIST = 280;
 
@@ -40,6 +44,7 @@ export function ForYouTab({ library }: { library: string }) {
   const { listenedAt } = useMusicMarks();
   const player = useMusic();
   const wide = useMediaQuery(SIDE_BY_SIDE);
+  const phone = useMediaQuery(PHONE);
   const [newest, setNewest] = useKeptState<Album[] | null>(`for-you|newest|${library}`, null);
   const [lately, setLately] = useKeptState<Song[]>(`for-you|lately|${library}`, []);
   const [most, setMost] = useKeptState<Song[]>(`for-you|most|${library}`, []);
@@ -75,7 +80,15 @@ export function ForYouTab({ library }: { library: string }) {
           </Row>
         </section>
       )}
-      {wide ? (
+      {phone ? (
+        <ListenedSwitch
+          lists={[
+            { title: t("music.listened_lately"), songs: lately },
+            { title: t("music.listened_most"), songs: most },
+          ]}
+          onPlay={(songs, index) => player.play(songs, index)}
+        />
+      ) : wide ? (
         <ListenedColumns>
           <ListenedList title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
           <ListenedList title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
@@ -87,6 +100,89 @@ export function ForYouTab({ library }: { library: string }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The two listened lists on a phone: one list the whole width of the screen,
+ * the other beside it, a swipe or a press on its name away. The one in view
+ * is the one whose name is lit.
+ */
+function ListenedSwitch({
+  lists,
+  onPlay,
+}: {
+  lists: { title: string; songs: Song[] }[];
+  onPlay: (songs: Song[], index: number) => void;
+}) {
+  const shown = lists.filter((list) => list.songs.length > 0);
+  const track = useRef<HTMLDivElement>(null);
+  const pages = useRef<(HTMLDivElement | null)[]>([]);
+  const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    const element = track.current;
+    if (!element) {
+      return;
+    }
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setPage(pages.current.indexOf(entry.target as HTMLDivElement));
+          }
+        }
+      },
+      { root: element, threshold: 0.6 },
+    );
+    for (const one of pages.current) {
+      if (one) {
+        watcher.observe(one);
+      }
+    }
+    return () => watcher.disconnect();
+  }, [shown.length]);
+
+  if (shown.length === 0) {
+    return null;
+  }
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2 className="music-listened-titles">
+          {shown.map((list, at) => (
+            <button
+              key={list.title}
+              type="button"
+              className="music-listened-title"
+              data-on={at === page ? "yes" : "no"}
+              onClick={() => pages.current[at]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
+            >
+              {list.title}
+            </button>
+          ))}
+        </h2>
+      </div>
+      <div className="music-listened-pages" ref={track}>
+        {shown.map((list, at) => (
+          <div
+            key={list.title}
+            className="music-listened-page"
+            ref={(element) => {
+              pages.current[at] = element;
+            }}
+          >
+            <SongList
+              songs={list.songs.slice(0, LISTED_ON_PHONE)}
+              numbered="place"
+              showAlbum={false}
+              menuOnly
+              onPlay={(index) => onPlay(list.songs, index)}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
