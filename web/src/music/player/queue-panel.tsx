@@ -9,10 +9,11 @@
  * when it is let go. The arrow keys on the grip move it a place at a time.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { asClock } from "../../clock";
 import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
+import { scrollerOf } from "../../landing";
 import { PauseIcon } from "../../player/icons";
 import { useSettings } from "../../settings";
 import { PlayingWave } from "../playing-wave";
@@ -65,6 +66,37 @@ export function QueuePanel() {
   const taken = useRef<Taken | null>(null);
   const pending = useRef<Pending | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+
+  /* The song playing in the middle of the box the list scrolls in: put there
+     before anything is drawn when the queue opens, so that it never opens on
+     the first lines of a long queue, and glided to when the song changes. */
+  const centre = (behavior: ScrollBehavior) => {
+    const line = list.current?.children[queue.at] as HTMLElement | undefined;
+    const box = line && scrollerOf(line);
+    if (line && box) {
+      const top = line.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+      box.scrollTo({ top: top - (box.clientHeight - line.offsetHeight) / 2, behavior });
+    }
+  };
+  useLayoutEffect(() => {
+    centre("instant");
+    /* Again a frame or two later, once the page around it has taken its
+       room: the foot of the page is measured after the first drawing, and
+       until it has its room there is not enough below the last lines to
+       bring them to the middle. */
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => centre("instant"));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    centre("smooth");
+  }, [queue.at]);
 
   /* Run for as long as a line is held: the line goes where the pointer is,
      in height only, the list scrolls when the pointer is at its edge, and the
