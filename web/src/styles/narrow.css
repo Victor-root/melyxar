@@ -613,37 +613,72 @@
     left: auto;
   }
 
-  /* The tabs of the music library stand under the bar at the top without a
-     name over them or a glass of their own: the width of the screen, quiet,
-     the one lit being the one open. */
+  /* The tabs of the music library are a bubble in the band at the top,
+     between the two pieces of the bar: three dots, rolled out from the
+     middle to the width of the band by a press, and rolled up again once
+     nobody has touched them. They are the bar's own, drawn over it, so the
+     page has no room kept for them. */
   .music-page .browse-head .section-head {
     display: none;
   }
 
-  .music-page .browse-bar {
-    flex: 1 1 100%;
-    min-width: 0;
-    justify-content: flex-start;
-  }
-
   .music-page .browse-head {
-    margin-top: calc(var(--gap) * -1);
+    margin: calc(var(--gap-wide) * -1) 0 var(--gap);
   }
 
-  /* From one end of the band at the top to the other, which is where its
-     pieces stand, and cutting what slides under its ends along its own round
-     ends. */
   .browse-piece.music-tabs,
   .browse-piece.music-tabs:hover,
   .browse-piece.music-tabs:focus-within {
-    flex: none;
-    width: calc(100vw - 2 * var(--header-edge));
-    max-width: none;
-    margin-inline: calc(var(--header-edge) - var(--gutter));
+    position: fixed;
+    top: var(--header-edge);
+    left: var(--header-edge);
+    right: var(--header-edge);
+    z-index: 30;
+    height: var(--header-piece);
     min-height: 0;
     padding: 0;
-    overflow: hidden;
-    box-shadow: none;
+    box-shadow:
+      var(--shadow-card),
+      0 0 14px 2px var(--accent-glow);
+    clip-path: inset(0 calc(50% - 28px) round var(--radius-pill));
+    transition:
+      clip-path 200ms var(--ease),
+      transform var(--calm) var(--ease);
+  }
+
+  .browse-piece.music-tabs[data-unrolled="yes"] {
+    clip-path: inset(0 0 0 0 round var(--radius-pill));
+    transition-duration: 340ms, var(--calm);
+  }
+
+  /* Stepped aside with the bar at the top while a page is read down. */
+  :root:has(.header-away) .browse-piece.music-tabs[data-unrolled="no"] {
+    transform: translateY(calc(-100% - 24px));
+  }
+
+  .music-tabs-track {
+    flex: 1;
+    padding: 0 4px;
+    align-items: center;
+  }
+
+  .music-bubble {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 56px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    transition: opacity 150ms var(--ease);
+  }
+
+  .music-tabs[data-unrolled="yes"] .music-bubble {
+    opacity: 0;
+    pointer-events: none;
   }
 
   /* The rows of the first tab stand nearer one another. */
