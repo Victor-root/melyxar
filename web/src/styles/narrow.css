@@ -306,6 +306,49 @@
       visibility 0s linear var(--calm);
   }
 
+  /* Unfolded, the buttons take the whole band, the piece at the left giving
+     way to them as the bubble of the music tabs does: it shrinks away and
+     what is left of the band is theirs. */
+  .header-start {
+    max-width: 110px;
+    overflow: hidden;
+    transition:
+      max-width 340ms var(--ease),
+      padding 340ms var(--ease),
+      border-width 340ms var(--ease),
+      opacity 200ms var(--ease);
+  }
+
+  .header-inner {
+    transition: column-gap 340ms var(--ease);
+  }
+
+  .header-inner:has(.header-side:not([data-folded])) {
+    column-gap: 0;
+  }
+
+  .header-inner:has(.header-side:not([data-folded])) .header-start {
+    max-width: 0;
+    padding-inline: 0;
+    border-width: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .header-side:not([data-folded]) {
+    flex: 1 1 0;
+  }
+
+  .header-side:not([data-folded]) .header-buttons {
+    flex: 1 1 0;
+    width: auto;
+    transition: opacity var(--quick) var(--ease) 120ms;
+  }
+
+  .header-side:not([data-folded]) .header-buttons-track {
+    justify-content: space-around;
+  }
+
   .header-buttons-track {
     display: flex;
     align-items: center;
