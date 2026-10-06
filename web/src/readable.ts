@@ -459,6 +459,21 @@ const DATA_UNITS: Record<string, string[]> = {
  * Counted by 1024, as Proxmox and Windows count, so a container given
  * 8192 MB reads 8 GB here as it does everywhere else its owner looks.
  */
+/** One way of writing numbers in a language, made once: making one costs far
+ *  more than using it, and a number written by `toLocaleString` with options
+ *  makes one every time. */
+const numberFormats = new Map<string, Intl.NumberFormat>();
+
+function written(value: number, language: string, options: Intl.NumberFormatOptions): string {
+  const key = `${language} ${JSON.stringify(options)}`;
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(language, options);
+    numberFormats.set(key, format);
+  }
+  return format.format(value);
+}
+
 export function amountOfData(bytes: number, language: string): string {
   const units = DATA_UNITS[language] ?? DATA_UNITS.en;
   let value = bytes;
@@ -468,7 +483,7 @@ export function amountOfData(bytes: number, language: string): string {
     unit += 1;
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
-  return `${value.toLocaleString(language, { maximumFractionDigits: digits })}\u00a0${units[unit]}`;
+  return `${written(value, language, { maximumFractionDigits: digits })}\u00a0${units[unit]}`;
 }
 
 /**
@@ -484,18 +499,18 @@ export function networkRate(bytesPerSecond: number, language: string): string {
     unit += 1;
   }
   const digits = unit === 0 || value >= 100 ? 0 : 1;
-  return `${value.toLocaleString(language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
+  return `${written(value, language, { maximumFractionDigits: digits, minimumFractionDigits: digits })}\u00a0${units[unit]}`;
 }
 
 /** How many voted, shortened the way the language shortens a large number:
  *  1.2M, 1,2 M. */
 export function howManyVoted(votes: number, language: string): string {
-  return votes.toLocaleString(language, { notation: "compact", maximumFractionDigits: 1 });
+  return written(votes, language, { notation: "compact", maximumFractionDigits: 1 });
 }
 
 /** A share from nought to one as a whole percentage, the way the language writes one. */
 export function percentOf(share: number, language: string): string {
-  return share.toLocaleString(language, { style: "percent", maximumFractionDigits: 0 });
+  return written(share, language, { style: "percent", maximumFractionDigits: 0 });
 }
 
 /**
@@ -503,7 +518,7 @@ export function percentOf(share: number, language: string): string {
  * with room left must not read as full.
  */
 export function fullnessOf(used: number, language: string): string {
-  return (Math.floor(used * 1000) / 1000).toLocaleString(language, {
+  return written(Math.floor(used * 1000) / 1000, language, {
     style: "percent",
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
