@@ -71,6 +71,17 @@ function Spectrum({
   /* Kept across a pause and a change of song, so the wave glides rather than
      drops. */
   const kept = useRef<number[]>([]);
+  /* Held still and set going again without starting the drawing over, which
+     would read the colour of the page again at the moment it is hidden or
+     shown, and so have all of it styled ahead of its frame. */
+  const stillNow = useRef(still);
+  const goOn = useRef(() => {});
+  useEffect(() => {
+    stillNow.current = still;
+    if (!still) {
+      goOn.current();
+    }
+  }, [still]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -112,7 +123,7 @@ function Spectrum({
 
     const tick = (now: number) => {
       frame = 0;
-      if (document.hidden) {
+      if (document.hidden || stillNow.current) {
         return;
       }
       if (now - lastDrawn >= FRAME_EVERY_MS) {
@@ -133,7 +144,7 @@ function Spectrum({
     };
 
     const start = () => {
-      if (!frame && !document.hidden && !still) {
+      if (!frame && !document.hidden && !stillNow.current) {
         frame = requestAnimationFrame(tick);
       }
     };
@@ -153,6 +164,7 @@ function Spectrum({
     });
     colours.observe(document.documentElement, { attributeFilter: ["style", "data-theme"] });
     document.addEventListener("visibilitychange", start);
+    goOn.current = start;
     start();
     return () => {
       watcher.disconnect();
@@ -160,7 +172,7 @@ function Spectrum({
       document.removeEventListener("visibilitychange", start);
       cancelAnimationFrame(frame);
     };
-  }, [playing, spectrum, still]);
+  }, [playing, spectrum]);
 
   return <canvas ref={canvas} className="music-bar-spectrum" aria-hidden="true" />;
 }

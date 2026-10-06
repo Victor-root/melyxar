@@ -97,14 +97,25 @@ export function QueuePanel() {
     }
   };
 
+  /* Where the box stands to put the song playing in its middle. */
+  const middle = (box: HTMLElement, height: number) => listTop.current + queue.at * height - (box.clientHeight - height) / 2;
+
+  /* Everything measured at once when the queue opens, in one reading of the
+     page: the box, where the list begins, how tall a line is, and from them
+     the lines to make around the song playing. */
   useLayoutEffect(() => {
     const first = list.current?.firstElementChild as HTMLElement | null | undefined;
     if (line > 0 || !first) {
       return;
     }
-    scroller.current = scrollerOf(first);
+    const box = scrollerOf(first);
+    scroller.current = box;
     placeOfTheList();
-    setLine(first.getBoundingClientRect().height);
+    const height = first.getBoundingClientRect().height;
+    if (box) {
+      setMade(linesShown(middle(box, height), box.clientHeight, listTop.current, height, count));
+    }
+    setLine(height);
   });
 
   useEffect(() => {
@@ -114,17 +125,25 @@ export function QueuePanel() {
       return;
     }
     let frame = 0;
+    let moved = false;
     const scrolled = () => {
       if (frame === 0) {
         frame = requestAnimationFrame(() => {
           frame = 0;
+          if (moved) {
+            moved = false;
+            placeOfTheList();
+          }
           refresh.current();
         });
       }
     };
+    /* Read on the next frame with the scroll, not as the watcher reports:
+       other watchers of the page change it at that moment, and reading it
+       then laid it out again for nothing. */
     const resized = new ResizeObserver(() => {
-      placeOfTheList();
-      refresh.current();
+      moved = true;
+      scrolled();
     });
     resized.observe(element);
     resized.observe(box);
@@ -150,10 +169,11 @@ export function QueuePanel() {
   };
   const measured = line > 0;
   useLayoutEffect(() => {
-    if (!measured) {
+    const box = scroller.current;
+    if (!measured || !box) {
       return;
     }
-    centre("instant");
+    box.scrollTo({ top: middle(box, line), behavior: "instant" });
     /* Again a frame or two later, once the page around it has taken its
        room: the foot of the page is measured after the first drawing, and
        until it has its room there is not enough below the last lines to
