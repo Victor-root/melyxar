@@ -183,17 +183,31 @@ function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
 
   /* Written down as the page moves: the box and every row in it, since a
      row's own scrolling is caught on its way through the box. Once a frame,
-     however many times it moved in it. */
+     however many times it moved in it. The rows are read again only once one
+     of them has moved: read on every frame of the page going up and down,
+     they had the whole page looked through and laid out on each. */
   useEffect(() => {
     if (!box) {
       return;
     }
     let frame = 0;
+    let rows: { page: string; along: number[] } = { page: page.current, along: [] };
+    let rowsMoved = false;
     const note = () => {
       frame = 0;
-      places.current = remember(places.current, page.current, placeOf(box), PAGES_KEPT);
+      if (rows.page !== page.current) {
+        rows = { page: page.current, along: [] };
+      }
+      if (rowsMoved) {
+        rowsMoved = false;
+        rows.along = rowsOf(box).map((row) => row.scrollLeft);
+      }
+      places.current = remember(places.current, page.current, { top: box.scrollTop, rows: rows.along }, PAGES_KEPT);
     };
-    const moved = () => {
+    const moved = (event: Event) => {
+      if (event.target !== box) {
+        rowsMoved = true;
+      }
       if (frame === 0) {
         frame = requestAnimationFrame(note);
       }
