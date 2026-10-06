@@ -169,6 +169,7 @@ export const Card = memo(function Card({
   const choosing = useChoosingPress(card.id);
   /* The buttons that show only under the pointer are made the first time a
      card is reached, by the pointer or the keyboard, and kept from then on.
+     A finger never reaches them: a touch screen has nothing to show them on.
      Made on every card, invisible, they were near half of what a grid of a
      few hundred films is made of, and the browser walks all of it for every
      card that scrolls into view: measured, a fifth of what drawing the page
@@ -206,7 +207,7 @@ export const Card = memo(function Card({
       className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card={card.id}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
-      onPointerEnter={reach}
+      onPointerEnter={(event) => event.pointerType !== "touch" && reach()}
       onFocus={reach}
     >
       <div className="card-picture">

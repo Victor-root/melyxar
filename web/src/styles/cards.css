@@ -359,10 +359,11 @@ button.seen-mark:not(.seen-mark-on):hover {
   color: var(--accent-contrast);
 }
 
-/* A finger has no pointer: the button is simply always reachable. */
+/* A finger has no pointer: the corner only says what is so, and a press on
+   it opens the card like a press anywhere else on the picture. */
 @media (hover: none) {
-  button.seen-mark {
-    opacity: 1;
+  .seen-mark {
+    pointer-events: none;
   }
 }
 
@@ -406,22 +407,11 @@ button.seen-mark:not(.seen-mark-on):hover {
   }
 }
 
-/* A finger has no hover: with the pointer that never arrives, the layer is
-   simply always there, faintly, and everything on it can be pressed. */
+/* A finger has no hover: what the pointer brings is left out, and the card
+   is the picture and its name, opened by a press. What the layer offers is on
+   the page of the work. */
 @media (hover: none) {
   .card-hover {
-    opacity: 1;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.5), transparent 40%);
-  }
-
-  .card-play {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  /* In a row that is slid with a finger, the layer comes up under it with
-     its buttons whenever a card is touched: there it is left out. */
-  .row-track .card-hover {
     display: none;
   }
 }
