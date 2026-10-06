@@ -1753,6 +1753,8 @@
      buttons keep their room. */
   .music-now .player-bottom .player-row {
     padding-inline: 16px;
+    row-gap: 0;
+    margin-top: -6px;
   }
 
   /* The glass itself, on a layer of its own so that it does not take the
