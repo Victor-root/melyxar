@@ -177,6 +177,7 @@ function ListenedSwitch({
               numbered="place"
               showAlbum={false}
               menuOnly
+              compact
               onPlay={(index) => onPlay(list.songs, index)}
             />
           </div>
