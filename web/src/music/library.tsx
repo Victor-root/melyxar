@@ -60,7 +60,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
         <div className="browse-bar">
           <TabsBar tabs={shown} open={tab} onOpen={open} />
-          {!barred && <UploadButton library={library} bare className="browse-piece browse-alone" />}
+          {!barred && tab !== "for_you" && <UploadButton library={library} bare className="browse-piece browse-alone" />}
         </div>
       </div>
 

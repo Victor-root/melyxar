@@ -626,12 +626,20 @@
     justify-content: flex-start;
   }
 
+  .music-page .browse-head {
+    margin-top: calc(var(--gap) * -1);
+  }
+
+  /* A little wider than the page's own margins, which the tabs have no use
+     for, and cutting what slides under its ends along its own round ends. */
   .browse-piece.music-tabs,
   .browse-piece.music-tabs:hover,
   .browse-piece.music-tabs:focus-within {
-    width: 100%;
+    width: calc(100% + var(--gutter));
+    margin-inline: calc(var(--gutter) / -2);
     min-height: 0;
     padding: 0;
+    overflow: hidden;
     box-shadow: none;
   }
 
