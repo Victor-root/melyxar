@@ -597,6 +597,10 @@
   padding-inline: 0;
 }
 
+.music-songs-compact .music-song-full {
+  cursor: pointer;
+}
+
 .music-songs-compact .music-song-toggle {
   width: 30px;
   height: 30px;
