@@ -2,6 +2,7 @@
  * A grid of a whole library, with what narrows it.
  */
 
+import { BrowseBubble } from "../components/browse-bubble";
 import { UploadButton } from "../components/upload-button";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -215,6 +216,86 @@ export function LibraryPage({
     [cards, shape, starts],
   );
 
+  const fields = (
+    <>
+      <span className="browse-field">
+        <span className="browse-label">{t("library.sort")}</span>
+        <Picker
+          value={order}
+          options={ORDERS.map((value) => [value, t(`library.sort.${value}`)] as const)}
+          onPick={(value) => choose("order", value)}
+          label={t("library.sort")}
+        />
+        {/* Which way round, drawn as the way the arrow points rather than
+            written out: a sentence for an arrow's worth of meaning. */}
+        <button
+          type="button"
+          className={`browse-direction${descending ? " browse-direction-down" : ""}`}
+          onClick={() => choose("descending", descending ? null : "true")}
+          aria-pressed={descending}
+          aria-label={t("library.descending")}
+          title={t(descending ? "library.descending" : "library.ascending")}
+        >
+          <ArrowRightIcon size={16} />
+        </button>
+      </span>
+
+      {filters && filters.genres.length > 0 && (
+        <Narrower
+          label={t("library.filter.genre")}
+          value={genre ?? ""}
+          options={filters.genres.map((entry) => [
+            entry.name,
+            `${entry.name} (${entry.works})`,
+          ])}
+          onPick={(value) => choose("genre", value || null)}
+        />
+      )}
+
+      {filters && filters.decades.length > 0 && (
+        <Narrower
+          label={t("library.filter.decade")}
+          value={decade === undefined ? "" : String(decade)}
+          options={filters.decades.map((entry) => [
+            String(entry.decade),
+            `${entry.decade}s (${entry.works})`,
+          ])}
+          onPick={(value) => choose("decade", value || null)}
+        />
+      )}
+
+      {/* On a phone the way to put files in is in the piece with the
+          sort, as the music libraries have it, rather than a piece of
+          its own under it. */}
+      {library && phone && account?.may_upload && (
+        <span className="browse-field music-library-tools">
+          <UploadButton library={library} bare className="music-tab music-play-tool" />
+        </span>
+      )}
+    </>
+  );
+
+  /* A press of the same kind as the others in the bubble of a phone, a piece
+     of its own beside the bar elsewhere. */
+  const unidentifiedPress = offersUnidentified && (
+    <button
+      type="button"
+      className={
+        phone
+          ? `music-tab music-play-tool${unidentified ? " music-tab-on" : ""}`
+          : `browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`
+      }
+      onClick={() => choose("unidentified", unidentified ? null : "true")}
+      aria-pressed={unidentified}
+      aria-label={t("library.filter.unidentified")}
+      title={t("library.filter.unidentified")}
+    >
+      <IdentifyIcon size={16} />
+      {/* Left out when the bar is short of room, the icon standing for it. */}
+      <span className="browse-alone-words">{t("library.filter.unidentified")}</span>
+    </button>
+  );
+
   return (
     <main className="page">
       {/* What the grid is and how it is read, which on a wide screen rise
@@ -242,82 +323,18 @@ export function LibraryPage({
         {/* How the grid is read, in one piece of the glass the bar at the top is
             made of: a row of loose system fields was the one place left that
             looked like a form rather than like Melyxar. */}
-        <div className="browse-bar">
-          <div className="browse-piece">
-            <span className="browse-field">
-              <span className="browse-label">{t("library.sort")}</span>
-              <Picker
-                value={order}
-                options={ORDERS.map((value) => [value, t(`library.sort.${value}`)] as const)}
-                onPick={(value) => choose("order", value)}
-                label={t("library.sort")}
-              />
-              {/* Which way round, drawn as the way the arrow points rather than
-                  written out: a sentence for an arrow's worth of meaning. */}
-              <button
-                type="button"
-                className={`browse-direction${descending ? " browse-direction-down" : ""}`}
-                onClick={() => choose("descending", descending ? null : "true")}
-                aria-pressed={descending}
-                aria-label={t("library.descending")}
-                title={t(descending ? "library.descending" : "library.ascending")}
-              >
-                <ArrowRightIcon size={16} />
-              </button>
-            </span>
-
-            {filters && filters.genres.length > 0 && (
-              <Narrower
-                label={t("library.filter.genre")}
-                value={genre ?? ""}
-                options={filters.genres.map((entry) => [
-                  entry.name,
-                  `${entry.name} (${entry.works})`,
-                ])}
-                onPick={(value) => choose("genre", value || null)}
-              />
-            )}
-
-            {filters && filters.decades.length > 0 && (
-              <Narrower
-                label={t("library.filter.decade")}
-                value={decade === undefined ? "" : String(decade)}
-                options={filters.decades.map((entry) => [
-                  String(entry.decade),
-                  `${entry.decade}s (${entry.works})`,
-                ])}
-                onPick={(value) => choose("decade", value || null)}
-              />
-            )}
-
-            {/* On a phone the way to put files in is in the piece with the
-                sort, as the music libraries have it, rather than a piece of
-                its own under it. */}
-            {library && phone && account?.may_upload && (
-              <span className="browse-field music-library-tools">
-                <UploadButton library={library} bare className="music-tab music-play-tool" />
-              </span>
-            )}
+        {phone ? (
+          <BrowseBubble>
+            {fields}
+            {unidentifiedPress}
+          </BrowseBubble>
+        ) : (
+          <div className="browse-bar">
+            <div className="browse-piece">{fields}</div>
+            {library && <UploadButton library={library} className="browse-piece browse-alone" />}
+            {unidentifiedPress}
           </div>
-
-          {library && !phone && <UploadButton library={library} className="browse-piece browse-alone" />}
-
-          {offersUnidentified && (
-            <button
-              type="button"
-              className={`browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`}
-              onClick={() => choose("unidentified", unidentified ? null : "true")}
-              aria-pressed={unidentified}
-              aria-label={t("library.filter.unidentified")}
-              title={t("library.filter.unidentified")}
-            >
-              <IdentifyIcon size={16} />
-              {/* Left out when the bar is short of room, the icon standing
-                  for it. */}
-              <span className="browse-alone-words">{t("library.filter.unidentified")}</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {besides}
