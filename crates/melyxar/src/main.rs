@@ -537,7 +537,10 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .context("serving")?;
 
     // The listener has stopped accepting: nothing new can open a session, so
-    // closing them all is the last thing left to do.
+    // closing them all is the last thing left to do. Each step says how long
+    // it took, since a stop that drags on is otherwise silent about why.
+    let stopping = std::time::Instant::now();
+    tracing::info!("connections finished, closing what is left");
     sweeper.abort();
     upkeep.abort();
     rounds.abort();
@@ -547,10 +550,12 @@ async fn serve(config: Config) -> anyhow::Result<()> {
     folders.abort();
     melyxar_app::watching::end_everything(&state).await;
     melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStopped).await;
+    tracing::info!(elapsed = ?stopping.elapsed(), "live lines ended");
     melyxar_app::playback::close_every_session(&state).await;
+    tracing::info!(elapsed = ?stopping.elapsed(), "playback sessions closed");
     state.database().close().await;
 
-    tracing::info!("stopped");
+    tracing::info!(elapsed = ?stopping.elapsed(), "stopped");
     Ok(())
 }
 
