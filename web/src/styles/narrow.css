@@ -613,6 +613,11 @@
     left: auto;
   }
 
+  /* The button of the debug journal is in the way of a thumb. */
+  .debug-fab {
+    display: none;
+  }
+
   /* The tabs of the music library are a bubble in the band at the top,
      between the two pieces of the bar: three dots, rolled out from the
      middle to the width of the band by a press, and rolled up again once

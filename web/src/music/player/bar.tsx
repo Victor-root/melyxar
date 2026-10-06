@@ -19,7 +19,7 @@ import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
-import { HeartButton, PlayButton, QueueButton, Rail, SongStepButton, Transport, Ways, Volume } from "./controls";
+import { HeartButton, PlayButton, QueueButton, Rail, Transport, Ways, Volume } from "./controls";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { BAR_LEAVES_MS, useMusic } from "./player";
@@ -84,9 +84,7 @@ export function MusicBar() {
           <Transport music={music} greyedWhenNone />
         </div>
         <div className="player-zone music-bar-phone">
-          <SongStepButton music={music} back greyedWhenNone />
           <PlayButton music={music} />
-          <SongStepButton music={music} back={false} greyedWhenNone />
         </div>
 
         <div className="player-zone player-zone-bottom-right music-bar-tools">
