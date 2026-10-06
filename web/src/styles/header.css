@@ -80,10 +80,12 @@
 }
 
 /* The glass itself, which the bar of a grid and its letters are made of
-   too. */
+   too, and the slices a piece is drawn with where it grows by sliding rather
+   than by being drawn again at every size. */
 .header-piece,
 .browse-piece,
-.letters {
+.letters,
+.glass-slice {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   /* A glow of the accent over the whole piece, even from end to end, laid on
      the glass the bar has always been. Follows the accent somebody chose. */
@@ -92,6 +94,18 @@
     linear-gradient(var(--header-glow), var(--header-glow)),
     var(--header-glass);
   backdrop-filter: blur(18px);
+}
+
+.glass-slice {
+  box-shadow:
+    var(--shadow-card),
+    0 0 14px 2px var(--accent-glow);
+}
+
+/* Drawn on a phone only, where the pieces they make grow and shrink. */
+.header-glass,
+.header-glass-end {
+  display: none;
 }
 
 .brand {

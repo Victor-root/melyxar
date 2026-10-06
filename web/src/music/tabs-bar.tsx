@@ -143,6 +143,16 @@ export function TabsBar({
       onPointerDown={unrolled ? stayUnrolled : undefined}
     >
       {phone && (
+        <>
+          <span className="music-tabs-glass music-tabs-glass-start" aria-hidden="true">
+            <span className="glass-slice" />
+          </span>
+          <span className="music-tabs-glass music-tabs-glass-end" aria-hidden="true">
+            <span className="glass-slice" />
+          </span>
+        </>
+      )}
+      {phone && (
         <button
           type="button"
           className="music-bubble"
