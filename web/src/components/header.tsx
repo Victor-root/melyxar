@@ -119,6 +119,9 @@ const HEADS_RISE_INTO_THE_BAND = "(min-width: 1280px)";
  *  its pieces end. */
 const SETTLES_AFTER_MS = 150;
 
+/** The room the folded piece keeps before its arrow, as its own edge does. */
+const FOLDED_AIR = 5;
+
 /** Where the full grid of results for these words lives, which is also what
  *  the enter key sends somebody to. */
 export function searchAddress(words: string, scope: string): string {
@@ -250,13 +253,27 @@ export function Header({
       }
     };
   }, [folded]);
-  /* How wide the buttons are when all of them are shown, in points, so that
-     the room they take can be grown from nothing to that and back by a
-     transition on its own width: the width of a box that is sized by what is
-     in it cannot be moved between two sizes, and the box jumped to full width
-     while its contents unfolded inside it. */
-  const buttons = useRef<HTMLDivElement>(null);
-  const [buttonsWidth, setButtonsWidth] = useState<number | null>(null);
+  /* How much of the right end of the band the piece shows folded: from just
+     before the arrow to the end. On a phone the piece is the whole band and
+     its glass slides out from there, so nothing is laid out or drawn again
+     at each step of the movement. Written on the piece, read by its glass. */
+  const fold = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    const piece = side.current;
+    const arrow = fold.current;
+    if (!piece || !arrow) {
+      return;
+    }
+    const measure = () => {
+      const shown = piece.getBoundingClientRect().right - arrow.getBoundingClientRect().left;
+      piece.style.setProperty("--header-folded", `${Math.ceil(shown) + FOLDED_AIR}px`);
+    };
+    measure();
+    const watching = new ResizeObserver(measure);
+    watching.observe(piece);
+    watching.observe(arrow);
+    return () => watching.disconnect();
+  }, []);
 
   /* Where the piece at the left end stops and how wide the one at the right
      end is, written on the page: the first as wide as the server's name and
@@ -546,21 +563,6 @@ export function Header({
     mayRequest: access?.may_ask === true,
   }).filter((button) => button !== "scan" || libraries.length > 0);
 
-  const offeredNames = offered.join(",");
-  useLayoutEffect(() => {
-    const track = buttons.current;
-    if (!track) {
-      return;
-    }
-    const measure = () => setButtonsWidth(Math.ceil(track.scrollWidth));
-    measure();
-    const watching = new ResizeObserver(measure);
-    for (const child of Array.from(track.children)) {
-      watching.observe(child);
-    }
-    return () => watching.disconnect();
-  }, [offeredNames, administrator]);
-
   /* The press that starts a scan, on the bar or in the menu. Nothing to
      start while something is already running, and the bar is saying so
      meanwhile. */
@@ -626,11 +628,12 @@ export function Header({
           {/* The buttons of the bar in one box, which on a phone is pulled
               sideways when they are more than the width allows. Everywhere
               else it takes no room of its own. */}
-          <div
-            className="header-buttons"
-            style={buttonsWidth === null ? undefined : { ["--buttons-width" as string]: `${buttonsWidth}px` }}
-          >
-            <div className="header-buttons-track" ref={buttons}>
+          <span className="header-glass" aria-hidden="true">
+            <span className="glass-slice header-glass-run" />
+          </span>
+          <span className="glass-slice header-glass-end" aria-hidden="true" />
+          <div className="header-buttons">
+            <div className="header-buttons-track">
           {/* Everything anybody can press, one icon each, in the order this
               account put them; those it moved into its menu are drawn there
               instead. A menu of five entries opened by one press is five
@@ -796,6 +799,7 @@ export function Header({
             */}
           <button
             type="button"
+            ref={fold}
             className="header-icon header-fold"
             aria-label={t(folded ? "nav.bar_show" : "nav.bar_hide")}
             aria-expanded={!folded}

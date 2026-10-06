@@ -78,6 +78,8 @@
      its pieces and that air twice over. Every page starts below it, so every
      page follows. */
   :root {
+    /* What is kept round a sliding piece of glass for its glow. */
+    --glass-glow-room: 30px;
     --header-edge: 12px;
     --header-height: calc(var(--header-piece) + 2 * var(--header-edge));
     /* Tall enough for the words and the way through the five, which have
@@ -284,86 +286,115 @@
   }
 
 
-  /* More buttons than the width has room for are reached by pulling them
-     sideways, while the arrow and the account stay where they are. */
-  .header-side {
-    min-width: 0;
+  /*
+   * The piece at the right end is the whole band, and only its glass shows
+   * how much of it is out: folded, the end with the arrow and the account;
+   * unfolded, all of it, the piece at the left giving way. The glass slides
+   * from one to the other rather than being drawn again at every width, the
+   * end with the round corner staying where it is: a piece of glass resized
+   * at every step had its blur, its glow and what it holds redrawn at every
+   * step, and a phone at sixty images a second could not keep up.
+   */
+  .header-inner {
+    position: relative;
   }
 
   .header-start {
-    flex: none;
+    position: absolute;
+    top: var(--header-edge);
+    left: var(--header-edge);
+    transition:
+      opacity 200ms var(--ease),
+      transform 340ms var(--ease);
   }
 
-  /* Put away and brought back as the search field is opened and shut: the
-     room they take grows from nothing to what they need and shrinks back
-     over the same time and on the same curve, while they fade. Folded, they
-     cannot be reached either, once they have gone. */
+  .header-inner:has(.header-side:not([data-folded])) .header-start {
+    opacity: 0;
+    transform: translateX(-12px);
+    pointer-events: none;
+  }
+
+  .header-side {
+    flex: 1 1 0;
+    min-width: 0;
+    position: relative;
+    pointer-events: none;
+    border-color: transparent;
+    background: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .header-side > :not(.header-glass, .header-glass-end) {
+    position: relative;
+    pointer-events: auto;
+  }
+
+  /* The run of glass, cut where the round end begins. Cut by a box that
+     hides what passes beyond it, with room kept for the glow, rather than by
+     a clip: a clip around glass leaves the glass nothing behind it to blur. */
+  .header-glass {
+    display: block;
+    position: absolute;
+    top: calc(-1px - var(--glass-glow-room));
+    bottom: calc(-1px - var(--glass-glow-room));
+    left: calc(-1px - var(--glass-glow-room));
+    right: calc(var(--header-piece) / 2 - 1px);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .header-glass-run {
+    position: absolute;
+    top: var(--glass-glow-room);
+    bottom: var(--glass-glow-room);
+    left: var(--glass-glow-room);
+    width: calc(100% - var(--glass-glow-room) + var(--header-piece) / 2 + 1px);
+    border-right-width: 0;
+    border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+    transition: transform 340ms var(--ease);
+  }
+
+  .header-side[data-folded] .header-glass-run {
+    transform: translateX(calc(100% - var(--header-folded, 100%)));
+  }
+
+  .header-glass-end {
+    display: block;
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    right: -1px;
+    width: calc(var(--header-piece) / 2);
+    border-left-width: 0;
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    clip-path: inset(calc(var(--glass-glow-room) * -1) calc(var(--glass-glow-room) * -1)
+      calc(var(--glass-glow-room) * -1) 0);
+    pointer-events: none;
+  }
+
+  /* The buttons stand in the band whether shown or not, and come and go by
+     fading, once the glass has room for them. */
   .header-buttons {
     display: block;
-    width: var(--buttons-width, auto);
+    flex: 1 1 0;
     min-width: 0;
-    transition:
-      width var(--calm) var(--ease),
-      opacity var(--quick) var(--ease);
+    transition: opacity var(--quick) var(--ease) 120ms;
   }
 
   .header-side[data-folded] .header-buttons {
-    width: 0;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transition:
-      width var(--calm) var(--ease),
       opacity var(--quick) var(--ease),
-      visibility 0s linear var(--calm);
-  }
-
-  /* Unfolded, the buttons take the whole band, the piece at the left giving
-     way to them as the bubble of the music tabs does: it shrinks away and
-     what is left of the band is theirs. */
-  .header-start {
-    max-width: 110px;
-    overflow: hidden;
-    transition:
-      max-width 340ms var(--ease),
-      padding 340ms var(--ease),
-      border-width 340ms var(--ease),
-      opacity 200ms var(--ease);
-  }
-
-  .header-inner {
-    transition: column-gap 340ms var(--ease);
-  }
-
-  .header-inner:has(.header-side:not([data-folded])) {
-    column-gap: 0;
-  }
-
-  .header-inner:has(.header-side:not([data-folded])) .header-start {
-    max-width: 0;
-    padding-inline: 0;
-    border-width: 0;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .header-side:not([data-folded]) {
-    flex: 1 1 0;
-  }
-
-  .header-side:not([data-folded]) .header-buttons {
-    flex: 1 1 0;
-    width: auto;
-    transition: opacity var(--quick) var(--ease) 120ms;
-  }
-
-  .header-side:not([data-folded]) .header-buttons-track {
-    justify-content: space-around;
+      visibility 0s linear var(--quick);
   }
 
   .header-buttons-track {
     display: flex;
     align-items: center;
+    justify-content: space-around;
     gap: 2px;
     width: 100%;
     min-width: 0;
@@ -691,29 +722,25 @@
   .browse-piece.music-tabs:focus-within {
     position: fixed;
     top: var(--header-edge);
-    left: calc(50% - 28px);
-    right: calc(50% - 28px);
+    left: var(--header-edge);
+    right: var(--header-edge);
     /* Under the bar at the top, whose lists unfold over it. */
     z-index: 19;
     height: var(--header-piece);
     min-height: 0;
     padding: 0;
-    overflow: hidden;
-    box-shadow:
-      var(--shadow-card),
-      0 0 14px 2px var(--accent-glow);
-    transition:
-      left 200ms var(--ease),
-      right 200ms var(--ease),
-      transform var(--calm) var(--ease);
+    border-color: transparent;
+    background: none;
+    backdrop-filter: none;
+    box-shadow: none;
+    pointer-events: none;
+    transition: transform var(--calm) var(--ease);
   }
 
   /* Rolled out, it is over the whole band, pieces included. */
   .browse-piece.music-tabs[data-unrolled="yes"] {
     z-index: 30;
-    left: var(--header-edge);
-    right: var(--header-edge);
-    transition-duration: 340ms, 340ms, var(--calm);
+    pointer-events: auto;
   }
 
   /* Stepped aside with the bar at the top while a page is read down. */
@@ -721,9 +748,59 @@
     transform: translateY(calc(-100% - 24px));
   }
 
+  /* The bubble is the whole band at all times, and its glass two halves
+     that meet in the middle: rolled up they show the dots' width, rolled
+     out they slide to the ends. Each is cut at the middle, so what slides
+     past it is never seen. */
+  .music-tabs-glass {
+    position: absolute;
+    top: calc(-1px - var(--glass-glow-room));
+    bottom: calc(-1px - var(--glass-glow-room));
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .music-tabs-glass-start {
+    left: calc(-1px - var(--glass-glow-room));
+    right: 50%;
+  }
+
+  .music-tabs-glass-end {
+    left: 50%;
+    right: calc(-1px - var(--glass-glow-room));
+  }
+
+  .music-tabs-glass > .glass-slice {
+    position: absolute;
+    top: var(--glass-glow-room);
+    bottom: var(--glass-glow-room);
+    width: calc(100% - var(--glass-glow-room));
+    transition: transform 200ms var(--ease);
+  }
+
+  .music-tabs-glass-start > .glass-slice {
+    left: var(--glass-glow-room);
+    border-right-width: 0;
+    border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+    transform: translateX(calc(100% - 28px));
+  }
+
+  .music-tabs-glass-end > .glass-slice {
+    right: var(--glass-glow-room);
+    border-left-width: 0;
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    transform: translateX(calc(28px - 100%));
+  }
+
+  .music-tabs[data-unrolled="yes"] .music-tabs-glass > .glass-slice {
+    transform: none;
+    transition-duration: 340ms;
+  }
+
   /* Nothing of the tabs shows round the dots: they come in once the bubble
      is on its way out, and go before it closes. */
   .music-tabs-track {
+    position: relative;
     flex: 1;
     padding: 0 5px;
     scroll-padding-inline: 5px;
@@ -752,6 +829,7 @@
     border: 0;
     background: none;
     color: var(--text);
+    pointer-events: auto;
     transition: opacity 150ms var(--ease);
   }
 
@@ -839,7 +917,10 @@
 
 @media (max-width: 600px) and (prefers-reduced-motion: reduce) {
   .header-buttons,
-  .header-side[data-folded] .header-buttons {
+  .header-side[data-folded] .header-buttons,
+  .header-start,
+  .header-glass-run,
+  .music-tabs-glass > .glass-slice {
     transition: none;
   }
 }
