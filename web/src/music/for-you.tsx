@@ -117,6 +117,8 @@ function ListenedSwitch({
   onPlay: (songs: Song[], index: number) => void;
 }) {
   const shown = lists.filter((list) => list.songs.length > 0);
+  /* Sideways only: bringing a list into view scrolled the whole page along. A
+     list is a width of the row plus the gap between two, which is its padding. */
   const track = useRef<HTMLDivElement>(null);
   const pages = useRef<(HTMLDivElement | null)[]>([]);
   const [page, setPage] = useState(0);
@@ -159,7 +161,7 @@ function ListenedSwitch({
               data-on={at === page ? "yes" : "no"}
               aria-label={list.title}
               title={list.title}
-              onClick={() => pages.current[at]?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" })}
+              onClick={() => track.current?.scrollTo({ left: at * track.current.clientWidth, behavior: "smooth" })}
             >
               {list.mark}
             </button>
