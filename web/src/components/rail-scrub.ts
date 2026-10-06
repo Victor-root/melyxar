@@ -6,29 +6,29 @@
  * goes to the letter under it, and again to each letter it slides over, with
  * the list following. A mouse or a key still presses one letter at a time.
  *
- * Which letter is under the finger is asked of the screen at the finger's
- * position: a touch stays with the letter it landed on, so the one it has
- * reached is never the one that receives the event.
+ * A touch stays with the rail until the finger is lifted, wherever it goes:
+ * the letter it is on is worked out from how far down it is.
  */
 
 import { useRef } from "react";
 import type { PointerEvent, RefObject } from "react";
 import type { DropHandle } from "./letter-drop";
 
-/** Put on each letter of the rail, with its place along it. */
-export const LETTER_ATTRIBUTE = "data-letter";
-
 export function useRailScrub(go: (index: number) => void, drop: RefObject<DropHandle | null>) {
   const touching = useRef(false);
   const last = useRef(-1);
 
-  const follow = (event: PointerEvent) => {
-    const under = document.elementFromPoint(event.clientX, event.clientY);
-    const letter = under?.closest<HTMLElement>(`[${LETTER_ATTRIBUTE}]`);
-    if (!letter) {
+  /* Counted from where the first letter stands and how tall it is, so the
+     finger may leave the rail, sideways or past either end, and the nearest
+     letter is still the one it is on. */
+  const follow = (event: PointerEvent<HTMLElement>) => {
+    const letters = event.currentTarget.children;
+    if (letters.length === 0) {
       return;
     }
-    const index = Number(letter.getAttribute(LETTER_ATTRIBUTE));
+    const first = letters[0].getBoundingClientRect();
+    const reached = Math.floor((event.clientY - first.top) / first.height);
+    const index = Math.min(Math.max(reached, 0), letters.length - 1);
     drop.current?.move(index, event.clientY);
     if (index !== last.current) {
       last.current = index;
@@ -44,14 +44,14 @@ export function useRailScrub(go: (index: number) => void, drop: RefObject<DropHa
 
   return {
     rail: {
-      onPointerDown: (event: PointerEvent) => {
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
         touching.current = event.pointerType === "touch";
         last.current = -1;
         if (touching.current) {
           follow(event);
         }
       },
-      onPointerMove: (event: PointerEvent) => {
+      onPointerMove: (event: PointerEvent<HTMLElement>) => {
         if (touching.current) {
           follow(event);
         }

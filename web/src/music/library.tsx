@@ -17,7 +17,7 @@ import { Picker } from "../components/panel";
 import { useReachEnd } from "../components/reach-end";
 import { LetterDrop } from "../components/letter-drop";
 import type { DropHandle } from "../components/letter-drop";
-import { LETTER_ATTRIBUTE, useRailScrub } from "../components/rail-scrub";
+import { useRailScrub } from "../components/rail-scrub";
 import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
@@ -429,7 +429,6 @@ function Lettered<T>({
                 key={letter.letter}
                 type="button"
                 className="letter"
-                {...{ [LETTER_ATTRIBUTE]: index }}
                 onClick={() => scrub.press(index)}
                 title={String(letter.count)}
               >
