@@ -70,12 +70,13 @@ export function BubbleParts({
   return (
     <>
       <span className="glass-slice music-tabs-glass" aria-hidden="true" />
-      <span className="glass-rim music-tabs-rim" aria-hidden="true" />
-      <span className="music-tabs-end music-tabs-end-start" aria-hidden="true">
-        <span className="glass-rim" />
-      </span>
-      <span className="music-tabs-end music-tabs-end-end" aria-hidden="true">
-        <span className="glass-rim" />
+      <span className="music-tabs-rim" aria-hidden="true">
+        <span className="music-tabs-rim-start">
+          <span className="glass-rim" />
+        </span>
+        <span className="music-tabs-rim-end">
+          <span className="glass-rim" />
+        </span>
       </span>
       <button
         type="button"

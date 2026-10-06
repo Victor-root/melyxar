@@ -113,8 +113,7 @@
 
 /* Drawn on a phone only, where the pieces they make grow and shrink. */
 .header-glass,
-.header-glass-halo,
-.header-glass-cap {
+.header-rim {
   display: none;
 }
 
