@@ -403,6 +403,12 @@ en|step_enable|Enabling the service at boot
 fr|step_enable|Activation du service au démarrage
 en|step_restart|Restarting the service
 fr|step_restart|Redémarrage du service
+en|restart_stopping|Waiting for the old server to stop, still %s s. What is left in the service:
+fr|restart_stopping|Attente de l'arrêt de l'ancien serveur, déjà %s s. Ce qu'il reste dans le service :
+en|restart_stopped|The old server stopped after %s s
+fr|restart_stopped|L'ancien serveur s'est arrêté après %s s
+en|restart_started|The new server started after %s s
+fr|restart_started|Le nouveau serveur a démarré après %s s
 en|step_stop|Stopping the service
 fr|step_stop|Arrêt du service
 en|section_done|Ready
@@ -1314,6 +1320,48 @@ write_configuration() {
   "
 }
 
+# Stops the service and starts it again, saying where the time goes. A plain
+# restart prints nothing for as long as the old server takes to let go of what
+# it is doing, which looks like a hang: here the service's own journal is
+# followed while it happens, and what is still running in it is listed every
+# few seconds, with how long each half took.
+restart_watched() {
+  local waited=0 shown=0 began="$SECONDS"
+
+  journalctl -u "$SERVICE" -n 0 -f -o cat --no-pager 2>/dev/null &
+  local follow=$!
+
+  systemctl stop "$SERVICE" &
+  local stopping=$!
+  while kill -0 "$stopping" 2>/dev/null; do
+    sleep 1
+    waited=$((SECONDS - began))
+    if kill -0 "$stopping" 2>/dev/null && ((waited - shown >= 5)); then
+      shown="$waited"
+      tr_fmt restart_stopping "$waited"
+      echo
+      systemctl status "$SERVICE" --no-pager -n 0 2>&1 | sed -e 's/^/    /' || true
+    fi
+  done
+  wait "$stopping" || true
+  tr_fmt restart_stopped "$((SECONDS - began))"
+  echo
+
+  began="$SECONDS"
+  systemctl start "$SERVICE"
+  tr_fmt restart_started "$((SECONDS - began))"
+  echo
+
+  # What the new server says as it comes up, before the follower is let go.
+  sleep 1
+  kill "$follow" 2>/dev/null || true
+  wait "$follow" 2>/dev/null || true
+}
+
+restart_service() {
+  step "$(tr_msg step_restart)" restart_watched
+}
+
 install_service() {
   section "$(tr_msg section_service)"
 
@@ -1414,7 +1462,7 @@ action_install() {
   install_speech
   write_configuration "$port"
   install_service
-  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+  restart_service
   mark_installed engine
   show_done
 }
@@ -1489,7 +1537,7 @@ action_update() {
     write_media_writes
   fi
   if [[ "$BUILT_ENGINE" -eq 1 ]]; then
-    step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+    restart_service
     mark_installed engine
   fi
   show_done
@@ -1713,7 +1761,7 @@ settle_refusals() {
         step "$(tr_fmt step_writes_group "$name")" usermod -aG "$name" "$APP_USER"
       done
       # The service takes its groups when it starts.
-      step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+      restart_service
     fi
   fi
 
@@ -1759,7 +1807,7 @@ action_writes() {
     confirm_default_no "$(tr_msg prompt_writes_shut)" || { info "$(tr_msg cancelled)"; return 0; }
     rm -f "$WRITES_FILE"
     systemctl daemon-reload
-    step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+    restart_service
     success "$(tr_msg writes_shut)"
     return 0
   fi
@@ -1774,7 +1822,7 @@ action_writes() {
   confirm_default_no "$(tr_msg prompt_writes_open)" || { info "$(tr_msg cancelled)"; return 0; }
 
   step "$(tr_msg step_writes)" write_media_writes
-  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+  restart_service
 
   refused="$(folders_refusing "$folders")"
   if [[ -z "$refused" ]]; then
@@ -1900,7 +1948,7 @@ action_restore() {
     cp -a '$picked' '${DATA_DIR}/melyxar.db'
     chown '$APP_USER:$APP_GROUP' '${DATA_DIR}/melyxar.db'
   "
-  step "$(tr_msg step_restart)" systemctl restart "$SERVICE"
+  restart_service
   if [[ -f "$kept" ]]; then
     success "$(tr_fmt restore_done "$kept")"
   else
