@@ -665,7 +665,7 @@
      is on its way out, and go before it closes. */
   .music-tabs-track {
     flex: 1;
-    padding: 0 4px;
+    padding: 0 6px;
     align-items: center;
     visibility: hidden;
     opacity: 0;
@@ -710,8 +710,13 @@
     margin-bottom: 4px;
   }
 
+  /* The tab open is as far from the end of the bubble as from its top and
+     foot, so its round end follows the bubble's own. */
   .music-tab {
-    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    height: calc(var(--header-piece) - 12px);
+    padding: 0 14px;
     font-size: 14px;
   }
 
