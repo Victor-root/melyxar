@@ -57,8 +57,7 @@ export function useBubble() {
   return { unrolled, setUnrolled, unroll, stay, bubble };
 }
 
-/** The glass of the bubble, two halves that meet in the middle, and the dots
- *  that roll it out. */
+/** The glass of the bubble, its line and the dots that roll it out. */
 export function BubbleParts({
   unrolled,
   onUnroll,
@@ -70,11 +69,13 @@ export function BubbleParts({
 }) {
   return (
     <>
-      <span className="music-tabs-glass music-tabs-glass-start" aria-hidden="true">
-        <span className="glass-slice" />
+      <span className="glass-slice music-tabs-glass" aria-hidden="true" />
+      <span className="glass-rim music-tabs-rim" aria-hidden="true" />
+      <span className="music-tabs-end music-tabs-end-start" aria-hidden="true">
+        <span className="glass-rim" />
       </span>
-      <span className="music-tabs-glass music-tabs-glass-end" aria-hidden="true">
-        <span className="glass-slice" />
+      <span className="music-tabs-end music-tabs-end-end" aria-hidden="true">
+        <span className="glass-rim" />
       </span>
       <button
         type="button"
