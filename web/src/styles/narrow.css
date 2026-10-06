@@ -631,24 +631,26 @@
   .browse-piece.music-tabs:focus-within {
     position: fixed;
     top: var(--header-edge);
-    left: var(--header-edge);
-    right: var(--header-edge);
+    left: calc(50% - 28px);
+    right: calc(50% - 28px);
     z-index: 30;
     height: var(--header-piece);
     min-height: 0;
     padding: 0;
+    overflow: hidden;
     box-shadow:
       var(--shadow-card),
       0 0 14px 2px var(--accent-glow);
-    clip-path: inset(0 calc(50% - 28px) round var(--radius-pill));
     transition:
-      clip-path 200ms var(--ease),
+      left 200ms var(--ease),
+      right 200ms var(--ease),
       transform var(--calm) var(--ease);
   }
 
   .browse-piece.music-tabs[data-unrolled="yes"] {
-    clip-path: inset(0 0 0 0 round var(--radius-pill));
-    transition-duration: 340ms, var(--calm);
+    left: var(--header-edge);
+    right: var(--header-edge);
+    transition-duration: 340ms, 340ms, var(--calm);
   }
 
   /* Stepped aside with the bar at the top while a page is read down. */
@@ -656,10 +658,23 @@
     transform: translateY(calc(-100% - 24px));
   }
 
+  /* Nothing of the tabs shows round the dots: they come in once the bubble
+     is on its way out, and go before it closes. */
   .music-tabs-track {
     flex: 1;
     padding: 0 4px;
     align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 120ms var(--ease),
+      visibility 0s linear 120ms;
+  }
+
+  .music-tabs[data-unrolled="yes"] .music-tabs-track {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 200ms var(--ease) 120ms;
   }
 
   .music-bubble {
