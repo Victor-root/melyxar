@@ -78,7 +78,7 @@
      its pieces and that air twice over. Every page starts below it, so every
      page follows. */
   :root {
-    --header-edge: 9px;
+    --header-edge: 12px;
     --header-height: calc(var(--header-piece) + 2 * var(--header-edge));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
