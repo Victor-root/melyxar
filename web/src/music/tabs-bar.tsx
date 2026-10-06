@@ -6,8 +6,10 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDragToScroll } from "../dragging";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
+import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import type { MusicTab } from "./tabs";
 
@@ -15,6 +17,9 @@ import type { MusicTab } from "./tabs";
  *  gap beside it as the stylesheet draws them: it appears as the tabs move,
  *  and pushes them along by as much. */
 const ARROW_ROOM = 32;
+
+/** How long the tabs of a phone stay rolled out once nobody has touched them. */
+const UNROLLED_MS = 2500;
 
 export function TabsBar({
   tabs,
@@ -30,6 +35,18 @@ export function TabsBar({
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoOn, setCanGoOn] = useState(false);
   const drag = useDragToScroll(track);
+  /* On a phone the tabs are a small bubble in the band at the top, rolled out
+     by a press and rolled up again by themselves. */
+  const phone = useMediaQuery(PHONE);
+  const [unrolled, setUnrolled] = useState(false);
+  const rollUp = useRef(0);
+
+  const stayUnrolled = useCallback(() => {
+    window.clearTimeout(rollUp.current);
+    rollUp.current = window.setTimeout(() => setUnrolled(false), UNROLLED_MS);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(rollUp.current), []);
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -83,21 +100,57 @@ export function TabsBar({
     }
   };
 
-  return (
-    <nav className="browse-piece music-tabs" aria-label={t("music.tabs")}>
+  const bar = (
+    <nav
+      className="browse-piece music-tabs"
+      aria-label={t("music.tabs")}
+      data-unrolled={unrolled ? "yes" : "no"}
+      onPointerDown={unrolled ? stayUnrolled : undefined}
+    >
+      {phone && (
+        <button
+          type="button"
+          className="music-bubble"
+          aria-label={t("music.tabs_open")}
+          aria-expanded={unrolled}
+          onClick={() => {
+            setUnrolled(true);
+            stayUnrolled();
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+            <circle cx="5" cy="12" r="2.6" />
+            <circle cx="12" cy="12" r="2.6" />
+            <circle cx="19" cy="12" r="2.6" />
+          </svg>
+        </button>
+      )}
       {canGoBack && (
         <button type="button" className="music-tabs-arrow" onClick={() => move(-1)} aria-label={t("music.tabs_back")}>
           <ChevronLeftIcon size={18} />
         </button>
       )}
-      <div className="music-tabs-track" ref={track} onScroll={measure} {...drag}>
+      <div
+        className="music-tabs-track"
+        ref={track}
+        onScroll={() => {
+          measure();
+          if (unrolled) {
+            stayUnrolled();
+          }
+        }}
+        {...drag}
+      >
         {tabs.map((tab) => (
           <button
             key={tab}
             type="button"
             className={`music-tab${tab === open ? " music-tab-on" : ""}`}
             aria-current={tab === open ? "page" : undefined}
-            onClick={() => onOpen(tab)}
+            onClick={() => {
+              setUnrolled(false);
+              onOpen(tab);
+            }}
           >
             {t(`music.tab.${tab}`)}
           </button>
@@ -110,4 +163,6 @@ export function TabsBar({
       )}
     </nav>
   );
+
+  return phone ? createPortal(bar, document.body) : bar;
 }
