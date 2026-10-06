@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import hoverOnlyWhereThereIsHover from "./hover-only.mjs";
 
 /// What comes out of here is put by the update script in the folder the
 /// server reads the interface from, and served from the next request on.
@@ -11,6 +12,9 @@ import react from "@vitejs/plugin-react";
 /// server beside it is ready, so the two always agree.
 export default defineConfig({
   plugins: [react()],
+  css: {
+    postcss: { plugins: [hoverOnlyWhereThereIsHover()] },
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
