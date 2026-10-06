@@ -1757,7 +1757,7 @@
     position: absolute;
     inset: 12px 0 0;
     z-index: -1;
-    background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
+    background: color-mix(in srgb, var(--surface-deep) 25%, transparent);
     backdrop-filter: blur(14px);
     pointer-events: none;
   }
