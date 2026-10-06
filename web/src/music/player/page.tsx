@@ -93,7 +93,7 @@ export function MusicNowPlaying() {
   return (
     <div ref={page} className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <PageBackdrop inPlace />
-      {onAPhone && <PhoneHeader title={t(PHONE_PAGES[phonePage])} close={close} />}
+      {onAPhone && <PhoneHeader title={t(PHONE_PAGES[phonePage])} page={phonePage} close={close} />}
 
       {onAPhone ? (
         <PhonePages song={song} close={close} page={phonePage} onPage={setPhonePage} />
@@ -172,8 +172,8 @@ function NowPlayingSong({ song, close }: { song: Song; close: () => void }) {
 }
 
 /** The left piece of the bar at the top, the one every page has, and the name
- *  of what is shown beside it. */
-function PhoneHeader({ title, close }: { title: string; close: () => void }) {
+ *  of what is shown beside it, and where it stands among the pages. */
+function PhoneHeader({ title, page, close }: { title: string; page: number; close: () => void }) {
   const { t } = useSettings();
   const branding = useBranding();
   return (
@@ -186,7 +186,16 @@ function PhoneHeader({ title, close }: { title: string; close: () => void }) {
           <ServerMark branding={branding} size={28} logoClassName="brand-logo" />
         </Link>
       </div>
-      <span className="music-now-heading">{title}</span>
+      <span className="music-now-heading">
+        {title}
+        {/* Three dots, the one lit being the page open: where it stands among
+            the others says there is more to the left or to the right. */}
+        <span className="music-now-dots" aria-hidden="true">
+          {PHONE_PAGES.map((one, at) => (
+            <span key={one} data-on={at === page ? "yes" : "no"} />
+          ))}
+        </span>
+      </span>
     </div>
   );
 }

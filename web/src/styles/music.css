@@ -1730,19 +1730,41 @@
     display: none;
   }
 
-  .music-now-header {
-    position: relative;
+  /* In the middle of what the piece at the left leaves, with the three dots
+     of the pages under it. */
+  .music-now-heading {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font-size: 1.15rem;
+    font-weight: 650;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  /* In the middle of the screen rather than hugging the piece at the left. */
-  .music-now-heading {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: 1.2rem;
-    font-weight: 650;
-    pointer-events: none;
+  .music-now-dots {
+    display: flex;
+    gap: 5px;
+  }
+
+  .music-now-dots > span {
+    width: 5px;
+    height: 5px;
+    border-radius: var(--radius-pill);
+    background: var(--text-faint);
+    transition:
+      width var(--quick) var(--ease),
+      background var(--quick) var(--ease);
+  }
+
+  .music-now-dots > span[data-on="yes"] {
+    width: 14px;
+    background: var(--accent);
   }
 
   /* Clear glass at the foot: the pages run behind it, fading as they go under
