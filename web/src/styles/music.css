@@ -1731,6 +1731,12 @@
     display: none;
   }
 
+  /* In the line with the heading, which the bar at the top's own piece, laid
+     over the band, would otherwise leave to run under it. */
+  .music-now-header .header-start {
+    position: static;
+  }
+
   /* In the middle of what the piece at the left leaves. */
   .music-now-heading {
     flex: 1;
