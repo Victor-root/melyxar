@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { BubbleParts, UNROLL_MS, useBubble } from "../components/bubble";
 import { useDragToScroll } from "../dragging";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { PHONE, useMediaQuery } from "../media-query";
@@ -17,12 +18,6 @@ import type { MusicTab } from "./tabs";
  *  gap beside it as the stylesheet draws them: it appears as the tabs move,
  *  and pushes them along by as much. */
 const ARROW_ROOM = 32;
-
-/** How long the bubble takes to roll out, as the stylesheet draws it. */
-const UNROLL_MS = 340;
-
-/** How long the tabs of a phone stay rolled out once nobody has touched them. */
-const UNROLLED_MS = 2000;
 
 export function TabsBar({
   tabs,
@@ -41,30 +36,7 @@ export function TabsBar({
   /* On a phone the tabs are a small bubble in the band at the top, rolled out
      by a press and rolled up again by themselves. */
   const phone = useMediaQuery(PHONE);
-  const [unrolled, setUnrolled] = useState(false);
-  const rollUp = useRef(0);
-
-  const stayUnrolled = useCallback(() => {
-    window.clearTimeout(rollUp.current);
-    rollUp.current = window.setTimeout(() => setUnrolled(false), UNROLLED_MS);
-  }, []);
-
-  useEffect(() => () => window.clearTimeout(rollUp.current), []);
-
-  /* A press anywhere else rolls them up at once. */
-  const bubble = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (!unrolled) {
-      return;
-    }
-    const away = (event: PointerEvent) => {
-      if (!bubble.current?.contains(event.target as Node)) {
-        setUnrolled(false);
-      }
-    };
-    document.addEventListener("pointerdown", away, true);
-    return () => document.removeEventListener("pointerdown", away, true);
-  }, [unrolled]);
+  const { unrolled, setUnrolled, unroll, stay, bubble } = useBubble();
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -140,36 +112,9 @@ export function TabsBar({
       className="browse-piece music-tabs"
       aria-label={t("music.tabs")}
       data-unrolled={unrolled ? "yes" : "no"}
-      onPointerDown={unrolled ? stayUnrolled : undefined}
+      onPointerDown={unrolled ? stay : undefined}
     >
-      {phone && (
-        <>
-          <span className="music-tabs-glass music-tabs-glass-start" aria-hidden="true">
-            <span className="glass-slice" />
-          </span>
-          <span className="music-tabs-glass music-tabs-glass-end" aria-hidden="true">
-            <span className="glass-slice" />
-          </span>
-        </>
-      )}
-      {phone && (
-        <button
-          type="button"
-          className="music-bubble"
-          aria-label={t("music.tabs_open")}
-          aria-expanded={unrolled}
-          onClick={() => {
-            setUnrolled(true);
-            stayUnrolled();
-          }}
-        >
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
-            <circle cx="5" cy="12" r="2.6" />
-            <circle cx="12" cy="12" r="2.6" />
-            <circle cx="19" cy="12" r="2.6" />
-          </svg>
-        </button>
-      )}
+      {phone && <BubbleParts unrolled={unrolled} onUnroll={unroll} label={t("music.tabs_open")} />}
       {canGoBack && (
         <button type="button" className="music-tabs-arrow" onClick={() => move(-1)} aria-label={t("music.tabs_back")}>
           <ChevronLeftIcon size={18} />
@@ -181,7 +126,7 @@ export function TabsBar({
         onScroll={() => {
           measure();
           if (unrolled) {
-            stayUnrolled();
+            stay();
           }
         }}
         {...drag}
