@@ -525,8 +525,7 @@
   }
 
   /* The fade starts beyond the very edge there, so the edge itself is never
-     empty, and is shorter on a small
-     screen. */
+     empty, and is shorter on a small screen. */
   .row {
     --fade-lead: -12px;
     --fade-length: 24px;
