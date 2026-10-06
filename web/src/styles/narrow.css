@@ -863,33 +863,44 @@
     display: none;
   }
 
-  /* The letters of the lists of music stand at the right of the screen as
-     they do on a wide one, rather than in a block above the list. */
-  .music-page .grid-with-letters {
+  /* The letters of a list stand at the right of the screen as they do on a
+     wide one, rather than in a block above the list. */
+  .grid-with-letters {
     --letter-width: 20px;
     flex-direction: row;
-    /* Only the room the rail takes beyond the page's own margin, so the
-       albums keep their two to a line. */
+  }
+
+  /* Only the room the rail takes beyond the page's own margin, so the
+     covers keep their two to a line. Kept from the first drawing of a grid
+     read by title, before it is known which letters there are. */
+  .grid-with-letters:has(> .letters),
+  .grid-with-letters-kept {
+    padding-right: 22px;
+  }
+
+  /* The bar of a list stops short of the rail, which runs down the same
+     margin from just under it. */
+  .page:has(.letters, .grid-with-letters-kept) .browse-head {
     padding-right: 22px;
   }
 
   /* Under the bar of the list at the top, which the rail would otherwise
      stand over. A finger slides along it, so the page must not take the
      movement for a scroll. */
-  .music-page .letters,
-  :root[data-music-bar] .music-page .letters {
+  .letters,
+  :root[data-music-bar] .letters {
     --letters-skip: 64px;
     --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--letters-skip));
     touch-action: none;
   }
 
-  :root[data-music-bar] .music-page .letters {
+  :root[data-music-bar] .letters {
     --letters-room: calc(
       100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--letters-skip) - var(--music-bar-height)
     );
   }
 
-  .music-page .letters {
+  .letters {
     --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 24px);
     position: fixed;
     top: calc(var(--header-height) + var(--gap-wide) + var(--letters-skip));
