@@ -1288,8 +1288,15 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
-  background: var(--surface-raised);
+  background: var(--surface-deep);
   color: var(--text);
+}
+
+/* The backdrop of the library is there from the start, not slowly coming up
+   behind a page that has just opened. */
+.music-now .home-backdrop {
+  opacity: 1;
+  animation: none;
 }
 
 .music-now .player-bottom {
@@ -1351,18 +1358,6 @@
   .music-now-body {
     animation: none;
   }
-}
-
-.music-now-glow {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(
-    ellipse at 30% 20%,
-    color-mix(in srgb, var(--accent) 22%, transparent),
-    transparent 60%
-  );
-  pointer-events: none;
 }
 
 .music-now-body {
@@ -1752,7 +1747,7 @@
     padding-top: 28px;
     background: linear-gradient(
       to top,
-      color-mix(in srgb, var(--surface-raised) 92%, transparent) 55%,
+      color-mix(in srgb, var(--surface-deep) 92%, transparent) 55%,
       transparent
     );
   }
