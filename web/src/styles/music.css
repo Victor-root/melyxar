@@ -636,6 +636,9 @@
 
 .music-songs-compact .music-song-actions {
   justify-content: flex-end;
+  /* The dots stand as far from the right edge as the play button's triangle
+     does from the left one. */
+  padding-right: 3px;
 }
 
 /* The three dots of its menu stand one above another, which takes less of
