@@ -1572,7 +1572,8 @@
   background: none;
   color: var(--text-faint);
   cursor: move;
-  touch-action: none;
+  /* Up and down belong to the grip, sideways to the swipe between pages. */
+  touch-action: pan-x;
 }
 
 .music-queue-grip:hover,

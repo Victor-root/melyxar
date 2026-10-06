@@ -22,6 +22,20 @@ import { useMusic } from "./player";
 /** How far from the top or foot of the list the pointer sets it scrolling. */
 const SCROLL_EDGE = 56;
 
+/** How far a finger on the grip goes before it is told which way it means to
+ *  go: up or down moves the line, sideways is a swipe from one page to the
+ *  next, which the grip must let through. */
+const MEANT_TO_MOVE = 6;
+
+/** A finger that is on a grip and has not yet said what it means to do. */
+interface Pending {
+  at: number;
+  grip: HTMLElement;
+  pointerId: number;
+  x: number;
+  y: number;
+}
+
 /** A line being moved, from where it was to where it would land. */
 interface Drag {
   from: number;
@@ -49,6 +63,7 @@ export function QueuePanel() {
   const { queue, playing } = music;
   const list = useRef<HTMLOListElement>(null);
   const taken = useRef<Taken | null>(null);
+  const pending = useRef<Pending | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
 
   /* Run for as long as a line is held: the line goes where the pointer is,
@@ -80,13 +95,13 @@ export function QueuePanel() {
     held.frame = requestAnimationFrame(follow);
   };
 
-  const take = (event: PointerEvent<HTMLButtonElement>, at: number) => {
+  const take = (grip: HTMLElement, pointerId: number, clientY: number, at: number) => {
     const box = list.current;
-    const line = event.currentTarget.closest("li");
-    if (event.button !== 0 || !box || !line) {
+    const line = grip.closest("li");
+    if (!box || !line) {
       return;
     }
-    event.currentTarget.setPointerCapture(event.pointerId);
+    grip.setPointerCapture(pointerId);
     const height = line.getBoundingClientRect().height;
     box.style.setProperty("--queue-line", `${height}px`);
     taken.current = {
@@ -95,15 +110,49 @@ export function QueuePanel() {
       line,
       height,
       count: queue.order.length,
-      startY: event.clientY,
-      pointerY: event.clientY,
+      startY: clientY,
+      pointerY: clientY,
       startScroll: box.scrollTop,
       frame: requestAnimationFrame(follow),
     };
     setDrag({ from: at, to: at });
   };
 
+  /* A mouse takes a line at once. A finger first says which way it goes: a
+     finger that lands on a grip while swiping from one page to another meant
+     the swipe, and must not be taken for a line being moved. */
+  const press = (event: PointerEvent<HTMLButtonElement>, at: number) => {
+    if (event.button !== 0) {
+      return;
+    }
+    if (event.pointerType === "mouse") {
+      take(event.currentTarget, event.pointerId, event.clientY, at);
+      return;
+    }
+    pending.current = { at, grip: event.currentTarget, pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  };
+
+  const moved = (event: PointerEvent<HTMLButtonElement>) => {
+    const waiting = pending.current;
+    if (waiting) {
+      const across = Math.abs(event.clientX - waiting.x);
+      const down = Math.abs(event.clientY - waiting.y);
+      if (down > MEANT_TO_MOVE && down > across) {
+        pending.current = null;
+        take(waiting.grip, waiting.pointerId, waiting.y, waiting.at);
+        if (taken.current) {
+          taken.current.pointerY = event.clientY;
+        }
+      } else if (across > MEANT_TO_MOVE) {
+        pending.current = null;
+      }
+    } else if (taken.current) {
+      taken.current.pointerY = event.clientY;
+    }
+  };
+
   const release = (landed: boolean) => {
+    pending.current = null;
     const held = taken.current;
     if (!held) {
       return;
@@ -132,7 +181,7 @@ export function QueuePanel() {
         const one = queue.songs[place];
         const here = at === queue.at;
         const label = here ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: one.title });
-        const press = () => (here ? music.toggle() : music.jump(at));
+        const play = () => (here ? music.toggle() : music.jump(at));
         /* The lines the one held passes make room for it. */
         const makesRoom =
           drag && drag.from < drag.to && at > drag.from && at <= drag.to
@@ -146,13 +195,13 @@ export function QueuePanel() {
             className={`music-song music-song-full music-queue-line${here ? " music-song-playing" : ""}${at < queue.at ? " music-queue-played" : ""}${drag?.from === at ? " music-queue-lifted" : ""}${makesRoom}`}
           >
             <span className="music-song-lead">
-              <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={press}>
+              <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
                 {here && playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
               </button>
             </span>
             <span className="music-song-number">{here ? <PlayingWave playing={playing} /> : at + 1}</span>
             <Cover song={one} />
-            <button type="button" className="music-queue-song" onClick={press} aria-current={here ? "true" : undefined}>
+            <button type="button" className="music-queue-song" onClick={play} aria-current={here ? "true" : undefined}>
               <span className="music-song-title">{one.title}</span>
               <span className="music-song-artists">{one.artists.map((artist) => artist.name).join(", ")}</span>
             </button>
@@ -176,12 +225,8 @@ export function QueuePanel() {
               aria-label={t("music.move_song", { title: one.title })}
               title={t("music.move_song", { title: one.title })}
               onKeyDown={(event) => step(event, at)}
-              onPointerDown={(event) => take(event, at)}
-              onPointerMove={(event) => {
-                if (taken.current) {
-                  taken.current.pointerY = event.clientY;
-                }
-              }}
+              onPointerDown={(event) => press(event, at)}
+              onPointerMove={moved}
               onPointerUp={() => release(true)}
               onPointerCancel={() => release(false)}
             >
