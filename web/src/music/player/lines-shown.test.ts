@@ -17,9 +17,9 @@ describe("the lines of a long list that are made", () => {
   });
 
   it("does not change while the scroll stays within a step", () => {
-    expect(linesShown(5000, 800, 0, 50, 2000)).toEqual({ from: 80, to: 140 });
-    expect(linesShown(5150, 800, 0, 50, 2000)).toEqual({ from: 80, to: 140 });
-    expect(linesShown(5500, 800, 0, 50, 2000)).toEqual({ from: 90, to: 150 });
+    expect(linesShown(5000, 800, 0, 50, 2000)).toEqual({ from: 90, to: 130 });
+    expect(linesShown(5150, 800, 0, 50, 2000)).toEqual({ from: 90, to: 130 });
+    expect(linesShown(5500, 800, 0, 50, 2000)).toEqual({ from: 100, to: 140 });
   });
 
   it("stays within the list at both ends", () => {

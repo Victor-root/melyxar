@@ -10,7 +10,7 @@
  */
 
 /** How many lines are made beyond those in sight, on each side. */
-export const MARGIN = 20;
+export const MARGIN = 10;
 
 /** By how many lines the edges move at a time. */
 export const STEP = 10;

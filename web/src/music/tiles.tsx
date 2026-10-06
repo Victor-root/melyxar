@@ -4,7 +4,7 @@
  * is, and over a round picture for an artist.
  */
 
-import { useContext, useState } from "react";
+import { memo, useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import { PicturesAhead } from "../components/card";
 import { useShownPicture } from "../components/picture";
@@ -193,7 +193,9 @@ function Tile({
   );
 }
 
-export function AlbumTile({ album, index }: { album: Album; index?: number }) {
+/* Drawn again only when its album is another: a grid of hundreds is not drawn
+   again whole each time the page around it is, as when the player opens. */
+export const AlbumTile = memo(function AlbumTile({ album, index }: { album: Album; index?: number }) {
   const whose = useWhoseAlbum();
   return (
     <Tile
@@ -208,9 +210,9 @@ export function AlbumTile({ album, index }: { album: Album; index?: number }) {
       owns={(song) => song.album?.id === album.id}
     />
   );
-}
+});
 
-export function ArtistTile({ artist, index }: { artist: Artist; index?: number }) {
+export const ArtistTile = memo(function ArtistTile({ artist, index }: { artist: Artist; index?: number }) {
   const { t } = useSettings();
   return (
     <Tile
@@ -230,7 +232,7 @@ export function ArtistTile({ artist, index }: { artist: Artist; index?: number }
       owns={(song) => song.artists.some((credited) => credited.id === artist.id)}
     />
   );
-}
+});
 
 /** A playlist of songs, wearing the cover of its first song's album. */
 export function PlaylistTile({ playlist }: { playlist: MusicPlaylist }) {
