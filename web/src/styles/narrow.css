@@ -787,23 +787,24 @@
 
   /* The letters of the lists of music stand at the right of the screen as
      they do on a wide one, rather than in a block above the list. */
-  .music-tab-content {
-    padding-right: calc(28px + 10px + var(--gap-wide));
-  }
-
   .music-page .grid-with-letters {
+    --letter-width: 20px;
     flex-direction: row;
+    /* Only the room the rail takes beyond the page's own margin, so the
+       albums keep their two to a line. */
+    padding-right: 22px;
   }
 
   .music-page .letters {
-    --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
+    --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 24px);
     position: fixed;
+    right: 4px;
     flex-direction: column;
     flex-wrap: nowrap;
     justify-content: flex-start;
     align-self: auto;
     max-height: var(--letters-room);
-    padding: 6px 4px;
+    padding: 4px 2px;
   }
 }
 
