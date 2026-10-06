@@ -7,7 +7,7 @@
  * Closed, it gives back the page it was opened over, just as it was.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Song } from "../api";
 import { PageBackdrop } from "../../components/backdrop";
@@ -27,6 +27,10 @@ import { useMusic } from "./player";
 import { QueuePanel } from "./queue-panel";
 import { BehindThePlayer } from "./spectrum";
 
+/** What the three pages of a phone are called, from the left: the queue, what
+ *  is playing and the words. */
+const PHONE_PAGES = ["music.queue", "music.now_playing", "music.lyrics"] as const;
+
 /** How long the page takes to leave, which is what its way out lasts. */
 const LEAVE_MS = 180;
 
@@ -38,7 +42,10 @@ export function MusicNowPlaying() {
   const nowPlaying = useNowPlayingPage();
   const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
-  const [onLyrics, setOnLyrics] = useState(false);
+  /* Which of the three pages of a phone is open, kept for as long as the page
+     is, so that it opens again on the one it was left on. It begins on what
+     is playing. */
+  const [phonePage, setPhonePage] = useState(1);
   const page = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const onAPhone = useMediaQuery("(max-width: 760px)");
@@ -86,10 +93,10 @@ export function MusicNowPlaying() {
   return (
     <div ref={page} className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <PageBackdrop inPlace />
-      {onAPhone && <PhoneHeader title={t(onLyrics ? "music.lyrics" : "music.queue")} close={close} />}
+      {onAPhone && <PhoneHeader title={t(PHONE_PAGES[phonePage])} close={close} />}
 
       {onAPhone ? (
-        <PhonePages song={song} close={close} onLyrics={setOnLyrics} />
+        <PhonePages song={song} close={close} page={phonePage} onPage={setPhonePage} />
       ) : (
         <div className="music-now-body">
           <NowPlayingSong song={song} close={close} />
@@ -185,57 +192,79 @@ function PhoneHeader({ title, close }: { title: string; close: () => void }) {
 }
 
 /**
- * On a phone, the queue under the cover and the words of the song are two
- * pages side by side: a swipe to the right leaves only the words, a swipe
- * back brings the cover and the queue again.
+ * On a phone, three pages side by side and swiped between: the queue at the
+ * left, what is playing in the middle with the cover, the words at the right.
+ * The one that was open last is the one that opens.
  */
 function PhonePages({
   song,
   close,
-  onLyrics,
+  page,
+  onPage,
 }: {
   song: Song;
   close: () => void;
-  onLyrics: (shown: boolean) => void;
+  page: number;
+  onPage: (page: number) => void;
 }) {
   const pager = useRef<HTMLDivElement>(null);
   const queue = useRef<HTMLDivElement>(null);
-  const lyrics = useRef<HTMLDivElement>(null);
+  const pages = useRef<(HTMLDivElement | null)[]>([]);
+
+  /* Opened on the page it was left on, before anything is drawn. */
+  useLayoutEffect(() => {
+    const element = pager.current;
+    if (element) {
+      element.scrollLeft = page * element.clientWidth;
+    }
+    // Only when it opens: afterwards the hand decides.
+  }, []);
 
   useEffect(() => {
     const element = pager.current;
-    if (!element || !lyrics.current) {
+    if (!element) {
       return;
     }
     const watcher = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
-          if (entry.target === lyrics.current && entry.isIntersecting) {
-            onLyrics(true);
-          } else if (entry.target === queue.current && entry.isIntersecting) {
-            onLyrics(false);
+          if (entry.isIntersecting) {
+            onPage(pages.current.indexOf(entry.target as HTMLDivElement));
           }
         }
       },
       { root: element, threshold: 0.6 },
     );
-    if (queue.current) {
-      watcher.observe(queue.current);
+    for (const one of pages.current) {
+      if (one) {
+        watcher.observe(one);
+      }
     }
-    watcher.observe(lyrics.current);
     return () => watcher.disconnect();
-  }, [onLyrics]);
+  }, [onPage]);
+
+  const hold = (at: number) => (element: HTMLDivElement | null) => {
+    pages.current[at] = element;
+  };
 
   return (
     <>
       <div className="music-now-pages" ref={pager}>
-        <div className="music-now-page music-now-page-queue" ref={queue}>
-          <NowPlayingSong song={song} close={close} />
+        <div
+          className="music-now-page"
+          ref={(element) => {
+            queue.current = element;
+            hold(0)(element);
+          }}
+        >
           <section className="music-now-queue">
             <QueuePanel />
           </section>
         </div>
-        <div className="music-now-page" ref={lyrics}>
+        <div className="music-now-page music-now-page-song" ref={hold(1)}>
+          <NowPlayingSong song={song} close={close} />
+        </div>
+        <div className="music-now-page" ref={hold(2)}>
           <section className="music-now-queue">
             <LyricsPanel song={song.id} />
           </section>
