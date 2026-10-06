@@ -12,6 +12,8 @@ import { InOrder } from "../components/in-order";
 import { LetterDrop } from "../components/letter-drop";
 import type { DropHandle } from "../components/letter-drop";
 import { useRailScrub } from "../components/rail-scrub";
+import { useAccount } from "../account";
+import { PHONE, useMediaQuery } from "../media-query";
 import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
@@ -36,6 +38,8 @@ export function LibraryPage({
   besidesFound?: boolean;
 }) {
   const { t } = useSettings();
+  const { account } = useAccount();
+  const phone = useMediaQuery(PHONE);
   const { narrowing, choose, cards: read, more, loadMore, reach, loading, failed, filters } =
     useBrowsing();
   const { order, descending, genre, decade, search, unidentified, favourites, watchLater } =
@@ -285,9 +289,18 @@ export function LibraryPage({
                 onPick={(value) => choose("decade", value || null)}
               />
             )}
+
+            {/* On a phone the way to put files in is in the piece with the
+                sort, as the music libraries have it, rather than a piece of
+                its own under it. */}
+            {library && phone && account?.may_upload && (
+              <span className="browse-field music-library-tools">
+                <UploadButton library={library} bare className="music-tab music-play-tool" />
+              </span>
+            )}
           </div>
 
-          {library && <UploadButton library={library} className="browse-piece browse-alone" />}
+          {library && !phone && <UploadButton library={library} className="browse-piece browse-alone" />}
 
           {offersUnidentified && (
             <button
