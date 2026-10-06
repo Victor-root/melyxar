@@ -1068,7 +1068,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 84px;
+  --music-bar-height: 100px;
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
