@@ -188,7 +188,6 @@ function PhoneHeader({ title, close }: { title: string; close: () => void }) {
         </Link>
       </div>
       <span className="music-now-heading">{title}</span>
-      </span>
     </div>
   );
 }
