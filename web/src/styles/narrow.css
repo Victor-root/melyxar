@@ -646,6 +646,11 @@
     box-shadow: none;
   }
 
+  /* The rows of the first tab stand nearer one another. */
+  .music-for-you > .section {
+    margin-bottom: var(--gap-wide);
+  }
+
   /* The name of a row stands nearer its pictures. */
   .section > .section-head,
   .music-listened-column > .section-head {
