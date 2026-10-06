@@ -1787,13 +1787,6 @@
     isolation: isolate;
   }
 
-  /* The line of the song runs from one edge of the screen to the other; the
-     buttons keep their room. */
-  /* The line has square ends where it meets the edges of the screen. */
-  .music-now .player-rail-fill {
-    border-radius: 0;
-  }
-
   .music-now .player-bottom .player-row {
     padding-inline: 16px;
     row-gap: 0;
@@ -1919,8 +1912,11 @@
     gap: 0;
   }
 
+  /* The line of the song keeps the same room at its sides as the buttons
+     under it, and is round at both its ends. */
   .music-now .player-seek .player-rail {
-    flex: 1 0 100%;
+    flex: 1 0 calc(100% - 32px);
+    margin-inline: 16px;
   }
 
   .music-now .player-seek-end {
