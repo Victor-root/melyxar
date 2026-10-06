@@ -1666,19 +1666,15 @@
     display: none;
   }
 
-  /* A fine line at the foot of the bar rather than a thick one at its top: the
-     bar is only shown here, so it needs no room to be caught in. */
+  /* A fine line, a little lower than the thick bar was: the bar is only shown
+     here, so it needs no room to be caught in. */
   .music-bar-dock {
     --player-rail: 2px;
     --player-rail-hovered: 2px;
   }
 
-  .music-bar-dock .music-bar-row {
-    flex: 1;
-  }
-
   .music-bar-dock .player-seek {
-    order: 2;
+    margin-top: 16px;
   }
 
   .music-bar-dock .player-rail {
