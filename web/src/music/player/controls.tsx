@@ -95,7 +95,16 @@ export function StopButton({ music }: { music: Music }) {
 
 /** The transport in the order the film's player has it, with the button that
     stops for good after the one that goes to the next song. */
-export function Transport({ music, greyedWhenNone }: { music: Music; greyedWhenNone?: boolean }) {
+export function Transport({
+  music,
+  greyedWhenNone,
+  withStop = true,
+}: {
+  music: Music;
+  greyedWhenNone?: boolean;
+  /** Left out where the stop button stands elsewhere. */
+  withStop?: boolean;
+}) {
   return (
     <>
       <SongStepButton music={music} back greyedWhenNone={greyedWhenNone} />
@@ -103,7 +112,7 @@ export function Transport({ music, greyedWhenNone }: { music: Music; greyedWhenN
       <PlayButton music={music} />
       <SecondsButton music={music} back={false} />
       <SongStepButton music={music} back={false} greyedWhenNone={greyedWhenNone} />
-      <StopButton music={music} />
+      {withStop && <StopButton music={music} />}
     </>
   );
 }
