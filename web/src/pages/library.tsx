@@ -297,7 +297,7 @@ export function LibraryPage({
   );
 
   return (
-    <main className="page">
+    <main className="page library-page">
       {/* What the grid is and how it is read, which on a wide screen rise
           together into the band of the bar at the top. */}
       <div className="browse-head">

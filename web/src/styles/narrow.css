@@ -717,6 +717,12 @@
     margin: calc(var(--gap-wide) * -1) 0 calc(var(--gap) / 2);
   }
 
+  /* The name of a grid of films stands as far under the bar at the top as
+     what opens a library of music does. */
+  .library-page .browse-head {
+    margin-top: calc(var(--gap) / 2 - var(--gap-wide));
+  }
+
   .browse-piece.music-tabs,
   .browse-piece.music-tabs:hover,
   .browse-piece.music-tabs:focus-within {
