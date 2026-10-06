@@ -18,6 +18,9 @@ import type { MusicTab } from "./tabs";
  *  and pushes them along by as much. */
 const ARROW_ROOM = 32;
 
+/** How long the bubble takes to roll out, as the stylesheet draws it. */
+const UNROLL_MS = 340;
+
 /** How long the tabs of a phone stay rolled out once nobody has touched them. */
 const UNROLLED_MS = 2000;
 
@@ -86,11 +89,27 @@ export function TabsBar({
     return () => watcher.disconnect();
   }, [measure, tabs]);
 
+  /* Rolled up, the tabs of a phone have a bubble's width to be seen in, and
+     bringing the open one into it would leave them pulled along when they
+     roll out. They start from their beginning then, the open one brought in
+     only if the width they end with does not show it. */
   useEffect(() => {
-    track.current
-      ?.querySelector<HTMLElement>("[aria-current]")
-      ?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [open]);
+    const element = track.current;
+    if (!element || (phone && !unrolled)) {
+      return;
+    }
+    const current = element.querySelector<HTMLElement>("[aria-current]");
+    if (!phone) {
+      current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+      return;
+    }
+    element.scrollLeft = 0;
+    const later = window.setTimeout(
+      () => current?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" }),
+      UNROLL_MS,
+    );
+    return () => window.clearTimeout(later);
+  }, [open, phone, unrolled]);
 
   /* One tab at a time: the next one cut off at the edge is brought in whole
      and nothing else is asked of it. */

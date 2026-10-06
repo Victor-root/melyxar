@@ -665,7 +665,8 @@
      is on its way out, and go before it closes. */
   .music-tabs-track {
     flex: 1;
-    padding: 0 6px;
+    padding: 0 5px;
+    scroll-padding-inline: 5px;
     align-items: center;
     visibility: hidden;
     opacity: 0;
