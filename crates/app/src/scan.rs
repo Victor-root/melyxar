@@ -570,6 +570,14 @@ async fn record_changes(
 
     for file in &changes.changed {
         if let Some(source) = by_path.get(file.relative_path.as_path()) {
+            tracing::info!(
+                file = %file.relative_path.display(),
+                was_size = source.size_bytes,
+                now_size = file.size_bytes,
+                was_modified = ?source.modified_at,
+                now_modified = ?file.modified_at,
+                "a file is not as it was written down, and is read again"
+            );
             database
                 .refresh_source_identity(source.id, file.size_bytes, file.modified_at)
                 .await?;
