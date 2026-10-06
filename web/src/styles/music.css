@@ -1878,8 +1878,21 @@
     margin: 0 auto;
   }
 
+  /* The two clocks under the line, one at each end of it. */
+  .music-now .player-seek {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .music-now .player-seek .player-rail {
+    flex: 1 0 100%;
+  }
+
   .music-now .player-seek-end {
-    display: none;
+    order: 1;
+    margin-top: -8px;
+    padding: 0 16px;
   }
 
   .music-now-cover-large {
