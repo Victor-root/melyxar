@@ -631,11 +631,13 @@ export function Header({
           <span className="header-glass" aria-hidden="true">
             <span className="glass-slice header-glass-run" />
           </span>
-          <span className="header-glass-halo" aria-hidden="true">
-            <span className="glass-rim header-glass-halo-run" />
-          </span>
-          <span className="header-glass-cap" aria-hidden="true">
-            <span className="glass-rim header-glass-end" />
+          <span className="header-rim" aria-hidden="true">
+            <span className="header-rim-run">
+              <span className="glass-rim" />
+            </span>
+            <span className="header-rim-end">
+              <span className="glass-rim" />
+            </span>
           </span>
           <div className="header-buttons">
             <div className="header-buttons-track">

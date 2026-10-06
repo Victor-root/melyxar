@@ -334,7 +334,7 @@
     box-shadow: none;
   }
 
-  .header-side > :not(.header-glass, .header-glass-halo, .header-glass-cap) {
+  .header-side > :not(.header-glass, .header-rim) {
     position: relative;
     pointer-events: auto;
   }
@@ -363,54 +363,70 @@
     transition: transform 340ms var(--ease);
   }
 
-  .header-side[data-folded] .header-glass-run,
-  .header-side[data-folded] .header-glass-halo-run {
+  .header-side[data-folded] .header-glass-run {
     transform: translateX(calc(100% - var(--header-folded, 100%)));
   }
 
-  /* What the box that cuts the glass would cut off of its line and its glow,
-     drawn by pieces of their own over the glass, so that the line is the same
-     all the way round: the line and glow along the run, which slide with it
-     and stop where the round end begins, and the round end's own. Neither runs short of the other, the end going on under the run out
-     of sight for as far as its glow reaches: ending at the join, a glow fades
-     there and shows as a line across the page. */
-  .header-glass-halo,
-  .header-glass-cap {
+  /* The line and the glow of the glass, drawn over it in a layer of their
+     own by two pieces: the one along the run, which slides with it, and the
+     round end's. Each runs on well past where they meet, so that its glow is
+     whole there, and the two are blended across a few pixels and added
+     rather than laid one over the other: cut where they met, each piece had
+     an edge of its own, and at some screen densities the two edges showed as
+     a line across the glow. */
+  .header-rim {
     display: block;
     position: absolute;
-    top: calc(-1px - var(--glass-glow-room));
-    bottom: calc(-1px - var(--glass-glow-room));
-    overflow: hidden;
+    inset: calc(-1px - var(--glass-glow-room));
+    isolation: isolate;
     pointer-events: none;
   }
 
-  .header-glass-halo {
-    left: calc(-1px - var(--glass-glow-room));
-    right: calc(var(--header-piece) / 2 - 1px);
+  .header-rim > span {
+    position: absolute;
+    inset: 0;
+    mix-blend-mode: plus-lighter;
   }
 
-  .header-glass-halo-run {
+  .header-rim .glass-rim {
     position: absolute;
     top: var(--glass-glow-room);
     bottom: var(--glass-glow-room);
+  }
+
+  .header-rim-run {
+    mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - var(--glass-glow-room) - var(--header-piece) / 2 - 8px),
+      transparent calc(100% - var(--glass-glow-room) - var(--header-piece) / 2)
+    );
+  }
+
+  .header-rim-run > .glass-rim {
     left: var(--glass-glow-room);
-    width: calc(100% - var(--glass-glow-room) + var(--header-piece) / 2);
+    width: calc(100% - var(--glass-glow-room));
     border-right-width: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     transition: transform 340ms var(--ease);
   }
 
-  .header-glass-cap {
-    left: calc(100% - var(--header-piece) / 2 + 1px);
-    right: calc(-1px - var(--glass-glow-room));
+  .header-side[data-folded] .header-rim-run > .glass-rim {
+    transform: translateX(
+      calc(100% - var(--glass-glow-room) - var(--header-folded, calc(100% - var(--glass-glow-room))))
+    );
   }
 
-  .header-glass-end {
-    position: absolute;
-    top: var(--glass-glow-room);
-    bottom: var(--glass-glow-room);
-    left: calc(var(--glass-glow-room) * -1);
+  .header-rim-end {
+    mask-image: linear-gradient(
+      to right,
+      transparent calc(100% - var(--glass-glow-room) - var(--header-piece) / 2 - 8px),
+      #000 calc(100% - var(--glass-glow-room) - var(--header-piece) / 2)
+    );
+  }
+
+  .header-rim-end > .glass-rim {
     right: var(--glass-glow-room);
+    width: calc(var(--header-piece) / 2 + 2 * var(--glass-glow-room));
     border-left-width: 0;
     border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   }
@@ -825,58 +841,50 @@
     pointer-events: none;
   }
 
-  /* The line and the glow of the glass, drawn over it: along the window
-     between its round ends, which are pieces of their own that move with it.
-     The glow of each runs on under the other, out of sight, for as far as it
-     reaches: ending at the join, a glow fades there and shows as a line. */
+  /* Its line and its glow, drawn over it as the bar's are: one piece for
+     each end, which moves with it and runs on well past the middle, the two
+     blended across a few pixels there and added. The middle is where they
+     meet whatever the window, and it is always the straight part. */
   .music-tabs-rim {
     position: absolute;
-    inset: -1px;
-    border-width: 1px 0;
-    border-radius: 0;
-    clip-path: inset(
-      calc(var(--glass-glow-room) * -1) calc(var(--bubble-o) + var(--header-piece) / 2)
-    );
+    inset: calc(-1px - var(--glass-glow-room));
+    isolation: isolate;
     pointer-events: none;
   }
 
-  .music-tabs-end {
+  .music-tabs-rim > span {
     position: absolute;
-    top: calc(-1px - var(--glass-glow-room));
-    bottom: calc(-1px - var(--glass-glow-room));
-    width: calc(var(--header-piece) / 2 + 1px + var(--glass-glow-room));
-    overflow: hidden;
-    pointer-events: none;
+    inset: 0;
+    mix-blend-mode: plus-lighter;
   }
 
-  .music-tabs-end > .glass-rim {
+  .music-tabs-rim .glass-rim {
     position: absolute;
     top: var(--glass-glow-room);
     bottom: var(--glass-glow-room);
+    width: calc(50% + var(--glass-glow-room));
   }
 
-  .music-tabs-end-start {
-    left: calc(-1px - var(--glass-glow-room));
+  .music-tabs-rim-start {
+    mask-image: linear-gradient(to right, #000 calc(50% - 4px), transparent calc(50% + 4px));
+  }
+
+  .music-tabs-rim-start > .glass-rim {
+    left: var(--glass-glow-room);
+    border-right-width: 0;
+    border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     transform: translateX(var(--bubble-o));
   }
 
-  .music-tabs-end-start > .glass-rim {
-    left: var(--glass-glow-room);
-    right: calc(var(--glass-glow-room) * -1);
-    border-right-width: 0;
-    border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+  .music-tabs-rim-end {
+    mask-image: linear-gradient(to right, transparent calc(50% - 4px), #000 calc(50% + 4px));
   }
 
-  .music-tabs-end-end {
-    right: calc(-1px - var(--glass-glow-room));
-    transform: translateX(calc(var(--bubble-o) * -1));
-  }
-
-  .music-tabs-end-end > .glass-rim {
-    left: calc(var(--glass-glow-room) * -1);
+  .music-tabs-rim-end > .glass-rim {
     right: var(--glass-glow-room);
     border-left-width: 0;
     border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+    transform: translateX(calc(var(--bubble-o) * -1));
   }
 
   /* Nothing of the tabs shows round the dots: they come in once the bubble
@@ -1012,7 +1020,8 @@
   .header-buttons,
   .header-side[data-folded] .header-buttons,
   .header-start,
-  .header-glass-run {
+  .header-glass-run,
+  .header-rim-run > .glass-rim {
     transition: none;
   }
 
