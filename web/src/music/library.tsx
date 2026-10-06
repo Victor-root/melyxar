@@ -15,6 +15,8 @@ import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
 import { useReachEnd } from "../components/reach-end";
+import { LetterDrop } from "../components/letter-drop";
+import type { DropHandle } from "../components/letter-drop";
 import { LETTER_ATTRIBUTE, useRailScrub } from "../components/rail-scrub";
 import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
@@ -396,11 +398,12 @@ function Lettered<T>({
   }, [landing, items]);
 
   const shownLetters = letters && letters.length > 1 ? letters : null;
+  const drop = useRef<DropHandle>(null);
   const scrub = useRailScrub((index) => {
     if (shownLetters) {
       void jumpTo(shownLetters[index]);
     }
-  });
+  }, drop);
   return (
     <>
       {paged.failed && <p className="notice">{t("error.unreachable")}</p>}
@@ -414,6 +417,7 @@ function Lettered<T>({
           <div ref={end} aria-hidden="true" />
         </div>
         {shownLetters && (
+          <>
           <nav
             className="letters"
             aria-label={t("library.letters")}
@@ -433,6 +437,8 @@ function Lettered<T>({
               </button>
             ))}
           </nav>
+          <LetterDrop ref={drop} letters={shownLetters.map((letter) => letter.letter.toUpperCase())} />
+          </>
         )}
       </div>
       {paged.loading && paged.items.length === 0 && (
