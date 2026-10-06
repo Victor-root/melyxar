@@ -1697,15 +1697,15 @@
     width: 48px;
   }
 
-  /* The cover stands in the corner, 10 points from the left edge and from the
-     foot, the row being held to the foot of the bar. */
+  /* What is playing is centred between the line and the foot of the bar, and
+     as far from the left edge as from either. */
   .music-bar-dock {
-    justify-content: space-between;
-    padding-bottom: 10px;
+    padding-bottom: 0;
   }
 
   .music-bar-dock .music-bar-row {
-    margin-left: -2px;
+    flex: 1;
+    margin-left: -3px;
   }
 
   .music-bar-dock .player-rail {
