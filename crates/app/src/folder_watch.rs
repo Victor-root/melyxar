@@ -384,6 +384,13 @@ pub fn keep_watching(state: &AppState) -> tokio::task::JoinHandle<()> {
                             let roots = state.folder_watch().roots_of(library).await.unwrap_or_default();
                             if let Some(paths) = worth_a_scan(&event, &roots) {
                                 let now = Instant::now();
+                                if !settling.contains_key(&library) {
+                                    tracing::info!(
+                                        kind = ?event.kind,
+                                        first = paths.first().map(|path| path.display().to_string()),
+                                        "a change in the folders of a library is worth a scan"
+                                    );
+                                }
                                 settling
                                     .entry(library)
                                     .or_insert_with(|| Settling::new(now))
