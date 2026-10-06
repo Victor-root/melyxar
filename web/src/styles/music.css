@@ -1760,6 +1760,11 @@
 
   /* The line of the song runs from one edge of the screen to the other; the
      buttons keep their room. */
+  /* The line has square ends where it meets the edges of the screen. */
+  .music-now .player-rail-fill {
+    border-radius: 0;
+  }
+
   .music-now .player-bottom .player-row {
     padding-inline: 16px;
     row-gap: 0;
@@ -1772,7 +1777,7 @@
   .music-now .player-bottom::before {
     content: "";
     position: absolute;
-    inset: 20px 0 0;
+    inset: 14px 0 0;
     z-index: -1;
     background: color-mix(in srgb, var(--surface-deep) 25%, transparent);
     backdrop-filter: blur(14px);
