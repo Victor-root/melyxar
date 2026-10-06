@@ -628,11 +628,11 @@ export function Header({
           {/* The buttons of the bar in one box, which on a phone is pulled
               sideways when they are more than the width allows. Everywhere
               else it takes no room of its own. */}
-          <span className="header-glass-halo" aria-hidden="true">
-            <span className="glass-rim header-glass-halo-run" />
-          </span>
           <span className="header-glass" aria-hidden="true">
             <span className="glass-slice header-glass-run" />
+          </span>
+          <span className="header-glass-halo" aria-hidden="true">
+            <span className="glass-rim header-glass-halo-run" />
           </span>
           <span className="header-glass-cap" aria-hidden="true">
             <span className="glass-rim header-glass-end" />

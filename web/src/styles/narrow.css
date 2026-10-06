@@ -349,8 +349,8 @@
   .header-glass-run {
     position: absolute;
     inset: 0;
-    border-right-width: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+    border-width: 0;
     box-shadow: none;
     transition: transform 340ms var(--ease);
   }
@@ -361,9 +361,9 @@
   }
 
   /* What the box that cuts the glass would cut off of its line and its glow,
-     drawn by pieces of their own: the line and glow along the run, which
-     slide with it and stop where the round end begins, and the round end's
-     own. Neither runs short of the other, the end going on under the run out
+     drawn by pieces of their own over the glass, so that the line is the same
+     all the way round: the line and glow along the run, which slide with it
+     and stop where the round end begins, and the round end's own. Neither runs short of the other, the end going on under the run out
      of sight for as far as its glow reaches: ending at the join, a glow fades
      there and shows as a line across the page. */
   .header-glass-halo,
@@ -387,7 +387,7 @@
     bottom: var(--glass-glow-room);
     left: var(--glass-glow-room);
     width: calc(100% - var(--glass-glow-room) + var(--header-piece) / 2);
-    border-color: transparent;
+    border-right-width: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     transition: transform 340ms var(--ease);
   }
