@@ -268,10 +268,10 @@
 .music-listened-pages {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
-  margin-inline: -8px;
-  padding-inline: 8px;
-  scroll-padding-inline: 8px;
+  gap: calc(var(--gutter) * 2);
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+  scroll-padding-inline: var(--gutter);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   will-change: scroll-position;
@@ -598,10 +598,10 @@
 .music-songs.music-songs-compact .music-song-full {
   grid-template-columns: 30px 40px minmax(0, 1fr) 20px 4ch;
   column-gap: 8px;
-  /* The frame of the line playing reaches out beyond its words, which stay
-     where the rest of the page's are. */
-  padding-inline: 8px;
-  margin-inline: -8px;
+  /* The frame of the line playing reaches out to the edges of the screen,
+     its words staying where the rest of the page's are. */
+  padding-inline: var(--gutter);
+  margin-inline: calc(var(--gutter) * -1);
 }
 
 .music-songs-compact .music-song-full {
