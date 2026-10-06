@@ -1675,7 +1675,7 @@
 
   /* The cover stands as far from the foot of the bar as from its left edge. */
   .music-bar-dock .player-seek {
-    margin-top: 12px;
+    margin: 12px calc(var(--gap) * -1) 0;
   }
 
   /* The page gives way over a short stretch, and ends on the line of the song
