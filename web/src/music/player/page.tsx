@@ -120,7 +120,7 @@ export function MusicNowPlaying() {
           <Rail music={music} />
           <div className="player-row">
             <div className="player-zone player-zone-bottom-left">
-              <Transport music={music} withStop={false} />
+              <Transport music={music} withStop={false} greyedWhenNone disc />
             </div>
             <div className="player-zone player-zone-bottom-right">
               <HeartButton id={song.id} />
