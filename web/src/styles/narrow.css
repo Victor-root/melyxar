@@ -325,52 +325,85 @@
     box-shadow: none;
   }
 
-  .header-side > :not(.header-glass, .header-glass-end) {
+  .header-side > :not(.header-glass, .header-glass-halo, .header-glass-cap) {
     position: relative;
     pointer-events: auto;
   }
 
-  /* The run of glass, cut where the round end begins. Cut by a box that
-     hides what passes beyond it, with room kept for the glow, rather than by
-     a clip: a clip around glass leaves the glass nothing behind it to blur. */
+  /* The glass is one slice from end to end, so that it has no join to show
+     at any screen density: a slice resized at every step had its blur
+     redrawn at every step, and two slices meeting had a line where they met.
+     The box that cuts it is the shape of the piece, round at the end that
+     stays, and hides what passes beyond it rather than clipping by a path: a
+     clip around glass leaves the glass nothing behind it to blur. */
   .header-glass {
     display: block;
     position: absolute;
-    top: calc(-1px - var(--glass-glow-room));
-    bottom: calc(-1px - var(--glass-glow-room));
-    left: calc(-1px - var(--glass-glow-room));
-    right: calc(var(--header-piece) / 2 - 1px);
+    inset: -1px;
     overflow: hidden;
+    border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
     pointer-events: none;
   }
 
   .header-glass-run {
     position: absolute;
+    inset: 0;
+    border-right-width: 0;
+    border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+    box-shadow: none;
+    transition: transform 340ms var(--ease);
+  }
+
+  .header-side[data-folded] .header-glass-run,
+  .header-side[data-folded] .header-glass-halo-run {
+    transform: translateX(calc(100% - var(--header-folded, 100%)));
+  }
+
+  /* What the box that cuts the glass would cut off of its line and its glow,
+     drawn by pieces of their own: the line and glow along the run, which
+     slide with it and stop where the round end begins, and the round end's
+     own. Neither runs short of the other, the end going on under the run out
+     of sight for as far as its glow reaches: ending at the join, a glow fades
+     there and shows as a line across the page. */
+  .header-glass-halo,
+  .header-glass-cap {
+    display: block;
+    position: absolute;
+    top: calc(-1px - var(--glass-glow-room));
+    bottom: calc(-1px - var(--glass-glow-room));
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .header-glass-halo {
+    left: calc(-1px - var(--glass-glow-room));
+    right: calc(var(--header-piece) / 2 - 1px);
+  }
+
+  .header-glass-halo-run {
+    position: absolute;
     top: var(--glass-glow-room);
     bottom: var(--glass-glow-room);
     left: var(--glass-glow-room);
-    width: calc(100% - var(--glass-glow-room) + var(--header-piece) / 2 + 1px);
-    border-right-width: 0;
+    width: calc(100% - var(--glass-glow-room) + var(--header-piece) / 2);
+    border-color: transparent;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     transition: transform 340ms var(--ease);
   }
 
-  .header-side[data-folded] .header-glass-run {
-    transform: translateX(calc(100% - var(--header-folded, 100%)));
+  .header-glass-cap {
+    left: calc(100% - var(--header-piece) / 2 + 1px);
+    right: calc(-1px - var(--glass-glow-room));
   }
 
   .header-glass-end {
-    display: block;
     position: absolute;
-    top: -1px;
-    bottom: -1px;
-    right: -1px;
-    width: calc(var(--header-piece) / 2);
+    top: var(--glass-glow-room);
+    bottom: var(--glass-glow-room);
+    left: calc(var(--glass-glow-room) * -1);
+    right: var(--glass-glow-room);
     border-left-width: 0;
     border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
-    clip-path: inset(calc(var(--glass-glow-room) * -1) calc(var(--glass-glow-room) * -1)
-      calc(var(--glass-glow-room) * -1) 0);
-    pointer-events: none;
   }
 
   /* The buttons stand in the band whether shown or not, and come and go by
