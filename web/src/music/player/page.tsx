@@ -18,7 +18,7 @@ import { useIsAFilmOnScreen } from "../../on-screen";
 import { useBranding } from "../../player/logo";
 import { useSettings } from "../../settings";
 import { Cover } from "./bar";
-import { HeartButton, Rail, Transport, Volume, Ways } from "./controls";
+import { HeartButton, Rail, StopButton, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
@@ -38,6 +38,8 @@ export function MusicNowPlaying() {
   const shown = nowPlaying.marked && song !== null && !film;
   const [side, setSide] = useState<"queue" | "lyrics">("queue");
   const [onLyrics, setOnLyrics] = useState(false);
+  const page = useRef<HTMLDivElement>(null);
+  const bottom = useRef<HTMLDivElement>(null);
   const onAPhone = useMediaQuery("(max-width: 760px)");
   const reduced = useMediaQuery("(prefers-reduced-motion: reduce)");
   const leaving = useLeaving(shown, song !== null && !film, reduced ? 0 : LEAVE_MS);
@@ -62,12 +64,26 @@ export function MusicNowPlaying() {
     }
   }, [marked, song, forget]);
 
+  /* The pages run behind the foot of the screen, which is clear glass over
+     them: how tall it is says how much room they keep at their end. */
+  const hasBottom = onAPhone && song !== null;
+  useEffect(() => {
+    const element = bottom.current;
+    const root = page.current;
+    if (!hasBottom || !element || !root) {
+      return;
+    }
+    const watcher = new ResizeObserver(() => root.style.setProperty("--now-bottom", `${element.offsetHeight}px`));
+    watcher.observe(element);
+    return () => watcher.disconnect();
+  }, [hasBottom, shown, leaving]);
+
   if ((!shown && !leaving) || !song) {
     return null;
   }
 
   return (
-    <div className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
+    <div ref={page} className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
       <div className="music-now-glow" aria-hidden="true" />
       {onAPhone && <PhoneHeader title={t(onLyrics ? "music.lyrics" : "music.queue")} close={close} />}
 
@@ -98,17 +114,18 @@ export function MusicNowPlaying() {
       )}
 
       {onAPhone && (
-        <div className="player-bottom">
+        <div className="player-bottom" ref={bottom}>
           <BehindThePlayer />
           <Rail music={music} />
           <div className="player-row">
             <div className="player-zone player-zone-bottom-left">
-              <Transport music={music} />
+              <Transport music={music} withStop={false} />
             </div>
             <div className="player-zone player-zone-bottom-right">
               <HeartButton id={song.id} />
               <Volume music={music} />
               <Ways music={music} />
+              <StopButton music={music} />
             </div>
           </div>
         </div>

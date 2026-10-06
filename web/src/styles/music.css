@@ -1726,9 +1726,35 @@
     display: none;
   }
 
+  .music-now-header {
+    position: relative;
+  }
+
+  /* In the middle of the screen rather than hugging the piece at the left. */
   .music-now-heading {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
     font-size: 1.2rem;
     font-weight: 650;
+    pointer-events: none;
+  }
+
+  /* Clear glass at the foot: the pages run behind it, fading as they go under
+     it, and it takes the presses over them. */
+  .music-now .player-bottom {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    padding-top: 28px;
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--surface-raised) 92%, transparent) 55%,
+      transparent
+    );
   }
 
   /* The queue under the cover and the words of the song, side by side: each
@@ -1756,7 +1782,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--gap-wide);
-    padding: var(--gap) var(--gutter);
+    padding: var(--gap) var(--gutter) calc(var(--now-bottom, 0px) + var(--gap));
     overflow-y: auto;
     scroll-snap-align: start;
     scroll-snap-stop: always;
