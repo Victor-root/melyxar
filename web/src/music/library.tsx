@@ -15,6 +15,7 @@ import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
 import { useReachEnd } from "../components/reach-end";
+import { LETTER_ATTRIBUTE, useRailScrub } from "../components/rail-scrub";
 import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
@@ -395,6 +396,11 @@ function Lettered<T>({
   }, [landing, items]);
 
   const shownLetters = letters && letters.length > 1 ? letters : null;
+  const scrub = useRailScrub((index) => {
+    if (shownLetters) {
+      void jumpTo(shownLetters[index]);
+    }
+  });
   return (
     <>
       {paged.failed && <p className="notice">{t("error.unreachable")}</p>}
@@ -412,13 +418,15 @@ function Lettered<T>({
             className="letters"
             aria-label={t("library.letters")}
             style={{ ["--letters" as string]: shownLetters.length }}
+            {...scrub.rail}
           >
-            {shownLetters.map((letter) => (
+            {shownLetters.map((letter, index) => (
               <button
                 key={letter.letter}
                 type="button"
                 className="letter"
-                onClick={() => void jumpTo(letter)}
+                {...{ [LETTER_ATTRIBUTE]: index }}
+                onClick={() => scrub.press(index)}
                 title={String(letter.count)}
               >
                 {letter.letter.toUpperCase()}
