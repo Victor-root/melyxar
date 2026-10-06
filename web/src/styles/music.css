@@ -1744,22 +1744,21 @@
     bottom: 0;
     left: 0;
     z-index: 2;
-    padding-top: 28px;
+    padding-top: 0;
     background: none;
     isolation: isolate;
   }
 
-  /* The glass itself, on a layer of its own so that its fade at the top does
-     not take the buttons along: what passes behind is blurred, more so the
-     nearer the foot. */
+  /* The glass itself, on a layer of its own so that it does not take the
+     buttons along. It begins on the line of the song, which is the middle of
+     the bar that holds it: what passes behind is blurred from there down. */
   .music-now .player-bottom::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: 16px 0 0;
     z-index: -1;
     background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
     backdrop-filter: blur(14px);
-    mask-image: linear-gradient(to top, #000 70%, transparent);
     pointer-events: none;
   }
 
