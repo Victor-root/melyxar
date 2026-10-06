@@ -1823,6 +1823,11 @@
     flex: none;
   }
 
+  /* What is playing stands in the middle of its page. */
+  .music-now-page-song {
+    justify-content: center;
+  }
+
   .music-now-page:not(.music-now-page-queue) .music-now-queue {
     flex: 1;
   }
