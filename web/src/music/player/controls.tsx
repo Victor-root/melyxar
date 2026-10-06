@@ -265,6 +265,7 @@ export function Rail({ music }: { music: Music }) {
       </span>
       <div
         className="player-rail"
+        data-dragging={dragging ? "yes" : undefined}
         ref={rail}
         role="slider"
         tabIndex={0}

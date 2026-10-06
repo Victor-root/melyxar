@@ -648,12 +648,15 @@
 
 /* The bar swells under a hand, which is what says it can be grabbed. */
 .player-rail:hover .player-rail-fill,
-.player-rail:focus-visible .player-rail-fill {
+.player-rail:focus-visible .player-rail-fill,
+.player-rail[data-dragging] .player-rail-fill {
   height: var(--player-rail-hovered);
 }
 
+/* Held by a finger, which has no hover to show it. */
 .player-rail:hover .player-rail-handle,
-.player-rail:focus-visible .player-rail-handle {
+.player-rail:focus-visible .player-rail-handle,
+.player-rail[data-dragging] .player-rail-handle {
   transform: scaleY(var(--player-handle-grow));
   opacity: 1;
 }
