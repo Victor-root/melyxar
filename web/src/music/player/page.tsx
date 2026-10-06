@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Song } from "../api";
+import { PageBackdrop } from "../../components/backdrop";
 import { ScrollBar } from "../../components/scrollbar";
 import { ServerMark } from "../../components/server-mark";
 import { BackIcon } from "../../icons";
@@ -84,7 +85,7 @@ export function MusicNowPlaying() {
 
   return (
     <div ref={page} className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`} role="dialog" aria-modal="true" aria-label={t("music.now_playing")}>
-      <div className="music-now-glow" aria-hidden="true" />
+      <PageBackdrop inPlace />
       {onAPhone && <PhoneHeader title={t(onLyrics ? "music.lyrics" : "music.queue")} close={close} />}
 
       {onAPhone ? (
