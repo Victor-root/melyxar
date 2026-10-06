@@ -1697,9 +1697,9 @@
     width: 48px;
   }
 
-  /* A little nearer the left edge, which looks as far as the foot is. */
+  /* The cover in the corner: 8 points from the left edge and from the foot. */
   .music-bar-dock .music-bar-row {
-    margin-left: -2px;
+    margin: 8px 0 0 -4px;
   }
 
   .music-bar-dock .player-rail {
