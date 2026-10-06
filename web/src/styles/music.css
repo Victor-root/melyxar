@@ -1697,6 +1697,11 @@
     width: 52px;
   }
 
+  /* A little nearer the left edge, which looks as far as the foot is. */
+  .music-bar-dock .music-bar-row {
+    margin-left: -2px;
+  }
+
   .music-bar-dock .player-rail {
     height: 8px;
   }
