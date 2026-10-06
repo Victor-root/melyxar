@@ -1697,9 +1697,15 @@
     width: 48px;
   }
 
-  /* The cover in the corner: 8 points from the left edge and from the foot. */
+  /* The cover stands in the corner, 10 points from the left edge and from the
+     foot, the row being held to the foot of the bar. */
+  .music-bar-dock {
+    justify-content: space-between;
+    padding-bottom: 10px;
+  }
+
   .music-bar-dock .music-bar-row {
-    margin: 8px 0 0 -4px;
+    margin-left: -2px;
   }
 
   .music-bar-dock .player-rail {
