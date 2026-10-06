@@ -633,7 +633,8 @@
     top: var(--header-edge);
     left: calc(50% - 28px);
     right: calc(50% - 28px);
-    z-index: 30;
+    /* Under the bar at the top, whose lists unfold over it. */
+    z-index: 19;
     height: var(--header-piece);
     min-height: 0;
     padding: 0;
@@ -647,7 +648,9 @@
       transform var(--calm) var(--ease);
   }
 
+  /* Rolled out, it is over the whole band, pieces included. */
   .browse-piece.music-tabs[data-unrolled="yes"] {
+    z-index: 30;
     left: var(--header-edge);
     right: var(--header-edge);
     transition-duration: 340ms, 340ms, var(--calm);
