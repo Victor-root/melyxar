@@ -1750,12 +1750,12 @@
   }
 
   /* The glass itself, on a layer of its own so that it does not take the
-     buttons along. It begins on the line of the song, which is the middle of
-     the bar that holds it: what passes behind is blurred from there down. */
+     buttons along. It begins just above the line of the song, which is held in
+     the middle of its bar: what passes behind is blurred from there down. */
   .music-now .player-bottom::before {
     content: "";
     position: absolute;
-    inset: 16px 0 0;
+    inset: 12px 0 0;
     z-index: -1;
     background: color-mix(in srgb, var(--surface-deep) 55%, transparent);
     backdrop-filter: blur(14px);
