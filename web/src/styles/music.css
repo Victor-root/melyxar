@@ -268,6 +268,10 @@
 .music-listened-pages {
   display: flex;
   align-items: flex-start;
+  gap: 16px;
+  margin-inline: -8px;
+  padding-inline: 8px;
+  scroll-padding-inline: 8px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   will-change: scroll-position;
@@ -594,7 +598,10 @@
 .music-songs.music-songs-compact .music-song-full {
   grid-template-columns: 30px 40px minmax(0, 1fr) 20px 4ch;
   column-gap: 8px;
-  padding-inline: 0;
+  /* The frame of the line playing reaches out beyond its words, which stay
+     where the rest of the page's are. */
+  padding-inline: 8px;
+  margin-inline: -8px;
 }
 
 .music-songs-compact .music-song-full {
