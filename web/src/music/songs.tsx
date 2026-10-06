@@ -9,12 +9,12 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { asClock } from "../clock";
 import { useShownPicture } from "../components/picture";
-import { PlayIcon } from "../icons";
+import { HeartIcon, PlayIcon } from "../icons";
 import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
-import { useGoneSongs } from "./marks";
+import { useGoneSongs, useMusicMarks } from "./marks";
 import { PlayingWave } from "./playing-wave";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
@@ -93,13 +93,31 @@ export function Cover({ song }: { song: Song }) {
 }
 
 /** What can be done with a song, on its line, as far as there is room. */
-function Actions({ song, inline, extra }: { song: Song; inline: number; extra?: MenuLine[] }) {
+function Actions({
+  song,
+  inline,
+  extra,
+  heartInMenu,
+}: {
+  song: Song;
+  inline: number;
+  extra?: MenuLine[];
+  heartInMenu: boolean;
+}) {
   const { t } = useSettings();
+  const marks = useMusicMarks();
   const { actions, dialog } = useSongActions([song], true);
   const carried = actions.slice(0, inline);
+  const liked = marks.liked(song.id);
+  const heart: MenuLine = {
+    key: "heart",
+    said: t(liked ? "card.unfavourite" : "card.favourite"),
+    mark: <HeartIcon size={17} filled={liked} />,
+    act: () => marks.setLiked(song.id, !liked),
+  };
   return (
     <span className="music-song-actions">
-      <Heart id={song.id} size={16} />
+      {!heartInMenu && <Heart id={song.id} size={16} />}
       {carried.map((action) => (
         <button
           key={action.key}
@@ -117,7 +135,7 @@ function Actions({ song, inline, extra }: { song: Song; inline: number; extra?: 
         songs={[song]}
         deletable
         label={t("music.more_about", { title: song.title })}
-        extra={extra}
+        extra={heartInMenu ? [heart, ...(extra ?? [])] : extra}
         inline={carried.length}
       />
     </span>
@@ -130,6 +148,7 @@ export function SongList({
   showAlbum = true,
   hideArtists,
   menuOnly,
+  compact,
   first = 0,
   onPlay,
   moreFor,
@@ -144,6 +163,9 @@ export function SongList({
   /** Every action but the heart goes into the menu of the line, whatever the
       room: the name keeps all of it. */
   menuOnly?: boolean;
+  /** For a phone's narrow lists: no number and no heart on the line, the
+      name taking the room, and the heart in the menu of the line. */
+  compact?: boolean;
   /** The place of the first line in the whole list. */
   first?: number;
   /** Plays the list from the line pressed. */
@@ -158,7 +180,7 @@ export function SongList({
   const inline = menuOnly ? 0 : fit;
   const gone = useGoneSongs();
   return (
-    <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}`}>
+    <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}${compact ? " music-songs-compact" : ""}`}>
       {songs.map((song, index) => {
         if (gone.has(song.id)) {
           return null;
@@ -190,9 +212,11 @@ export function SongList({
                 </button>
               )}
             </span>
-            <span className="music-song-number">
-              {current ? <PlayingWave playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
-            </span>
+            {!compact && (
+              <span className="music-song-number">
+                {current ? <PlayingWave playing={playing} /> : numbered === "track" ? (song.track ?? "") : first + index + 1}
+              </span>
+            )}
             <Cover song={song} />
             <span className="music-song-words">
               <span className="music-song-title">{song.title}</span>
@@ -207,7 +231,7 @@ export function SongList({
                 {song.album && <Link to={`/music/album/${song.album.id}`}>{song.album.name}</Link>}
               </span>
             )}
-            <Actions song={song} inline={inline} extra={moreFor?.(index)} />
+            <Actions song={song} inline={inline} extra={moreFor?.(index)} heartInMenu={!!compact} />
             <span className="music-song-length" title={t("music.length")}>
               {song.seconds === null ? "" : asClock(song.seconds)}
             </span>

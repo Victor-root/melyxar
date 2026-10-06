@@ -586,6 +586,19 @@
   grid-template-columns: 40px 4ch 44px minmax(0, 1fr) auto 6ch;
 }
 
+/* The compact line of a phone: the play button, the cover, the name, the
+   menu and the length, and nothing else. */
+.music-songs.music-songs-compact .music-song-full {
+  grid-template-columns: 36px 40px minmax(0, 1fr) auto 5ch;
+}
+
+/* The three dots of its menu stand one above another, which takes less of
+   the width than side by side. */
+.music-songs-compact .music-more {
+  width: 24px;
+  transform: rotate(90deg);
+}
+
 /* What separates two lines is what separates "continue watching" from
    "up next" on the home page: the accent, faint, and the light falling off
    it, fading out at both ends rather than cut off. */
