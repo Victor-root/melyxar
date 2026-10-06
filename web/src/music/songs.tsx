@@ -52,11 +52,15 @@ const NARROW = 600;
  * Read once for the whole list, from its own width, so no line measures
  * anything.
  */
-function useActionsThatFit(list: React.RefObject<HTMLOListElement | null>, showAlbum: boolean): number {
+function useActionsThatFit(
+  list: React.RefObject<HTMLOListElement | null>,
+  showAlbum: boolean,
+  wanted: boolean,
+): number {
   const [fit, setFit] = useState(0);
   useLayoutEffect(() => {
     const element = list.current;
-    if (!element) {
+    if (!element || !wanted) {
       return;
     }
     const measure = () => {
@@ -68,8 +72,8 @@ function useActionsThatFit(list: React.RefObject<HTMLOListElement | null>, showA
     const watcher = new ResizeObserver(measure);
     watcher.observe(element);
     return () => watcher.disconnect();
-  }, [list, showAlbum]);
-  return fit;
+  }, [list, showAlbum, wanted]);
+  return wanted ? fit : 0;
 }
 
 export function Cover({ song }: { song: Song }) {
@@ -174,8 +178,9 @@ export function SongList({
   moreFor?: (index: number) => MenuLine[];
 }) {
   const list = useRef<HTMLOListElement>(null);
-  const fit = useActionsThatFit(list, showAlbum);
-  const inline = menuOnly ? 0 : fit;
+  /* A list whose lines put every action in their menu has nothing to
+     measure. */
+  const inline = useActionsThatFit(list, showAlbum, !menuOnly);
   const gone = useGoneSongs();
   return (
     <ol ref={list} className={`music-songs${showAlbum ? "" : " music-songs-no-album"}${compact ? " music-songs-compact" : ""}`}>

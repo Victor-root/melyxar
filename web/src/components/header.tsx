@@ -268,7 +268,9 @@ export function Header({
       const shown = piece.getBoundingClientRect().right - arrow.getBoundingClientRect().left;
       piece.style.setProperty("--header-folded", `${Math.ceil(shown) + FOLDED_AIR}px`);
     };
-    measure();
+    /* First read by the watcher itself, once the page is laid out and before
+       it is painted: read here, it laid the whole page out halfway through
+       being put together. */
     const watching = new ResizeObserver(measure);
     watching.observe(piece);
     watching.observe(arrow);
