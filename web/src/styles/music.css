@@ -1777,7 +1777,7 @@
   .music-now .player-bottom::before {
     content: "";
     position: absolute;
-    inset: 14px 0 0;
+    inset: calc(24px - var(--player-rail) / 2) 0 0;
     z-index: -1;
     background: color-mix(in srgb, var(--surface-deep) 25%, transparent);
     backdrop-filter: blur(14px);
