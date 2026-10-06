@@ -19,7 +19,7 @@ import type { MusicTab } from "./tabs";
 const ARROW_ROOM = 32;
 
 /** How long the tabs of a phone stay rolled out once nobody has touched them. */
-const UNROLLED_MS = 2500;
+const UNROLLED_MS = 2000;
 
 export function TabsBar({
   tabs,
@@ -47,6 +47,21 @@ export function TabsBar({
   }, []);
 
   useEffect(() => () => window.clearTimeout(rollUp.current), []);
+
+  /* A press anywhere else rolls them up at once. */
+  const bubble = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!unrolled) {
+      return;
+    }
+    const away = (event: PointerEvent) => {
+      if (!bubble.current?.contains(event.target as Node)) {
+        setUnrolled(false);
+      }
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [unrolled]);
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -102,6 +117,7 @@ export function TabsBar({
 
   const bar = (
     <nav
+      ref={bubble}
       className="browse-piece music-tabs"
       aria-label={t("music.tabs")}
       data-unrolled={unrolled ? "yes" : "no"}
