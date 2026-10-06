@@ -528,7 +528,7 @@
      screen. */
   .row {
     --fade-lead: 0px;
-    --fade-length: 40px;
+    --fade-length: 24px;
   }
 
   .row-arrow {
