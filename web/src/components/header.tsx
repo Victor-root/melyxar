@@ -76,6 +76,9 @@ import { music } from "../music/api";
 import { musicScopeOf, quickLinesOf } from "../music/search";
 import type { QuickLine } from "../music/search";
 
+/** How long the buttons of the bar stay unfolded once nobody has touched it. */
+const FOLDS_AFTER_MS = 3000;
+
 /**
  * The two keys that reach the search field, written the way this machine
  * writes them.
@@ -209,6 +212,38 @@ export function Header({
   /* Whether the buttons of the bar are put away behind the arrow beside the
      account, which a phone offers and nothing wider draws. */
   const [folded, setFolded] = useState(true);
+
+  /* Unfolded, the buttons put themselves away again after a few seconds of
+     nobody touching the bar, unless one of its lists or its field is open. */
+  useEffect(() => {
+    const piece = side.current;
+    if (folded || !piece) {
+      return;
+    }
+    let timer = 0;
+    const wait = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const open = piece.querySelector('[aria-expanded="true"]:not(.header-fold), input:focus');
+        if (open) {
+          wait();
+        } else {
+          setFolded(true);
+        }
+      }, FOLDS_AFTER_MS);
+    };
+    wait();
+    const events = ["pointerdown", "keydown", "focusin", "scroll"] as const;
+    for (const type of events) {
+      piece.addEventListener(type, wait, { capture: true, passive: true });
+    }
+    return () => {
+      window.clearTimeout(timer);
+      for (const type of events) {
+        piece.removeEventListener(type, wait, { capture: true });
+      }
+    };
+  }, [folded]);
   /* How wide the buttons are when all of them are shown, in points, so that
      the room they take can be grown from nothing to that and back by a
      transition on its own width: the width of a box that is sized by what is
