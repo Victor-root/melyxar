@@ -1730,15 +1730,11 @@
     display: none;
   }
 
-  /* In the middle of what the piece at the left leaves, with the three dots
-     of the pages under it. */
+  /* In the middle of what the piece at the left leaves. */
   .music-now-heading {
     flex: 1;
     min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
+    text-align: center;
     font-size: 1.15rem;
     font-weight: 650;
     line-height: 1.1;
@@ -1748,8 +1744,11 @@
   }
 
   .music-now-dots {
+    flex: none;
     display: flex;
+    justify-content: center;
     gap: 5px;
+    padding: 2px 0 6px;
   }
 
   .music-now-dots > span {
