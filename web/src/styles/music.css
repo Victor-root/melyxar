@@ -1891,8 +1891,14 @@
 
   .music-now .player-seek-end {
     order: 1;
-    margin-top: -8px;
+    margin-top: -4px;
     padding: 0 16px;
+  }
+
+  /* The same tint as the lengths in the lists of songs. */
+  .music-now .player-seek .player-clock {
+    color: var(--text-faint);
+    text-shadow: none;
   }
 
   .music-now-cover-large {
