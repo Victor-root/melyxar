@@ -1736,8 +1736,9 @@
     flex: 1;
     min-width: 0;
     text-align: center;
-    font-size: 1.15rem;
+    font-size: 21px;
     font-weight: 650;
+    letter-spacing: -0.01em;
     line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
