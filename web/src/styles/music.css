@@ -1545,6 +1545,8 @@
    it out and the grip that moves it after its length. */
 .music-queue .music-queue-line {
   grid-template-columns: 40px 4ch 44px minmax(0, 1fr) 6ch 30px 28px;
+  /* Only the lines in sight are made, and each is measured as it is. */
+  content-visibility: visible;
 }
 
 .music-queue-played {

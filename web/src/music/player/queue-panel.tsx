@@ -18,6 +18,8 @@ import { PauseIcon } from "../../player/icons";
 import { useSettings } from "../../settings";
 import { PlayingWave } from "../playing-wave";
 import { Cover } from "../songs";
+import { keeping, linesAround, linesShown } from "./lines-shown";
+import type { Shown } from "./lines-shown";
 import { useMusic } from "./player";
 
 /** How far from the top or foot of the list the pointer sets it scrolling. */
@@ -66,19 +68,91 @@ export function QueuePanel() {
   const taken = useRef<Taken | null>(null);
   const pending = useRef<Pending | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const count = queue.order.length;
+
+  /* Only the lines in sight and a margin around them are made, the rest of
+     the list being room kept above and below them: a queue of a whole
+     library is two thousand songs. Every line is as tall as the others. */
+  const [line, setLine] = useState(0);
+  const [made, setMade] = useState<Shown>(() => linesAround(queue.at, count));
+  const scroller = useRef<HTMLElement | null>(null);
+  /* How far down the box the list begins, read when either changes size. */
+  const listTop = useRef(0);
+  const shown = keeping({ from: Math.min(made.from, count), to: Math.min(made.to, count) }, drag?.from ?? null);
+
+  const placeOfTheList = () => {
+    const element = list.current;
+    const box = scroller.current;
+    if (element && box) {
+      listTop.current =
+        box === element ? 0 : element.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    }
+  };
+  const refresh = useRef(() => {});
+  refresh.current = () => {
+    const box = scroller.current;
+    if (box && line > 0) {
+      const next = linesShown(box.scrollTop, box.clientHeight, listTop.current, line, count);
+      setMade((was) => (was.from === next.from && was.to === next.to ? was : next));
+    }
+  };
+
+  useLayoutEffect(() => {
+    const first = list.current?.firstElementChild as HTMLElement | null | undefined;
+    if (line > 0 || !first) {
+      return;
+    }
+    scroller.current = scrollerOf(first);
+    placeOfTheList();
+    setLine(first.getBoundingClientRect().height);
+  });
+
+  useEffect(() => {
+    const element = list.current;
+    const box = scroller.current;
+    if (line === 0 || !element || !box) {
+      return;
+    }
+    let frame = 0;
+    const scrolled = () => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          refresh.current();
+        });
+      }
+    };
+    const resized = new ResizeObserver(() => {
+      placeOfTheList();
+      refresh.current();
+    });
+    resized.observe(element);
+    resized.observe(box);
+    box.addEventListener("scroll", scrolled, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      resized.disconnect();
+      box.removeEventListener("scroll", scrolled);
+    };
+  }, [line]);
+
+  useEffect(() => refresh.current(), [count]);
 
   /* The song playing in the middle of the box the list scrolls in: put there
      before anything is drawn when the queue opens, so that it never opens on
      the first lines of a long queue, and glided to when the song changes. */
   const centre = (behavior: ScrollBehavior) => {
-    const line = list.current?.children[queue.at] as HTMLElement | undefined;
-    const box = line && scrollerOf(line);
-    if (line && box) {
-      const top = line.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-      box.scrollTo({ top: top - (box.clientHeight - line.offsetHeight) / 2, behavior });
+    const box = scroller.current;
+    if (box && line > 0) {
+      placeOfTheList();
+      box.scrollTo({ top: listTop.current + queue.at * line - (box.clientHeight - line) / 2, behavior });
     }
   };
+  const measured = line > 0;
   useLayoutEffect(() => {
+    if (!measured) {
+      return;
+    }
     centre("instant");
     /* Again a frame or two later, once the page around it has taken its
        room: the foot of the page is measured after the first drawing, and
@@ -88,7 +162,7 @@ export function QueuePanel() {
       frame = requestAnimationFrame(() => centre("instant"));
     });
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [measured]);
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
@@ -208,8 +282,13 @@ export function QueuePanel() {
   };
 
   return (
-    <ol ref={list} className={`music-queue${drag ? " music-queue-sorting" : ""}`}>
-      {queue.order.map((place, at) => {
+    <ol
+      ref={list}
+      className={`music-queue${drag ? " music-queue-sorting" : ""}`}
+      style={{ paddingTop: shown.from * line, paddingBottom: (count - shown.to) * line }}
+    >
+      {queue.order.slice(shown.from, shown.to).map((place, index) => {
+        const at = shown.from + index;
         const one = queue.songs[place];
         const here = at === queue.at;
         const label = here ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: one.title });
