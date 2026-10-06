@@ -85,6 +85,7 @@
 .header-piece,
 .browse-piece,
 .letters,
+.glass-rim,
 .glass-slice {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   /* A glow of the accent over the whole piece, even from end to end, laid on
@@ -96,6 +97,14 @@
   backdrop-filter: blur(18px);
 }
 
+/* The rim of a piece drawn apart from its glass: its line and its glow,
+   with nothing to blur and nothing to tint. */
+.glass-rim {
+  background: none;
+  backdrop-filter: none;
+}
+
+.glass-rim,
 .glass-slice {
   box-shadow:
     var(--shadow-card),
@@ -104,7 +113,8 @@
 
 /* Drawn on a phone only, where the pieces they make grow and shrink. */
 .header-glass,
-.header-glass-end {
+.header-glass-halo,
+.header-glass-cap {
   display: none;
 }
 
