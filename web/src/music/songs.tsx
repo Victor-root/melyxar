@@ -198,6 +198,24 @@ export function SongList({
             className={`music-song music-song-full${current ? " music-song-playing" : ""}`}
             key={song.id}
             data-index={first + index}
+            onClick={
+              compact
+                ? (event) => {
+                    const target = event.target as HTMLElement;
+                    /* Whatever a line holds that does something of its own, and
+                       what a menu opened from it draws elsewhere, is not a press
+                       on the line. */
+                    if (!event.currentTarget.contains(target) || target.closest("a, button")) {
+                      return;
+                    }
+                    if (current) {
+                      toggle();
+                    } else {
+                      onPlay?.(index);
+                    }
+                  }
+                : undefined
+            }
           >
             <span className="music-song-lead">
               {(onPlay || current) && (
