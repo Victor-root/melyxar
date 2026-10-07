@@ -20,11 +20,11 @@ const ANSWERS_AT_MOST: usize = 30;
 /// How wide the posters of a list are asked for, in pixels.
 pub const POSTER_WIDTH: u32 = 342;
 
-/// A title as the libraries hold it, for one account.
+/// A title as the libraries this account sees hold it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Held {
-    /// The work to open, when the account may read the library holding it.
-    pub work_id: Option<WorkId>,
+    /// The work to open.
+    pub work_id: WorkId,
     /// For a series, the seasons with at least one episode.
     pub seasons: Vec<i32>,
 }
@@ -92,15 +92,20 @@ async fn candidates<P: MetadataProvider>(
     })
 }
 
-/// What the libraries hold of some titles, and the requests waiting on
-/// them, catalogue by catalogue.
+/// What the libraries an account sees hold of some titles, and the requests
+/// waiting on them, catalogue by catalogue.
 pub(super) struct Standing {
     held: HashMap<(Catalogue, String), HeldTitle>,
     open: HashMap<(Catalogue, String), Vec<TitleRequest>>,
 }
 
-pub(super) async fn standing_of(state: &AppState, found: &[Candidate]) -> Result<Standing> {
+pub(super) async fn standing_of(
+    state: &AppState,
+    who: &User,
+    found: &[Candidate],
+) -> Result<Standing> {
     let database = state.database();
+    let within = crate::reach::within(who);
     let mut standing = Standing {
         held: HashMap::new(),
         open: HashMap::new(),
@@ -111,7 +116,10 @@ pub(super) async fn standing_of(state: &AppState, found: &[Candidate]) -> Result
             .filter(|one| one.catalogue == catalogue)
             .map(|one| one.external_id.clone())
             .collect();
-        for (id, held) in database.held_titles(word_of(catalogue), &ids).await? {
+        for (id, held) in database
+            .held_titles(word_of(catalogue), &ids, within.as_deref())
+            .await?
+        {
             standing.held.insert((catalogue, id), held);
         }
         for request in database.open_requests_for(word_of(catalogue), &ids).await? {
@@ -143,7 +151,7 @@ pub async fn look_for<P: MetadataProvider>(
     found.retain(|one| seen.insert((one.catalogue, one.external_id.clone())));
     found.truncate(ANSWERS_AT_MOST);
 
-    let standing = standing_of(state, &found).await?;
+    let standing = standing_of(state, who, &found).await?;
     Ok(found
         .into_iter()
         .map(|candidate| found_from(candidate, &standing, who, provider.as_ref()))
@@ -166,10 +174,7 @@ pub(super) fn found_from<P: MetadataProvider>(
             .as_deref()
             .map(|path| provider.image_url_at(path, POSTER_WIDTH)),
         held: standing.held.get(&key).map(|held| Held {
-            work_id: who
-                .permissions
-                .may_access_library(held.library_id)
-                .then_some(held.work_id),
+            work_id: held.work_id,
             seasons: held.seasons.clone(),
         }),
         asked_by: open.len(),
@@ -178,7 +183,8 @@ pub(super) fn found_from<P: MetadataProvider>(
     }
 }
 
-/// The seasons of a series the provider knows, and which are held.
+/// The seasons of a series the provider knows, and which the libraries this
+/// account sees hold.
 pub async fn seasons_of<P: MetadataProvider>(
     state: &AppState,
     provider: &Arc<P>,
@@ -192,7 +198,11 @@ pub async fn seasons_of<P: MetadataProvider>(
         .await?;
     let held = state
         .database()
-        .held_titles(word_of(Catalogue::Series), &[tmdb_id.to_string()])
+        .held_titles(
+            word_of(Catalogue::Series),
+            &[tmdb_id.to_string()],
+            crate::reach::within(who).as_deref(),
+        )
         .await?
         .remove(tmdb_id)
         .map(|held| held.seasons)
@@ -215,8 +225,51 @@ mod tests {
     use melyxar_core::work::WorkKind;
     use melyxar_database::requests::NewRequest;
 
-    use super::super::testing::{a_film, a_series, requests_on, StandIn};
+    use super::super::testing::{a_film, a_series, kept_away, requests_on, StandIn};
     use super::*;
+
+    #[tokio::test]
+    async fn a_title_held_only_out_of_reach_reads_as_not_held() {
+        let (_held, state, viewer) = requests_on().await;
+        let kept = kept_away(&state).await;
+        let provider = Arc::new(StandIn {
+            films: vec![a_film("5", "Paper Moons")],
+            series: vec![a_series("7", "Salt Road", &[(1, 8), (2, 10)])],
+        });
+        let held_for = |who: &User| {
+            let state = state.clone();
+            let provider = Arc::clone(&provider);
+            let who = who.clone();
+            async move {
+                look_for(&state, &provider, &who, "anything", "en")
+                    .await
+                    .expect("found")
+                    .into_iter()
+                    .filter(|one| one.held.is_some())
+                    .count()
+            }
+        };
+        let seasons_held_for = |who: &User| {
+            let state = state.clone();
+            let provider = Arc::clone(&provider);
+            let who = who.clone();
+            async move {
+                seasons_of(&state, &provider, &who, "7", "en")
+                    .await
+                    .expect("read")
+                    .into_iter()
+                    .filter(|season| season.held)
+                    .count()
+            }
+        };
+
+        assert_eq!(held_for(&viewer).await, 2);
+        assert_eq!(seasons_held_for(&viewer).await, 1);
+        // Here already, said of a title they cannot open, would tell them
+        // what the library kept from them holds.
+        assert_eq!(held_for(&kept.kept_from).await, 0);
+        assert_eq!(seasons_held_for(&kept.kept_from).await, 0);
+    }
 
     #[tokio::test]
     async fn an_answer_says_whether_it_is_here_asked_for_or_free() {
@@ -272,7 +325,7 @@ mod tests {
         assert_eq!(found.len(), 4, "films and series together");
         assert_eq!(
             by(Catalogue::Films, "1").held,
-            Some(Held { work_id: Some(film.id), seasons: Vec::new() })
+            Some(Held { work_id: film.id, seasons: Vec::new() })
         );
         assert_eq!(by(Catalogue::Series, "1").held, None, "a series does not share a film's number");
         let asked = by(Catalogue::Films, "2");

@@ -1,8 +1,10 @@
 //! What the tests of requests are set up with: a server with requests on and
 //! an account allowed to ask, and a provider that knows a few titles.
 
+use melyxar_core::id::{LibraryId, WorkId};
+use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{Permissions, User};
-use melyxar_core::work::SeasonLength;
+use melyxar_core::work::{SeasonLength, WorkKind};
 use melyxar_metadata::provider::Result;
 use melyxar_metadata::{
     Candidate, Catalogue, Details, Genre, MetadataProvider, OfferedPicture, PersonDetails, ProviderError,
@@ -22,6 +24,69 @@ pub(super) async fn requests_on() -> (tempfile::TempDir, AppState, User) {
         .expect("account");
     database.set_request_right(viewer.id, true).await.expect("allowed");
     (directory, state, viewer)
+}
+
+/// An account kept from a library holding the film "5" and the first season
+/// of the series "7".
+pub(super) struct KeptAway {
+    /// Granted to the account below, and empty.
+    pub open: LibraryId,
+    /// Sees the open library alone, and may ask.
+    pub kept_from: User,
+}
+
+pub(super) async fn kept_away(state: &AppState) -> KeptAway {
+    let database = state.database();
+    let hidden = database
+        .create_library("Hidden", LibraryKind::Movies, "en", &[])
+        .await
+        .expect("library")
+        .id;
+    let open = database
+        .create_library("Open", LibraryKind::Movies, "en", &[])
+        .await
+        .expect("library")
+        .id;
+    held(state, hidden, WorkKind::Movie, "5").await;
+    let series = held(state, hidden, WorkKind::Series, "7").await;
+    let season = database
+        .create_child_work(hidden, series, 1, WorkKind::Season, "Season", "season")
+        .await
+        .expect("season");
+    database
+        .create_child_work(hidden, season.id, 1, WorkKind::Episode, "Episode", "episode")
+        .await
+        .expect("episode");
+    let kept_from = database
+        .create_user(
+            "kept from it",
+            None,
+            &Permissions {
+                sees_every_library: false,
+                allowed_libraries: vec![open],
+                ..Permissions::viewer()
+            },
+        )
+        .await
+        .expect("account");
+    database.set_request_right(kept_from.id, true).await.expect("allowed");
+    KeptAway { open, kept_from }
+}
+
+/// A title identified in a library, as a scan leaves it.
+pub(super) async fn held(state: &AppState, library: LibraryId, kind: WorkKind, tmdb_id: &str) -> WorkId {
+    let database = state.database();
+    let work = database
+        .create_work(library, kind, "Held", "held", None)
+        .await
+        .expect("work");
+    database.set_work_external_id(work.id, "tmdb", tmdb_id).await.expect("named");
+    sqlx::query("UPDATE works SET identification = 'identified' WHERE id = ?")
+        .bind(work.id.to_db_string())
+        .execute(database.writer())
+        .await
+        .expect("identified");
+    work.id
 }
 
 fn described(id: &str, title: &str, seasons: &[(i32, i32)]) -> Details {

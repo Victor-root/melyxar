@@ -33,7 +33,7 @@ pub async fn describe<P: MetadataProvider>(
         .details(catalogue, tmdb_id, provider_language(language))
         .await?;
     let candidate = details.as_candidate(catalogue);
-    let standing = standing_of(state, std::slice::from_ref(&candidate)).await?;
+    let standing = standing_of(state, who, std::slice::from_ref(&candidate)).await?;
     let found = found_from(candidate, &standing, who, provider.as_ref());
     let held = found.held.as_ref().map(|held| held.seasons.as_slice()).unwrap_or_default();
     let seasons = details

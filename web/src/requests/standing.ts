@@ -8,8 +8,8 @@
 import type { Catalogue, Found, TitleRequest } from "./api";
 
 export type Standing =
-  /** Here, whole. The work opens when this account may read it. */
-  | { is: "here"; workId: string | null }
+  /** Here, whole, in a library this account sees. */
+  | { is: "here"; workId: string }
   /** This account asked for it and waits. */
   | { is: "mine"; request: TitleRequest; others: number }
   /** Free to ask for, by others already or not. A series held in part

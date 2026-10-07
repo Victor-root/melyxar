@@ -12,6 +12,7 @@ use crate::convert::{
     bool_to_int, int_to_bool, parse_id, parse_optional_timestamp, parse_timestamp,
     timestamp_to_text,
 };
+use crate::browse::kept_inside;
 use crate::{Database, DatabaseError, Result};
 
 /// One request about to be written.
@@ -353,11 +354,18 @@ impl Database {
     /// Which of some titles of one catalogue the libraries hold, identified,
     /// by their identifier at the provider. A title held twice is answered
     /// by its oldest copy, with the seasons of every copy.
+    ///
+    /// Only the libraries `within`, when an account was granted some: for
+    /// that account, a title held anywhere else is not held.
     pub async fn held_titles(
         &self,
         catalogue: &str,
         tmdb_ids: &[String],
+        within: Option<&[LibraryId]>,
     ) -> Result<HashMap<String, HeldTitle>> {
+        let Some(inside) = kept_inside(within, "w.library_id") else {
+            return Ok(HashMap::new());
+        };
         if tmdb_ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -371,13 +379,16 @@ impl Database {
                JOIN works w ON w.id = e.work_id
               WHERE e.provider = 'tmdb' AND w.kind = ? AND w.parent_id IS NULL
                 AND w.identification IN ('identified', 'manual')
-                AND e.external_id IN ({})
+                AND e.external_id IN ({}){inside}
               ORDER BY w.added_at",
             vec!["?"; tmdb_ids.len()].join(", ")
         )))
         .bind(kind_of(catalogue));
         for id in tmdb_ids {
             query = query.bind(id);
+        }
+        for library in within.unwrap_or_default() {
+            query = query.bind(library.to_db_string());
         }
         let rows = query.fetch_all(self.reader()).await?;
 
@@ -523,6 +534,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_title_held_only_out_of_reach_is_not_held_for_whoever_cannot_reach_it() {
+        let (database, _, _) = an_account().await;
+        let mut held_in = Vec::new();
+        for name in ["Hidden", "Open"] {
+            let library = database
+                .create_library(name, LibraryKind::Movies, "en", &[(name.to_string(), PathBuf::from(name))])
+                .await
+                .expect("library");
+            let film = database
+                .create_work(library.id, WorkKind::Movie, "Paper Moons", "paper moons", Some(2018))
+                .await
+                .expect("film");
+            database.set_work_external_id(film.id, "tmdb", "70").await.expect("named");
+            sqlx::query("UPDATE works SET identification = 'identified' WHERE id = ?")
+                .bind(film.id.to_db_string())
+                .execute(database.writer())
+                .await
+                .expect("identified");
+            held_in.push((library.id, film.id));
+        }
+        let [(hidden, _), (open, in_the_open)] = held_in[..] else {
+            unreachable!("two libraries")
+        };
+        let asked = vec!["70".to_string()];
+        let held = |within: Option<Vec<LibraryId>>| {
+            let database = database.clone();
+            let asked = asked.clone();
+            async move {
+                database
+                    .held_titles("films", &asked, within.as_deref())
+                    .await
+                    .expect("read")
+                    .remove("70")
+                    .map(|title| (title.library_id, title.work_id))
+            }
+        };
+
+        assert!(held(None).await.is_some(), "every library, for an account that sees them all");
+        assert_eq!(held(Some(vec![open])).await, Some((open, in_the_open)));
+        assert_eq!(held(Some(vec![hidden])).await.map(|(library, _)| library), Some(hidden));
+        assert_eq!(held(Some(Vec::new())).await, None, "granted nothing, holding nothing");
+
+        sqlx::query("DELETE FROM works WHERE id = ?")
+            .bind(in_the_open.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("removed");
+        assert_eq!(held(Some(vec![open])).await, None, "held only where it cannot be seen");
+    }
+
+    #[tokio::test]
     async fn held_titles_are_found_by_their_identifier_with_the_seasons_that_have_episodes() {
         let (database, one, _) = an_account().await;
         let library = database
@@ -551,7 +613,7 @@ mod tests {
             .expect("named");
         let asked = vec!["40".to_string(), "41".to_string()];
         assert!(
-            database.held_titles("series", &asked).await.expect("read").is_empty(),
+            database.held_titles("series", &asked, None).await.expect("read").is_empty(),
             "a work not yet identified is not held"
         );
 
@@ -560,7 +622,7 @@ mod tests {
             .execute(database.writer())
             .await
             .expect("identified");
-        let held = database.held_titles("series", &asked).await.expect("read");
+        let held = database.held_titles("series", &asked, None).await.expect("read");
         assert_eq!(
             held.get("40"),
             Some(&HeldTitle {
@@ -570,7 +632,7 @@ mod tests {
             })
         );
         assert!(
-            database.held_titles("films", &asked).await.expect("read").is_empty(),
+            database.held_titles("films", &asked, None).await.expect("read").is_empty(),
             "a film and a series do not share their identifiers"
         );
 

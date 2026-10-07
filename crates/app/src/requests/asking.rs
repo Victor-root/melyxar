@@ -48,9 +48,15 @@ pub async fn ask<P: MetadataProvider>(
         .await?;
     let known: Vec<i32> = details.season_lengths.iter().map(|season| season.season).collect();
     let catalogue = word_of(asking.catalogue);
+    // Held where this account cannot see is not held, for this account: the
+    // administrator decides what to do with a title already kept from it.
     let held = state
         .database()
-        .held_titles(catalogue, std::slice::from_ref(&details.external_id))
+        .held_titles(
+            catalogue,
+            std::slice::from_ref(&details.external_id),
+            crate::reach::within(who).as_deref(),
+        )
         .await?;
     may_be_asked(
         asking.catalogue,
@@ -109,9 +115,29 @@ pub async fn withdraw(state: &AppState, who: &User, id: RequestId) -> Result<()>
 mod tests {
     use melyxar_core::user::Permissions;
 
-    use super::super::testing::{a_film, a_series, requests_on, StandIn};
+    use super::super::testing::{a_film, a_series, kept_away, requests_on, StandIn};
     use super::*;
     use crate::notifications::live::{follow, Change};
+
+    #[tokio::test]
+    async fn a_title_held_only_out_of_reach_may_be_asked_for_by_whoever_cannot_see_it() {
+        let (_held, state, viewer) = requests_on().await;
+        let kept = kept_away(&state).await;
+        let provider = Arc::new(StandIn {
+            films: vec![a_film("5", "Paper Moons")],
+            series: Vec::new(),
+        });
+
+        assert!(matches!(
+            ask(&state, &provider, &viewer, asking(Catalogue::Films, "5", &[]), "en").await,
+            Err(Trouble::Refused(Refused::AlreadyHere))
+        ));
+        // Refused for being here, it would say what the library kept from
+        // them holds.
+        ask(&state, &provider, &kept.kept_from, asking(Catalogue::Films, "5", &[]), "en")
+            .await
+            .expect("asked like any title not here");
+    }
 
     fn provider() -> Arc<StandIn> {
         Arc::new(StandIn {
