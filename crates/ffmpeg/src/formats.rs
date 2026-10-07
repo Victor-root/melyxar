@@ -52,27 +52,23 @@ pub(crate) fn allowed_from(demuxers: &str) -> String {
 /// What is said before a file the server did not make itself, to hold the
 /// tool to opening it only as one of `allowed`. Said right before the `-i`
 /// the input follows, since it is that one input it speaks for.
-pub(crate) fn only_as(allowed: &str) -> [OsString; 2] {
-    [
-        OsString::from("-format_whitelist"),
-        OsString::from(allowed),
-    ]
+///
+/// Nothing at all when `allowed` is empty: a build that gave no listing holds
+/// the reading to nothing, rather than to an empty whitelist, which the tool
+/// reads as "no format at all" and refuses every file for. Decided here and
+/// nowhere else, so no reading can get it wrong on its own.
+pub(crate) fn only_as(allowed: &str) -> Vec<OsString> {
+    if allowed.is_empty() {
+        return Vec::new();
+    }
+    vec![OsString::from("-format_whitelist"), OsString::from(allowed)]
 }
 
 /// Puts [`only_as`] right before the one input a reading takes, for a reading
-/// whose arguments are built without it. For a command of a single input,
-/// which every reading of a picture is.
-///
-/// An empty set is no set: a build that gave no listing holds the reading to
-/// nothing rather than to the empty whitelist, which the tool reads as "no
-/// format at all" and would refuse every file for.
+/// of a single input whose arguments are built without it.
 pub(crate) fn guard_the_one_input(args: &mut Vec<OsString>, allowed: &str) {
-    if allowed.is_empty() {
-        return;
-    }
     if let Some(at) = args.iter().position(|arg| arg == "-i") {
-        let said = only_as(allowed);
-        args.splice(at..at, said);
+        args.splice(at..at, only_as(allowed));
     }
 }
 
@@ -136,7 +132,9 @@ Demuxers:
     fn an_empty_set_adds_no_guard_rather_than_an_empty_whitelist() {
         // An empty whitelist is read by the tool as "no format at all" and
         // refuses every file, so a build that gave no listing must be held to
-        // nothing instead, leaving the reading untouched.
+        // nothing instead, leaving the reading untouched. Asked of both ways
+        // in: the analyser and the subtitles say it themselves.
+        assert!(only_as("").is_empty());
         let mut args = vec![OsString::from("-i"), OsString::from("/films/a.mkv")];
         guard_the_one_input(&mut args, "");
         assert_eq!(args, [OsString::from("-i"), OsString::from("/films/a.mkv")]);
