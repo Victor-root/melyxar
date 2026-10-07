@@ -165,9 +165,12 @@ fn low_priority(tool: &Path) -> TokioCommand {
 /// What the encoder is told: the first sound track, as mono at the rate the
 /// models are made for, written as plain samples.
 pub fn recording_arguments(video: &Path, recording: &Path) -> Vec<OsString> {
-    let mut arguments: Vec<OsString> = ["-hide_banner", "-nostats", "-nostdin", "-loglevel", "error", "-i"]
+    let mut arguments: Vec<OsString> = ["-hide_banner", "-nostats", "-nostdin", "-loglevel", "error"]
         .map(OsString::from)
         .to_vec();
+    // The whole sound is written to the disk before it is listened to.
+    arguments.extend(crate::reading::no_further_than_believable());
+    arguments.push(OsString::from("-i"));
     arguments.push(video.as_os_str().to_os_string());
     arguments.extend(
         ["-map", "0:a:0", "-vn", "-ac", "1", "-ar", SAMPLE_RATE, "-c:a", "pcm_s16le", "-y"]

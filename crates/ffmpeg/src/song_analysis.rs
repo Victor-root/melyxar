@@ -7,7 +7,9 @@
 //! the second output is the sound itself as plain single channel samples, for
 //! whoever writes its spectrum down. A song is decoded once for both, and for
 //! only the one still wanted when the other is already known. Nothing is
-//! written anywhere; what is read is kept by whoever asked.
+//! written anywhere, and nothing of the sound is kept here: it is handed over
+//! as it comes, since an hour of it is a third of a gigabyte and a library of
+//! music holds audiobooks of dozens of hours.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -15,7 +17,7 @@ use std::path::Path;
 use melyxar_core::media::Loudness;
 use tokio::process::Command as TokioCommand;
 
-use crate::process::{AskedToStop, output_of};
+use crate::process::{AskedToStop, output_handed_over};
 use crate::{FfmpegError, Result};
 
 /// How many samples of one second come back for the spectrum.
@@ -33,42 +35,61 @@ pub struct Wanted {
     pub spectrum: bool,
 }
 
-/// What came back: the loudness when it was asked for, and the samples of the
-/// sound when they were.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Analysis {
-    pub loudness: Option<Loudness>,
-    pub samples: Vec<i16>,
-}
-
-/// Reads a song through once for what is wanted of it.
+/// Reads a song through once for what is wanted of it, and answers its
+/// loudness when it was asked for.
+///
+/// The samples of its sound, when they are wanted, are given to `on_samples`
+/// as they come, in pieces of no particular length.
 pub async fn analyse(
     tool: &Path,
     song: &Path,
     wanted: Wanted,
     asked_to_stop: AskedToStop,
-) -> Result<Analysis> {
+    on_samples: &(dyn Fn(&[i16]) + Sync),
+) -> Result<Option<Loudness>> {
     let mut builder = TokioCommand::new(tool);
     builder.args(arguments(song, wanted));
-    let output = output_of(builder, asked_to_stop).await?;
+    // A sample is two bytes, and the pipe may cut between them.
+    let cut_in_two = std::sync::Mutex::new(None::<u8>);
+    let output = output_handed_over(builder, asked_to_stop, &|bytes| {
+        let mut cut_in_two = cut_in_two
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        on_samples(&samples_of(&mut cut_in_two, bytes));
+    })
+    .await?;
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
     }
-    let loudness = if wanted.loudness {
-        let loudness = summary_of(&String::from_utf8_lossy(&output.stderr));
-        if !loudness.is_measured() {
-            return Err(FfmpegError::from_output("ffmpeg", &output));
+    if !wanted.loudness {
+        return Ok(None);
+    }
+    let loudness = summary_of(&String::from_utf8_lossy(&output.stderr));
+    if !loudness.is_measured() {
+        return Err(FfmpegError::from_output("ffmpeg", &output));
+    }
+    Ok(Some(loudness))
+}
+
+/// The samples these bytes hold, the first one finished with the byte the
+/// last piece ended on, and the last byte kept when it begins one.
+fn samples_of(cut_in_two: &mut Option<u8>, mut bytes: &[u8]) -> Vec<i16> {
+    let mut samples = Vec::with_capacity(bytes.len() / 2 + 1);
+    if let Some(first) = cut_in_two.take() {
+        match bytes.split_first() {
+            Some((second, rest)) => {
+                samples.push(i16::from_le_bytes([first, *second]));
+                bytes = rest;
+            }
+            None => *cut_in_two = Some(first),
         }
-        Some(loudness)
-    } else {
-        None
-    };
-    let samples = output
-        .stdout
-        .chunks_exact(2)
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-        .collect();
-    Ok(Analysis { loudness, samples })
+    }
+    let mut pairs = bytes.chunks_exact(2);
+    samples.extend(pairs.by_ref().map(|pair| i16::from_le_bytes([pair[0], pair[1]])));
+    if let Some(last) = pairs.remainder().first() {
+        *cut_in_two = Some(*last);
+    }
+    samples
 }
 
 /// What the tool is told: the first sound of the song through the measure,
@@ -225,12 +246,16 @@ mod tests {
         };
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
-        let analysis = analyse(&tools.ffmpeg, &song, BOTH, AskedToStop::never())
-            .await
-            .expect("read");
-        let loudness = analysis.loudness.expect("measured");
+        let heard = std::sync::Mutex::new(0usize);
+        let loudness = analyse(&tools.ffmpeg, &song, BOTH, AskedToStop::never(), &|samples| {
+            *heard.lock().expect("counted") += samples.len();
+        })
+        .await
+        .expect("read")
+        .expect("measured");
         assert!(loudness.is_measured(), "{loudness:?}");
-        let seconds = analysis.samples.len() as f64 / f64::from(SPECTRUM_SAMPLES_A_SECOND);
+        let heard = *heard.lock().expect("counted");
+        let seconds = heard as f64 / f64::from(SPECTRUM_SAMPLES_A_SECOND);
         assert!(
             (0.9..1.1).contains(&seconds),
             "{seconds} seconds of samples"
@@ -249,10 +274,32 @@ mod tests {
             loudness: false,
             spectrum: true,
         };
-        let analysis = analyse(&tools.ffmpeg, &song, wanted, AskedToStop::never())
-            .await
-            .expect("read");
-        assert_eq!(analysis.loudness, None);
-        assert!(!analysis.samples.is_empty());
+        let heard = std::sync::Mutex::new(0usize);
+        let loudness = analyse(&tools.ffmpeg, &song, wanted, AskedToStop::never(), &|samples| {
+            *heard.lock().expect("counted") += samples.len();
+        })
+        .await
+        .expect("read");
+        assert_eq!(loudness, None);
+        assert!(*heard.lock().expect("counted") > 0);
+    }
+
+    #[test]
+    fn a_sample_cut_in_two_by_the_pipe_is_put_back_together() {
+        let sound: Vec<i16> = vec![1, -2, 300, -32768, 32767, 12345];
+        let bytes: Vec<u8> = sound.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+        for cut in 1..bytes.len() {
+            let mut cut_in_two = None;
+            let mut heard = samples_of(&mut cut_in_two, &bytes[..cut]);
+            heard.extend(samples_of(&mut cut_in_two, &bytes[cut..]));
+            assert_eq!(heard, sound, "cut after byte {cut}");
+            assert_eq!(cut_in_two, None);
+        }
+        let mut cut_in_two = None;
+        let mut heard = Vec::new();
+        for byte in &bytes {
+            heard.extend(samples_of(&mut cut_in_two, std::slice::from_ref(byte)));
+        }
+        assert_eq!(heard, sound, "one byte at a time");
     }
 }

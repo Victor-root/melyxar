@@ -66,6 +66,10 @@ pub fn arguments(
         arguments.push(OsString::from("-skip_frame"));
         arguments.push(OsString::from("nokey"));
     }
+    // The pictures are counted out of the times in the film rather than out
+    // of how long it says it lasts, so times leaping ahead would make them
+    // without end.
+    arguments.extend(crate::reading::no_further_than_believable());
     arguments.push(OsString::from("-i"));
     arguments.push(source.as_os_str().to_os_string());
     // Neither the sound nor the words have anything to do with a picture.

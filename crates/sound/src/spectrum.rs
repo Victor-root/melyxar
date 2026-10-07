@@ -44,42 +44,99 @@ const REFERENCE_SHARE: f32 = 0.98;
 /// sound, is silence and written as silence.
 const SILENCE_DB: f32 = -75.0;
 
-/// The levels of a song: `SPECTRUM_BANDS` bytes for each reading, readings in
-/// the order they come, nought for nothing and 255 for as loud as the song
-/// gets.
-pub fn spectrum_of(samples: &[i16]) -> Vec<u8> {
-    let frames = samples.len().div_ceil(FRAME);
-    if frames == 0 {
-        return Vec::new();
-    }
-    let transform = Transform::of_size(WINDOW);
-    let edges = band_edges();
-    let shape = window_shape();
-    let tilts = tilts(&edges);
+/// The levels of a song, worked out as its sound arrives.
+///
+/// Every reading is made of its own quarter of a second and of nothing
+/// around it, so no more of the song than one reading is ever held: the sound
+/// of an hour is a third of a gigabyte, and an audiobook in a library of music
+/// lasts dozens of hours. What is kept is the reading itself, a few dozen
+/// numbers, until the song is over and they can be judged against each other.
+pub struct SpectrumReading {
+    transform: Transform,
+    edges: [usize; SPECTRUM_BANDS + 1],
+    shape: [f32; WINDOW],
+    tilts: [f32; SPECTRUM_BANDS],
+    /// What came in after the last whole reading.
+    pending: Vec<i16>,
+    /// `SPECTRUM_BANDS` for each reading so far.
+    decibels: Vec<f32>,
+}
 
-    let mut decibels = Vec::with_capacity(frames * SPECTRUM_BANDS);
-    for frame in 0..frames {
+impl Default for SpectrumReading {
+    fn default() -> Self {
+        let edges = band_edges();
+        Self {
+            transform: Transform::of_size(WINDOW),
+            tilts: tilts(&edges),
+            edges,
+            shape: window_shape(),
+            pending: Vec::with_capacity(FRAME),
+            decibels: Vec::new(),
+        }
+    }
+}
+
+impl SpectrumReading {
+    /// The next of the song, in however many pieces it comes.
+    pub fn hear(&mut self, mut samples: &[i16]) {
+        if !self.pending.is_empty() {
+            let taken = (FRAME - self.pending.len()).min(samples.len());
+            self.pending.extend_from_slice(&samples[..taken]);
+            samples = &samples[taken..];
+            if self.pending.len() < FRAME {
+                return;
+            }
+            let frame = std::mem::take(&mut self.pending);
+            self.read(&frame);
+            self.pending = frame;
+            self.pending.clear();
+        }
+        let mut frames = samples.chunks_exact(FRAME);
+        for frame in &mut frames {
+            self.read(frame);
+        }
+        self.pending.extend_from_slice(frames.remainder());
+    }
+
+    /// The levels of the whole song: `SPECTRUM_BANDS` bytes for each reading,
+    /// readings in the order they came, nought for nothing and 255 for as
+    /// loud as the song gets. A last part of a reading counts as one.
+    pub fn levels(mut self) -> Vec<u8> {
+        if !self.pending.is_empty() {
+            let last = std::mem::take(&mut self.pending);
+            self.read(&last);
+        }
+        if self.decibels.is_empty() {
+            return Vec::new();
+        }
+
+        let reference = reference_of(&self.decibels);
+        if reference < SILENCE_DB {
+            return vec![0; self.decibels.len()];
+        }
+        self.decibels
+            .iter()
+            .map(|level| {
+                (((level - (reference - RANGE_DB)) / RANGE_DB).clamp(0.0, 1.0) * 255.0).round()
+                    as u8
+            })
+            .collect()
+    }
+
+    /// Writes down one reading, from its quarter of a second of sound or the
+    /// part of one the song ended on.
+    fn read(&mut self, frame: &[i16]) {
         let mut power = [0.0f32; SPECTRUM_BANDS];
         for window in 0..WINDOWS_A_FRAME {
-            let start = frame * FRAME + window * (FRAME - WINDOW) / (WINDOWS_A_FRAME - 1);
-            add_power_of_window(samples, start, &transform, &shape, &edges, &mut power);
+            let start = window * (FRAME - WINDOW) / (WINDOWS_A_FRAME - 1);
+            add_power_of_window(frame, start, &self.transform, &self.shape, &self.edges, &mut power);
         }
         for (band, power) in power.iter().enumerate() {
             let mean = power / WINDOWS_A_FRAME as f32;
-            decibels.push(10.0 * (mean + 1e-12).log10() + tilts[band]);
+            self.decibels
+                .push(10.0 * (mean + 1e-12).log10() + self.tilts[band]);
         }
     }
-
-    let reference = reference_of(&decibels);
-    if reference < SILENCE_DB {
-        return vec![0; decibels.len()];
-    }
-    decibels
-        .iter()
-        .map(|level| {
-            (((level - (reference - RANGE_DB)) / RANGE_DB).clamp(0.0, 1.0) * 255.0).round() as u8
-        })
-        .collect()
 }
 
 /// Adds to each band the mean strength of the pitches it holds in the window
@@ -162,6 +219,29 @@ fn window_shape() -> [f32; WINDOW] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The levels of a song heard in one piece.
+    fn spectrum_of(samples: &[i16]) -> Vec<u8> {
+        let mut reading = SpectrumReading::default();
+        reading.hear(samples);
+        reading.levels()
+    }
+
+    #[test]
+    fn a_song_heard_in_pieces_reads_exactly_as_one_heard_whole() {
+        // The tool hands its sound over in whatever pieces the pipe makes,
+        // and a reading straddles any number of them.
+        let mut song = note(220.0, 0.6, 2.3);
+        song.extend(note(3_000.0, 0.2, 1.7));
+        let whole = spectrum_of(&song);
+        for piece in [1, 7, 999, FRAME - 1, FRAME, FRAME + 1, 4096, 3 * FRAME + 5] {
+            let mut reading = SpectrumReading::default();
+            for part in song.chunks(piece) {
+                reading.hear(part);
+            }
+            assert_eq!(reading.levels(), whole, "in pieces of {piece}");
+        }
+    }
 
     /// A note of this pitch and loudness, for this many seconds.
     fn note(pitch: f32, loudness: f32, seconds: f32) -> Vec<i16> {

@@ -20,7 +20,7 @@ use melyxar_database::music_analysis::SongToAnalyse;
 use melyxar_ffmpeg::AskedToStop;
 use melyxar_ffmpeg::song_analysis::{Wanted, analyse};
 use melyxar_jobs::JobHandle;
-use melyxar_sound::{SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, spectrum_of};
+use melyxar_sound::{SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, SpectrumReading};
 
 use crate::{AppState, Result};
 
@@ -159,11 +159,26 @@ async fn read(tool: &Path, song: &SongToAnalyse, asked_to_stop: AskedToStop) -> 
         loudness: song.needs_loudness,
         spectrum: song.needs_spectrum,
     };
-    match analyse(tool, &song.path, wanted, asked_to_stop).await {
-        Ok(analysis) => Some(Outcome {
-            loudness: analysis.loudness,
+    // Worked out as the sound comes, never holding more of the song than a
+    // quarter of a second: an audiobook of twenty hours held whole asked for
+    // gigabytes. A reading costs a few transforms, small beside the time the
+    // tool takes to hand over the next piece.
+    let reading = std::sync::Mutex::new(SpectrumReading::default());
+    let heard = analyse(tool, &song.path, wanted, asked_to_stop, &|samples| {
+        reading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .hear(samples);
+    })
+    .await;
+    match heard {
+        Ok(loudness) => Some(Outcome {
+            loudness,
             spectrum: if song.needs_spectrum {
-                spectrum_of_samples(analysis.samples).await
+                let reading = reading
+                    .into_inner()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                spectrum_of(reading).await
             } else {
                 None
             },
@@ -183,10 +198,10 @@ async fn read(tool: &Path, song: &SongToAnalyse, asked_to_stop: AskedToStop) -> 
     }
 }
 
-/// The levels of the sound, written down off the threads that serve requests:
-/// a song of minutes is some thousands of transforms.
-async fn spectrum_of_samples(samples: Vec<i16>) -> Option<Spectrum> {
-    let levels = tokio::task::spawn_blocking(move || spectrum_of(&samples))
+/// The levels of the sound once it is all heard, judged against each other
+/// off the threads that serve requests: a long song is a long list to sort.
+async fn spectrum_of(reading: SpectrumReading) -> Option<Spectrum> {
+    let levels = tokio::task::spawn_blocking(move || reading.levels())
         .await
         .ok()?;
     (!levels.is_empty()).then(|| Spectrum {

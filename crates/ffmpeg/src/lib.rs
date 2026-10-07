@@ -22,6 +22,7 @@ pub mod listening;
 pub mod painting;
 pub mod probe;
 pub mod process;
+mod reading;
 pub mod song_analysis;
 pub mod speech;
 pub mod spoken_lines;

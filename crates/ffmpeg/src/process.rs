@@ -130,10 +130,32 @@ pub(crate) async fn output_of(
 /// kept out of what the tool said, so a failure is reported with its own words
 /// only.
 pub(crate) async fn output_streaming(
+    builder: TokioCommand,
+    asked_to_stop: AskedToStop,
+    on_stdout: &(dyn Fn(&[u8]) + Sync),
+    on_position: &(dyn Fn(Millis) + Sync),
+) -> Result<std::process::Output> {
+    read_through(builder, asked_to_stop, on_stdout, on_position, true).await
+}
+
+/// The same, keeping nothing of what the tool writes: for a tool that writes
+/// more than is worth holding, and a caller that makes what it needs of it as
+/// it comes. The output answered carries the tool's words and none of what it
+/// wrote.
+pub(crate) async fn output_handed_over(
+    builder: TokioCommand,
+    asked_to_stop: AskedToStop,
+    on_stdout: &(dyn Fn(&[u8]) + Sync),
+) -> Result<std::process::Output> {
+    read_through(builder, asked_to_stop, on_stdout, &|_| {}, false).await
+}
+
+async fn read_through(
     mut builder: TokioCommand,
     mut asked_to_stop: AskedToStop,
     on_stdout: &(dyn Fn(&[u8]) + Sync),
     on_position: &(dyn Fn(Millis) + Sync),
+    keeping: bool,
 ) -> Result<std::process::Output> {
     use tokio::io::AsyncReadExt;
 
@@ -161,7 +183,9 @@ pub(crate) async fn output_streaming(
                     break;
                 }
                 on_stdout(&chunk[..read]);
-                all.extend_from_slice(&chunk[..read]);
+                if keeping {
+                    all.extend_from_slice(&chunk[..read]);
+                }
             }
             Ok::<_, std::io::Error>(all)
         };

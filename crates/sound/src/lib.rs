@@ -48,7 +48,7 @@ mod spectrum;
 mod transform;
 
 pub use spectrum::{
-    SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, SPECTRUM_SAMPLES_A_SECOND, spectrum_of,
+    SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, SPECTRUM_SAMPLES_A_SECOND, SpectrumReading,
 };
 
 use melyxar_core::time::Millis;
