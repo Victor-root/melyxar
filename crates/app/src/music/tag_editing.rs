@@ -60,6 +60,34 @@ pub struct Written {
 /// Where the copies of the files are kept before they are written.
 const BACKUPS: &str = "tag-backups";
 
+/// How long a copy is kept: long enough to notice a change gone wrong and
+/// put it back, short of filling the disk with every song ever retagged.
+const KEPT_FOR: time::Duration = time::Duration::days(30);
+
+/// The folder the copies made now go in, each folder named by the moment it
+/// was made. The copies past keeping are cleared away first.
+async fn backups_now(state: &AppState) -> PathBuf {
+    let all = state.config().directories.data.join(BACKUPS);
+    let now = melyxar_core::time::now().unix_timestamp();
+    if let Ok(mut kept) = tokio::fs::read_dir(&all).await {
+        while let Ok(Some(entry)) = kept.next_entry().await {
+            if entry.file_name().to_str().is_some_and(|made| past_keeping(made, now))
+                && let Err(error) = tokio::fs::remove_dir_all(entry.path()).await
+            {
+                tracing::warn!(folder = %entry.path().display(), %error, "an old copy of songs could not be removed");
+            }
+        }
+    }
+    all.join(now.to_string())
+}
+
+/// Whether the copies made at this moment, as their folder is named, are
+/// past keeping. A folder named otherwise is not one of them, and stays.
+fn past_keeping(made: &str, now: i64) -> bool {
+    made.parse::<i64>()
+        .is_ok_and(|made| now.saturating_sub(made) > KEPT_FOR.whole_seconds())
+}
+
 /// What the songs of an album carry in their files, read from the files.
 pub async fn album_tags(state: &AppState, who: &User, album: WorkId) -> Result<Vec<SongTags>> {
     let mut found = Vec::new();
@@ -114,12 +142,7 @@ pub async fn write(
     keep_a_copy: bool,
 ) -> Result<Written> {
     let planned = plan(state, who, wanted, pattern).await?;
-    let backups = state
-        .config()
-        .directories
-        .data
-        .join(BACKUPS)
-        .join(melyxar_core::time::now().unix_timestamp().to_string());
+    let backups = backups_now(state).await;
     let mut written = Written::default();
     let mut libraries: Vec<LibraryId> = Vec::new();
     // A song that nothing changes is left alone, and so is its file: no copy
@@ -185,13 +208,7 @@ pub async fn set_cover(
             .strip_prefix(&on_disk.root_path)
             .unwrap_or(&cover)
             .to_path_buf();
-        let backup = state
-            .config()
-            .directories
-            .data
-            .join(BACKUPS)
-            .join(melyxar_core::time::now().unix_timestamp().to_string())
-            .join(relative);
+        let backup = backups_now(state).await.join(relative);
         copy_into(&cover, &backup).await.map_err(refused)?;
     }
     tokio::fs::write(&cover, jpeg)
@@ -342,6 +359,16 @@ fn refused(reason: impl Into<String>) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_copy_is_kept_a_month_and_what_is_not_a_copy_stays() {
+        let now = 1_800_000_000;
+        let days = |count: i64| (now - count * 24 * 60 * 60).to_string();
+        assert!(!past_keeping(&days(29), now));
+        assert!(!past_keeping(&days(30), now));
+        assert!(past_keeping(&days(31), now));
+        assert!(!past_keeping("notes", now), "nothing the server did not make is touched");
+    }
 
     #[test]
     fn a_file_is_renamed_by_the_tags_it_is_given_and_keeps_its_extension() {
