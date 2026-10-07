@@ -12,6 +12,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::media::{SubtitleDetails, SubtitleLayout, Track, TrackKind};
@@ -78,6 +79,9 @@ pub async fn as_web_vtt(
     {
         tracing::debug!(track = %track_id, "a subtitle was already converted and is served from the cache");
         return Ok(destination);
+    }
+    if left_alone(track_id, Instant::now()) {
+        return Err(would_not_convert());
     }
 
     // Asking for one pulls out every one of them, because the reading is the
@@ -158,6 +162,7 @@ pub async fn as_web_vtt(
             .await
     {
         let _ = tokio::fs::remove_file(&being_written).await;
+        given_up_on(track_id, Instant::now());
         tracing::warn!(
             track = %track_id,
             codec = details.codec,
@@ -177,6 +182,7 @@ pub async fn as_web_vtt(
         .unwrap_or(0);
     if written == 0 {
         let _ = tokio::fs::remove_file(&being_written).await;
+        given_up_on(track_id, Instant::now());
         tracing::warn!(
             track = %track_id,
             codec = details.codec,
@@ -204,6 +210,43 @@ pub async fn as_web_vtt(
     }
     tracing::info!(track = %track_id, bytes = written, "a subtitle is ready for the browser");
     Ok(destination)
+}
+
+/// How long a subtitle that would not convert is left alone before it is
+/// tried again. Turned on again and again, or asked for by a page every time
+/// it opens, it would otherwise have the whole film read through each time
+/// for the same failure, and every other subtitle of the film along with it.
+const LEFT_ALONE_FOR: Duration = Duration::from_secs(60 * 60);
+
+/// The subtitles that would not convert lately, and when.
+fn given_up() -> std::sync::MutexGuard<'static, HashMap<TrackId, Instant>> {
+    static GIVEN_UP: OnceLock<std::sync::Mutex<HashMap<TrackId, Instant>>> = OnceLock::new();
+    GIVEN_UP
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn given_up_on(track: TrackId, at: Instant) {
+    let mut given_up = given_up();
+    given_up.retain(|_, since| at.duration_since(*since) < LEFT_ALONE_FOR);
+    given_up.insert(track, at);
+}
+
+/// Whether a subtitle would not convert lately and is left alone for now.
+fn left_alone(track: TrackId, at: Instant) -> bool {
+    given_up()
+        .get(&track)
+        .is_some_and(|since| at.duration_since(*since) < LEFT_ALONE_FOR)
+}
+
+/// What is answered for a subtitle left alone: what was answered when it
+/// would not convert, without reading the film again to answer it.
+fn would_not_convert() -> AppError {
+    AppError::Domain(melyxar_core::Error::new(
+        melyxar_core::error::ErrorCode::Internal,
+        "this subtitle would not convert, and is left alone for a while",
+    ))
 }
 
 /// One film is pulled apart once at a time.
@@ -266,7 +309,7 @@ pub async fn pull_them_all_out(
         let Ok(details) = text_subtitle(track) else {
             continue;
         };
-        if details.is_external {
+        if details.is_external || left_alone(track.id, Instant::now()) {
             continue;
         }
         let destination = cached_at(state, track.id);
@@ -478,6 +521,18 @@ fn text_subtitle(track: &Track) -> Result<&SubtitleDetails> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_subtitle_that_would_not_convert_is_left_alone_for_an_hour() {
+        let track = TrackId::new();
+        let failed_at = Instant::now();
+        assert!(!left_alone(track, failed_at));
+
+        given_up_on(track, failed_at);
+        assert!(left_alone(track, failed_at + Duration::from_secs(59 * 60)));
+        assert!(!left_alone(track, failed_at + LEFT_ALONE_FOR), "tried again after the hour");
+        assert!(!left_alone(TrackId::new(), failed_at), "the others are not");
+    }
 
     /// Whoever turns the subtitles on, for tests about something else.
     fn somebody() -> melyxar_core::user::User {
