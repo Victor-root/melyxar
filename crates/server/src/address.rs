@@ -56,7 +56,7 @@ fn proxy_encrypted(peer: Option<IpAddr>, headers: &HeaderMap) -> bool {
 
 /// Whether a proxy may sit at this address: this machine or the local
 /// network, which is where the one in front of this server lives.
-fn nearby(address: IpAddr) -> bool {
+pub(crate) fn nearby(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
         IpAddr::V6(v6) => {

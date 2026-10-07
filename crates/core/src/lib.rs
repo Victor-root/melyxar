@@ -18,6 +18,7 @@ pub mod music;
 pub mod music_lyrics;
 pub mod music_naming;
 pub mod music_preferences;
+pub mod network;
 pub mod orientation;
 pub mod rating;
 pub mod refresh;

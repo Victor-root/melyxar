@@ -1394,6 +1394,11 @@ KillSignal=SIGTERM
 TimeoutStopSec=30
 KillMode=mixed
 
+# Every connection open holds a file. The usual ceiling of 1024 is reached by
+# somebody opening a few hundred connections and saying nothing, and past it
+# the server can accept nobody, the next film and the next page included.
+LimitNOFILE=65536
+
 # The server needs nothing beyond its own folders and the media it is given.
 NoNewPrivileges=yes
 PrivateTmp=yes

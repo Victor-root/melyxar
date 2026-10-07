@@ -13,7 +13,7 @@
 //! for somebody who locked themselves out and rebooted it.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::IpAddr;
 use std::sync::{Mutex, PoisonError};
 
 use melyxar_core::time::Timestamp;
@@ -33,24 +33,15 @@ const FORGOTTEN_AFTER: time::Duration = time::Duration::days(1);
 /// tried once and went are not kept for ever.
 const SWEPT_EVERY: time::Duration = time::Duration::hours(1);
 
-/// Where tries come from, as they are counted.
-///
-/// An IPv4 address, or the network an IPv6 one belongs to: a single customer
-/// is handed billions of IPv6 addresses, and counting each apart would let
-/// one machine start afresh with every try. Nothing when the address could
+/// Where tries come from, as they are counted: the party behind the address
+/// (see [`melyxar_core::network::party_of`]). Nothing when the address could
 /// not be told, in which case every such try is counted together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Origin(Option<IpAddr>);
 
 impl Origin {
     pub(crate) fn of(address: Option<IpAddr>) -> Self {
-        Self(address.map(|address| match address {
-            IpAddr::V4(_) => address,
-            IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
-                Some(v4) => IpAddr::V4(v4),
-                None => IpAddr::V6(Ipv6Addr::from(u128::from(v6) & (u128::MAX << 64))),
-            },
-        }))
+        Self(address.map(melyxar_core::network::party_of))
     }
 }
 
@@ -273,13 +264,5 @@ mod tests {
         answers.take_a_turn(from("203.0.113.9"), ALLOWED, AT);
         answers.take_a_turn(from("198.51.100.4"), ALLOWED, AT + FORGOTTEN_AFTER);
         assert_eq!(answers.kept().by_origin.len(), 1);
-    }
-
-    #[test]
-    fn one_ipv6_network_is_one_origin() {
-        assert_eq!(from("2001:db8:1:2::1"), from("2001:db8:1:2:ffff::9"));
-        assert_ne!(from("2001:db8:1:2::1"), from("2001:db8:1:3::1"));
-        assert_eq!(from("::ffff:203.0.113.9"), from("203.0.113.9"));
-        assert_ne!(from("203.0.113.9"), from("203.0.113.10"));
     }
 }

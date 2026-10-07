@@ -68,6 +68,11 @@ uuid = { version = "1", features = ["v7", "serde"] }
 time = { version = "0.3", features = ["formatting", "parsing", "serde", "macros"] }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "uuid", "time"] }
 axum = "0.8"
+# What axum serves with, reached directly to give each connection a timer:
+# axum's own way of serving sets none, and without one a client may take for
+# ever to send a request. The same versions axum already builds.
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio", "service"] }
 # Encrypted connections served by the server itself, on the same provider of
 # cryptography the metadata client already builds.
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12", "logging"] }
