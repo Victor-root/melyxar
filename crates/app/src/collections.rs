@@ -34,6 +34,7 @@ pub async fn one(state: &AppState, who: &User, id: CollectionId) -> Result<Optio
 /// or takes it out of them.
 pub async fn holding(state: &AppState, who: &User, work_id: WorkId) -> Result<Vec<CollectionId>> {
     may_manage(who)?;
+    crate::reach::may_read_the_work(state, who, work_id).await?;
     Ok(state.database().hand_made_collections_of(work_id).await?)
 }
 
@@ -46,6 +47,7 @@ pub async fn create(
 ) -> Result<CollectionId> {
     may_manage(who)?;
     let name = named(name)?;
+    crate::reach::may_read_the_works(state, who, works).await?;
     let database = state.database();
     let id = database
         .create_collection(name, &melyxar_library::naming::sort_title(name))
@@ -83,6 +85,7 @@ pub async fn put(
     in_it: bool,
 ) -> Result<()> {
     may_manage(who)?;
+    crate::reach::may_read_the_works(state, who, works).await?;
     let database = state.database();
     let done = match in_it {
         true => database.add_to_collection(id, works).await?,

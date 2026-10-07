@@ -66,6 +66,23 @@ pub async fn may_read_the_work(
     may_read(who, work.library_id)
 }
 
+/// Refuses works when any one of them is in a library this account was not
+/// granted, for whatever is handed a list of them to keep or to change.
+/// Costs nothing for an account that sees every library.
+pub async fn may_read_the_works(
+    state: &AppState,
+    who: &User,
+    works: &[melyxar_core::id::WorkId],
+) -> Result<()> {
+    if who.permissions.sees_the_whole_server() {
+        return Ok(());
+    }
+    for work in works {
+        may_read_the_work(state, who, *work).await?;
+    }
+    Ok(())
+}
+
 /// Refuses a copy of a work whose library this account was not granted.
 ///
 /// Asked before anything is said about the copy, its disk or what the cache
