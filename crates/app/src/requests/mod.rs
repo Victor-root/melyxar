@@ -39,6 +39,8 @@ pub enum Refused {
     /// The administrator accepted it: it is no longer the account's to take
     /// back.
     Accepted,
+    /// The provider asked too often by this account lately.
+    TooFast,
 }
 
 impl Refused {
@@ -50,17 +52,19 @@ impl Refused {
             Self::NoSuchSeason => "no_such_season",
             Self::NoteTooLong => "note_too_long",
             Self::Accepted => "accepted",
+            Self::TooFast => "too_fast",
         }
     }
 
     /// Every one of them, so a test can check each has words on the screen.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::NotAllowed,
         Self::AlreadyHere,
         Self::AlreadyAsked,
         Self::NoSuchSeason,
         Self::NoteTooLong,
         Self::Accepted,
+        Self::TooFast,
     ];
 }
 

@@ -1,6 +1,10 @@
 //! Whether requests are on, and who may make them. An administrator always
 //! may; anybody else once given the right.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock, PoisonError};
+use std::time::{Duration, Instant};
+
 use melyxar_core::id::UserId;
 use melyxar_core::user::User;
 
@@ -45,6 +49,37 @@ pub(super) async fn require(state: &AppState, who: &User) -> Result<()> {
     }
 }
 
+/// The same, for what asks the metadata provider, counted for the account.
+///
+/// The provider holds back the whole server once it is asked too much,
+/// identification included: an account looking titles up as fast as a
+/// program can would leave every film added meanwhile unidentified. Sixty a
+/// minute is one a second, more than anybody types.
+pub(super) async fn require_a_look(state: &AppState, who: &User) -> Result<()> {
+    require(state, who).await?;
+    match a_look_allowed(who.id, Instant::now()) {
+        true => Ok(()),
+        false => Err(Trouble::Refused(Refused::TooFast)),
+    }
+}
+
+/// How many times an account may ask the provider in a minute.
+const LOOKS_A_MINUTE: u32 = 60;
+const A_MINUTE: Duration = Duration::from_secs(60);
+
+/// Counts one look for this account, and answers whether it is allowed.
+fn a_look_allowed(who: UserId, at: Instant) -> bool {
+    static LOOKED: OnceLock<Mutex<HashMap<UserId, (Instant, u32)>>> = OnceLock::new();
+    let mut looked = LOOKED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    looked.retain(|_, (since, _)| at.duration_since(*since) < A_MINUTE);
+    let (_, looks) = looked.entry(who).or_insert((at, 0));
+    *looks += 1;
+    *looks <= LOOKS_A_MINUTE
+}
+
 pub async fn switch(state: &AppState, enabled: bool) -> Result<()> {
     state.database().set_requests_enabled(enabled).await?;
     moved(state);
@@ -85,6 +120,18 @@ mod tests {
 
     use super::*;
     use crate::an_empty_server;
+
+    #[test]
+    fn an_account_asks_the_provider_sixty_times_a_minute_at_most() {
+        let who = UserId::new();
+        let at = Instant::now();
+        for _ in 0..LOOKS_A_MINUTE {
+            assert!(a_look_allowed(who, at));
+        }
+        assert!(!a_look_allowed(who, at + Duration::from_secs(59)));
+        assert!(a_look_allowed(UserId::new(), at), "another account is not held back");
+        assert!(a_look_allowed(who, at + A_MINUTE), "and a minute later, nor is this one");
+    }
 
     #[tokio::test]
     async fn nobody_may_ask_while_off_and_then_administrators_and_who_was_given_the_right() {

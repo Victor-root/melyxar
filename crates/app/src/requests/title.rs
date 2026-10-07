@@ -28,7 +28,7 @@ pub async fn describe<P: MetadataProvider>(
     tmdb_id: &str,
     language: &str,
 ) -> Result<Described> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let details = provider
         .details(catalogue, tmdb_id, provider_language(language))
         .await?;
