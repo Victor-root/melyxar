@@ -135,6 +135,24 @@ impl TmdbProvider {
     }
 }
 
+/// An identifier of this provider, a number, as it goes in the address the
+/// key is sent to. Anything else, a path or a question a request slipped in,
+/// would send the key elsewhere on the provider: it is answered as a title
+/// the provider does not know, without asking.
+fn a_number(id: &str) -> Result<&str> {
+    match !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()) {
+        true => Ok(id),
+        false => Err(ProviderError::Unexpected("not found".to_string())),
+    }
+}
+
+/// The same, for the other catalogue's identifiers: "tt" and a number.
+fn an_imdb_number(id: &str) -> Result<&str> {
+    id.strip_prefix("tt").map(a_number).transpose()?.map(|_| id).ok_or_else(|| {
+        ProviderError::Unexpected("not found".to_string())
+    })
+}
+
 /// The word this provider puts in an address for one of its catalogues, and
 /// the word it names a release date by.
 ///
@@ -204,7 +222,7 @@ impl MetadataProvider for TmdbProvider {
     ) -> Result<Details> {
         let raw: DetailsResponse = self
             .get(
-                &format!("/{}/{external_id}", road_of(catalogue)),
+                &format!("/{}/{}", road_of(catalogue), a_number(external_id)?),
                 &[
                     ("language", language.to_string()),
                     ("append_to_response", extras_of(catalogue).to_string()),
@@ -218,7 +236,7 @@ impl MetadataProvider for TmdbProvider {
     async fn person(&self, external_id: &str, language: &str) -> Result<PersonDetails> {
         let raw: RawPerson = self
             .get(
-                &format!("/person/{external_id}"),
+                &format!("/person/{}", a_number(external_id)?),
                 &[
                     ("language", language.to_string()),
                     // Every language the life is written in, in the same
@@ -240,7 +258,7 @@ impl MetadataProvider for TmdbProvider {
     ) -> Result<SeasonDetails> {
         let raw: RawSeason = self
             .get(
-                &format!("/tv/{series_id}/season/{season_number}"),
+                &format!("/tv/{}/season/{season_number}", a_number(series_id)?),
                 &[("language", language.to_string())],
             )
             .await?;
@@ -318,7 +336,7 @@ impl MetadataProvider for TmdbProvider {
     ) -> Result<Vec<OfferedPicture>> {
         let held: RawImages = self
             .get(
-                &format!("/{}/{external_id}/images", road_of(catalogue)),
+                &format!("/{}/{}/images", road_of(catalogue), a_number(external_id)?),
                 &[("include_image_language", image_languages(language))],
             )
             .await?;
@@ -354,7 +372,7 @@ impl MetadataProvider for TmdbProvider {
     async fn imdb_id(&self, catalogue: Catalogue, external_id: &str) -> Result<Option<String>> {
         let ids: RawExternalIds = self
             .get(
-                &format!("/{}/{external_id}/external_ids", road_of(catalogue)),
+                &format!("/{}/{}/external_ids", road_of(catalogue), a_number(external_id)?),
                 &[],
             )
             .await?;
@@ -364,7 +382,7 @@ impl MetadataProvider for TmdbProvider {
     async fn by_imdb_id(&self, imdb_id: &str, language: &str) -> Result<Option<Candidate>> {
         let found: FindResponse = self
             .get(
-                &format!("/find/{imdb_id}"),
+                &format!("/find/{}", an_imdb_number(imdb_id)?),
                 &[
                     ("external_source", "imdb_id".to_string()),
                     ("language", language.to_string()),
@@ -1213,6 +1231,18 @@ fn country_for_language(language: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_number_goes_in_the_address_the_key_is_sent_to() {
+        assert_eq!(a_number("27205").ok(), Some("27205"));
+        for slipped in ["", "27205/../account", "27205?session_id=x", "../account", "12 3"] {
+            assert!(a_number(slipped).is_err(), "{slipped:?}");
+        }
+        assert_eq!(an_imdb_number("tt1375666").ok(), Some("tt1375666"));
+        for slipped in ["1375666", "tt", "tt13?x=1", "tt../1"] {
+            assert!(an_imdb_number(slipped).is_err(), "{slipped:?}");
+        }
+    }
 
     #[test]
     fn a_life_not_written_in_the_language_asked_for_is_read_in_english() {
