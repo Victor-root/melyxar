@@ -141,7 +141,7 @@ pub async fn look_for<P: MetadataProvider>(
     line: &str,
     language: &str,
 ) -> Result<Vec<Found>> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let line = line.trim();
     if line.is_empty() {
         return Ok(Vec::new());
@@ -192,7 +192,7 @@ pub async fn seasons_of<P: MetadataProvider>(
     tmdb_id: &str,
     language: &str,
 ) -> Result<Vec<SeasonChoice>> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let details = provider
         .details(Catalogue::Series, tmdb_id, provider_language(language))
         .await?;

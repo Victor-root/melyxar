@@ -35,7 +35,7 @@ pub async fn ask<P: MetadataProvider>(
     mut asking: Asking,
     language: &str,
 ) -> Result<TitleRequest> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let note = asking.note.trim();
     if note.chars().count() > LONGEST_NOTE {
         return Err(Trouble::Refused(Refused::NoteTooLong));

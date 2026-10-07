@@ -112,7 +112,7 @@ pub async fn suggestions<P: MetadataProvider>(
     who: &User,
     language: &str,
 ) -> Result<Vec<Shelf>> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let shown_in = provider_language(language);
     let taste = state.database().watched_genres(who.id).await?;
 
@@ -219,7 +219,7 @@ pub async fn more<P: MetadataProvider>(
     page: u32,
     language: &str,
 ) -> Result<Vec<Found>> {
-    access::require(state, who).await?;
+    access::require_a_look(state, who).await?;
     let candidates = provider
         .popular(
             catalogue,
