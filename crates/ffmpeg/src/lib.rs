@@ -160,16 +160,24 @@ impl ToolPaths {
 
         // Asked once, here, rather than on every reading. A build with no
         // listing to give is held to nothing rather than refused: the tool is
-        // there and works, and the guard is one defence among others.
-        let allowed_formats = std::process::Command::new(&ffmpeg)
+        // there and works, and the guard is one defence among others. Said in
+        // the journal, since a defence that is off must never be off quietly.
+        let allowed_formats: String = std::process::Command::new(&ffmpeg)
             .args(["-hide_banner", "-demuxers"])
             .stdin(std::process::Stdio::null())
             .output()
             .ok()
             .filter(|output| output.status.success())
             .map(|output| crate::formats::allowed_from(&String::from_utf8_lossy(&output.stdout)))
-            .unwrap_or_default()
-            .into();
+            .unwrap_or_default();
+        if allowed_formats.is_empty() {
+            tracing::warn!(
+                encoder = %ffmpeg.display(),
+                "the encoder gave no list of the formats it reads, so files are not held to \
+                 the formats they may be"
+            );
+        }
+        let allowed_formats = allowed_formats.into();
 
         Ok(Self {
             ffmpeg,

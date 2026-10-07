@@ -886,38 +886,54 @@ mod tests {
 
     #[tokio::test]
     async fn a_file_disguised_as_a_video_but_made_of_a_playlist_is_refused() {
-        // A reader that opens other files it names, handed a file that looks
-        // like an ordinary video. Refused before it can go and read whatever
-        // it points at. The manifest here names nothing: being read as one of
-        // those readers at all is what is refused.
+        // A list that names another file to open, written into a file that
+        // looks like an ordinary video. The tool recognises such a list by
+        // what it holds, whatever the name says, and goes and reads the file
+        // it names: here a film beside it, elsewhere any file it can reach.
         let Ok(tools) = ToolPaths::discover(None, None) else {
             eprintln!("no media tool here, nothing was probed");
             return;
         };
-        assert!(
-            !tools.allowed_formats().is_empty(),
-            "this build gave a list of readers to hold a file to"
-        );
         let directory = tempfile::tempdir().expect("temporary directory");
+        make_clip(&directory.path().join("another.mkv")).await;
         let disguised = directory.path().join("looks-like-a-film.mkv");
-        std::fs::write(
-            &disguised,
-            concat!(
-                "<?xml version=\"1.0\"?>\n",
-                "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"static\" ",
-                "mediaPresentationDuration=\"PT2S\" ",
-                "profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">",
-                "<Period><AdaptationSet contentType=\"video\">",
-                "<Representation id=\"1\" bandwidth=\"1\"></Representation>",
-                "</AdaptationSet></Period></MPD>",
-            ),
-        )
-        .expect("the file is written");
+        std::fs::write(&disguised, "ffconcat version 1.0\nfile another.mkv\n")
+            .expect("the file is written");
+
+        // Without the guard, the list is opened and the other film read
+        // through it: what makes this test prove something rather than
+        // pass on a file the tool refuses anyway.
+        let unguarded = TokioCommand::new(&tools.ffprobe)
+            .args(["-v", "error", "-show_entries", "format=format_name", "-of", "csv=p=0"])
+            .arg(&disguised)
+            .output()
+            .await
+            .expect("the analyser runs");
+        assert_eq!(String::from_utf8_lossy(&unguarded.stdout).trim(), "concat");
 
         assert!(
             probe(&tools, &disguised).await.is_err(),
-            "a playlist disguised as a video must not be opened as one"
+            "a list disguised as a video must not be opened as one"
         );
+    }
+
+    #[tokio::test]
+    async fn a_build_that_lists_no_formats_still_reads_every_file() {
+        // The guard turned off, never turned into a refusal of everything:
+        // an empty whitelist would have the analyser turn every film away.
+        let Ok(found) = ToolPaths::discover(None, None) else {
+            eprintln!("no media tool here, nothing was probed");
+            return;
+        };
+        let tools = ToolPaths {
+            allowed_formats: String::new().into(),
+            ..found
+        };
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let film = directory.path().join("film.mkv");
+        make_clip(&film).await;
+        assert!(probe(&tools, &film).await.is_ok());
+        assert!(!key_frames(&tools, &film, AskedToStop::never()).await.expect("listed").is_empty());
     }
 
     #[tokio::test]

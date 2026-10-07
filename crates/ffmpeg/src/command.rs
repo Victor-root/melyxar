@@ -478,14 +478,10 @@ impl Command {
         }
         // The film is a file the server did not make itself: said before each
         // reading of it, so it is only ever opened as one of the formats it
-        // may be, never as a reader that opens other files it names. An empty
-        // set is no set: a build that gave no listing is held to nothing
-        // rather than to an empty whitelist, which refuses every file.
+        // may be, never as a reader that opens other files it names.
         macro_rules! guard_the_input {
             () => {
-                if !allowed_formats.is_empty() {
-                    args.extend(crate::formats::only_as(allowed_formats));
-                }
+                args.extend(crate::formats::only_as(allowed_formats))
             };
         }
 
@@ -1235,6 +1231,27 @@ mod tests {
         );
         assert!(args.iter().any(|value| value == "1:1"), "{args:?}");
         assert!(!args.iter().any(|value| value == "0:1"), "{args:?}");
+    }
+
+    #[test]
+    fn every_opening_of_the_film_is_held_to_its_formats_unless_there_are_none() {
+        let mut encode = VideoEncode::software_h264();
+        encode.burn_in_subtitle = Some(3);
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode))
+        .with_streams(StreamSelection {
+            video_index: Some(0),
+            audio_index: Some(1),
+            subtitle_index: None,
+        });
+        let held = |args: &[OsString]| {
+            args.iter().filter(|value| *value == "-format_whitelist").count()
+        };
+        assert_eq!(held(&command.to_arguments("matroska,webm")), 2);
+        assert_eq!(held(&command.to_arguments("")), 0);
     }
 
     #[test]

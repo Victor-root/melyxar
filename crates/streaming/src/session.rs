@@ -1077,10 +1077,12 @@ impl Session {
         // decided in a dozen places, and a film that plays wrong is a question
         // about the one command that produced it: without it, the answer has
         // to be guessed from the settings that were in force an hour ago.
+        // Said without the formats the film is held to: the same few hundred
+        // names on every line, kilobytes of them, which only buried the rest.
         tracing::debug!(
             session = %self.id,
             index,
-            arguments = ?command.to_arguments(self.tools.allowed_formats()),
+            arguments = ?command.to_arguments(""),
             "the tool is being set going with these arguments"
         );
         melyxar_ffmpeg::painting::announce(&self.id.to_string(), index, &command);
