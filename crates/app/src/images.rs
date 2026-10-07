@@ -105,6 +105,26 @@ impl Kind {
     }
 }
 
+/// Refuses a picture of a work this account may not read, from where it is
+/// kept: a work's pictures are filed under the work, and those of a library
+/// somebody was not granted are pictures that are not there. A frame of a
+/// home video is one of them. The face of a person stays open to anybody
+/// signed in: it is the provider's, and a person is in many works.
+/// Costs nothing for an account that sees every library.
+pub async fn may_see(state: &AppState, who: &melyxar_core::user::User, kept_at: &Path) -> Result<()> {
+    if who.permissions.sees_the_whole_server() {
+        return Ok(());
+    }
+    let mut parts = kept_at.iter().map(|part| part.to_str());
+    if parts.next() != Some(Some(Kind::Poster.folder())) {
+        return Ok(());
+    }
+    match parts.next().flatten().map(str::parse::<WorkId>) {
+        Some(Ok(work)) => crate::reach::may_read_the_work(state, who, work).await,
+        _ => Err(crate::AppError::Domain(melyxar_core::Error::not_found("picture"))),
+    }
+}
+
 /// Fetches the pictures a provider named for one work.
 ///
 /// Answers how many pictures were prepared. Nothing here can fail the caller:

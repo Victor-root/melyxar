@@ -17,6 +17,7 @@ use axum::Router;
 use melyxar_app::AppState;
 use std::path::{Component, Path, PathBuf};
 
+use crate::account::Viewer;
 use crate::error::{Result, ServerError};
 
 pub fn router() -> Router<AppState> {
@@ -52,37 +53,43 @@ pub fn door_picture_url(picture: &str) -> String {
 /// nothing stale can be held on to.
 pub(crate) const KEEP_FOR: &str = "public, max-age=31536000, immutable";
 
-async fn picture(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
-    match read(&state.config().directories.images(), &path).await {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
+/// A picture of the library, for an account that may read the work it is of.
+async fn picture(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    RoutePath(path): RoutePath<String>,
+) -> Response {
+    let answer = async {
+        let relative = picture_path(&path)?;
+        melyxar_app::images::may_see(&state, &who, &relative).await?;
+        read(&state.config().directories.images(), &relative).await
+    };
+    answer.await.unwrap_or_else(IntoResponse::into_response)
 }
 
 async fn face(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
-    match read(&state.config().directories.avatars(), &path).await {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
+    let answer = async { read(&state.config().directories.avatars(), &picture_path(&path)?).await };
+    answer.await.unwrap_or_else(IntoResponse::into_response)
 }
 
 async fn logo(State(state): State<AppState>, RoutePath(path): RoutePath<String>) -> Response {
-    match read(&state.config().directories.uploads(), &path).await {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
-    }
+    let answer = async { read(&state.config().directories.uploads(), &picture_path(&path)?).await };
+    answer.await.unwrap_or_else(IntoResponse::into_response)
 }
 
-async fn read(folder: &Path, requested: &str) -> Result<Response> {
-    let relative = safe_relative_path(requested)
-        .ok_or_else(|| ServerError::invalid_input("that is not a picture path"))?;
+/// What was asked for, as a path inside a folder of pictures.
+fn picture_path(requested: &str) -> Result<PathBuf> {
+    safe_relative_path(requested)
+        .ok_or_else(|| ServerError::invalid_input("that is not a picture path"))
+}
 
-    let full_path = folder.join(&relative);
+async fn read(folder: &Path, relative: &Path) -> Result<Response> {
+    let full_path = folder.join(relative);
     let bytes = tokio::fs::read(&full_path)
         .await
         .map_err(|_| ServerError::not_found("no picture there"))?;
 
-    let content_type = content_type_of(&relative)
+    let content_type = content_type_of(relative)
         .ok_or_else(|| ServerError::invalid_input("that is not a kind of picture served here"))?;
 
     Ok((

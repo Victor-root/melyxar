@@ -414,3 +414,28 @@ async fn a_collection_holds_nothing_out_of_reach_of_whoever_fills_it() {
             .contains(&theirs)
     );
 }
+
+#[tokio::test]
+async fn a_picture_of_a_work_out_of_reach_is_a_picture_that_is_not_there() {
+    let here = two_libraries().await;
+    let of = |work: WorkId| PathBuf::from(format!("works/{}/poster-abc-400.webp", work.to_db_string()));
+    let may_see = |who: &User, kept_at: PathBuf| {
+        let state = here.state.clone();
+        let who = who.clone();
+        async move { melyxar_app::images::may_see(&state, &who, &kept_at).await.is_ok() }
+    };
+
+    assert!(may_see(&here.anybody, of(here.a_series)).await);
+    assert!(may_see(&here.granted_the_films, of(here.a_film)).await);
+    // A frame of a home video is filed the same way as a poster.
+    assert!(!may_see(&here.granted_the_films, of(here.a_series)).await);
+    assert!(!may_see(&here.granted_nothing, of(here.a_film)).await);
+    assert!(
+        !may_see(&here.granted_the_films, PathBuf::from("works/not-a-work/poster.webp")).await,
+        "a work that cannot be named is not one somebody may see"
+    );
+    assert!(
+        may_see(&here.granted_nothing, PathBuf::from("people/someone/photo-abc-96.webp")).await,
+        "the face of a person is the provider's, and in many works"
+    );
+}
