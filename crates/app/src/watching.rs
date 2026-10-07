@@ -784,12 +784,34 @@ pub fn stop(state: &AppState, device: DeviceId) -> bool {
 /// Asks every film this account is watching to stop, as an administrator's
 /// stop does, and answers how many there were.
 pub fn stop_everything_of(state: &AppState, user: UserId) -> usize {
-    state
+    let asked = state
         .watching()
         .devices_of(user)
         .into_iter()
         .filter(|device| stop(state, *device))
-        .count()
+        .count();
+    close_what_was_converting(state, user);
+    asked
+}
+
+/// Closes what was being converted for this account when it was stopped,
+/// once its players had their time to obey.
+///
+/// A player that no longer says it plays is not on the list of what is being
+/// watched, and what is converted for it goes on for as long as it asks for
+/// the pieces: stopping what is on the list leaves that one going. Only what
+/// was open then is closed, since a film started meanwhile is a new one.
+fn close_what_was_converting(state: &AppState, user: UserId) {
+    let Some(sessions) = state.sessions().cloned() else {
+        return;
+    };
+    tokio::spawn(async move {
+        let open = sessions.sessions_of(user).await;
+        tokio::time::sleep(OBEY_WITHIN).await;
+        for session in open {
+            sessions.close(session, user).await;
+        }
+    });
 }
 
 /// Below this, a conversion produces the film more slowly than it plays.

@@ -226,6 +226,17 @@ impl Sessions {
             .ok_or(StreamingError::NoSuchSession)
     }
 
+    /// Every session of one account, as they stand now.
+    pub async fn sessions_of(&self, watcher: UserId) -> Vec<SessionId> {
+        self.live
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, kept)| kept.session.watcher == watcher)
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
     /// Closes one session of theirs and forgets it.
     ///
     /// Somebody else's is left alone: a name is all it would take to stop a
@@ -538,6 +549,25 @@ mod tests {
 
         sessions.close(mine.id, a_watcher()).await;
         assert!(sessions.get(mine.id, a_watcher()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_sessions_of_one_account_are_its_own_and_nobody_else_s() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().to_path_buf());
+        let film = || recipe(directory.path().join("film.mkv"));
+        let mine = sessions
+            .open(a_watcher(), a_device(), film(), false, Limits::default())
+            .await
+            .expect("session opened");
+        let somebody_else = melyxar_core::id::UserId::new();
+        sessions
+            .open(somebody_else, a_device(), film(), false, Limits::default())
+            .await
+            .expect("session opened");
+
+        assert_eq!(sessions.sessions_of(a_watcher()).await, vec![mine.id]);
+        assert!(sessions.sessions_of(melyxar_core::id::UserId::new()).await.is_empty());
     }
 
     fn sessions(folder: PathBuf) -> Sessions {
