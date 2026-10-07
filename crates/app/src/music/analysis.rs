@@ -9,6 +9,7 @@
 //! where it was: each batch asks what is left, so nothing about where it got
 //! to has to be written down.
 
+use std::sync::{Arc, Mutex, PoisonError};
 
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
@@ -164,13 +165,14 @@ async fn read(
     };
     // Worked out as the sound comes, never holding more of the song than a
     // quarter of a second: an audiobook of twenty hours held whole asked for
-    // gigabytes. A reading costs a few transforms, small beside the time the
-    // tool takes to hand over the next piece.
-    let reading = std::sync::Mutex::new(SpectrumReading::default());
-    let heard = analyse(tools, &song.path, wanted, asked_to_stop, &|samples| {
-        reading
+    // gigabytes. Heard on the thread the sound is read on, which is not one
+    // that serves requests: a song is thousands of transforms.
+    let reading = Arc::new(Mutex::new(SpectrumReading::default()));
+    let hearing = Arc::clone(&reading);
+    let heard = analyse(tools, &song.path, wanted, asked_to_stop, move |samples| {
+        hearing
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unwrap_or_else(PoisonError::into_inner)
             .hear(samples);
     })
     .await;
@@ -178,9 +180,8 @@ async fn read(
         Ok(loudness) => Some(Outcome {
             loudness,
             spectrum: if song.needs_spectrum {
-                let reading = reading
-                    .into_inner()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let reading =
+                    std::mem::take(&mut *reading.lock().unwrap_or_else(PoisonError::into_inner));
                 spectrum_of(reading).await
             } else {
                 None

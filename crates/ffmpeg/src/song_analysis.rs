@@ -39,24 +39,22 @@ pub struct Wanted {
 /// loudness when it was asked for.
 ///
 /// The samples of its sound, when they are wanted, are given to `on_samples`
-/// as they come, in pieces of no particular length.
+/// as they come, in pieces of no particular length, on a thread of its own:
+/// it may work as hard as it likes on them.
 pub async fn analyse(
     tools: &crate::ToolPaths,
     song: &Path,
     wanted: Wanted,
     asked_to_stop: AskedToStop,
-    on_samples: &(dyn Fn(&[i16]) + Sync),
+    mut on_samples: impl FnMut(&[i16]) + Send + 'static,
 ) -> Result<Option<Loudness>> {
     let mut builder = TokioCommand::new(&tools.ffmpeg);
     let mut args = arguments(song, wanted);
     crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
     builder.args(args);
     // A sample is two bytes, and the pipe may cut between them.
-    let cut_in_two = std::sync::Mutex::new(None::<u8>);
-    let output = output_handed_over(builder, asked_to_stop, &|bytes| {
-        let mut cut_in_two = cut_in_two
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut cut_in_two = None;
+    let output = output_handed_over(builder, asked_to_stop, move |bytes| {
         on_samples(&samples_of(&mut cut_in_two, bytes));
     })
     .await?;
@@ -158,6 +156,8 @@ fn summary_of(said: &str) -> Loudness {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
 
     const SAID: &str = "\
@@ -248,15 +248,23 @@ mod tests {
         };
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
-        let heard = std::sync::Mutex::new(0usize);
-        let loudness = analyse(&tools, &song, BOTH, AskedToStop::never(), &|samples| {
-            *heard.lock().expect("counted") += samples.len();
+        // Counted, and where: the test runs on the one thread of its runtime,
+        // so sound heard on that thread would be sound heard where requests
+        // are served.
+        let heard = Arc::new(Mutex::new((0usize, false)));
+        let hearing = Arc::clone(&heard);
+        let serving = std::thread::current().id();
+        let loudness = analyse(&tools, &song, BOTH, AskedToStop::never(), move |samples| {
+            let mut heard = hearing.lock().expect("counted");
+            heard.0 += samples.len();
+            heard.1 |= std::thread::current().id() == serving;
         })
         .await
         .expect("read")
         .expect("measured");
         assert!(loudness.is_measured(), "{loudness:?}");
-        let heard = *heard.lock().expect("counted");
+        let (heard, where_requests_are_served) = *heard.lock().expect("counted");
+        assert!(!where_requests_are_served, "the sound is heard on a thread of its own");
         let seconds = heard as f64 / f64::from(SPECTRUM_SAMPLES_A_SECOND);
         assert!(
             (0.9..1.1).contains(&seconds),
@@ -276,9 +284,10 @@ mod tests {
             loudness: false,
             spectrum: true,
         };
-        let heard = std::sync::Mutex::new(0usize);
-        let loudness = analyse(&tools, &song, wanted, AskedToStop::never(), &|samples| {
-            *heard.lock().expect("counted") += samples.len();
+        let heard = Arc::new(Mutex::new(0usize));
+        let hearing = Arc::clone(&heard);
+        let loudness = analyse(&tools, &song, wanted, AskedToStop::never(), move |samples| {
+            *hearing.lock().expect("counted") += samples.len();
         })
         .await
         .expect("read");
