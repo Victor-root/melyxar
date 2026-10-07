@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { api, ApiError } from "../../api";
 import type { Library, ManagedAccount, Rights } from "../../api";
 import { useAccount } from "../../account";
-import { useAsked, useTold } from "../../asking";
+import { figuresOf, useAsked, useTold } from "../../asking";
 import { Face } from "../../components/face";
 import { Modal } from "../../components/modal";
 import {
@@ -131,9 +131,7 @@ function refusalOf(failure: ApiError | null, t: Wording): string | null {
     return null;
   }
   if (failure.reason) {
-    return t(`refused.account.${failure.reason}`, {
-      shortest: Number(failure.details?.shortest ?? 0),
-    });
+    return t(`refused.account.${failure.reason}`, figuresOf(failure));
   }
   return t(failure.code === "not_found" ? "users.gone" : "users.failed");
 }

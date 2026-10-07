@@ -491,9 +491,11 @@ pub async fn clip_file(
 
 /// Whether a calibration answers for exactly the clips that were offered.
 ///
-/// Every codec once, no codec that was not offered, and no height that was
-/// not one of the clips: anything else is a run that did not finish, or one
-/// measured against other clips, and neither is a calibration.
+/// Every codec once, no codec that was not offered, no height that was not
+/// one of the clips, and no height measured twice: anything else is a run that
+/// did not finish, or one measured against other clips, and neither is a
+/// calibration. Measured twice is also how a page would make the kept row,
+/// and the journal line about it, as long as it liked.
 fn is_whole(offered: &[Clip], codecs: &[CodecResult]) -> bool {
     let mut offered_codecs: Vec<&str> = offered.iter().map(|clip| clip.codec.as_str()).collect();
     offered_codecs.dedup();
@@ -507,11 +509,22 @@ fn is_whole(offered: &[Clip], codecs: &[CodecResult]) -> bool {
                     .iter()
                     .any(|clip| clip.codec == result.codec && clip.height == height)
             };
-            result.smooth_height.is_none_or(heights_offered)
-                && result
+            let measured_once = |height: i32| {
+                result
                     .measurements
                     .iter()
-                    .all(|measurement| heights_offered(measurement.height))
+                    .filter(|measurement| measurement.height == height)
+                    .count()
+                    == 1
+            };
+            // Counted first, so a list sent long on purpose is turned away
+            // before anything is compared within it.
+            let offered_for_it = offered.iter().filter(|clip| clip.codec == result.codec).count();
+            result.measurements.len() <= offered_for_it
+                && result.smooth_height.is_none_or(heights_offered)
+                && result.measurements.iter().all(|measurement| {
+                    heights_offered(measurement.height) && measured_once(measurement.height)
+                })
         })
 }
 
@@ -670,6 +683,24 @@ mod tests {
                 result("h264", Some(1080), &[1080]),
                 result("h264", Some(1080), &[1080]),
                 result("hevc", None, &[1080, 720]),
+            ]
+        ));
+    }
+
+    #[test]
+    fn a_height_measured_twice_is_not_a_calibration() {
+        assert!(!is_whole(
+            &offered(),
+            &[
+                result("h264", Some(1080), &[1080, 1080]),
+                result("hevc", None, &[1080, 720]),
+            ]
+        ));
+        assert!(!is_whole(
+            &offered(),
+            &[
+                result("h264", Some(1080), &[1080]),
+                result("hevc", None, &[720; 50_000]),
             ]
         ));
     }

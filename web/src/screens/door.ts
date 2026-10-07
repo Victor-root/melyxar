@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding, NameAtTheDoor } from "../api";
-import { heldBackFor } from "../asking";
+import { figuresOf, heldBackFor } from "../asking";
 import { deviceIdentity } from "../deviceIdentity";
 import { refusalKey } from "../i18n";
 
@@ -128,10 +128,7 @@ function whatTheServerSaid(error: unknown): Refusal {
     return { key: "door.refused.wrong", values: {} };
   }
   if (error.reason) {
-    return {
-      key: `refused.account.${error.reason}`,
-      values: { shortest: Number(error.details?.shortest ?? 0) },
-    };
+    return { key: `refused.account.${error.reason}`, values: figuresOf(error) };
   }
   return { key: refusalKey(error.code), values: {} };
 }

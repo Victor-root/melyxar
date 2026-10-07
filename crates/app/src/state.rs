@@ -47,6 +47,8 @@ struct Inner {
     wrong_answers: crate::wrong_answers::WrongAnswers,
     /// Where passwords are hashed and checked, a few at a time.
     passwords: crate::passwords::Passwords,
+    /// Profile pictures being made, a few at a time.
+    avatar_making: crate::avatars::Making,
     /// How the server is reached, and what encrypts it when it is.
     access: crate::access::Current,
     /// When this server came up, for how long it has been running.
@@ -122,6 +124,7 @@ impl AppState {
                 counts: crate::counted::Counts::default(),
                 wrong_answers: crate::wrong_answers::WrongAnswers::default(),
                 passwords: crate::passwords::Passwords::default(),
+                avatar_making: crate::avatars::Making::default(),
                 access: crate::access::Current::default(),
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
@@ -189,6 +192,10 @@ impl AppState {
 
     pub(crate) fn passwords(&self) -> &crate::passwords::Passwords {
         &self.inner.passwords
+    }
+
+    pub(crate) fn avatar_making(&self) -> &crate::avatars::Making {
+        &self.inner.avatar_making
     }
 
     /// What each library has been counted for.

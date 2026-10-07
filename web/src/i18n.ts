@@ -263,6 +263,7 @@ const en: Dictionary = {
   "door.refused.not_the_same": "Passwords do not match.",
   "door.refused.generic": "Sign-in failed. Please try again.",
   "refused.account.name_needed": "Enter a username.",
+  "refused.account.name_too_long": "Username must be at most {longest} characters.",
   "refused.account.name_taken": "Another account already has this name.",
   "refused.account.password_too_short":
     "Password must contain at least {shortest} characters.",
@@ -2246,6 +2247,7 @@ const fr: Dictionary = {
   "door.refused.not_the_same": "Les mots de passe ne correspondent pas.",
   "door.refused.generic": "Échec de la connexion. Réessayez.",
   "refused.account.name_needed": "Saisissez un nom d’utilisateur.",
+  "refused.account.name_too_long": "Le nom d’utilisateur doit contenir au plus {longest} caractères.",
   "refused.account.name_taken": "Un autre compte porte déjà ce nom.",
   "refused.account.password_too_short":
     "Le mot de passe doit contenir au moins {shortest} caractères.",

@@ -17,6 +17,26 @@ use crate::{AppError, AppState};
 /// a few megabytes; this leaves room for a large one.
 pub const LARGEST: usize = 20 * 1024 * 1024;
 
+/// How many profile pictures are made at the same moment.
+///
+/// Any account can send one, and making one decodes the whole image: without
+/// a bound, the same image sent twenty times at once would be decoded twenty
+/// times over in memory. With two at once, nobody choosing a picture waits.
+const MADE_AT_ONCE: usize = 2;
+
+/// Whose turn it is to have a profile picture made.
+pub(crate) struct Making {
+    turns: tokio::sync::Semaphore,
+}
+
+impl Default for Making {
+    fn default() -> Self {
+        Self {
+            turns: tokio::sync::Semaphore::new(MADE_AT_ONCE),
+        }
+    }
+}
+
 /// Why a picture was not taken, in a word the interface turns into a
 /// sentence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +103,11 @@ pub async fn set(state: &AppState, user_id: UserId, bytes: &[u8]) -> Result<Stri
             melyxar_core::Error::internal("no picture tool on this server").into(),
         ));
     };
+    // Held until the picture is made or given up on: the tool is stopped as
+    // soon as nobody waits for it, so the turn never outlives the work.
+    let _turn = state.avatar_making().turns.acquire().await.map_err(|_| {
+        Trouble::Failed(melyxar_core::Error::internal("no turn to make a picture").into())
+    })?;
 
     let root = state.config().directories.avatars();
     let folder = root.join(user_id.to_string());
@@ -167,10 +192,9 @@ mod tests {
             .expect("account created");
         let state = AppState::new(config, database, tools, capabilities);
 
-        // A wide picture, as a phone held sideways takes one.
-        let made = |colour: &'static str| {
+        let made_at = |colour: &'static str, size: &'static str| {
             let ffmpeg = ffmpeg.clone();
-            let out = directory.path().join(format!("{colour}.png"));
+            let out = directory.path().join(format!("{colour}-{size}.png"));
             async move {
                 let done = tokio::process::Command::new(&ffmpeg)
                     .args([
@@ -182,7 +206,7 @@ mod tests {
                         "lavfi",
                         "-i",
                     ])
-                    .arg(format!("color=c={colour}:s=400x300"))
+                    .arg(format!("color=c={colour}:s={size}"))
                     .args(["-frames:v", "1"])
                     .arg(&out)
                     .status()
@@ -192,6 +216,8 @@ mod tests {
                 tokio::fs::read(&out).await.expect("picture read")
             }
         };
+        // A wide picture, as a phone held sideways takes one.
+        let made = |colour: &'static str| made_at(colour, "400x300");
         let root = state.config().directories.avatars();
 
         let first = set(&state, zoe.id, &made("red").await).await.expect("worn");
@@ -225,6 +251,14 @@ mod tests {
             root.join(&second).exists(),
             "a refusal leaves the picture worn"
         );
+
+        // A few hundred kilobytes that would take a hundred megabytes and more
+        // to decode: refused from what it declares, before it is decoded.
+        assert!(matches!(
+            set(&state, zoe.id, &made_at("black", "6000x6000").await).await,
+            Err(Trouble::Refused(Refused::CouldNotBeRead))
+        ));
+        assert!(root.join(&second).exists());
 
         remove(&state, zoe.id).await.expect("taken away");
         assert!(!root.join(&second).exists());

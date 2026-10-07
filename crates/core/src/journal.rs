@@ -36,6 +36,14 @@ use crate::time::{now, Timestamp};
 /// this is for, at a cost of well under a megabyte.
 const KEPT: usize = 4_000;
 
+/// The most of one line that is kept, in bytes.
+///
+/// Room for the longest honest line, a whole conversion command with its
+/// paths and its filters. Part of what is said comes from outside, a name
+/// typed or what a page measured, and without a bound four thousand lines of
+/// a few megabytes each would hold gigabytes.
+const LONGEST_LINE: usize = 8 * 1024;
+
 /// The tag a line carries, read from the module that wrote it.
 ///
 /// One word, in the vocabulary of the thing rather than of the code: somebody
@@ -140,6 +148,43 @@ fn take() -> std::sync::MutexGuard<'static, VecDeque<Line>> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// What is said, as one line cut past [`LONGEST_LINE`] bytes.
+///
+/// A break or any other control character is written out rather than kept:
+/// the journal is copied as text, one line under the other, and a message
+/// starting a line of its own would read as a line the server never wrote.
+/// A tab is left alone, since it breaks nothing.
+fn as_one_line(message: String) -> String {
+    let plain = |character: char| !character.is_control() || character == '\t';
+    if message.len() <= LONGEST_LINE && message.chars().all(plain) {
+        return message;
+    }
+
+    let mut line = String::with_capacity(message.len().min(LONGEST_LINE));
+    let mut cut = false;
+    for character in message.chars() {
+        if plain(character) {
+            if line.len() + character.len_utf8() > LONGEST_LINE {
+                cut = true;
+                break;
+            }
+            line.push(character);
+        } else {
+            let written = character.escape_debug();
+            if line.len() + written.len() > LONGEST_LINE {
+                cut = true;
+                break;
+            }
+            line.extend(written);
+        }
+    }
+    if cut {
+        // Said rather than left to pass for the whole of it.
+        line.push_str(&format!(" [cut, {} bytes in all]", message.len()));
+    }
+    line
+}
+
 /// Keeps one line, dropping the oldest once the room is full.
 pub fn remember(level: &'static str, module: &str, message: String) {
     let line = Line {
@@ -147,7 +192,7 @@ pub fn remember(level: &'static str, module: &str, message: String) {
         level,
         tag: tag_of(module),
         module: module.to_string(),
-        message,
+        message: as_one_line(message),
     };
     let mut lines = take();
     if lines.len() == KEPT {
@@ -290,6 +335,31 @@ mod tests {
         };
         let sent = serde_json::to_value(&line).expect("serialised");
         assert_eq!(sent["at"], "2026-09-23T14:05:09Z");
+    }
+
+    #[test]
+    fn a_message_is_kept_whole_when_it_is_one_line_of_a_sensible_length() {
+        let said = "the page began the film here\tsession=01a0".to_string();
+        assert_eq!(as_one_line(said.clone()), said);
+    }
+
+    #[test]
+    fn a_break_in_what_is_said_cannot_start_a_line_of_its_own() {
+        // Text from outside, a name typed or what a page saw, would otherwise
+        // read in a pasted journal as a line the server wrote.
+        let forged = "refused\n2026-01-01 00:00:00  error [http] forged".to_string();
+        let kept = as_one_line(forged);
+        assert!(!kept.contains('\n'), "{kept}");
+        assert_eq!(kept, "refused\\n2026-01-01 00:00:00  error [http] forged");
+    }
+
+    #[test]
+    fn a_line_too_long_is_cut_and_says_so() {
+        let kept = as_one_line("é".repeat(LONGEST_LINE));
+        assert!(kept.starts_with(&"é".repeat(LONGEST_LINE / 2)));
+        let said = format!(" [cut, {} bytes in all]", 2 * LONGEST_LINE);
+        assert!(kept.ends_with(&said), "{}", &kept[kept.len() - 40..]);
+        assert!(kept.len() < LONGEST_LINE + 64);
     }
 
     #[test]
