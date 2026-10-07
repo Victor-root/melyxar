@@ -15,6 +15,34 @@ use crate::{AppError, AppState, Result};
 /// The longest name a collection or a playlist may carry, in letters.
 pub const LONGEST_NAME: usize = 80;
 
+/// The most playlists of one kind an account keeps, and the most a playlist
+/// holds or a request hands over at once. Far past what anybody listens to
+/// or watches; there so that what one account writes stays a list rather
+/// than a weight on the whole server, and what one request asks to be looked
+/// up stays a moment's work.
+pub const MOST_PLAYLISTS: usize = 1_000;
+pub const MOST_IN_A_LIST: usize = 10_000;
+
+/// Refuses a list longer than any list is kept.
+pub(crate) fn not_too_long(length: usize) -> Result<()> {
+    match length <= MOST_IN_A_LIST {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "a list holds no more than ten thousand",
+        ))),
+    }
+}
+
+/// Refuses one playlist more for an account that keeps as many as any does.
+pub(crate) fn room_for_another(kept: usize) -> Result<()> {
+    match kept < MOST_PLAYLISTS {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "an account keeps no more than a thousand playlists",
+        ))),
+    }
+}
+
 /// Every collection this account can see something of, by name.
 pub async fn every_one(state: &AppState, who: &User) -> Result<Vec<CollectionSummary>> {
     let within = crate::reach::within(who);
@@ -143,6 +171,40 @@ mod tests {
         assert_eq!(named("  Noël  ").expect("kept"), "Noël");
         assert!(named("   ").is_err());
         assert!(named(&"a".repeat(LONGEST_NAME + 1)).is_err());
+    }
+
+    #[test]
+    fn a_list_and_the_lists_of_an_account_stop_somewhere() {
+        assert!(not_too_long(MOST_IN_A_LIST).is_ok());
+        assert!(not_too_long(MOST_IN_A_LIST + 1).is_err());
+        assert!(room_for_another(MOST_PLAYLISTS - 1).is_ok());
+        assert!(room_for_another(MOST_PLAYLISTS).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_list_past_the_longest_is_refused_before_anything_in_it_is_looked_up() {
+        let (_directory, state) = crate::an_empty_server().await;
+        let who = state
+            .database()
+            .create_user("listener", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account");
+        let too_many: Vec<WorkId> = (0..=MOST_IN_A_LIST).map(|_| WorkId::new()).collect();
+        let refused = crate::music::playlists::create(&state, &who, "Everything", &too_many)
+            .await
+            .expect_err("refused");
+        // Looked up first, the first song would be found missing instead.
+        assert!(
+            matches!(refused, AppError::Domain(ref error) if error.code == melyxar_core::error::ErrorCode::InvalidInput),
+            "{refused:?}"
+        );
+        let refused = crate::playlists::create(&state, &who, "Everything", &too_many)
+            .await
+            .expect_err("refused");
+        assert!(
+            matches!(refused, AppError::Domain(ref error) if error.code == melyxar_core::error::ErrorCode::InvalidInput),
+            "{refused:?}"
+        );
     }
 
     #[test]

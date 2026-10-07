@@ -10,7 +10,7 @@ use melyxar_core::user::User;
 use melyxar_core::work::WorkKind;
 pub use melyxar_database::playlists::{PlaylistHeld, PlaylistSummary};
 
-use crate::collections::named;
+use crate::collections::{named, not_too_long, room_for_another};
 use crate::{AppError, AppState, Result};
 
 /// Every playlist of this account, by name.
@@ -33,8 +33,10 @@ pub async fn holding(state: &AppState, who: &User, work_id: WorkId) -> Result<Ve
 /// Makes a playlist, with the works given in it.
 pub async fn create(state: &AppState, who: &User, name: &str, works: &[WorkId]) -> Result<PlaylistId> {
     let name = named(name)?;
-    playable(state, who, works).await?;
+    not_too_long(works.len())?;
     let database = state.database();
+    room_for_another(database.playlists(who.id, None).await?.len())?;
+    playable(state, who, works).await?;
     let id = database.create_playlist(who.id, name).await?;
     database.add_to_playlist(who.id, id, works).await?;
     Ok(id)
@@ -53,6 +55,7 @@ pub async fn delete(state: &AppState, who: &User, id: PlaylistId) -> Result<()> 
 
 /// Puts works at the end of a playlist, or takes them out.
 pub async fn put(state: &AppState, who: &User, id: PlaylistId, works: &[WorkId], in_it: bool) -> Result<()> {
+    not_too_long(works.len())?;
     let database = state.database();
     let done = match in_it {
         true => {
@@ -66,6 +69,7 @@ pub async fn put(state: &AppState, who: &User, id: PlaylistId, works: &[WorkId],
 
 /// Puts the works of a playlist in the order given.
 pub async fn reorder(state: &AppState, who: &User, id: PlaylistId, order: &[WorkId]) -> Result<()> {
+    not_too_long(order.len())?;
     found(state.database().reorder_playlist(who.id, id, order).await?)
 }
 
