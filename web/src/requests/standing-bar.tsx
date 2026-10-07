@@ -21,11 +21,9 @@ export function StandingBar({ found, onAsk }: { found: Found; onAsk: () => void 
       {standing.is === "here" && (
         <>
           <span className="state-pill state-ok">{t("requests.here")}</span>
-          {standing.workId && (
-            <Link className="button button-accent" to={`/work/${standing.workId}`}>
-              {t("requests.open")}
-            </Link>
-          )}
+          <Link className="button button-accent" to={`/work/${standing.workId}`}>
+            {t("requests.open")}
+          </Link>
         </>
       )}
       {standing.is === "mine" && (

@@ -40,7 +40,7 @@ describe("where an answer stands", () => {
     expect(standingOf(found(), [])).toEqual({ is: "free", others: 0, heldSeasons: [] });
   });
 
-  it("is here for a film held, opening it when it may be read", () => {
+  it("is here for a film held, opening it", () => {
     expect(standingOf(found({ held: { work_id: "w", seasons: [] } }), [])).toEqual({ is: "here", workId: "w" });
   });
 

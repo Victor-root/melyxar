@@ -113,8 +113,8 @@ struct Looked {
 
 #[derive(Debug, Serialize)]
 struct HeldView {
-    /// The work to open, when this account may read where it is.
-    work_id: Option<String>,
+    /// The work to open.
+    work_id: String,
     seasons: Vec<i32>,
 }
 
@@ -144,7 +144,7 @@ fn found_view(found: Found) -> FoundView {
         overview: candidate.overview,
         poster: found.poster,
         held: found.held.map(|held| HeldView {
-            work_id: held.work_id.map(|work| work.to_string()),
+            work_id: held.work_id.to_string(),
             seasons: held.seasons,
         }),
         asked_by: found.asked_by,

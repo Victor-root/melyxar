@@ -167,7 +167,7 @@ pub async fn suggestions<P: MetadataProvider>(
         .iter()
         .flat_map(|shelf| shelf.candidates.iter().cloned())
         .collect();
-    let standing = standing_of(state, &every).await?;
+    let standing = standing_of(state, who, &every).await?;
     Ok(taken
         .into_iter()
         .map(|shelf| Shelf {
@@ -229,7 +229,7 @@ pub async fn more<P: MetadataProvider>(
             provider_language(language),
         )
         .await?;
-    let standing = standing_of(state, &candidates).await?;
+    let standing = standing_of(state, who, &candidates).await?;
     Ok(not_held(candidates, &standing, who, provider.as_ref()))
 }
 

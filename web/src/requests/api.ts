@@ -30,7 +30,7 @@ export interface Found {
   poster: string | null;
   /** Here already: the work to open when this account may, and for a series
       the seasons it holds. */
-  held: { work_id: string | null; seasons: number[] } | null;
+  held: { work_id: string; seasons: number[] } | null;
   /** How many accounts asked for it and wait. */
   asked_by: number;
   /** This account's own request for it, while it waits. */
