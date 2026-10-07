@@ -198,6 +198,18 @@ impl Database {
         Ok(id)
     }
 
+    /// Gives a device the identifier its browser names itself by, when the
+    /// device was signed in before browsers said it. Answers whether it is
+    /// now its own: never once it has one.
+    pub async fn adopt_client(&self, device: DeviceId, client: &str) -> Result<bool> {
+        let done = sqlx::query("UPDATE devices SET client_id = ? WHERE id = ? AND client_id IS NULL")
+            .bind(client)
+            .bind(device.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(done.rows_affected() > 0)
+    }
+
     /// Signs out every device of an account but the `kept` it used last,
     /// and answers how many went.
     pub async fn keep_the_devices_used_last(&self, user_id: UserId, kept: usize) -> Result<u64> {
@@ -449,6 +461,36 @@ mod tests {
             .await
             .expect("account created");
         (database, user.id)
+    }
+
+    #[tokio::test]
+    async fn a_device_with_no_name_of_its_own_takes_the_first_and_keeps_it() {
+        let (database, user) = a_server_with_one_account().await;
+        let before = database
+            .open_session(user, "older", "older", Remembered::Yes, A_MOMENT, None)
+            .await
+            .expect("opened");
+        let named = database
+            .open_session(user, "newer", "newer", Remembered::Yes, A_MOMENT, Some("its-own"))
+            .await
+            .expect("opened");
+
+        assert!(database.adopt_client(before, "first").await.expect("adopted"));
+        assert!(!database.adopt_client(before, "second").await.expect("asked"));
+        assert!(!database.adopt_client(named, "another").await.expect("asked"));
+        let client = |token: &'static str| {
+            let database = database.clone();
+            async move {
+                database
+                    .session_holder(token, A_MOMENT)
+                    .await
+                    .expect("read")
+                    .expect("signed in")
+                    .client
+            }
+        };
+        assert_eq!(client("older").await.as_deref(), Some("first"));
+        assert_eq!(client("newer").await.as_deref(), Some("its-own"));
     }
 
     #[tokio::test]
