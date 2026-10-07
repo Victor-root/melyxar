@@ -665,8 +665,9 @@ pub async fn heard(
     paused: Option<bool>,
     fresh: bool,
 ) -> Result<bool> {
-    crate::reach::may_read_the_work(state, who, work).await?;
-    let music = is_a_song(state, work).await?;
+    let music = playable_by(state, who, work)
+        .await?
+        .ok_or_else(|| crate::AppError::Domain(melyxar_core::Error::not_found("work")))?;
     let (stop, ended) = state.watching().heard(
         viewer,
         work,
@@ -683,13 +684,22 @@ pub async fn heard(
     Ok(stop)
 }
 
-/// Whether this work is a song, which is played and counted as music.
-async fn is_a_song(state: &AppState, work: WorkId) -> Result<bool> {
-    Ok(state
-        .database()
-        .work(work)
-        .await?
-        .is_some_and(|found| found.kind == WorkKind::Song))
+/// Whether this work is a song, which is played and counted as music, for an
+/// account that may say it plays it: nothing for a work that is not there, or
+/// is in a library this account was not granted. Written down once it ends,
+/// what somebody played is theirs and the administration's to read.
+async fn playable_by(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    work: WorkId,
+) -> Result<Option<bool>> {
+    let Some(found) = state.database().work(work).await? else {
+        return Ok(None);
+    };
+    if !who.permissions.may_access_library(found.library_id) {
+        return Ok(None);
+    }
+    Ok(Some(found.kind == WorkKind::Song))
 }
 
 /// A player said it is leaving this film.
@@ -700,10 +710,16 @@ pub fn gone(state: &AppState, device: DeviceId, work: WorkId) {
 }
 
 /// A player opened its live line for this film. Absent when its device is
-/// playing another film or has just left this one.
-pub async fn line(state: &AppState, viewer: Viewer, work: WorkId) -> Option<Line> {
+/// playing another film or has just left this one, and for a film this
+/// account may not play.
+pub async fn line(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    viewer: Viewer,
+    work: WorkId,
+) -> Option<Line> {
     let device = viewer.device;
-    let music = is_a_song(state, work).await.unwrap_or(false);
+    let music = playable_by(state, who, work).await.ok()??;
     let stop = state.watching().line_opened(
         viewer,
         work,
