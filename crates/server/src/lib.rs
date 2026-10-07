@@ -10,6 +10,7 @@
 pub mod account;
 mod address;
 mod door;
+mod elsewhere;
 pub mod accounts;
 pub mod activity;
 pub mod calibration;
@@ -89,6 +90,9 @@ pub fn build(state: AppState) -> axum::Router {
             state.clone(),
             account::at_the_gate,
         ))
+        // Outside the gate, so a change another site asked for is turned
+        // away before anybody is looked up for it.
+        .layer(axum::middleware::from_fn(elsewhere::only_from_here))
         // Outside the gate, so somebody not signed in yet is sent to the
         // encrypted address before anything else.
         .layer(axum::middleware::from_fn_with_state(state, door::sent_to_encrypted))
