@@ -797,12 +797,6 @@ pub async fn set_rights(
     })
 }
 
-/// The account as it stands now, if it still exists, asked again by what
-/// stays open for it: a live line outlives the request that opened it.
-pub async fn as_it_stands(state: &AppState, id: UserId) -> Result<Option<User>> {
-    Ok(state.database().user(id).await?)
-}
-
 /// Gives another account the name the administration typed for it.
 pub async fn rename_account(
     state: &AppState,

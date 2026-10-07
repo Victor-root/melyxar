@@ -148,6 +148,23 @@ pub fn sends_plain_to_encrypted(state: &AppState) -> bool {
     held.status.mode != Mode::Proxy && held.status.redirect_to_https && held.encryption.is_some()
 }
 
+/// Whether browsers are told to come back encrypted only, for a year
+/// (`Strict-Transport-Security`), on what they were sent encrypted.
+pub fn keeps_browsers_encrypted(state: &AppState) -> bool {
+    let held = state.access().read();
+    told_to_stay_encrypted(held.status.mode, held.status.redirect_to_https, held.encryption.is_some())
+}
+
+/// Only with a certificate obtained for a domain, which every browser
+/// trusts, and the clear sent to the encrypted address already. A browser so
+/// told refuses a certificate it does not trust with no way past the
+/// warning: a certificate the server signs itself, or one the administrator
+/// made, would lock everybody out for the year. Behind a proxy, telling them
+/// is the proxy's to decide.
+fn told_to_stay_encrypted(mode: Mode, redirect_to_https: bool, encrypts: bool) -> bool {
+    mode == Mode::Automatic && redirect_to_https && encrypts
+}
+
 /// Where the server stands.
 pub fn status(state: &AppState) -> Status {
     state.access().read().status.clone()
@@ -490,6 +507,16 @@ fn ip_of(bytes: &[u8]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn browsers_are_told_to_stay_encrypted_only_with_a_certificate_every_one_trusts() {
+        assert!(told_to_stay_encrypted(Mode::Automatic, true, true));
+        for mode in [Mode::Proxy, Mode::SelfSigned, Mode::Provided] {
+            assert!(!told_to_stay_encrypted(mode, true, true), "{}", mode.as_str());
+        }
+        assert!(!told_to_stay_encrypted(Mode::Automatic, false, true), "the clear still answered");
+        assert!(!told_to_stay_encrypted(Mode::Automatic, true, false), "nothing encrypts yet");
+    }
+
     use super::*;
     use std::path::PathBuf;
 
