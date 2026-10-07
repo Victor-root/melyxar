@@ -136,6 +136,8 @@ impl Drop for Place {
 /// the server encrypts, is not behind a proxy and the administrator wants it,
 /// unless it comes from this machine or the local network, where nobody is
 /// listening in. Kept for the same host and port, since it is the same door.
+/// And what is answered encrypted tells the browser to stay so, when the
+/// certificate is one every browser trusts.
 pub async fn sent_to_encrypted(
     axum::extract::State(state): axum::extract::State<AppState>,
     request: axum::extract::Request,
@@ -153,8 +155,19 @@ pub async fn sent_to_encrypted(
             return axum::response::Redirect::permanent(&to).into_response();
         }
     }
-    next.run(axum::extract::Request::from_parts(parts, body)).await
+    let mut response = next.run(axum::extract::Request::from_parts(parts, body)).await;
+    if caller.encrypted && melyxar_app::access::keeps_browsers_encrypted(&state) {
+        response.headers_mut().insert(
+            axum::http::header::STRICT_TRANSPORT_SECURITY,
+            axum::http::HeaderValue::from_static(STAY_ENCRYPTED),
+        );
+    }
+    response
 }
+
+/// For a year, and for this name alone: whatever else answers under the
+/// same domain is left to decide for itself.
+const STAY_ENCRYPTED: &str = "max-age=31536000";
 
 /// The same address, encrypted, when the host is one a browser could have
 /// sent.

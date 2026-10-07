@@ -163,7 +163,7 @@ async fn who_is_asking(state: &AppState, headers: &HeaderMap) -> Result<Option<S
 }
 
 /// The session token carried by a request, when it carries one.
-fn token_in(headers: &HeaderMap) -> Option<String> {
+pub(crate) fn token_in(headers: &HeaderMap) -> Option<String> {
     headers
         .get(header::COOKIE)?
         .to_str()

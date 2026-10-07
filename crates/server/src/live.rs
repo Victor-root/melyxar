@@ -10,8 +10,9 @@
 use std::time::Duration;
 
 use axum::extract::{Query, State};
+use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::Router;
 use melyxar_app::notifications::live::News;
 use melyxar_app::AppState;
@@ -19,6 +20,7 @@ use serde::Deserialize;
 use tokio::sync::{broadcast, watch};
 
 use crate::account::Viewer;
+use crate::error::ServerError;
 use crate::notifications::change_word;
 use crate::playback::{live, watched_views};
 
@@ -49,9 +51,12 @@ struct Administration {
 /// What the line waits on between two words.
 struct Following {
     state: AppState,
-    /// Who opened it. The line outlives the request that opened it: the
-    /// account is asked about again before every word.
+    /// Who opened it.
     who: melyxar_core::id::UserId,
+    /// The session it was opened with. The line outlives the request that
+    /// opened it: the session is asked about again before every word, so a
+    /// browser signed out, or an account removed, is told nothing more.
+    token: String,
     notified: broadcast::Receiver<News>,
     requests: watch::Receiver<u64>,
     libraries: watch::Receiver<u64>,
@@ -109,7 +114,12 @@ async fn line(
     Viewer(who): Viewer,
     State(state): State<AppState>,
     Query(asked): Query<Asked>,
+    headers: HeaderMap,
 ) -> Response {
+    // Always there: the gate let this through for the session it carries.
+    let Some(token) = crate::account::token_in(&headers) else {
+        return ServerError::unauthenticated("nobody is signed in").into_response();
+    };
     let administration = who.permissions.is_administrator.then(|| Administration {
         written: melyxar_app::activity::written(&state),
         playing: asked
@@ -119,6 +129,7 @@ async fn line(
     });
     let following = Following {
         who: who.id,
+        token,
         notified: melyxar_app::notifications::live::follow(&state),
         requests: melyxar_app::requests::live::follow(&state),
         libraries: state.database().library_moves(),
@@ -183,11 +194,13 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
         };
 
         // Asked once the word is ready and before it leaves, so nothing is
-        // told to an account removed meanwhile, and nothing of the
-        // administration to somebody who stopped being an administrator.
-        let account = melyxar_app::accounts::as_it_stands(&following.state, following.who)
+        // told to a browser signed out or an account removed meanwhile, and
+        // nothing of the administration to somebody who stopped being an
+        // administrator.
+        let account = melyxar_app::accounts::who_holds(&following.state, &following.token)
             .await
-            .ok()??;
+            .ok()??
+            .user;
         return Some(match word {
             Word::Written | Word::Playing if !account.permissions.is_administrator => {
                 following.administration = None;
