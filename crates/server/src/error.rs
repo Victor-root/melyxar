@@ -211,17 +211,24 @@ impl From<melyxar_app::avatars::Trouble> for ServerError {
 
 impl From<melyxar_app::accounts::Trouble> for ServerError {
     /// A refusal carries the word saying which thing to put right, and the
-    /// rule it broke where there is one: the shortest a password may be lives
-    /// on this server, so the interface says it rather than deciding it.
+    /// rule it broke where there is one: the shortest a password may be and
+    /// the longest a name may be live on this server, so the interface says
+    /// them rather than deciding them.
     fn from(trouble: melyxar_app::accounts::Trouble) -> Self {
         use melyxar_app::accounts::Refused;
 
         match trouble {
             melyxar_app::accounts::Trouble::Refused(refused) => {
                 let mut details = serde_json::json!({ "reason": refused.as_str() });
-                if refused == Refused::PasswordTooShort {
-                    details["shortest"] =
-                        serde_json::json!(melyxar_app::accounts::SHORTEST_PASSWORD);
+                match refused {
+                    Refused::PasswordTooShort => {
+                        details["shortest"] =
+                            serde_json::json!(melyxar_app::accounts::SHORTEST_PASSWORD);
+                    }
+                    Refused::NameTooLong => {
+                        details["longest"] = serde_json::json!(melyxar_app::accounts::LONGEST_NAME);
+                    }
+                    _ => {}
                 }
                 Self::with_details(
                     StatusCode::BAD_REQUEST,

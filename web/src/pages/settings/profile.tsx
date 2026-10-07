@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import type { Account, ApiError, SignedInDevice } from "../../api";
 import { useAccount } from "../../account";
-import { heldBackFor, refusalAbout, refusalOf, useAsked, useTold } from "../../asking";
+import { figuresOf, heldBackFor, refusalAbout, refusalOf, useAsked, useTold } from "../../asking";
 import type { Asked } from "../../asking";
 import { Cropper } from "../../components/cropper";
 import { DeviceLines } from "../../components/device-lines";
@@ -189,7 +189,9 @@ function Name() {
           }}
         />
         {refused && (
-          <p className="panel-notice panel-notice-trouble">{t(refusalAbout(refused, "account"))}</p>
+          <p className="panel-notice panel-notice-trouble">
+            {t(refusalAbout(refused, "account"), figuresOf(refused))}
+          </p>
         )}
         {done && <p className="panel-notice panel-notice-ok">{t("me.name_changed")}</p>}
         <div className="panel-foot">
@@ -291,7 +293,10 @@ function passwordRefusal(refused: ApiError, t: Wording): string {
   if (seconds !== null) {
     return t("door.refused.held_back", { seconds });
   }
-  return t(refused.status === NOT_THE_CURRENT_ONE ? "me.password_wrong" : refusalAbout(refused, "account"));
+  if (refused.status === NOT_THE_CURRENT_ONE) {
+    return t("me.password_wrong");
+  }
+  return t(refusalAbout(refused, "account"), figuresOf(refused));
 }
 
 /**

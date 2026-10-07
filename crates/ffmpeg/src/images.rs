@@ -155,6 +155,21 @@ pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
 /// round it is shown in, for a screen with fine pixels.
 pub const AVATAR_SIDE: u32 = 256;
 
+/// The most points an image sent for a profile picture may hold, read by the
+/// tool from what the image declares, before it decodes anything.
+///
+/// Its weight says nothing of its size: a black image of a megabyte can claim
+/// tens of thousands of points a side and ask for a gigabyte to decode. This
+/// lets a whole phone photo through, twelve million points, while the browser
+/// never sends more than a small square.
+pub const AVATAR_MOST_POINTS: u64 = 4096 * 4096;
+
+/// The longest the making of one picture is given before it is stopped.
+///
+/// Far past what the largest photo takes, so it only ever stops a picture
+/// that would not have finished at all.
+const LONGEST_MAKING: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// The most a server's logo is written across or down: well past the largest
 /// it is shown at, the mark above the sign in screen, on a screen with fine
 /// pixels.
@@ -170,7 +185,14 @@ pub fn avatar_arguments(
 ) -> Vec<OsString> {
     let square =
         format!("crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,{AVATAR_SIDE})':-1:flags=lanczos");
-    sent_picture_arguments(source, orientation, &square, Written::Webp, destination)
+    sent_picture_arguments(
+        source,
+        orientation,
+        &square,
+        Written::Webp,
+        Some(AVATAR_MOST_POINTS),
+        destination,
+    )
 }
 
 /// Builds the making of a server's logo out of whatever image the
@@ -181,7 +203,7 @@ pub fn logo_arguments(source: &Path, orientation: Orientation, destination: &Pat
     let inside = format!(
         "scale='min(iw,{LOGO_SIDE})':'min(ih,{LOGO_SIDE})':force_original_aspect_ratio=decrease:flags=lanczos"
     );
-    sent_picture_arguments(source, orientation, &inside, Written::Webp, destination)
+    sent_picture_arguments(source, orientation, &inside, Written::Webp, None, destination)
 }
 
 /// The widest the picture behind the sign in screen is kept: a large screen
@@ -197,7 +219,7 @@ pub fn door_picture_arguments(
     destination: &Path,
 ) -> Vec<OsString> {
     let inside = format!("scale='min(iw,{DOOR_PICTURE_WIDTH})':-2:flags=lanczos");
-    sent_picture_arguments(source, orientation, &inside, Written::Webp, destination)
+    sent_picture_arguments(source, orientation, &inside, Written::Webp, None, destination)
 }
 
 /// How wide the square icons made from a server's logo are, the size a
@@ -227,7 +249,7 @@ pub fn logo_icon_arguments(
         format!("scale={side}:{side}:force_original_aspect_ratio=decrease:flags=lanczos")
     };
     let square = format!("{scale},format=rgba,pad={side}:{side}:(ow-iw)/2:(oh-ih)/2:color=black@0");
-    sent_picture_arguments(source, orientation, &square, Written::Png, destination)
+    sent_picture_arguments(source, orientation, &square, Written::Png, None, destination)
 }
 
 /// How a picture made out of an image somebody sent is written.
@@ -240,12 +262,13 @@ enum Written {
 }
 
 /// The one picture made out of an image somebody sent, turned first and then
-/// given its shape.
+/// given its shape, refused unread past `most_points` when there is a bound.
 fn sent_picture_arguments(
     source: &Path,
     orientation: Orientation,
     shape: &str,
     written: Written,
+    most_points: Option<u64>,
     destination: &Path,
 ) -> Vec<OsString> {
     let filter = match turn_of(orientation) {
@@ -258,13 +281,18 @@ fn sent_picture_arguments(
         OsString::from("error"),
         OsString::from("-y"),
         OsString::from("-noautorotate"),
+    ];
+    if let Some(most) = most_points {
+        arguments.extend([OsString::from("-max_pixels"), OsString::from(most.to_string())]);
+    }
+    arguments.extend([
         OsString::from("-i"),
         source.as_os_str().to_os_string(),
         OsString::from("-vf"),
         OsString::from(filter),
         OsString::from("-frames:v"),
         OsString::from("1"),
-    ];
+    ]);
     match written {
         Written::Webp => arguments.extend([
             OsString::from("-c:v"),
@@ -320,13 +348,17 @@ pub async fn logo_icon(
     make(tool, logo_icon_arguments(source, orientation, inset, destination)).await
 }
 
-/// Runs the tool on what it was given to make one picture.
+/// Runs the tool on what it was given to make one picture, stopping it past
+/// [`LONGEST_MAKING`] or as soon as nobody is waiting for it any more.
 async fn make(tool: &Path, arguments: Vec<OsString>) -> Result<()> {
-    let output = TokioCommand::new(tool)
+    let running = TokioCommand::new(tool)
         .args(arguments)
         .stdin(Stdio::null())
-        .output()
-        .await?;
+        .kill_on_drop(true)
+        .output();
+    let output = tokio::time::timeout(LONGEST_MAKING, running)
+        .await
+        .map_err(|_| FfmpegError::GivenUp)??;
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
     }
@@ -585,8 +617,8 @@ mod tests {
             Path::new("/data/avatar.webp"),
         ));
         assert!(
-            turned.contains("-noautorotate -i /data/sent.source"),
-            "{turned}"
+            turned.contains("-noautorotate -max_pixels 16777216 -i /data/sent.source"),
+            "an image claiming more points than that is refused before it is decoded: {turned}"
         );
         assert!(
             turned.contains(
@@ -618,6 +650,10 @@ mod tests {
             "{logo}"
         );
         assert!(!logo.contains("crop"), "a logo is never cut: {logo}");
+        assert!(
+            !logo.contains("-max_pixels"),
+            "an administrator's photo is taken whole, whatever its camera: {logo}"
+        );
         assert!(logo.ends_with("-c:v libwebp -quality 80 /data/logo.webp"));
     }
 

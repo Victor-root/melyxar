@@ -25,9 +25,14 @@ use crate::activity::{record, Event};
 use crate::wrong_answers::{Origin, Turn};
 use crate::{AppError, AppState, Result};
 
-/// How much of a name typed at the door is written down when it was refused:
-/// anything can be typed there, and a journal is not where it goes whole.
-const LONGEST_NAME_WRITTEN: usize = 64;
+/// The longest name an account may be given, in characters.
+///
+/// Room for anybody's first and last names. A name is shown to everybody, at
+/// the door, in every list and in the journal, and without a bound an account
+/// could call itself two megabytes that the door then sent to every visitor.
+/// A name typed at the door is written down cut to the same length: no
+/// account answers to more.
+pub const LONGEST_NAME: usize = 64;
 
 /// The fewest characters a password may hold, for whoever has to say so.
 ///
@@ -51,6 +56,7 @@ pub use melyxar_database::sessions::{Remembered, SignedIn, AN_UNUSED_SESSION_IS_
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refused {
     NameNeeded,
+    NameTooLong,
     NameTaken,
     PasswordTooShort,
     /// Afterwards nobody would be an administrator of this server.
@@ -67,6 +73,7 @@ impl Refused {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::NameNeeded => "name_needed",
+            Self::NameTooLong => "name_too_long",
             Self::NameTaken => "name_taken",
             Self::PasswordTooShort => "password_too_short",
             Self::LastAdministrator => "last_administrator",
@@ -94,11 +101,15 @@ impl From<melyxar_database::DatabaseError> for Trouble {
     }
 }
 
-/// A name as it is kept: without the spaces around it, and never empty.
+/// A name as it is kept: without the spaces around it, never empty and
+/// never longer than [`LONGEST_NAME`].
 fn name_of(asked: &str) -> std::result::Result<&str, Trouble> {
     let name = asked.trim();
     if name.is_empty() {
         return Err(Trouble::Refused(Refused::NameNeeded));
+    }
+    if name.chars().count() > LONGEST_NAME {
+        return Err(Trouble::Refused(Refused::NameTooLong));
     }
     Ok(name)
 }
@@ -161,7 +172,7 @@ async fn held_back_from_now(state: &AppState, name: &str, device: &str, address:
     record(
         state,
         Event::SignInHeldBack {
-            name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
+            name: name.chars().take(LONGEST_NAME).collect(),
             device: device.to_string(),
             address: address.map(|address| address.to_string()),
         },
@@ -260,7 +271,7 @@ pub async fn sign_in(
         record(
             state,
             Event::SignInRefused {
-                name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
+                name: name.chars().take(LONGEST_NAME).collect(),
                 device: device_name.to_string(),
                 address: address.map(|address| address.to_string()),
             },
@@ -1468,6 +1479,14 @@ mod tests {
             rename(&state, &here.user, "   ").await,
             Err(Trouble::Refused(Refused::NameNeeded))
         ));
+        assert!(matches!(
+            rename(&state, &here.user, &"é".repeat(LONGEST_NAME + 1)).await,
+            Err(Trouble::Refused(Refused::NameTooLong))
+        ));
+        assert!(
+            rename(&state, &here.user, &"é".repeat(LONGEST_NAME)).await.is_ok(),
+            "counted in characters, so a name in any language has the same room"
+        );
         assert!(matches!(
             rename(&state, &here.user, "Marc").await,
             Err(Trouble::Refused(Refused::NameTaken))

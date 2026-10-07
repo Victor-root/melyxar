@@ -56,6 +56,25 @@ export function refusalOf(error: unknown): string {
 }
 
 /**
+ * The figures a refusal carried beside its word, ready to go into its
+ * sentence: the shortest a password may be, the longest a name may be.
+ *
+ * The rule lives on the server, so the number does too, and every screen
+ * that words a refusal puts in whatever the server sent rather than the ones
+ * it remembered to read.
+ */
+export function figuresOf(error: unknown): Record<string, number> {
+  if (!(error instanceof ApiError) || !error.details) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(error.details).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
+  );
+}
+
+/**
  * How many seconds the brake on wrong passwords asks to wait, when this
  * refusal is that brake, or nothing.
  *
