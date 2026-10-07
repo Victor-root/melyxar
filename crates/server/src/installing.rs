@@ -182,6 +182,11 @@ async fn icon_on_ground(
     }
 }
 
+/// How many icons are drawn at the same moment. These addresses answer
+/// anybody, and any colour can be asked for: however many are asked at once,
+/// drawing them takes no more of the machine than this.
+static DRAWING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+
 /// One icon, drawn from the relief the interface carries. Named after the
 /// relief's own version: the colours are in the address already, so the
 /// relief is all that can change under it.
@@ -199,7 +204,9 @@ async fn icon(
         .map(str::to_owned);
     // Drawing a square of half a thousand pixels and writing it out takes a
     // few milliseconds: not for the threads that answer requests.
+    let turn = DRAWING.acquire().await;
     let drawn = tokio::task::spawn_blocking(move || {
+        let _turn = turn;
         look(&path, held.as_deref()).map(|found| match found {
             Found::Held(tag) => Ok((tag, None)),
             Found::Read(tag, bytes) => {
@@ -272,7 +279,12 @@ async fn logo_icon(
         // Laying half a thousand pixels square on a ground takes a few
         // milliseconds: not for the threads that answer requests.
         Some(ground) => {
-            match tokio::task::spawn_blocking(move || mark::laid_on(&made, ground)).await {
+            let turn = DRAWING.acquire().await;
+            let laid = tokio::task::spawn_blocking(move || {
+                let _turn = turn;
+                mark::laid_on(&made, ground)
+            });
+            match laid.await {
                 Ok(Ok(laid)) => laid,
                 Ok(Err(error)) => {
                     tracing::warn!(%error, "the icon of the server's logo could not be laid on its ground");
