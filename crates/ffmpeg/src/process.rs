@@ -134,30 +134,71 @@ pub(crate) async fn output_streaming(
     on_stdout: &(dyn Fn(&[u8]) + Sync),
     on_position: &(dyn Fn(Millis) + Sync),
 ) -> Result<std::process::Output> {
-    read_through(builder, asked_to_stop, on_stdout, on_position, true).await
+    read_through(builder, asked_to_stop, on_position, |mut stdout| async move {
+        use tokio::io::AsyncReadExt;
+        let mut all = Vec::new();
+        let mut chunk = [0_u8; CHUNK];
+        loop {
+            let read = stdout.read(&mut chunk).await?;
+            if read == 0 {
+                return Ok(all);
+            }
+            on_stdout(&chunk[..read]);
+            all.extend_from_slice(&chunk[..read]);
+        }
+    })
+    .await
 }
 
 /// The same, keeping nothing of what the tool writes: for a tool that writes
 /// more than is worth holding, and a caller that makes what it needs of it as
 /// it comes. The output answered carries the tool's words and none of what it
 /// wrote.
+///
+/// `on_stdout` is called on a thread of its own rather than on one that
+/// serves requests, so it may work as hard as it likes on what it is given:
+/// the tool waits on it, and never more than one piece is held.
 pub(crate) async fn output_handed_over(
     builder: TokioCommand,
     asked_to_stop: AskedToStop,
-    on_stdout: &(dyn Fn(&[u8]) + Sync),
+    mut on_stdout: impl FnMut(&[u8]) + Send + 'static,
 ) -> Result<std::process::Output> {
-    read_through(builder, asked_to_stop, on_stdout, &|_| {}, false).await
+    read_through(builder, asked_to_stop, &|_| {}, |stdout| async move {
+        // Handed back blocking, which is what a thread of its own reads.
+        let mut stdout = std::fs::File::from(stdout.into_owned_fd()?);
+        tokio::task::spawn_blocking(move || {
+            use std::io::Read;
+            let mut chunk = [0_u8; CHUNK];
+            loop {
+                match stdout.read(&mut chunk) {
+                    Ok(0) => return Ok(Vec::new()),
+                    Ok(read) => on_stdout(&chunk[..read]),
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(error) => return Err(error),
+                }
+            }
+        })
+        .await
+        .map_err(std::io::Error::other)?
+    })
+    .await
 }
 
-async fn read_through(
+/// How much of what the tool writes is read at a time.
+const CHUNK: usize = 8192;
+
+/// Runs the tool to its end, its output read by `read_written` and its error
+/// output read here, given up the moment the reading is called off.
+async fn read_through<Read, Written>(
     mut builder: TokioCommand,
     mut asked_to_stop: AskedToStop,
-    on_stdout: &(dyn Fn(&[u8]) + Sync),
     on_position: &(dyn Fn(Millis) + Sync),
-    keeping: bool,
-) -> Result<std::process::Output> {
-    use tokio::io::AsyncReadExt;
-
+    read_written: Read,
+) -> Result<std::process::Output>
+where
+    Read: FnOnce(tokio::process::ChildStdout) -> Written,
+    Written: std::future::Future<Output = std::io::Result<Vec<u8>>>,
+{
     if asked_to_stop.already() {
         return Err(FfmpegError::GivenUp);
     }
@@ -169,25 +210,11 @@ async fn read_through(
         .kill_on_drop(true);
 
     let mut child = builder.spawn()?;
-    let (Some(mut stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
         return Err(FfmpegError::Spawn(std::io::Error::other("no pipe to read")));
     };
     let reading = async {
-        let written = async {
-            let mut all = Vec::new();
-            let mut chunk = [0_u8; 8192];
-            loop {
-                let read = stdout.read(&mut chunk).await?;
-                if read == 0 {
-                    break;
-                }
-                on_stdout(&chunk[..read]);
-                if keeping {
-                    all.extend_from_slice(&chunk[..read]);
-                }
-            }
-            Ok::<_, std::io::Error>(all)
-        };
+        let written = read_written(stdout);
         let said = async {
             let mut kept = Vec::new();
             let mut current = Progress::default();
@@ -717,6 +744,44 @@ mod tests {
             "a reading nobody wants is not started: {outcome:?}"
         );
         drop(asked_to_stop);
+    }
+
+    #[tokio::test]
+    async fn a_reading_handed_over_and_called_off_leaves_nothing_running() {
+        // A sound without end, read on a thread of its own: called off, the
+        // tool is killed and the thread finds the end of what it reads,
+        // rather than the two going on for nobody.
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let mut builder = TokioCommand::new(&tools.ffmpeg);
+        builder.args([
+            "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "sine", "-f",
+            "s16le", "pipe:1",
+        ]);
+        let (asked_to_stop, listening) = tokio::sync::watch::channel(false);
+        let pieces = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counting = std::sync::Arc::clone(&pieces);
+        let reading = output_handed_over(builder, AskedToStop::when(listening), move |_| {
+            counting.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        });
+        let stopping = async {
+            while pieces.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            asked_to_stop.send(true).expect("someone listens");
+        };
+        let (outcome, ()) = tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::join!(reading, stopping)
+        })
+        .await
+        .expect("called off well before ten seconds");
+        assert!(matches!(outcome, Err(FfmpegError::GivenUp)), "{outcome:?}");
+
+        let at_the_stop = pieces.load(std::sync::atomic::Ordering::SeqCst);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            pieces.load(std::sync::atomic::Ordering::SeqCst) <= at_the_stop + 1,
+            "nothing goes on being read once it is called off"
+        );
     }
 
     #[tokio::test]
