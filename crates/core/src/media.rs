@@ -22,6 +22,13 @@ use crate::time::{Millis, Timestamp};
 /// times written inside.
 pub const LONGEST_BELIEVABLE: Millis = Millis::new(7 * 24 * 60 * 60 * 1000);
 
+/// How long a file is taken to last, from how long it says it lasts: nothing
+/// past [`LONGEST_BELIEVABLE`]. Asked by every reader of a file, whichever
+/// part of it says its length: the analyser for a film, the tags for a song.
+pub fn believed(claimed: Millis) -> Option<Millis> {
+    (claimed <= LONGEST_BELIEVABLE).then_some(claimed)
+}
+
 /// How a file is recognised again after being renamed or moved.
 ///
 /// Size and modification time are cheap and cover the ordinary case. A short
@@ -528,6 +535,14 @@ impl SubtitleDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_length_past_a_week_is_not_believed() {
+        assert_eq!(believed(Millis::new(7_245_120)), Some(Millis::new(7_245_120)));
+        assert_eq!(believed(LONGEST_BELIEVABLE), Some(LONGEST_BELIEVABLE));
+        assert_eq!(believed(Millis::new(LONGEST_BELIEVABLE.get() + 1)), None);
+        assert_eq!(believed(Millis::new(i64::MAX)), None);
+    }
 
     #[test]
     fn a_title_saying_forced_in_either_language_is_read_as_forced() {

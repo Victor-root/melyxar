@@ -311,9 +311,13 @@ fn described(sound: &melyxar_tags::Sound, source_id: MediaSourceId) -> (SourceAn
     (
         SourceAnalysis {
             container: Some(sound.container.to_string()),
-            duration: Some(Millis::new(
-                i64::try_from(sound.duration_ms).unwrap_or(i64::MAX),
-            )),
+            // What the tags say a song lasts is a few bytes anybody can write,
+            // and a song can be asked of the player of films, which cuts it
+            // into pieces by it.
+            duration: i64::try_from(sound.duration_ms)
+                .ok()
+                .map(Millis::new)
+                .and_then(melyxar_core::media::believed),
             overall_bitrate: sound.overall_bitrate.map(bits),
         },
         Track {
@@ -349,6 +353,30 @@ mod tests {
     use melyxar_core::work::{Work, WorkKind};
 
     use super::*;
+
+    #[test]
+    fn a_song_whose_tags_claim_more_than_a_week_has_no_known_length() {
+        // A few bytes of the header of an MP3 say how many pieces of sound it
+        // holds, and nothing checks them: one second of sound can claim years.
+        let said = |duration_ms: u64| {
+            let sound = melyxar_tags::Sound {
+                container: "mp3",
+                codec: "mp3",
+                duration_ms,
+                overall_bitrate: None,
+                audio_bitrate: None,
+                sample_rate: None,
+                channels: None,
+                bit_depth: None,
+                replay_gain_db: None,
+                replay_gain_peak: None,
+            };
+            described(&sound, MediaSourceId::new()).0.duration
+        };
+        assert_eq!(said(215_000), Some(Millis::new(215_000)));
+        assert_eq!(said(56_097_532_003), None);
+        assert_eq!(said(u64::MAX), None);
+    }
 
     /// The one second files the tag reader is tested on, shared rather than
     /// made again.
