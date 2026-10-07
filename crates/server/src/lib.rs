@@ -121,12 +121,12 @@ pub async fn serve(
     tracing::info!(%address, "listening");
     let closing = state.clone();
     let door = door::Door::new(listener, state.clone())?;
-    axum::serve(door, build(state).into_make_service_with_connect_info::<door::Peer>())
-        .with_graceful_shutdown(async move {
-            shutdown.await;
-            // A live line never ends on its own, and a stopping server waits
-            // for every answer it started.
-            melyxar_app::watching::close_every_line(&closing);
-        })
-        .await
+    door.serve(build(state), async move {
+        shutdown.await;
+        // A live line never ends on its own, and a stopping server waits
+        // for every answer it started.
+        melyxar_app::watching::close_every_line(&closing);
+    })
+    .await;
+    Ok(())
 }
