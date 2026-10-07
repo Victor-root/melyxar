@@ -167,7 +167,6 @@ impl PictureRebuild {
     }
 }
 
-/// Works out how one file reaches one client.
 /// Where the file of a copy is, for the route that hands it over as it lies
 /// on the disk.
 pub async fn file_of(
@@ -196,6 +195,7 @@ pub async fn file_to_download(
     Ok(path)
 }
 
+/// Works out how one file reaches one client.
 pub async fn plan(
     state: &AppState,
     who: &melyxar_core::user::User,
@@ -2349,6 +2349,21 @@ mod tests {
         );
     }
 
+    /// A film to open a session on, nothing of which is produced before a
+    /// player asks for it.
+    fn a_film_copied_as_it_is() -> Recipe {
+        Recipe {
+            source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
+            duration: Millis::new(20_000),
+            streams: melyxar_ffmpeg::command::StreamSelection::default(),
+            video: melyxar_ffmpeg::command::VideoOutput::Copy,
+            audio: melyxar_ffmpeg::command::AudioOutput::Copy,
+            where_the_viewer_starts: Millis::ZERO,
+            where_it_can_be_started: Vec::new(),
+            if_the_card_refuses: Vec::new(),
+        }
+    }
+
     /// The same server, but able to convert: the sessions only exist when the
     /// media tools do.
     async fn state_that_can_convert() -> (tempfile::TempDir, AppState) {
@@ -2395,16 +2410,7 @@ mod tests {
             .open(
                 melyxar_core::id::UserId::new(),
                 melyxar_core::id::DeviceId::new(),
-                Recipe {
-                    source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
-                    duration: Millis::new(20_000),
-                    streams: melyxar_ffmpeg::command::StreamSelection::default(),
-                    video: melyxar_ffmpeg::command::VideoOutput::Copy,
-                    audio: melyxar_ffmpeg::command::AudioOutput::Copy,
-                    where_the_viewer_starts: Millis::ZERO,
-                    where_it_can_be_started: Vec::new(),
-                    if_the_card_refuses: Vec::new(),
-                },
+                a_film_copied_as_it_is(),
                 false,
                 melyxar_streaming::registry::Limits::default(),
             )
@@ -2422,6 +2428,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_account_stopped_loses_even_what_its_players_stopped_saying_they_play() {
+        // A player that no longer says it plays is not on the list of what is
+        // watched, and what is converted for it goes on while it asks for the
+        // pieces. Stopping the account, its rights cut, closes it all the same,
+        // and leaves what it starts afterwards alone.
+        let (_directory, state) = state_that_can_convert().await;
+        let sessions = state.sessions().expect("this server converts").clone();
+        let someone = melyxar_core::id::UserId::new();
+        let somebody_else = melyxar_core::id::UserId::new();
+        let open = |user| {
+            let sessions = sessions.clone();
+            async move {
+                sessions
+                    .open(
+                        user,
+                        melyxar_core::id::DeviceId::new(),
+                        a_film_copied_as_it_is(),
+                        false,
+                        melyxar_streaming::registry::Limits::default(),
+                    )
+                    .await
+                    .expect("a session")
+                    .id
+            }
+        };
+        let unreported = open(someone).await;
+        let theirs = open(somebody_else).await;
+
+        // Held still from here, so the time players are given to obey passes
+        // without being waited for.
+        tokio::time::pause();
+        crate::watching::stop_everything_of(&state, someone);
+        tokio::task::yield_now().await;
+        let started_since = open(someone).await;
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+        assert!(sessions.get(unreported, someone).await.is_err(), "closed once given its time");
+        assert!(sessions.get(started_since, someone).await.is_ok(), "a film started since is a new one");
+        assert!(sessions.get(theirs, somebody_else).await.is_ok(), "nobody else's is touched");
+    }
+
+    #[tokio::test]
     async fn a_session_nobody_came_back_for_is_swept_while_the_server_runs() {
         // The viewer closed the tab, so nothing will ever ask this session for
         // anything again. Nobody is coming to clean up but this loop.
@@ -2431,16 +2479,7 @@ mod tests {
             .open(
                 melyxar_core::id::UserId::new(),
                 melyxar_core::id::DeviceId::new(),
-                Recipe {
-                    source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
-                    duration: Millis::new(20_000),
-                    streams: melyxar_ffmpeg::command::StreamSelection::default(),
-                    video: melyxar_ffmpeg::command::VideoOutput::Copy,
-                    audio: melyxar_ffmpeg::command::AudioOutput::Copy,
-                    where_the_viewer_starts: Millis::ZERO,
-                    where_it_can_be_started: Vec::new(),
-                    if_the_card_refuses: Vec::new(),
-                },
+                a_film_copied_as_it_is(),
                 false,
                 melyxar_streaming::registry::Limits::default(),
             )
