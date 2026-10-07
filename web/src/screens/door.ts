@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import type { Account, Branding, NameAtTheDoor } from "../api";
+import { heldBackFor } from "../asking";
 import { deviceIdentity } from "../deviceIdentity";
 import { refusalKey } from "../i18n";
 
@@ -109,21 +110,19 @@ export function useDoorScreen(
  * The refusal, as this screen says it.
  *
  * Three of them are worth telling apart, and the rest are the server's usual
- * answers. A pair that is not a pair is the ordinary mistake. An account being
- * held back has to say how long, or somebody types their own password again
- * and again and believes they have forgotten it. And a form refused for
- * something typed names the thing to put right.
+ * answers. A pair that is not a pair is the ordinary mistake. Being held back
+ * has to say how long, or somebody types their own password again and again
+ * and believes they have forgotten it. And a form refused for something typed
+ * names the thing to put right.
  */
 function whatTheServerSaid(error: unknown): Refusal {
   if (!(error instanceof ApiError)) {
     return { key: "door.refused.generic", values: {} };
   }
 
-  if (error.code === "too_many_attempts") {
-    return {
-      key: "door.refused.held_back",
-      values: { seconds: Number(error.details?.seconds ?? 60) },
-    };
+  const seconds = heldBackFor(error);
+  if (seconds !== null) {
+    return { key: "door.refused.held_back", values: { seconds } };
   }
   if (error.code === "unauthenticated") {
     return { key: "door.refused.wrong", values: {} };

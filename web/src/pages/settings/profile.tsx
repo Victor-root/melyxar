@@ -5,9 +5,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import type { Account, SignedInDevice } from "../../api";
+import type { Account, ApiError, SignedInDevice } from "../../api";
 import { useAccount } from "../../account";
-import { refusalAbout, refusalOf, useAsked, useTold } from "../../asking";
+import { heldBackFor, refusalAbout, refusalOf, useAsked, useTold } from "../../asking";
 import type { Asked } from "../../asking";
 import { Cropper } from "../../components/cropper";
 import { DeviceLines } from "../../components/device-lines";
@@ -18,6 +18,7 @@ import { refusalKey } from "../../i18n";
 import { AccountIcon, DeviceIcon, EnterIcon, LockIcon, ProfileIcon } from "../../icons";
 import { useJournalNews } from "../../live";
 import { howMany } from "../../readable";
+import type { Wording } from "../../readable";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
 
@@ -267,13 +268,7 @@ function Password({ onChanged }: { onChanged: () => void }) {
         />
         {differ && <p className="panel-notice">{t("door.refused.not_the_same")}</p>}
         {refused && (
-          <p className="panel-notice panel-notice-trouble">
-            {t(
-              refused.status === NOT_THE_CURRENT_ONE
-                ? "me.password_wrong"
-                : refusalAbout(refused, "account"),
-            )}
-          </p>
+          <p className="panel-notice panel-notice-trouble">{passwordRefusal(refused, t)}</p>
         )}
         {done && <p className="panel-notice panel-notice-ok">{t("me.password_changed")}</p>}
         <div className="panel-foot">
@@ -288,6 +283,15 @@ function Password({ onChanged }: { onChanged: () => void }) {
       </form>
     </Panel>
   );
+}
+
+/** Why a password was not changed, as the panel says it. */
+function passwordRefusal(refused: ApiError, t: Wording): string {
+  const seconds = heldBackFor(refused);
+  if (seconds !== null) {
+    return t("door.refused.held_back", { seconds });
+  }
+  return t(refused.status === NOT_THE_CURRENT_ONE ? "me.password_wrong" : refusalAbout(refused, "account"));
 }
 
 /**

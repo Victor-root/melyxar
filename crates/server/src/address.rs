@@ -7,7 +7,10 @@
 //! writing down is the one it saw. A header from anywhere further away is
 //! not believed, since anybody can write one.
 //!
-//! Written down to be read by the administrator, never to decide anything.
+//! Written down to be read by the administrator, and counted by the brake on
+//! wrong passwords, which holds back an address rather than an account. That
+//! is the one thing it decides, and why a proxy in front has to write the
+//! address it saw itself rather than pass on what the browser claimed.
 
 use std::convert::Infallible;
 use std::net::IpAddr;
@@ -21,7 +24,7 @@ use crate::door::Peer;
 /// Where a request came from, when it can be told, and whether it travelled
 /// encrypted to whoever the browser spoke to.
 pub struct Caller {
-    pub address: Option<String>,
+    pub address: Option<IpAddr>,
     pub encrypted: bool,
     /// Whether it came from this machine or the local network.
     pub local: bool,
@@ -36,7 +39,7 @@ impl<S: Send + Sync> FromRequestParts<S> for Caller {
         let address = address_of(ip, &parts.headers);
         Ok(Self {
             local: address.is_some_and(nearby),
-            address: address.map(|address| address.to_string()),
+            address,
             encrypted: peer.is_some_and(|peer| peer.encrypted) || proxy_encrypted(ip, &parts.headers),
         })
     }

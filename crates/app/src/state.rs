@@ -43,10 +43,10 @@ struct Inner {
     /// hundred thousand works to draw a menu.
     counts: crate::counted::Counts,
     /// Wrong passwords, so that guessing one costs time rather than a
-    /// processor. Held in memory: a server that has just restarted has
-    /// forgotten them, which is the right way round for somebody who locked
-    /// themselves out and rebooted it.
-    wrong_answers: crate::accounts::WrongAnswers,
+    /// processor.
+    wrong_answers: crate::wrong_answers::WrongAnswers,
+    /// Where passwords are hashed and checked, a few at a time.
+    passwords: crate::passwords::Passwords,
     /// How the server is reached, and what encrypts it when it is.
     access: crate::access::Current,
     /// When this server came up, for how long it has been running.
@@ -120,7 +120,8 @@ impl AppState {
                 tools,
                 capabilities,
                 counts: crate::counted::Counts::default(),
-                wrong_answers: crate::accounts::WrongAnswers::default(),
+                wrong_answers: crate::wrong_answers::WrongAnswers::default(),
+                passwords: crate::passwords::Passwords::default(),
                 access: crate::access::Current::default(),
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
@@ -182,11 +183,15 @@ impl AppState {
         &self.inner.access
     }
 
-    /// What each library has been counted for.
-    pub(crate) fn wrong_answers(&self) -> &crate::accounts::WrongAnswers {
+    pub(crate) fn wrong_answers(&self) -> &crate::wrong_answers::WrongAnswers {
         &self.inner.wrong_answers
     }
 
+    pub(crate) fn passwords(&self) -> &crate::passwords::Passwords {
+        &self.inner.passwords
+    }
+
+    /// What each library has been counted for.
     pub(crate) fn counts(&self) -> &crate::counted::Counts {
         &self.inner.counts
     }

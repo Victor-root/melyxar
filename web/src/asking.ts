@@ -56,6 +56,22 @@ export function refusalOf(error: unknown): string {
 }
 
 /**
+ * How many seconds the brake on wrong passwords asks to wait, when this
+ * refusal is that brake, or nothing.
+ *
+ * Every door that checks a password is held back by the same brake, and each
+ * has to say how long rather than that the password is wrong: somebody told
+ * nothing types their own password again and again and believes they have
+ * forgotten it.
+ */
+export function heldBackFor(error: unknown): number | null {
+  if (!(error instanceof ApiError) || error.code !== "too_many_attempts") {
+    return null;
+  }
+  return Number(error.details?.seconds ?? 60);
+}
+
+/**
  * The same, worded, and naming the field when the server named one.
  *
  * A refusal met while filling a form in has to say which box is wrong.

@@ -424,7 +424,7 @@ async fn sign_in(
         &what_asked(&headers),
         wished_for(asked.remember),
         asked.client.as_deref(),
-        address.as_deref(),
+        address,
     )
     .await?
     {
@@ -436,16 +436,21 @@ async fn sign_in(
         SignedInOrNot::NotAPair => Err(ServerError::unauthenticated(
             "no account answers to that pair",
         )),
-        // Told how long to wait, because somebody who has mistyped their own
-        // password ten times has to know to come back rather than to try
-        // harder.
-        SignedInOrNot::HeldBack { seconds } => Err(ServerError::with_details(
-            axum::http::StatusCode::TOO_MANY_REQUESTS,
-            melyxar_core::error::ErrorCode::TooManyAttempts,
-            serde_json::json!({ "seconds": seconds }),
-            "held back after too many wrong passwords",
-        )),
+        SignedInOrNot::HeldBack { seconds } => Err(held_back(seconds)),
     }
+}
+
+/// The refusal of a try held back by the brake on wrong passwords.
+///
+/// Told how long to wait, because somebody who has mistyped their own
+/// password ten times has to know to come back rather than to try harder.
+fn held_back(seconds: i64) -> ServerError {
+    ServerError::with_details(
+        axum::http::StatusCode::TOO_MANY_REQUESTS,
+        melyxar_core::error::ErrorCode::TooManyAttempts,
+        serde_json::json!({ "seconds": seconds }),
+        "held back after too many wrong passwords",
+    )
 }
 
 async fn sign_out(State(state): State<AppState>, headers: HeaderMap) -> Result<Response> {
@@ -498,7 +503,7 @@ async fn change_password(
     ThisBrowser {
         remembered, client, ..
     }: ThisBrowser,
-    Caller { encrypted, .. }: Caller,
+    Caller { address, encrypted, .. }: Caller,
     Json(asked): Json<TheOldAndTheNew>,
 ) -> Result<Response> {
     let changed = melyxar_app::accounts::change_password(
@@ -509,6 +514,7 @@ async fn change_password(
         &what_asked(&headers),
         remembered,
         client.as_deref(),
+        address,
     )
     .await?;
 
@@ -521,6 +527,7 @@ async fn change_password(
         PasswordChange::NotTheCurrentOne => Err(ServerError::unauthenticated(
             "that is not the current password",
         )),
+        PasswordChange::HeldBack { seconds } => Err(held_back(seconds)),
     }
 }
 
@@ -590,7 +597,7 @@ async fn set_this_server_up(
         &what_asked(&headers),
         wished_for(asked.remember),
         asked.client.as_deref(),
-        address.as_deref(),
+        address,
     )
     .await?
     else {
