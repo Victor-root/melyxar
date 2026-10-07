@@ -10,12 +10,17 @@
 //! A viewer never says goodbye: they close a tab, lose a connection, put a
 //! telephone in a pocket. So a session is kept alive by being used, and
 //! anything nobody has touched for a while is swept away.
+//!
+//! A device plays one film at a time: the session it opens takes the place
+//! of the one it held, which is how a track or a size changed partway
+//! through, or the next film, is played.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use melyxar_core::id::{DeviceId, UserId};
 use melyxar_ffmpeg::ToolPaths;
 use tokio::sync::Mutex;
 
@@ -53,11 +58,18 @@ async fn size_of(folder: &std::path::Path) -> u64 {
 /// heartbeat covers a pause.
 pub const KEPT_WHILE_IDLE: Duration = Duration::from_secs(120);
 
-/// What the owner allows the sessions, as the settings say at this moment.
+/// What the owner allows the sessions, as the settings and the rights of the
+/// account opening one say at this moment.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Limits {
     /// How many sessions may convert at once. None: no ceiling.
     pub most_at_once: Option<u32>,
+    /// How many sessions the account opening one may hold at once, copies
+    /// included, across all its devices. None: no ceiling.
+    ///
+    /// Without it, the ceiling above is everybody's to share and one account
+    /// could take every place in it.
+    pub most_of_one_account: Option<u32>,
     /// How much of the disk every session's segments together may fill.
     /// None: no ceiling.
     pub room: Option<Room>,
@@ -73,10 +85,11 @@ pub struct Room {
     pub kept_behind: Duration,
 }
 
-/// A session being served, and whether it is rebuilding the film rather than
-/// copying it.
+/// A session being served, the device it plays on, and whether it is
+/// rebuilding the film rather than copying it.
 struct Live {
     session: Arc<Session>,
+    device: DeviceId,
     expensive: bool,
 }
 
@@ -96,18 +109,28 @@ impl Sessions {
         }
     }
 
-    /// Opens a session, unless the machine is already converting as many as
-    /// its owner allowed, or the disk is full of what nobody may give up.
+    /// Opens a session in place of the one this device held, unless the
+    /// machine is already converting as many as its owner allowed, the
+    /// account already holds as many as it may, or the disk is full of what
+    /// nobody may give up.
     ///
     /// `expensive` is what the playback decision said: a stream being rebuilt
     /// counts against the ceiling on conversions, one being copied does not,
     /// since it costs almost nothing and refusing it would turn a cheap
     /// request away for the benefit of an expensive one. Both fill the disk
-    /// alike, so both are held to the room. The limits are asked of the
-    /// settings on every opening, so a change applies to the next film.
+    /// alike, so both are held to the room, and both are films the account
+    /// holds. The limits are asked on every opening, so a change applies to
+    /// the next film.
+    ///
+    /// The session this device held is never counted against the one taking
+    /// its place: a player changing track closes the old one and opens the
+    /// new one at the same moment, and the new one may well arrive first.
+    /// Closed only once the new one is open, so a refusal leaves the film
+    /// that was playing as it was.
     pub async fn open(
         &self,
-        watcher: melyxar_core::id::UserId,
+        watcher: UserId,
+        device: DeviceId,
         recipe: Recipe,
         expensive: bool,
         limits: Limits,
@@ -122,8 +145,12 @@ impl Sessions {
         }
 
         let mut live = self.live.lock().await;
+        let replaced = |kept: &Live| kept.device == device && kept.session.watcher == watcher;
 
-        let converting = live.values().filter(|kept| kept.expensive).count();
+        let converting = live
+            .values()
+            .filter(|kept| kept.expensive && !replaced(kept))
+            .count();
         if expensive
             && limits
                 .most_at_once
@@ -132,6 +159,17 @@ impl Sessions {
             // Told plainly rather than accepted and served badly: a machine
             // converting five films at once finishes none of them in time.
             return Err(StreamingError::TooManyAtOnce);
+        }
+
+        let theirs = live
+            .values()
+            .filter(|kept| kept.session.watcher == watcher && !replaced(kept))
+            .count();
+        if limits
+            .most_of_one_account
+            .is_some_and(|most| theirs >= most as usize)
+        {
+            return Err(StreamingError::TooManyOfOneAccount);
         }
 
         let id = SessionId::new();
@@ -145,14 +183,29 @@ impl Sessions {
             )
             .await?,
         );
+        let gone: Vec<Arc<Session>> = live
+            .extract_if(|_, kept| replaced(kept))
+            .map(|(_, kept)| kept.session)
+            .collect();
         live.insert(
             id,
             Live {
                 session: Arc::clone(&session),
+                device,
                 expensive,
             },
         );
         tracing::info!(session = %id, live = live.len(), "playback session opened");
+        drop(live);
+
+        for session in gone {
+            tracing::info!(
+                session = %session.id,
+                by = %id,
+                "a session gave way to the next one its device opened"
+            );
+            session.close().await;
+        }
         Ok(session)
     }
 
@@ -163,11 +216,7 @@ impl Sessions {
     /// signed in cannot be the same thing as being signed in as whoever
     /// opened it. Asked for here rather than by each caller: a caller can
     /// forget.
-    pub async fn get(
-        &self,
-        id: SessionId,
-        watcher: melyxar_core::id::UserId,
-    ) -> Result<Arc<Session>> {
+    pub async fn get(&self, id: SessionId, watcher: UserId) -> Result<Arc<Session>> {
         self.live
             .lock()
             .await
@@ -181,7 +230,7 @@ impl Sessions {
     ///
     /// Somebody else's is left alone: a name is all it would take to stop a
     /// film somebody else is in the middle of.
-    pub async fn close(&self, id: SessionId, watcher: melyxar_core::id::UserId) {
+    pub async fn close(&self, id: SessionId, watcher: UserId) {
         let session = self
             .live
             .lock()
@@ -336,15 +385,20 @@ mod tests {
     ///
     /// The same one every time, since what they are about is the registry
     /// rather than whose session it is.
-    fn a_watcher() -> melyxar_core::id::UserId {
+    fn a_watcher() -> UserId {
         *NOBODY_IN_PARTICULAR
+    }
+
+    /// A device of their own, for the tests that are not about which.
+    fn a_device() -> DeviceId {
+        DeviceId::new()
     }
 
     /// A ceiling on conversions and nothing else.
     fn at_most(most: u32) -> Limits {
         Limits {
             most_at_once: Some(most),
-            room: None,
+            ..Limits::default()
         }
     }
 
@@ -365,6 +419,7 @@ mod tests {
         let session = sessions
             .open(
                 a_watcher(),
+                a_device(),
                 recipe(directory.join("film.mkv")),
                 false,
                 Limits::default(),
@@ -424,11 +479,12 @@ mod tests {
         let refused = sessions
             .open(
                 a_watcher(),
+                a_device(),
                 recipe(directory.path().join("another.mkv")),
                 false,
                 Limits {
-                    most_at_once: None,
                     room: Some(room(1500)),
+                    ..Limits::default()
                 },
             )
             .await;
@@ -460,7 +516,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().to_path_buf());
         let mine = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("film.mkv")), false, Limits::default())
             .await
             .expect("session opened");
 
@@ -497,7 +553,7 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"));
 
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("film.mkv")), false, Limits::default())
             .await
             .expect("a session");
         assert_eq!(sessions.live_count().await, 1);
@@ -520,18 +576,107 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"));
 
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), true, at_most(1))
+            .open(a_watcher(), a_device(), recipe(directory.path().join("one.mkv")), true, at_most(1))
             .await
             .expect("the first fits");
         assert!(
             matches!(
                 sessions
-                    .open(a_watcher(), recipe(directory.path().join("two.mkv")), true, at_most(1))
+                    .open(a_watcher(), a_device(), recipe(directory.path().join("two.mkv")), true, at_most(1))
                     .await,
                 Err(StreamingError::TooManyAtOnce)
             ),
             "a machine converting more than it can finishes none of them in time"
         );
+    }
+
+    #[tokio::test]
+    async fn a_device_opening_another_session_closes_the_one_it_held() {
+        // A track or a size changed partway through, or the next film: the
+        // conversion left behind would otherwise run for nobody until swept.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().join("sessions"));
+        let device = a_device();
+
+        let before = sessions
+            .open(a_watcher(), device, recipe(directory.path().join("film.mkv")), true, Limits::default())
+            .await
+            .expect("a session");
+        let after = sessions
+            .open(a_watcher(), device, recipe(directory.path().join("film.mkv")), true, Limits::default())
+            .await
+            .expect("its place taken");
+
+        assert_eq!(sessions.live_count().await, 1);
+        assert!(matches!(
+            sessions.get(before.id, a_watcher()).await,
+            Err(StreamingError::NoSuchSession)
+        ));
+        assert!(sessions.get(after.id, a_watcher()).await.is_ok());
+        assert!(!before.folder().exists(), "its tool stopped and its segments gone");
+    }
+
+    #[tokio::test]
+    async fn a_track_changed_on_a_machine_at_its_ceiling_is_not_refused() {
+        // The player closes the old session and opens the new one at the same
+        // moment, and the opening may arrive first: counted against itself,
+        // changing a soundtrack would be refused on a full machine.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().join("sessions"));
+        let device = a_device();
+
+        sessions
+            .open(a_watcher(), device, recipe(directory.path().join("film.mkv")), true, at_most(1))
+            .await
+            .expect("the first fits");
+        sessions
+            .open(a_watcher(), device, recipe(directory.path().join("film.mkv")), true, at_most(1))
+            .await
+            .expect("the same device taking its own place");
+        assert!(matches!(
+            sessions
+                .open(a_watcher(), a_device(), recipe(directory.path().join("other.mkv")), true, at_most(1))
+                .await,
+            Err(StreamingError::TooManyAtOnce)
+        ));
+    }
+
+    #[tokio::test]
+    async fn one_account_holds_no_more_sessions_than_its_rights_allow() {
+        // Otherwise the ceiling on the machine is everybody's to share, and
+        // one account could take every place in it from one browser signed
+        // in many times over.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let sessions = sessions(directory.path().join("sessions"));
+        let two_each = Limits {
+            most_of_one_account: Some(2),
+            ..Limits::default()
+        };
+
+        let first = sessions
+            .open(a_watcher(), a_device(), recipe(directory.path().join("one.mkv")), true, two_each)
+            .await
+            .expect("the first");
+        sessions
+            .open(a_watcher(), a_device(), recipe(directory.path().join("two.mkv")), false, two_each)
+            .await
+            .expect("the second, a copy, counted all the same");
+        assert!(matches!(
+            sessions
+                .open(a_watcher(), a_device(), recipe(directory.path().join("three.mkv")), false, two_each)
+                .await,
+            Err(StreamingError::TooManyOfOneAccount)
+        ));
+        assert!(
+            sessions.get(first.id, a_watcher()).await.is_ok(),
+            "a refusal leaves what was playing as it was"
+        );
+
+        let somebody_else = UserId::new();
+        sessions
+            .open(somebody_else, a_device(), recipe(directory.path().join("four.mkv")), true, two_each)
+            .await
+            .expect("another account has places of its own");
     }
 
     #[tokio::test]
@@ -541,7 +686,7 @@ mod tests {
 
         for name in ["one.mkv", "two.mkv", "three.mkv"] {
             sessions
-                .open(a_watcher(), recipe(directory.path().join(name)), true, Limits::default())
+                .open(a_watcher(), a_device(), recipe(directory.path().join(name)), true, Limits::default())
                 .await
                 .expect("nobody set a ceiling");
         }
@@ -556,15 +701,15 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"));
 
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false, at_most(1))
+            .open(a_watcher(), a_device(), recipe(directory.path().join("one.mkv")), false, at_most(1))
             .await
             .expect("a copy is welcome");
         sessions
-            .open(a_watcher(), recipe(directory.path().join("two.mkv")), true, at_most(1))
+            .open(a_watcher(), a_device(), recipe(directory.path().join("two.mkv")), true, at_most(1))
             .await
             .expect("the copy holds no place a conversion needs");
         sessions
-            .open(a_watcher(), recipe(directory.path().join("three.mkv")), false, at_most(1))
+            .open(a_watcher(), a_device(), recipe(directory.path().join("three.mkv")), false, at_most(1))
             .await
             .expect("a copy is welcome all the same");
         assert_eq!(sessions.live_count().await, 3);
@@ -576,7 +721,7 @@ mod tests {
         let sessions = sessions(directory.path().join("sessions"));
 
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("film.mkv")), false, Limits::default())
             .await
             .expect("a session");
         let folder = session.folder().to_path_buf();
@@ -599,7 +744,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"));
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("film.mkv")), false, Limits::default())
             .await
             .expect("a session");
 
@@ -625,7 +770,7 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"));
         let session = sessions
-            .open(a_watcher(), recipe(directory.path().join("film.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("film.mkv")), false, Limits::default())
             .await
             .expect("a session");
 
@@ -660,11 +805,11 @@ mod tests {
         let directory = tempfile::tempdir().expect("temporary directory");
         let sessions = sessions(directory.path().join("sessions"));
         sessions
-            .open(a_watcher(), recipe(directory.path().join("one.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("one.mkv")), false, Limits::default())
             .await
             .expect("a session");
         sessions
-            .open(a_watcher(), recipe(directory.path().join("two.mkv")), false, Limits::default())
+            .open(a_watcher(), a_device(), recipe(directory.path().join("two.mkv")), false, Limits::default())
             .await
             .expect("another");
 

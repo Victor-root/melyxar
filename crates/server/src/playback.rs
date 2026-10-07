@@ -790,6 +790,7 @@ async fn open_session(
     let session = melyxar_app::playback::open_session(
         &state,
         &who,
+        watcher.device,
         &plan,
         body.start_at_seconds
             .filter(|seconds| seconds.is_finite())

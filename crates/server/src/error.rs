@@ -293,6 +293,13 @@ impl From<melyxar_app::playback::StreamingError> for ServerError {
             Failure::TooManyAtOnce => {
                 Self::busy("this server is already converting all it can at once")
             }
+            // The same refusal as the one asked before anything is converted,
+            // which the player already puts into words.
+            Failure::TooManyOfOneAccount => Self::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                ErrorCode::TooManyStreams,
+                "this account already holds as many films at once as it may",
+            ),
             Failure::NoRoomLeft => Self::new(
                 StatusCode::SERVICE_UNAVAILABLE,
                 ErrorCode::NoRoomLeft,
@@ -394,6 +401,17 @@ mod tests {
         ));
         assert_eq!(error.code(), "conflict");
         assert_eq!(error.status, StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
+    fn an_account_holding_all_its_films_is_told_as_before_anything_is_converted() {
+        // The player already words this one: the same refusal, whichever of
+        // the two checks met it first.
+        let error = ServerError::from(melyxar_app::AppError::Streaming(
+            melyxar_app::playback::StreamingError::TooManyOfOneAccount,
+        ));
+        assert_eq!(error.code(), "too_many_streams");
+        assert_eq!(error.status, StatusCode::TOO_MANY_REQUESTS);
     }
 
     #[test]

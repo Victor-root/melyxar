@@ -530,7 +530,8 @@ pub async fn remember_chosen_tracks(
     Ok(())
 }
 
-/// Opens a session that produces this film in a form the client can play.
+/// Opens a session that produces this film in a form the client can play,
+/// in place of the one this device held.
 ///
 /// Everything about what to produce was already decided; this turns that
 /// decision into the recipe a session carries out. A film the client could
@@ -539,6 +540,7 @@ pub async fn remember_chosen_tracks(
 pub async fn open_session(
     state: &AppState,
     who: &melyxar_core::user::User,
+    device: melyxar_core::id::DeviceId,
     plan: &PlayPlan,
     starting_at: Option<Millis>,
 ) -> Result<Arc<Session>> {
@@ -581,8 +583,18 @@ pub async fn open_session(
     }
 
     let expensive = plan.decision.method.is_expensive();
-    let limits = session_limits(state).await?;
-    let session = sessions.open(who.id, recipe, expensive, limits).await?;
+    let limits = melyxar_streaming::registry::Limits {
+        // As many as the films it may watch at once, the same number the
+        // account is held to before anything is converted.
+        most_of_one_account: who
+            .permissions
+            .max_sessions
+            .and_then(|most| u32::try_from(most).ok()),
+        ..session_limits(state).await?
+    };
+    let session = sessions
+        .open(who.id, device, recipe, expensive, limits)
+        .await?;
     say_how_the_film_was_cut(&session);
 
     // The upkeep normally pulled these out of the film long before anybody
@@ -1144,6 +1156,7 @@ pub(crate) async fn session_limits(state: &AppState) -> Result<melyxar_streaming
     let limits = state.database().transcoding_limits().await?;
     Ok(melyxar_streaming::registry::Limits {
         most_at_once: limits.most_at_once,
+        most_of_one_account: None,
         room: limits
             .cache_megabytes
             .map(|megabytes| melyxar_streaming::registry::Room {
@@ -2381,6 +2394,7 @@ mod tests {
         sessions
             .open(
                 melyxar_core::id::UserId::new(),
+                melyxar_core::id::DeviceId::new(),
                 Recipe {
                     source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
                     duration: Millis::new(20_000),
@@ -2416,6 +2430,7 @@ mod tests {
         sessions
             .open(
                 melyxar_core::id::UserId::new(),
+                melyxar_core::id::DeviceId::new(),
                 Recipe {
                     source: std::path::PathBuf::from("Quiet.Harbour.2019.mkv"),
                     duration: Millis::new(20_000),
