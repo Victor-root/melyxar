@@ -12,10 +12,9 @@
 //! expressed about it, written down beside the device, so that a token handed
 //! to the same browser again is kept for exactly as long as the one before.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::net::IpAddr;
 
-use melyxar_auth::{fingerprint_of, hash_password, password_matches, AuthError};
+use melyxar_auth::{fingerprint_of, AuthError};
 use melyxar_core::id::UserId;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::user::{Permissions, User};
@@ -23,6 +22,7 @@ use melyxar_core::user::{Permissions, User};
 use melyxar_database::users::KeptAnAdministrator;
 
 use crate::activity::{record, Event};
+use crate::wrong_answers::{Origin, Turn};
 use crate::{AppError, AppState, Result};
 
 /// How much of a name typed at the door is written down when it was refused:
@@ -104,16 +104,16 @@ fn name_of(asked: &str) -> std::result::Result<&str, Trouble> {
 }
 
 /// Hashes a password, telling a rule it breaks apart from a failure.
-fn stored_form_of(password: &str) -> std::result::Result<String, Trouble> {
-    match hash_password(password) {
+async fn stored_form_of(state: &AppState, password: &str) -> std::result::Result<String, Trouble> {
+    match state.passwords().hash(password).await {
         Ok(hashed) => Ok(hashed),
         Err(AuthError::PasswordTooShort) => Err(Trouble::Refused(Refused::PasswordTooShort)),
         Err(other) => Err(Trouble::Failed(AppError::Auth(other))),
     }
 }
 
-/// How many wrong answers in a row an account may be set to take before it
-/// is held back.
+/// How many tries in a row without the right password an address may be set
+/// to take before it is held back.
 ///
 /// Ten by default, which is more mistakes than anybody makes typing their
 /// own password and far fewer than guessing one needs. Never fewer than three,
@@ -121,65 +121,7 @@ fn stored_form_of(password: &str) -> std::result::Result<String, Trouble> {
 /// which the wait no longer slows any guessing.
 pub const SIGN_IN_TRIES: std::ops::RangeInclusive<i64> = 3..=100;
 
-/// How long an account is left alone for, once it has been held back.
-///
-/// A minute, and again for every further round of wrong answers. Guessing a
-/// password of eight characters at ten tries a minute takes longer than the
-/// sun has left.
-const HELD_BACK_FOR: time::Duration = time::Duration::minutes(1);
-
-/// Wrong passwords, counted per account and kept in memory.
-///
-/// Two things this is for. Guessing a password should cost time rather than a
-/// handful of tries; and checking one is *made* expensive on purpose, memory
-/// and all, so somebody throwing a thousand guesses a second at this server
-/// would be asking it to grind itself to a halt. Held back, none of those
-/// guesses is ever checked, so neither happens.
-///
-/// Only accounts that exist are counted, so nobody can fill this by inventing
-/// names: a name nobody has is answered before any password is checked, and
-/// there is nothing to hold back.
-#[derive(Default)]
-pub struct WrongAnswers {
-    by_account: Mutex<HashMap<UserId, InARow>>,
-}
-
-#[derive(Default)]
-struct InARow {
-    how_many: u32,
-    until: Option<Timestamp>,
-}
-
-impl WrongAnswers {
-    /// How much longer this account is being left alone, when it is.
-    fn held_back(&self, who: UserId, at: Timestamp) -> Option<time::Duration> {
-        let kept = self.by_account.lock().ok()?;
-        let until = kept.get(&who)?.until?;
-        (until > at).then(|| until - at)
-    }
-
-    /// One more wrong answer, which at `allowed` holds the account back.
-    fn one_more(&self, who: UserId, allowed: u32, at: Timestamp) {
-        let Ok(mut kept) = self.by_account.lock() else {
-            return;
-        };
-        let counted = kept.entry(who).or_default();
-        counted.how_many += 1;
-        if counted.how_many >= allowed {
-            counted.how_many = 0;
-            counted.until = Some(at + HELD_BACK_FOR);
-        }
-    }
-
-    /// Somebody got it right, so nothing is held against them any more.
-    fn forget(&self, who: UserId) {
-        if let Ok(mut kept) = self.by_account.lock() {
-            kept.remove(&who);
-        }
-    }
-}
-
-/// How many wrong passwords in a row an account takes before it is held back.
+/// How many tries in a row an address takes before it is held back.
 pub async fn sign_in_tries(state: &AppState) -> Result<i64> {
     Ok(state.database().sign_in_tries().await?)
 }
@@ -193,6 +135,38 @@ pub async fn set_sign_in_tries(state: &AppState, tries: i64) -> Result<i64> {
     }
     state.database().set_sign_in_tries(tries).await?;
     Ok(tries)
+}
+
+/// What a try from here is allowed, before its password is looked at.
+///
+/// An address already held back is told so without even the setting being
+/// read: while it is held back, it costs this server nothing.
+async fn turn_from(state: &AppState, from: Origin, at: Timestamp) -> Result<Turn> {
+    if let Some(left) = state.wrong_answers().held_back(from, at) {
+        return Ok(Turn::HeldBack(left));
+    }
+    let allowed = u32::try_from(state.database().sign_in_tries().await?).unwrap_or(u32::MAX);
+    Ok(state.wrong_answers().take_a_turn(from, allowed, at))
+}
+
+/// A wait as somebody is told it: in whole seconds, and never none.
+fn seconds_of(left: time::Duration) -> i64 {
+    left.whole_seconds().max(1)
+}
+
+/// Writes down that an address has just been held back, once for the whole
+/// hold rather than once for every try it then refuses.
+async fn held_back_from_now(state: &AppState, name: &str, device: &str, address: Option<IpAddr>) {
+    tracing::warn!(?address, "held back an address after too many wrong passwords");
+    record(
+        state,
+        Event::SignInHeldBack {
+            name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
+            device: device.to_string(),
+            address: address.map(|address| address.to_string()),
+        },
+    )
+    .await;
 }
 
 /// What a client is handed when it signs in.
@@ -212,11 +186,11 @@ pub enum SignedInOrNot {
     Opened(Box<OpenedSession>),
     /// No account answers to that pair, whichever half of it was wrong.
     NotAPair,
-    /// Too many wrong answers in a row on this account, so nothing is being
-    /// checked for a while. Said out loud rather than answered as one more
-    /// wrong password: somebody who has mistyped theirs ten times needs to be
-    /// told to wait, and it tells whoever is guessing nothing they cannot see
-    /// from the time it takes anyway.
+    /// Too many tries in a row without the right password from where this
+    /// one comes, so nothing from there is being checked for a while. Said
+    /// out loud rather than answered as one more wrong password: somebody
+    /// who has mistyped theirs ten times needs to be told to wait. It says
+    /// nothing about the name typed, which is not what is held back.
     HeldBack {
         seconds: i64,
     },
@@ -229,6 +203,10 @@ pub enum PasswordChange {
     Changed(SessionToken),
     /// What was given as the current password is not the current password.
     NotTheCurrentOne,
+    /// Too many wrong current passwords from where this comes, by the same
+    /// brake as signing in: a session left open somewhere is not a way to
+    /// guess the password behind it at leisure.
+    HeldBack { seconds: i64 },
 }
 
 /// Signs somebody in, or answers nothing.
@@ -243,6 +221,9 @@ pub enum PasswordChange {
 /// design and by a setting that is on: hiding which names exist while offering
 /// to draw them would be a lock on a door standing open.
 ///
+/// Every try counts against the address it comes from, whatever name it
+/// types: see [`crate::wrong_answers`].
+///
 /// A browser that says which one it is has the session this account held on
 /// it replaced rather than joined by another.
 pub async fn sign_in(
@@ -252,57 +233,45 @@ pub async fn sign_in(
     device_name: &str,
     remembered: Remembered,
     client: Option<&str>,
-    address: Option<&str>,
+    address: Option<IpAddr>,
 ) -> Result<SignedInOrNot> {
-    let refused = || {
+    let from = Origin::of(address);
+    // Asked before anything is checked: the checking is the expensive part,
+    // and not doing it is the whole point of holding an address back.
+    let holds_back = match turn_from(state, from, now()).await? {
+        Turn::HeldBack(left) => return Ok(SignedInOrNot::HeldBack { seconds: seconds_of(left) }),
+        Turn::Checked { holds_back } => holds_back,
+    };
+
+    let signing_in = match state.database().user_by_name(name).await? {
+        Some((user, Some(stored))) => {
+            let right = state.passwords().matches(password, &stored).await;
+            if !right {
+                tracing::info!(account = %user.name, "refused a sign in");
+            }
+            right.then_some(user)
+        }
+        // An account waiting for its first password is not an account anybody
+        // can sign into. It is the state a server sits in before the wizard
+        // has run.
+        Some((_, None)) | None => None,
+    };
+    let Some(user) = signing_in else {
         record(
             state,
             Event::SignInRefused {
                 name: name.chars().take(LONGEST_NAME_WRITTEN).collect(),
                 device: device_name.to_string(),
-                address: address.map(str::to_string),
-            },
-        )
-    };
-    let Some((user, stored)) = state.database().user_by_name(name).await? else {
-        refused().await;
-        return Ok(SignedInOrNot::NotAPair);
-    };
-    // An account waiting for its first password is not an account anybody can
-    // sign into. It is the state a server sits in before the wizard has run.
-    let Some(stored) = stored else {
-        refused().await;
-        return Ok(SignedInOrNot::NotAPair);
-    };
-
-    let at = now();
-    // Asked before anything is checked: the checking is the expensive part,
-    // and not doing it is the whole point of holding an account back.
-    if let Some(left) = state.wrong_answers().held_back(user.id, at) {
-        tracing::warn!(account = %user.name, "held back after too many wrong passwords");
-        record(
-            state,
-            Event::SignInHeldBack {
-                user: user.id,
-                user_name: user.name.clone(),
-                device: device_name.to_string(),
-                address: address.map(str::to_string),
+                address: address.map(|address| address.to_string()),
             },
         )
         .await;
-        return Ok(SignedInOrNot::HeldBack {
-            seconds: left.whole_seconds().max(1),
-        });
-    }
-
-    if !password_matches(password, &stored) {
-        let allowed = u32::try_from(state.database().sign_in_tries().await?).unwrap_or(u32::MAX);
-        state.wrong_answers().one_more(user.id, allowed, at);
-        tracing::info!(account = %user.name, "refused a sign in");
-        refused().await;
+        if holds_back {
+            held_back_from_now(state, name, device_name, address).await;
+        }
         return Ok(SignedInOrNot::NotAPair);
-    }
-    state.wrong_answers().forget(user.id);
+    };
+    state.wrong_answers().forget(from);
 
     let token = SessionToken::new()?;
     let device_id = state
@@ -424,6 +393,7 @@ pub async fn sign_out(state: &AppState, token: &str) -> Result<bool> {
 /// The fresh session is kept exactly as the one it replaces was: somebody who
 /// signed in on a machine that is not theirs did not ask to be remembered on
 /// it, and changing a password is not a place to quietly decide otherwise.
+#[allow(clippy::too_many_arguments)]
 pub async fn change_password(
     state: &AppState,
     who: &User,
@@ -432,7 +402,14 @@ pub async fn change_password(
     device_name: &str,
     remembered: Remembered,
     client: Option<&str>,
+    address: Option<IpAddr>,
 ) -> std::result::Result<PasswordChange, Trouble> {
+    let from = Origin::of(address);
+    let holds_back = match turn_from(state, from, now()).await? {
+        Turn::HeldBack(left) => return Ok(PasswordChange::HeldBack { seconds: seconds_of(left) }),
+        Turn::Checked { holds_back } => holds_back,
+    };
+
     let stored = state
         .database()
         .user_by_name(&who.name)
@@ -440,17 +417,22 @@ pub async fn change_password(
         .and_then(|(_, stored)| stored);
     // An account with no password yet is one the wizard has not finished, and
     // it is reached through the wizard rather than through here.
-    let Some(stored) = stored else {
-        return Ok(PasswordChange::NotTheCurrentOne);
+    let right = match stored {
+        Some(stored) => state.passwords().matches(current, &stored).await,
+        None => false,
     };
-    if !password_matches(current, &stored) {
+    if !right {
+        if holds_back {
+            held_back_from_now(state, &who.name, device_name, address).await;
+        }
         return Ok(PasswordChange::NotTheCurrentOne);
     }
+    state.wrong_answers().forget(from);
 
     // Hashed before anything is taken away, so a password the rule refuses
     // leaves the account exactly as it was rather than signed out of
     // everywhere with its old password still on it.
-    let hashed = stored_form_of(wanted)?;
+    let hashed = stored_form_of(state, wanted).await?;
     state.database().set_password(who.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(who.id).await?;
     tracing::info!(account = %who.name, closed, "changed a password and signed every device out");
@@ -554,18 +536,26 @@ pub async fn create_the_first_account(
     language: Option<&str>,
 ) -> std::result::Result<User, Trouble> {
     let name = name_of(name)?;
-
-    // Hashed before the door is looked at, because hashing is the slow part
-    // and a password the rule refuses is refused whatever else is true.
-    let hashed = stored_form_of(password)?;
-
-    // The looking and the writing happen together down there, so two people
-    // reaching a brand new server in the same breath cannot both come through.
-    let Some(mut user) = state.database().create_the_first_user(name, &hashed).await? else {
-        return Err(Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
+    let already_set_up = || {
+        Trouble::Failed(AppError::Domain(melyxar_core::Error::new(
             melyxar_core::error::ErrorCode::Conflict,
             "this server has already been set up",
-        ))));
+        )))
+    };
+
+    // Looked at before anything is hashed: this door answers anybody for as
+    // long as the server runs, and hashing first handed whoever reached it
+    // the slowest thing this server does, for free, with every request.
+    if !still_to_be_set_up(state).await? {
+        return Err(already_set_up());
+    }
+    let hashed = stored_form_of(state, password).await?;
+
+    // Looked at again where the account is written, together with the
+    // writing, so two people reaching a brand new server in the same breath
+    // cannot both come through.
+    let Some(mut user) = state.database().create_the_first_user(name, &hashed).await? else {
+        return Err(already_set_up());
     };
     if let Some(language) = language.filter(|language| melyxar_core::user::is_an_interface_language(language)) {
         user.preferences.interface_language = language.to_string();
@@ -673,7 +663,7 @@ pub async fn create_account(
 ) -> std::result::Result<User, Trouble> {
     let name = name_of(name)?;
     let permissions = checked(state, permissions).await?;
-    let hashed = stored_form_of(password)?;
+    let hashed = stored_form_of(state, password).await?;
     // Left to the unique index, as a rename is, so two accounts made under
     // one name in the same breath cannot both come through.
     let user = match state
@@ -1049,7 +1039,7 @@ async fn password_put_on(
     user: &User,
     password: &str,
 ) -> std::result::Result<(), Trouble> {
-    let hashed = stored_form_of(password)?;
+    let hashed = stored_form_of(state, password).await?;
     state.database().set_password(user.id, Some(&hashed)).await?;
     let closed = state.database().close_every_session_of(user.id).await?;
     crate::watching::stop_everything_of(state, user.id);
@@ -1074,7 +1064,6 @@ mod tests {
     use super::*;
     use melyxar_config::{Config, Directories};
     use melyxar_database::Database;
-    use time::macros::datetime;
 
     /// How many wrong answers a server that was never set takes.
     const ALLOWED_TRIES: u32 = 10;
@@ -1171,6 +1160,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_server_already_set_up_refuses_before_hashing_anything() {
+        // This door answers anybody for as long as the server runs, and
+        // hashing is the slowest thing the server does. A password too short
+        // to be hashed at all shows which came first: it is answered as a
+        // server already set up, not as a password the rule refuses.
+        let (_directory, state) = a_server_with_an_account().await;
+        let refused = create_the_first_account(&state, "someone else", "short", None).await;
+        assert!(
+            matches!(
+                &refused,
+                Err(Trouble::Failed(AppError::Domain(error)))
+                    if error.code == melyxar_core::error::ErrorCode::Conflict
+            ),
+            "{refused:?}"
+        );
+    }
+
+    #[tokio::test]
     async fn an_account_cannot_be_made_without_a_name_or_with_too_short_a_password() {
         let (_directory, state) = a_server().await;
         assert!(create_the_first_account(&state, "   ", "quiet harbour", None)
@@ -1232,15 +1239,37 @@ mod tests {
             .is_none());
     }
 
+    /// Where the tries of these tests come from, and where somebody else's do.
+    fn here() -> Option<IpAddr> {
+        Some("203.0.113.9".parse().expect("an address"))
+    }
+
+    fn elsewhere() -> Option<IpAddr> {
+        Some("198.51.100.4".parse().expect("an address"))
+    }
+
+    async fn a_try(state: &AppState, name: &str, password: &str, from: Option<IpAddr>) -> SignedInOrNot {
+        sign_in(state, name, password, "a browser", Remembered::Yes, None, from)
+            .await
+            .expect("asked")
+    }
+
+    async fn the_kinds_in_the_journal(state: &AppState) -> Vec<String> {
+        crate::activity::page(state, &[crate::activity::Category::Access], None, 100)
+            .await
+            .expect("journal read")
+            .into_iter()
+            .map(|line| line.kind)
+            .collect()
+    }
+
     #[tokio::test]
-    async fn too_many_wrong_passwords_hold_an_account_back() {
+    async fn too_many_wrong_passwords_hold_their_address_back() {
         let (_directory, state) = a_server_with_an_account().await;
 
         for _ in 0..ALLOWED_TRIES {
             assert!(matches!(
-                sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
-                    .await
-                    .expect("asked"),
+                a_try(&state, "victor", "not the password", here()).await,
                 SignedInOrNot::NotAPair
             ));
         }
@@ -1249,100 +1278,131 @@ mod tests {
         // which is the point of holding it back: checking one is made
         // expensive on purpose, so a thousand guesses a second would be asking
         // this server to grind itself to a halt.
-        let held = sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None, None)
-            .await
-            .expect("asked");
-        let SignedInOrNot::HeldBack { seconds } = held else {
-            panic!("ten wrong answers in a row have to hold an account back");
+        let SignedInOrNot::HeldBack { seconds } = a_try(&state, "victor", "quiet harbour", here()).await else {
+            panic!("ten wrong answers in a row have to hold their address back");
         };
         assert!(seconds > 0, "it has to say how long to wait: {seconds}");
     }
 
     #[tokio::test]
-    async fn getting_it_right_clears_what_was_held_against_an_account() {
+    async fn whoever_guesses_at_a_name_does_not_shut_its_owner_out() {
+        // Counted per account, ten wrong passwords a minute at a name offered
+        // at the door kept its owner, the administrator included, from ever
+        // signing in again.
         let (_directory, state) = a_server_with_an_account().await;
-
-        for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
-                .await
-                .expect("asked");
+        for _ in 0..ALLOWED_TRIES {
+            a_try(&state, "victor", "not the password", here()).await;
         }
-        assert!(a_session(&state, "victor", "quiet harbour", "a browser")
-            .await
-            .is_some());
-
-        // Back to nothing, so the next mistake is the first one again and
-        // somebody who mistypes their password now and then is never locked
-        // out by a week of them.
-        for _ in 0..ALLOWED_TRIES - 1 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
-                .await
-                .expect("asked");
-        }
-        assert!(a_session(&state, "victor", "quiet harbour", "a browser")
-            .await
-            .is_some());
+        assert!(matches!(
+            a_try(&state, "victor", "quiet harbour", elsewhere()).await,
+            SignedInOrNot::Opened(_)
+        ));
     }
 
     #[tokio::test]
-    async fn an_account_is_held_back_after_the_tries_the_administrator_set() {
+    async fn names_nobody_has_count_like_any_other_wrong_answer() {
+        // Otherwise inventing a new name for each guess would never be held
+        // back, and being held back would say which names exist.
         let (_directory, state) = a_server_with_an_account().await;
-        assert!(set_sign_in_tries(&state, 2).await.is_err(), "fewer than three shuts out a typo");
-        set_sign_in_tries(&state, 3).await.expect("set");
-
-        for _ in 0..3 {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
-                .await
-                .expect("asked");
+        for attempt in 0..ALLOWED_TRIES {
+            a_try(&state, &format!("nobody {attempt}"), "quiet harbour", here()).await;
         }
         assert!(matches!(
-            sign_in(&state, "victor", "quiet harbour", "a browser", Remembered::Yes, None, None)
-                .await
-                .expect("asked"),
+            a_try(&state, "victor", "quiet harbour", here()).await,
             SignedInOrNot::HeldBack { .. }
         ));
     }
 
     #[tokio::test]
-    async fn holding_one_account_back_leaves_every_other_alone() {
+    async fn getting_it_right_clears_what_was_held_against_an_address() {
         let (_directory, state) = a_server_with_an_account().await;
-        state
-            .database()
-            .create_user("someone", None, &Permissions::viewer())
-            .await
-            .expect("account created");
-        set_a_password(&state, "someone", "amber field road")
-            .await
-            .expect("password set");
 
-        for _ in 0..ALLOWED_TRIES {
-            sign_in(&state, "victor", "not the password", "a browser", Remembered::Yes, None, None)
-                .await
-                .expect("asked");
+        for _ in 0..ALLOWED_TRIES - 1 {
+            a_try(&state, "victor", "not the password", here()).await;
         }
+        assert!(matches!(
+            a_try(&state, "victor", "quiet harbour", here()).await,
+            SignedInOrNot::Opened(_)
+        ));
 
-        // Otherwise anybody could shut everyone else out of their own server
-        // by typing nonsense at one account.
-        assert!(a_session(&state, "someone", "amber field road", "a browser")
-            .await
-            .is_some());
+        // Back to nothing, so the next mistake is the first one again and
+        // somebody who mistypes their password now and then is never locked
+        // out by a week of them.
+        for _ in 0..ALLOWED_TRIES - 1 {
+            a_try(&state, "victor", "not the password", here()).await;
+        }
+        assert!(matches!(
+            a_try(&state, "victor", "quiet harbour", here()).await,
+            SignedInOrNot::Opened(_)
+        ));
     }
 
-    #[test]
-    fn an_account_is_left_alone_again_once_the_wait_is_over() {
-        let counted = WrongAnswers::default();
-        let who = UserId::new();
-        let at = datetime!(2026-01-01 12:00 UTC);
+    #[tokio::test]
+    async fn an_address_is_held_back_after_the_tries_the_administrator_set() {
+        let (_directory, state) = a_server_with_an_account().await;
+        assert!(set_sign_in_tries(&state, 2).await.is_err(), "fewer than three shuts out a typo");
+        set_sign_in_tries(&state, 3).await.expect("set");
+
+        for _ in 0..3 {
+            a_try(&state, "victor", "not the password", here()).await;
+        }
+        assert!(matches!(
+            a_try(&state, "victor", "quiet harbour", here()).await,
+            SignedInOrNot::HeldBack { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_hold_is_written_down_once_rather_than_for_every_try_it_refuses() {
+        // Somebody hammering at the door while held back would otherwise
+        // fill the journal, and the one connection that writes to the
+        // database, as fast as they can send.
+        let (_directory, state) = a_server_with_an_account().await;
+        for _ in 0..ALLOWED_TRIES + 20 {
+            a_try(&state, "victor", "not the password", here()).await;
+        }
+
+        let kinds = the_kinds_in_the_journal(&state).await;
+        let counted = |kind: &str| kinds.iter().filter(|one| *one == kind).count();
+        assert_eq!(counted("sign_in_refused"), ALLOWED_TRIES as usize);
+        assert_eq!(counted("sign_in_held_back"), 1);
+    }
+
+    #[tokio::test]
+    async fn the_current_password_asked_for_a_change_is_braked_like_signing_in() {
+        // A session left open on a borrowed machine is not a way to guess the
+        // password behind it at leisure, and then take the account away from
+        // its owner with it.
+        let (_directory, state) = a_server_with_an_account().await;
+        let opened = a_session(&state, "victor", "quiet harbour", "a browser")
+            .await
+            .expect("signed in");
+        let change = |current: &'static str| {
+            change_password(
+                &state,
+                &opened.user,
+                current,
+                "amber field road",
+                "a browser",
+                Remembered::Yes,
+                None,
+                here(),
+            )
+        };
 
         for _ in 0..ALLOWED_TRIES {
-            counted.one_more(who, ALLOWED_TRIES, at);
+            assert!(matches!(
+                change("not the current one").await.expect("asked"),
+                PasswordChange::NotTheCurrentOne
+            ));
         }
-        assert!(counted.held_back(who, at).is_some());
+        assert!(matches!(
+            change("quiet harbour").await.expect("asked"),
+            PasswordChange::HeldBack { .. }
+        ));
         assert!(
-            counted
-                .held_back(who, at + HELD_BACK_FOR + time::Duration::seconds(1))
-                .is_none(),
-            "being held back is a wait, not a lock somebody has to come and undo"
+            a_session(&state, "victor", "quiet harbour", "a browser").await.is_some(),
+            "nothing was changed while it was held back"
         );
     }
 
@@ -1457,6 +1517,7 @@ mod tests {
             "a browser",
             Remembered::Yes,
             None,
+            None,
         )
         .await
         .expect("asked");
@@ -1509,6 +1570,7 @@ mod tests {
             "a browser",
             Remembered::Yes,
             None,
+            None,
         )
         .await
         .expect("asked");
@@ -1541,6 +1603,7 @@ mod tests {
                 "short",
                 "a browser",
                 Remembered::Yes,
+                None,
                 None,
             )
                 .await

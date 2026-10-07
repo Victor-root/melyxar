@@ -39,8 +39,10 @@ pub enum Event {
     /// Where it came from is the address the server saw, or the one the
     /// proxy in front of it passed on.
     SignInRefused { name: String, device: String, address: Option<String> },
-    /// An account held back after too many wrong passwords.
-    SignInHeldBack { user: UserId, user_name: String, device: String, address: Option<String> },
+    /// An address held back after too many tries without the right password,
+    /// written when the hold begins. The name is the one its last try typed,
+    /// which may be nobody's.
+    SignInHeldBack { name: String, device: String, address: Option<String> },
     SignedOut {
         user: UserId,
         user_name: String,
@@ -314,11 +316,11 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(device),
             json!({ "user_name": name, "address": address }),
         ),
-        Event::SignInHeldBack { user, user_name, device, address } => line(
+        Event::SignInHeldBack { name, device, address } => line(
             SIGN_IN_HELD_BACK,
-            Some(user),
+            None,
             Some(device),
-            json!({ "user_name": user_name, "address": address }),
+            json!({ "user_name": name, "address": address }),
         ),
         Event::SignedOut {
             user,

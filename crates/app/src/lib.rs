@@ -37,6 +37,7 @@ pub mod notifications;
 pub mod overview;
 pub mod people;
 mod own;
+mod passwords;
 pub mod playback;
 pub mod playlists;
 pub mod ratings;
@@ -56,6 +57,7 @@ pub mod translation;
 pub mod uploads;
 pub mod upkeep;
 pub mod watching;
+mod wrong_answers;
 
 pub use state::AppState;
 
