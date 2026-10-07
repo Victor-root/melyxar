@@ -34,6 +34,12 @@ use crate::{AppError, AppState, Result};
 /// account answers to more.
 pub const LONGEST_NAME: usize = 64;
 
+/// The most devices an account stays signed in on: far more than anybody
+/// owns, and short of what a program signing in again and again would
+/// otherwise leave behind for ever. Past it, the one used longest ago is
+/// signed out.
+pub const MOST_DEVICES: usize = 100;
+
 /// The fewest characters a password may hold, for whoever has to say so.
 ///
 /// Sent with the refusal rather than written into the interface, so the rule
@@ -345,6 +351,10 @@ pub async fn sign_in(
             now(),
             a_browser_identifier(client),
         )
+        .await?;
+    state
+        .database()
+        .keep_the_devices_used_last(user.id, MOST_DEVICES)
         .await?;
     tracing::info!(account = %user.name, device = device_name, "signed in");
     record(

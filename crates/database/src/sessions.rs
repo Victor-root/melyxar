@@ -198,6 +198,21 @@ impl Database {
         Ok(id)
     }
 
+    /// Signs out every device of an account but the `kept` it used last,
+    /// and answers how many went.
+    pub async fn keep_the_devices_used_last(&self, user_id: UserId, kept: usize) -> Result<u64> {
+        let done = sqlx::query(
+            "DELETE FROM devices WHERE user_id = ?1 AND id NOT IN
+               (SELECT id FROM devices WHERE user_id = ?1
+                 ORDER BY last_seen_at DESC, created_at DESC LIMIT ?2)",
+        )
+        .bind(user_id.to_db_string())
+        .bind(i64::try_from(kept).unwrap_or(i64::MAX))
+        .execute(self.writer())
+        .await?;
+        Ok(done.rows_affected())
+    }
+
     /// The account behind a token, and nothing when there is none.
     ///
     /// Answers nothing rather than failing for every way a token can fail to
@@ -434,6 +449,39 @@ mod tests {
             .await
             .expect("account created");
         (database, user.id)
+    }
+
+    #[tokio::test]
+    async fn only_the_devices_used_last_are_kept_signed_in() {
+        let (database, user) = a_server_with_one_account().await;
+        for (token, minutes) in [("oldest", 0), ("older", 10), ("newer", 20), ("newest", 30)] {
+            database
+                .open_session(
+                    user,
+                    token,
+                    token,
+                    Remembered::Yes,
+                    A_MOMENT + time::Duration::minutes(minutes),
+                    None,
+                )
+                .await
+                .expect("opened");
+        }
+        // Used lately, the oldest one is among the last two used.
+        database
+            .session_holder("oldest", A_MOMENT + time::Duration::days(1))
+            .await
+            .expect("read");
+
+        assert_eq!(database.keep_the_devices_used_last(user, 2).await.expect("kept"), 2);
+        for (token, kept) in [("oldest", true), ("older", false), ("newer", false), ("newest", true)] {
+            assert_eq!(
+                database.session_holder(token, A_MOMENT).await.expect("read").is_some(),
+                kept,
+                "{token}"
+            );
+        }
+        assert_eq!(database.keep_the_devices_used_last(user, 2).await.expect("kept"), 0);
     }
 
     #[tokio::test]
