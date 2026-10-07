@@ -111,7 +111,8 @@ impl AnalysedFile {
                 .as_deref()
                 .and_then(|value| value.parse::<f64>().ok())
                 .filter(|seconds| *seconds > 0.0)
-                .map(Millis::from_seconds_f64),
+                .map(Millis::from_seconds_f64)
+                .filter(|duration| *duration <= melyxar_core::media::LONGEST_BELIEVABLE),
             overall_bitrate: report
                 .format
                 .bit_rate
@@ -686,6 +687,20 @@ mod tests {
     fn a_zero_duration_reads_as_unknown_rather_than_as_an_instant_film() {
         let file = analyse(r#"{"format":{"duration":"0.000000"},"streams":[]}"#);
         assert_eq!(file.duration, None);
+    }
+
+    #[test]
+    fn a_duration_past_believing_reads_as_unknown() {
+        // A few kilobytes can claim to last for ever, and everything worked
+        // out from how long a film lasts would be without end.
+        for claimed in ["1000000000000.000000", "inf", "604800.001"] {
+            let file = analyse(&format!(r#"{{"format":{{"duration":"{claimed}"}},"streams":[]}}"#));
+            assert_eq!(file.duration, None, "{claimed}");
+        }
+        let a_week = analyse(r#"{"format":{"duration":"604800.000000"},"streams":[]}"#);
+        assert_eq!(a_week.duration, Some(melyxar_core::media::LONGEST_BELIEVABLE));
+        let a_film = analyse(r#"{"format":{"duration":"7245.120000"},"streams":[]}"#);
+        assert_eq!(a_film.duration, Some(Millis::new(7_245_120)));
     }
 
     #[test]

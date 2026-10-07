@@ -10,6 +10,18 @@ use std::path::PathBuf;
 use crate::id::{LibraryRootId, MediaSourceId, TrackId, WorkId};
 use crate::time::{Millis, Timestamp};
 
+/// The longest a file is believed to last: a week.
+///
+/// Past the longest recording anybody keeps, a whole season run end to end or
+/// an audiobook of many evenings, and well short of what costs too much to
+/// build on. A file is trusted for how long it says it lasts, and a few
+/// kilobytes can say it lasts for ever: everything worked out from that (the
+/// pieces a film is cut into for a browser, the pictures of the bar, a
+/// recording of its sound) would then be without end. So a file claiming more
+/// is taken as not saying, and no reading of a file goes past it, whatever the
+/// times written inside.
+pub const LONGEST_BELIEVABLE: Millis = Millis::new(7 * 24 * 60 * 60 * 1000);
+
 /// How a file is recognised again after being renamed or moved.
 ///
 /// Size and modification time are cheap and cover the ordinary case. A short
