@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use melyxar_auth::AuthError;
-use tokio::sync::Semaphore;
+use tokio::sync::{OnceCell, Semaphore};
 
 /// How many passwords are hashed or checked at the same moment.
 ///
@@ -20,17 +20,26 @@ use tokio::sync::Semaphore;
 /// of milliseconds, and people do not sign in twenty times a second.
 const AT_ONCE: usize = 2;
 
+/// What the stand-in for an account nobody holds is made from. Its stored
+/// form is drawn with a fresh salt like any other, so nothing is learnt from
+/// knowing it.
+const NOBODY_S: &str = "a password that belongs to nobody at all";
+
 pub(crate) struct Passwords {
     /// Each turn is held by the work itself rather than by the request that
     /// asked for it: somebody who gives up waiting does not free a turn the
     /// work they started is still using.
     turns: Arc<Semaphore>,
+    /// The stored form a password is checked against when the name it came
+    /// with has no account: made the first time it is needed.
+    nobody_s: OnceCell<String>,
 }
 
 impl Default for Passwords {
     fn default() -> Self {
         Self {
             turns: Arc::new(Semaphore::new(AT_ONCE)),
+            nobody_s: OnceCell::new(),
         }
     }
 }
@@ -70,6 +79,16 @@ impl Passwords {
         .await
         .unwrap_or(false)
     }
+
+    /// Checks a password the way it would be checked against an account, for
+    /// a name that has none. Answered at once, a name with no account behind
+    /// it would say so to whoever times the answer, and the list of names
+    /// kept from the door would be read back one guess at a time.
+    pub(crate) async fn checked_against_nobody(&self, password: &str) {
+        if let Ok(stored) = self.nobody_s.get_or_try_init(|| self.hash(NOBODY_S)).await {
+            self.matches(password, stored).await;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -82,6 +101,27 @@ mod tests {
         let stored = passwords.hash("quiet harbour").await.expect("hashed");
         assert!(passwords.matches("quiet harbour", &stored).await);
         assert!(!passwords.matches("quiet harbours", &stored).await);
+    }
+
+    #[tokio::test]
+    async fn a_name_with_no_account_takes_as_long_as_one_with_an_account() {
+        let passwords = Passwords::default();
+        let stored = passwords.hash("quiet harbour").await.expect("hashed");
+        // The stand-in is made the first time, and only timed afterwards.
+        passwords.checked_against_nobody("a guess").await;
+
+        let timed = |checked: std::time::Instant| checked.elapsed().as_secs_f64();
+        let started = std::time::Instant::now();
+        passwords.matches("a guess", &stored).await;
+        let with_an_account = timed(started);
+        let started = std::time::Instant::now();
+        passwords.checked_against_nobody("a guess").await;
+        let with_none = timed(started);
+
+        assert!(
+            with_none > with_an_account / 3.0,
+            "{with_none} s against {with_an_account} s: the same work, so the same time"
+        );
     }
 
     #[tokio::test]

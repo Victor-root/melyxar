@@ -58,6 +58,9 @@ pub enum Refused {
     NameNeeded,
     NameTooLong,
     NameTaken,
+    /// Reads the same as another account's name, though it is written
+    /// otherwise: a letter of another alphabet, or one nobody can see.
+    NameLooksTaken,
     PasswordTooShort,
     /// Afterwards nobody would be an administrator of this server.
     LastAdministrator,
@@ -75,6 +78,7 @@ impl Refused {
             Self::NameNeeded => "name_needed",
             Self::NameTooLong => "name_too_long",
             Self::NameTaken => "name_taken",
+            Self::NameLooksTaken => "name_looks_taken",
             Self::PasswordTooShort => "password_too_short",
             Self::LastAdministrator => "last_administrator",
             Self::NotYourself => "not_yourself",
@@ -105,13 +109,56 @@ impl From<melyxar_database::DatabaseError> for Trouble {
 /// never longer than [`LONGEST_NAME`].
 fn name_of(asked: &str) -> std::result::Result<&str, Trouble> {
     let name = asked.trim();
-    if name.is_empty() {
+    if how_it_reads(name).trim().is_empty() {
         return Err(Trouble::Refused(Refused::NameNeeded));
     }
     if name.chars().count() > LONGEST_NAME {
         return Err(Trouble::Refused(Refused::NameTooLong));
     }
     Ok(name)
+}
+
+/// A name as it reads on a screen, for two of them to be told apart: what
+/// cannot be seen left out, every letter that is drawn like another written
+/// as that other one (the skeleton of the Unicode rules on confusable text),
+/// and in small letters. Two names that read the same here are the same name
+/// to whoever picks one at the door.
+///
+/// Drawn like another before the capitals go and again after: a capital I is
+/// drawn like a small l, which it no longer is once made small.
+fn how_it_reads(name: &str) -> String {
+    use unicode_security::confusable_detection::skeleton;
+    use unicode_security::general_security_profile::IdentifierType;
+    use unicode_security::GeneralSecurityProfile;
+    let seen: String = name
+        .chars()
+        .filter(|letter| letter.identifier_type() != Some(IdentifierType::Default_Ignorable))
+        .collect();
+    let small: String = skeleton(&seen).flat_map(char::to_lowercase).collect();
+    skeleton(&small).collect()
+}
+
+/// Refuses a name another account's reads like, though it is written
+/// otherwise; the very same name is left to the database to refuse, which
+/// it does whoever asks at the same moment.
+async fn not_read_like_another(
+    state: &AppState,
+    name: &str,
+    except: Option<UserId>,
+) -> std::result::Result<(), Trouble> {
+    let reads = how_it_reads(name);
+    let others = state.database().list_users().await?;
+    let like = others
+        .iter()
+        .filter(|other| Some(other.id) != except)
+        .find(|other| how_it_reads(&other.name) == reads);
+    match like {
+        Some(other) if other.name.to_lowercase() == name.to_lowercase() => {
+            Err(Trouble::Refused(Refused::NameTaken))
+        }
+        Some(_) => Err(Trouble::Refused(Refused::NameLooksTaken)),
+        None => Ok(()),
+    }
 }
 
 /// Hashes a password, telling a rule it breaks apart from a failure.
@@ -264,8 +311,11 @@ pub async fn sign_in(
         }
         // An account waiting for its first password is not an account anybody
         // can sign into. It is the state a server sits in before the wizard
-        // has run.
-        Some((_, None)) | None => None,
+        // has run. Checked all the same, for the answer to take as long.
+        Some((_, None)) | None => {
+            state.passwords().checked_against_nobody(password).await;
+            None
+        }
     };
     let Some(user) = signing_in else {
         record(
@@ -485,6 +535,7 @@ pub async fn rename(
     if name == who.name {
         return Ok(who.clone());
     }
+    not_read_like_another(state, name, Some(who.id)).await?;
     if !state.database().rename_user(who.id, name).await? {
         return Err(Trouble::Refused(Refused::NameTaken));
     }
@@ -673,6 +724,7 @@ pub async fn create_account(
     permissions: &Permissions,
 ) -> std::result::Result<User, Trouble> {
     let name = name_of(name)?;
+    not_read_like_another(state, name, None).await?;
     let permissions = checked(state, permissions).await?;
     let hashed = stored_form_of(state, password).await?;
     // Left to the unique index, as a rename is, so two accounts made under
@@ -1998,6 +2050,45 @@ mod tests {
             0
         );
         assert_eq!(last_line(&state).await, "other_devices_signed_out");
+    }
+
+    #[test]
+    fn a_name_reads_the_same_whatever_alphabet_or_invisible_letter_it_is_written_with() {
+        let reads_like = |one: &str, other: &str| how_it_reads(one) == how_it_reads(other);
+        // A Cyrillic i, a Greek o, a capital I drawn like a small l.
+        assert!(reads_like("Zoe", "Z\u{03BF}e"));
+        assert!(reads_like("Amberfield", "Amberf\u{0456}eld"));
+        assert!(reads_like("Bill", "BiII"));
+        // A letter nobody sees, and the same name in capitals.
+        assert!(reads_like("Zoe", "Zo\u{200B}e"));
+        assert!(reads_like("Zoe", "ZOE"));
+        // An accent is something everybody sees, and emoji stay welcome.
+        assert!(!reads_like("Zoe", "Zoé"));
+        assert!(!reads_like("Zoe", "Zoe 🎬"));
+    }
+
+    #[test]
+    fn a_name_of_nothing_but_invisible_letters_is_no_name() {
+        assert!(matches!(name_of("\u{200B}\u{2060}"), Err(Trouble::Refused(Refused::NameNeeded))));
+        assert!(name_of("Zoe 🎬").is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_name_reading_like_another_account_s_is_refused() {
+        let (_directory, state, admin, zoe) = an_administrator_and_somebody().await;
+        for looks_like_zoe in ["z\u{03BF}e", "zo\u{200B}e"] {
+            let trouble = create_account(&state, looks_like_zoe, "amber field road", &Permissions::viewer())
+                .await
+                .expect_err("refused");
+            assert_eq!(refused(trouble), Refused::NameLooksTaken, "{looks_like_zoe:?}");
+            let trouble = rename_account(&state, admin.id, looks_like_zoe)
+                .await
+                .expect_err("refused");
+            assert_eq!(refused(trouble), Refused::NameLooksTaken, "{looks_like_zoe:?}");
+        }
+        // Its own name, written another way, is still its own.
+        assert!(rename(&state, &zoe.user, "Zoe").await.is_ok());
+        assert!(rename_account(&state, admin.id, "Zoé").await.is_ok(), "an accent reads otherwise");
     }
 
     #[tokio::test]

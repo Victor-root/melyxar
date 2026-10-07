@@ -265,6 +265,7 @@ const en: Dictionary = {
   "refused.account.name_needed": "Enter a username.",
   "refused.account.name_too_long": "Username must be at most {longest} characters.",
   "refused.account.name_taken": "Another account already has this name.",
+  "refused.account.name_looks_taken": "This name looks too much like another account's.",
   "refused.account.password_too_short":
     "Password must contain at least {shortest} characters.",
   "refused.account.last_administrator": "This server must keep at least one administrator.",
@@ -2249,6 +2250,7 @@ const fr: Dictionary = {
   "refused.account.name_needed": "Saisissez un nom d’utilisateur.",
   "refused.account.name_too_long": "Le nom d’utilisateur doit contenir au plus {longest} caractères.",
   "refused.account.name_taken": "Un autre compte porte déjà ce nom.",
+  "refused.account.name_looks_taken": "Ce nom ressemble trop à celui d’un autre compte.",
   "refused.account.password_too_short":
     "Le mot de passe doit contenir au moins {shortest} caractères.",
   "refused.account.last_administrator": "Ce serveur doit garder au moins un administrateur.",
