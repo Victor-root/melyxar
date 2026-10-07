@@ -353,3 +353,64 @@ async fn what_one_account_watched_is_not_what_another_one_carries_on_with() {
         "a film somebody else left halfway is not on this person's home page"
     );
 }
+
+#[tokio::test]
+async fn a_collection_holds_nothing_out_of_reach_of_whoever_fills_it() {
+    let here = two_libraries().await;
+    let fills_collections = here
+        .state
+        .database()
+        .create_user(
+            "fills collections",
+            None,
+            &Permissions {
+                sees_every_library: false,
+                allowed_libraries: vec![here.films],
+                may_manage_collections: true,
+                ..Permissions::viewer()
+            },
+        )
+        .await
+        .expect("account created");
+
+    // Put in a collection, a work out of reach would be shown to everybody
+    // who may see it, by somebody who may not.
+    assert!(melyxar_app::collections::create(
+        &here.state,
+        &fills_collections,
+        "Mixed",
+        &[here.a_film, here.a_series]
+    )
+    .await
+    .is_err());
+    let theirs =
+        melyxar_app::collections::create(&here.state, &fills_collections, "Films", &[here.a_film])
+            .await
+            .expect("made of what they may see");
+    for in_it in [true, false] {
+        assert!(
+            melyxar_app::collections::put(
+                &here.state,
+                &fills_collections,
+                theirs,
+                &[here.a_series],
+                in_it
+            )
+            .await
+            .is_err(),
+            "put in: {in_it}"
+        );
+    }
+    assert!(
+        melyxar_app::collections::holding(&here.state, &fills_collections, here.a_series)
+            .await
+            .is_err(),
+        "nor is it said which collections a work out of reach is in"
+    );
+    assert!(
+        melyxar_app::collections::holding(&here.state, &fills_collections, here.a_film)
+            .await
+            .expect("read")
+            .contains(&theirs)
+    );
+}
