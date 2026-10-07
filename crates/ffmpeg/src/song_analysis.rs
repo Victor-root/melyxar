@@ -41,14 +41,16 @@ pub struct Wanted {
 /// The samples of its sound, when they are wanted, are given to `on_samples`
 /// as they come, in pieces of no particular length.
 pub async fn analyse(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     song: &Path,
     wanted: Wanted,
     asked_to_stop: AskedToStop,
     on_samples: &(dyn Fn(&[i16]) + Sync),
 ) -> Result<Option<Loudness>> {
-    let mut builder = TokioCommand::new(tool);
-    builder.args(arguments(song, wanted));
+    let mut builder = TokioCommand::new(&tools.ffmpeg);
+    let mut args = arguments(song, wanted);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    builder.args(args);
     // A sample is two bytes, and the pipe may cut between them.
     let cut_in_two = std::sync::Mutex::new(None::<u8>);
     let output = output_handed_over(builder, asked_to_stop, &|bytes| {
@@ -247,7 +249,7 @@ mod tests {
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
         let heard = std::sync::Mutex::new(0usize);
-        let loudness = analyse(&tools.ffmpeg, &song, BOTH, AskedToStop::never(), &|samples| {
+        let loudness = analyse(&tools, &song, BOTH, AskedToStop::never(), &|samples| {
             *heard.lock().expect("counted") += samples.len();
         })
         .await
@@ -275,7 +277,7 @@ mod tests {
             spectrum: true,
         };
         let heard = std::sync::Mutex::new(0usize);
-        let loudness = analyse(&tools.ffmpeg, &song, wanted, AskedToStop::never(), &|samples| {
+        let loudness = analyse(&tools, &song, wanted, AskedToStop::never(), &|samples| {
             *heard.lock().expect("counted") += samples.len();
         })
         .await

@@ -154,7 +154,7 @@ pub async fn as_web_vtt(
 
     let being_written = while_it_is_written(&destination);
     if let Err(error) =
-        melyxar_ffmpeg::subtitles::to_web_vtt(&tools.ffmpeg, &file, &being_written, stream_index)
+        melyxar_ffmpeg::subtitles::to_web_vtt(tools, &file, &being_written, stream_index)
             .await
     {
         let _ = tokio::fs::remove_file(&being_written).await;
@@ -302,7 +302,7 @@ pub async fn pull_them_all_out(
         .map(|((index, _), aside)| (*index, aside.as_path()))
         .collect();
     if let Err(error) = melyxar_ffmpeg::subtitles::all_to_web_vtt(
-        &tools.ffmpeg,
+        tools,
         &source.path,
         &asked,
         asked_to_stop,

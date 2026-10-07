@@ -201,7 +201,7 @@ mod tests {
             },
             Path::new("/cache/h264-1080.mp4"),
         )
-        .to_arguments()
+        .to_arguments("matroska,webm,mov,mp4,m4a")
         .into_iter()
         .map(|value| value.to_string_lossy().to_string())
         .collect()
@@ -256,7 +256,7 @@ mod tests {
         let metadata = std::fs::metadata(&into).expect("the reference film was written");
         assert!(metadata.len() > 0, "a real film, not an empty file");
 
-        let probed = crate::probe::probe(&tools.ffprobe, &into)
+        let probed = crate::probe::probe(&tools, &into)
             .await
             .expect("the reference film can be read back");
         assert!(probed.describes_something());

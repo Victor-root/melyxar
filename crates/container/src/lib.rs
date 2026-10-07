@@ -132,7 +132,7 @@ mod tests {
         let tools =
             melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are installed here");
         melyxar_ffmpeg::probe::key_frames(
-            &tools.ffprobe,
+            &tools,
             path,
             melyxar_ffmpeg::AskedToStop::never(),
         )

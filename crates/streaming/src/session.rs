@@ -914,7 +914,7 @@ impl Session {
         let piece = tokio::fs::read(self.path_of(index)).await?;
         tokio::fs::write(&whole, [header, piece].concat()).await?;
 
-        let read = melyxar_ffmpeg::probe::probe(&self.tools.ffprobe, &whole).await;
+        let read = melyxar_ffmpeg::probe::probe(&self.tools, &whole).await;
         // Removed whatever the reading said: it exists for one line of the
         // journal, and a folder of these would be a cache filling up for
         // nobody.
@@ -1080,11 +1080,11 @@ impl Session {
         tracing::debug!(
             session = %self.id,
             index,
-            arguments = ?command.to_arguments(),
+            arguments = ?command.to_arguments(self.tools.allowed_formats()),
             "the tool is being set going with these arguments"
         );
         melyxar_ffmpeg::painting::announce(&self.id.to_string(), index, &command);
-        let process = RunningProcess::start(&self.tools.ffmpeg, &command, Some(reports))?;
+        let process = RunningProcess::start(&self.tools, &command, Some(reports))?;
         if command.is_painting_a_subtitle()
             && let Some(pid) = process.id()
         {
@@ -2944,7 +2944,7 @@ mod tests {
 
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
         let found = melyxar_ffmpeg::probe::key_frames(
-            &tools.ffprobe,
+            &tools,
             &source,
             melyxar_ffmpeg::AskedToStop::never(),
         )
@@ -3034,7 +3034,7 @@ mod tests {
 
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
         let found = melyxar_ffmpeg::probe::key_frames(
-            &tools.ffprobe,
+            &tools,
             &source,
             melyxar_ffmpeg::AskedToStop::never(),
         )

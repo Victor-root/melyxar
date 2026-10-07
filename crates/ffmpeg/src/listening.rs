@@ -57,14 +57,16 @@ pub struct ConvertedSong {
 
 /// Starts converting a song, from `start` on, at `kbps` kilobits a second.
 pub fn convert(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     song: &Path,
     start: Millis,
     into: Converted,
     kbps: u32,
 ) -> Result<ConvertedSong> {
-    let mut process = TokioCommand::new(tool)
-        .args(arguments(song, start, into, kbps))
+    let mut args = arguments(song, start, into, kbps);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    let mut process = TokioCommand::new(&tools.ffmpeg)
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -164,7 +166,7 @@ mod tests {
             (Converted::Mp3, &b"ID3"[..]),
         ] {
             let mut converted = convert(
-                &tools.ffmpeg,
+                &tools,
                 &song,
                 Millis::new(1_000),
                 into,

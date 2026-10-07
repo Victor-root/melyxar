@@ -989,7 +989,7 @@ pub async fn read_copy_again(state: &AppState, source_id: MediaSourceId) -> Resu
         relative_path: source.relative_path.clone(),
     };
     let name = file.name();
-    let analyser = tools.ffprobe.clone();
+    let tools = tools.clone();
     let owned = state.clone();
 
     let started = state
@@ -1011,7 +1011,7 @@ pub async fn read_copy_again(state: &AppState, source_id: MediaSourceId) -> Resu
                 // rather than stripped of everything it had: a file read again
                 // and unreadable would otherwise come out of this worse than
                 // it went in.
-                let outcome = analyse_one(database, &analyser, &file)
+                let outcome = analyse_one(database, &tools, &file)
                     .await
                     .map_err(|error| error.to_string())?;
                 handle.advance(1).await;
@@ -1488,7 +1488,7 @@ async fn analyse_pending(
     // worse than no name at all.
     handle.at_step(JobStep::AnalysingFiles).await;
     handle.set_total(pending.len() as i64).await;
-    let analyser = tools.ffprobe.clone();
+    let tools = tools.clone();
     let limit = state.config().limits.concurrent_probes;
     // Each file is analysed on its own task, so what they work with is owned
     // rather than borrowed from a scan that may well finish first.
@@ -1498,7 +1498,7 @@ async fn analyse_pending(
     // Bounded on purpose: an unbounded scan would take the machine away from
     // the playback it is supposed to leave untouched.
     let outcomes = melyxar_jobs::for_each_bounded(pending, limit, move |file| {
-        let analyser = analyser.clone();
+        let tools = tools.clone();
         let handle = owned_handle.clone();
         let database = owned_database.clone();
         async move {
@@ -1506,7 +1506,7 @@ async fn analyse_pending(
                 return Outcome::Stopped;
             }
             handle.now_working_on(Some(&file.name())).await;
-            let outcome = analyse_one(&database, &analyser, &file)
+            let outcome = analyse_one(&database, &tools, &file)
                 .await
                 .unwrap_or_else(|error| {
                     tracing::warn!(error = %error, "a file could not be recorded after analysis");
@@ -1553,9 +1553,9 @@ enum Outcome {
     Stopped,
 }
 
-async fn analyse_one(database: &Database, analyser: &Path, file: &PendingFile) -> Result<Outcome> {
+async fn analyse_one(database: &Database, tools: &melyxar_ffmpeg::ToolPaths, file: &PendingFile) -> Result<Outcome> {
     let full_path = file.root_path.join(&file.relative_path);
-    let report = match melyxar_ffmpeg::probe::probe(analyser, &full_path).await {
+    let report = match melyxar_ffmpeg::probe::probe(tools, &full_path).await {
         Ok(report) => report,
         Err(error) => {
             tracing::warn!(

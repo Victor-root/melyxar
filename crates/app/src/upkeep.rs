@@ -348,7 +348,7 @@ pub(crate) async fn read_the_key_frames_of(
         "reading the films of this library for where their picture can be started"
     );
 
-    let analyser = tools.ffprobe.clone();
+    let tools = tools.clone();
     let mut read = 0;
     let mut from_their_own_index = 0;
     let mut still_waiting = waiting;
@@ -368,7 +368,7 @@ pub(crate) async fn read_the_key_frames_of(
             break;
         }
 
-        let analyser = analyser.clone();
+        let tools = tools.clone();
         let owned_database = database.clone();
         let owned_handle = handle.clone();
         // Bounded like the analysis of a scan: this is the disk from end to
@@ -377,7 +377,7 @@ pub(crate) async fn read_the_key_frames_of(
             batch,
             state.config().limits.concurrent_probes,
             move |source_id| {
-                let analyser = analyser.clone();
+                let tools = tools.clone();
                 let database = owned_database.clone();
                 let handle = owned_handle.clone();
                 let asked_to_stop = asked_to_stop.clone();
@@ -390,7 +390,7 @@ pub(crate) async fn read_the_key_frames_of(
                     }
                     let how = read_one_film_for_its_key_frames(
                         &database,
-                        &analyser,
+                        &tools,
                         source_id,
                         asked_to_stop,
                         &handle,
@@ -732,7 +732,7 @@ enum HowItWasRead {
 /// always available, and the two answer exactly the same thing.
 async fn read_one_film_for_its_key_frames(
     database: &Database,
-    analyser: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
     handle: &JobHandle,
@@ -748,7 +748,7 @@ async fn read_one_film_for_its_key_frames(
         Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
         None => (
             melyxar_ffmpeg::probe::key_frames_reporting(
-                analyser,
+                tools,
                 &source.path,
                 asked_to_stop,
                 &|position| {

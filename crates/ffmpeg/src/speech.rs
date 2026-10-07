@@ -82,7 +82,7 @@ impl Drop for Scratch {
 /// the tool is run at the lowest priority there is, since this is work nobody
 /// is waiting for and the machine may be playing something.
 pub async fn listen(
-    encoder: &Path,
+    tools: &crate::ToolPaths,
     tool: &SpeechTool,
     video: &Path,
     model: &Path,
@@ -96,8 +96,10 @@ pub async fn listen(
     let recording = folder.0.join("sound.wav");
     let written = folder.0.join("heard");
 
-    let mut recording_of_it = TokioCommand::new(encoder);
-    recording_of_it.args(recording_arguments(video, &recording));
+    let mut recording_of_it = TokioCommand::new(&tools.ffmpeg);
+    let mut args = recording_arguments(video, &recording);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    recording_of_it.args(args);
     let output = output_of(recording_of_it, asked_to_stop.clone()).await?;
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));

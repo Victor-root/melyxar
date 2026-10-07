@@ -755,7 +755,7 @@ mod tests {
         assert!(status.success());
 
         let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("tools are installed");
-        let report = melyxar_ffmpeg::probe::probe(&tools.ffprobe, &media)
+        let report = melyxar_ffmpeg::probe::probe(&tools, &media)
             .await
             .expect("the file analyses");
         let file = AnalysedFile::from_report(&report, MediaSourceId::new());

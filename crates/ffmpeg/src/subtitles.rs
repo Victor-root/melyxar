@@ -32,15 +32,18 @@ pub fn to_web_vtt_arguments(
     source: &Path,
     destination: &Path,
     stream_index: Option<i32>,
+    allowed_formats: &str,
 ) -> Vec<OsString> {
     let mut arguments = vec![
         OsString::from("-hide_banner"),
         OsString::from("-loglevel"),
         OsString::from("error"),
         OsString::from("-y"),
-        OsString::from("-i"),
-        source.as_os_str().to_os_string(),
     ];
+    // The film is a file the server did not make itself.
+    arguments.extend(crate::formats::only_as(allowed_formats));
+    arguments.push(OsString::from("-i"));
+    arguments.push(source.as_os_str().to_os_string());
 
     if let Some(index) = stream_index {
         arguments.push(OsString::from("-map"));
@@ -68,15 +71,20 @@ pub fn to_web_vtt_arguments(
 /// the file has to be read through. Done once per track, a film carrying seven
 /// of them is read seven times. Measured on a film with seven: 575 ms in seven
 /// passes against 89 ms in one, for output identical to the byte.
-pub fn all_to_web_vtt_arguments(source: &Path, wanted: &[(i32, &Path)]) -> Vec<OsString> {
+pub fn all_to_web_vtt_arguments(
+    source: &Path,
+    wanted: &[(i32, &Path)],
+    allowed_formats: &str,
+) -> Vec<OsString> {
     let mut arguments = vec![
         OsString::from("-hide_banner"),
         OsString::from("-loglevel"),
         OsString::from("error"),
         OsString::from("-y"),
-        OsString::from("-i"),
-        source.as_os_str().to_os_string(),
     ];
+    arguments.extend(crate::formats::only_as(allowed_formats));
+    arguments.push(OsString::from("-i"));
+    arguments.push(source.as_os_str().to_os_string());
 
     for (stream_index, destination) in wanted {
         arguments.push(OsString::from("-map"));
@@ -97,7 +105,7 @@ pub fn all_to_web_vtt_arguments(source: &Path, wanted: &[(i32, &Path)]) -> Vec<O
 
 /// Writes several subtitle tracks of one film out as WebVTT, in one reading.
 pub async fn all_to_web_vtt(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     wanted: &[(i32, &Path)],
     asked_to_stop: AskedToStop,
@@ -105,8 +113,8 @@ pub async fn all_to_web_vtt(
     if wanted.is_empty() {
         return Ok(());
     }
-    let mut builder = TokioCommand::new(tool);
-    builder.args(all_to_web_vtt_arguments(source, wanted));
+    let mut builder = TokioCommand::new(&tools.ffmpeg);
+    builder.args(all_to_web_vtt_arguments(source, wanted, tools.allowed_formats()));
     let output = crate::process::output_of(builder, asked_to_stop).await?;
 
     if !output.status.success() {
@@ -117,13 +125,13 @@ pub async fn all_to_web_vtt(
 
 /// Writes one subtitle track out as WebVTT.
 pub async fn to_web_vtt(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     destination: &Path,
     stream_index: Option<i32>,
 ) -> Result<()> {
-    let output = TokioCommand::new(tool)
-        .args(to_web_vtt_arguments(source, destination, stream_index))
+    let output = TokioCommand::new(&tools.ffmpeg)
+        .args(to_web_vtt_arguments(source, destination, stream_index, tools.allowed_formats()))
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -152,6 +160,7 @@ mod tests {
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
             &PathBuf::from("/cache/subtitles/one.vtt"),
             Some(3),
+            "matroska,webm",
         ));
         let map = arguments
             .iter()
@@ -169,6 +178,7 @@ mod tests {
             &PathBuf::from("/films/Quiet.Harbour.2019.fr.srt"),
             &PathBuf::from("/cache/subtitles/one.vtt"),
             None,
+            "matroska,webm",
         ));
         assert!(!arguments.iter().any(|value| value == "-map"));
     }
@@ -181,6 +191,7 @@ mod tests {
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
             &PathBuf::from("/cache/subtitles/one.vtt"),
             Some(3),
+            "matroska,webm",
         ));
         assert!(arguments.iter().any(|value| value == "-vn"));
         assert!(arguments.iter().any(|value| value == "-an"));
@@ -197,6 +208,7 @@ mod tests {
         let arguments = written(&all_to_web_vtt_arguments(
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
             &[(3, one.as_path()), (4, two.as_path())],
+            "matroska,webm",
         ));
 
         assert_eq!(
@@ -225,6 +237,7 @@ mod tests {
         let arguments = written(&all_to_web_vtt_arguments(
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
             &[],
+            "matroska,webm",
         ));
         assert!(!arguments.iter().any(|value| value == "-map"));
     }
@@ -235,6 +248,7 @@ mod tests {
             &PathBuf::from("/films/Quiet.Harbour.2019.mkv"),
             &PathBuf::from("/cache/subtitles/one.vtt"),
             Some(3),
+            "matroska,webm",
         ));
         let codec = arguments
             .iter()
@@ -307,7 +321,7 @@ mod tests {
             .map(|(which, path)| (which as i32 + 1, path.as_path()))
             .collect();
 
-        all_to_web_vtt(&tools.ffmpeg, &film, &asked, AskedToStop::never())
+        all_to_web_vtt(&tools, &film, &asked, AskedToStop::never())
             .await
             .expect("every track comes out");
 
@@ -334,7 +348,7 @@ mod tests {
 
         let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
         let destination = directory.path().join("out.vtt");
-        to_web_vtt(&tools.ffmpeg, &subtitle, &destination, None)
+        to_web_vtt(&tools, &subtitle, &destination, None)
             .await
             .expect("converted");
 
@@ -361,7 +375,7 @@ mod tests {
         let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
         assert!(
             to_web_vtt(
-                &tools.ffmpeg,
+                &tools,
                 &nothing,
                 &directory.path().join("out.vtt"),
                 None

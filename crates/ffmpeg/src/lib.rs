@@ -21,6 +21,7 @@ pub mod images;
 pub mod listening;
 pub mod painting;
 pub mod probe;
+pub mod formats;
 pub mod process;
 mod reading;
 pub mod song_analysis;
@@ -94,6 +95,18 @@ pub type Result<T> = std::result::Result<T, FfmpegError>;
 pub struct ToolPaths {
     pub ffmpeg: PathBuf,
     pub ffprobe: PathBuf,
+    /// Which formats a file the server did not make itself may be read as:
+    /// every reader this build of the tool has, less those that open other
+    /// inputs. Asked of the tool once, here, so every reading of such a file
+    /// can be held to it. See [`crate::formats`].
+    allowed_formats: std::sync::Arc<str>,
+}
+
+impl ToolPaths {
+    /// Which formats an untrusted file may be read as.
+    pub fn allowed_formats(&self) -> &str {
+        &self.allowed_formats
+    }
 }
 
 impl ToolPaths {
@@ -145,7 +158,24 @@ impl ToolPaths {
                 })?,
         };
 
-        Ok(Self { ffmpeg, ffprobe })
+        // Asked once, here, rather than on every reading. A build with no
+        // listing to give is held to nothing rather than refused: the tool is
+        // there and works, and the guard is one defence among others.
+        let allowed_formats = std::process::Command::new(&ffmpeg)
+            .args(["-hide_banner", "-demuxers"])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| crate::formats::allowed_from(&String::from_utf8_lossy(&output.stdout)))
+            .unwrap_or_default()
+            .into();
+
+        Ok(Self {
+            ffmpeg,
+            ffprobe,
+            allowed_formats,
+        })
     }
 }
 

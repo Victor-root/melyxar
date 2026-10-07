@@ -258,10 +258,10 @@ async fn made_from(state: &AppState, bytes: &[u8], sent: Sent) -> Result<String,
     let destination = folder.join(&name);
     let made = match sent {
         Sent::Logo => {
-            melyxar_ffmpeg::images::logo(&tools.ffmpeg, &source, orientation, &destination).await
+            melyxar_ffmpeg::images::logo(tools, &source, orientation, &destination).await
         }
         Sent::DoorPicture => {
-            melyxar_ffmpeg::images::door_picture(&tools.ffmpeg, &source, orientation, &destination)
+            melyxar_ffmpeg::images::door_picture(tools, &source, orientation, &destination)
                 .await
         }
     };
@@ -339,7 +339,7 @@ pub async fn logo_icon(
     // meanwhile never reads half of one.
     let making = path.with_extension("part.png");
     let made = melyxar_ffmpeg::images::logo_icon(
-        &tools.ffmpeg,
+        tools,
         &folder.join(&logo),
         Orientation::AsStored,
         icon == LogoIcon::Inset,

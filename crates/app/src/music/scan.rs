@@ -206,13 +206,13 @@ async fn read_all(
     // Bounded like the analysis of the films, and for the same reason: the
     // machine is there for somebody watching or listening first.
     let limit = state.config().limits.concurrent_probes;
-    let analyser = state.tools().map(|tools| tools.ffprobe.clone());
+    let tools = state.tools().cloned();
     let owned_handle = handle.clone();
     let label = root_label.to_string();
 
     let read = melyxar_jobs::for_each_bounded(files, limit, move |file| {
         let handle = owned_handle.clone();
-        let analyser = analyser.clone();
+        let tools = tools.clone();
         let label = label.clone();
         async move {
             if handle.is_cancelled() {
@@ -225,7 +225,7 @@ async fn read_all(
                 .unwrap_or_default()
                 .to_string();
             handle.now_working_on(Some(&name)).await;
-            let one = read_one(file, analyser.as_deref(), &label).await;
+            let one = read_one(file, tools.as_ref(), &label).await;
             handle.advance(1).await;
             Some(one)
         }
@@ -236,7 +236,7 @@ async fn read_all(
 
 /// Reads one file: in place first, and failing that with the analyser of the
 /// films, which knows the few forms the reader here does not.
-async fn read_one(file: ToRead, analyser: Option<&Path>, root_label: &str) -> Read {
+async fn read_one(file: ToRead, tools: Option<&melyxar_ffmpeg::ToolPaths>, root_label: &str) -> Read {
     let path = file.path.clone();
     let in_place = tokio::task::spawn_blocking(move || melyxar_tags::read(&path))
         .await
@@ -244,8 +244,8 @@ async fn read_one(file: ToRead, analyser: Option<&Path>, root_label: &str) -> Re
 
     let (tags, reading) = match in_place {
         Ok(read) => (read.tags, Ok(described(&read.sound, file.source_id))),
-        Err(ReadError::Unsupported) => match analyser {
-            Some(analyser) => probed(analyser, &file).await,
+        Err(ReadError::Unsupported) => match tools {
+            Some(tools) => probed(tools, &file).await,
             None => (
                 Tags::default(),
                 Err("no media tool is available to read this kind of file".to_string()),
@@ -271,10 +271,10 @@ async fn read_one(file: ToRead, analyser: Option<&Path>, root_label: &str) -> Re
 /// What the analyser of the films says of a file the reader here does not
 /// know: its tags as pairs, and its first stream of sound.
 async fn probed(
-    analyser: &Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     file: &ToRead,
 ) -> (Tags, std::result::Result<(SourceAnalysis, Track), String>) {
-    let report = match melyxar_ffmpeg::probe::probe(analyser, &file.path).await {
+    let report = match melyxar_ffmpeg::probe::probe(tools, &file.path).await {
         Ok(report) => report,
         Err(error) => return (Tags::default(), Err(error.to_string())),
     };

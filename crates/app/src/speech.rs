@@ -366,7 +366,7 @@ pub(crate) async fn listen_to_the_videos_of(
                 handle.now_working_on(name.as_deref()).await;
             }
             let asked_to_stop = AskedToStop::when(handle.cancelled_when());
-            match listen_to_one(state, &tools.ffmpeg, &ready, source_id, threads, asked_to_stop).await {
+            match listen_to_one(state, tools, &ready, source_id, threads, asked_to_stop).await {
                 Ok(lines) => {
                     listened += 1;
                     tracing::debug!(library = library.name, lines, "a video was listened to");
@@ -433,7 +433,7 @@ pub(crate) fn generated_track(
 /// Answers how many lines there are, nought when nothing was said.
 async fn listen_to_one(
     state: &AppState,
-    encoder: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     ready: &Ready,
     source_id: MediaSourceId,
     threads: usize,
@@ -445,7 +445,7 @@ async fn listen_to_one(
     tokio::fs::create_dir_all(directories.speech_scratch()).await?;
 
     let heard = listen(
-        encoder,
+        tools,
         &ready.tool,
         &source.path,
         &ready.model,

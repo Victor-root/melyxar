@@ -467,13 +467,25 @@ impl Command {
     }
 
     /// Turns the command into the argument list to hand to the tool.
-    pub fn to_arguments(&self) -> Vec<OsString> {
+    pub fn to_arguments(&self, allowed_formats: &str) -> Vec<OsString> {
         let mut args: Vec<OsString> = Vec::new();
         // A macro rather than a closure: the output branches also push paths
         // directly, and a closure holding a mutable borrow would forbid that.
         macro_rules! push {
             ($value:expr) => {
                 args.push(OsString::from($value))
+            };
+        }
+        // The film is a file the server did not make itself: said before each
+        // reading of it, so it is only ever opened as one of the formats it
+        // may be, never as a reader that opens other files it names. An empty
+        // set is no set: a build that gave no listing is held to nothing
+        // rather than to an empty whitelist, which refuses every file.
+        macro_rules! guard_the_input {
+            () => {
+                if !allowed_formats.is_empty() {
+                    args.extend(crate::formats::only_as(allowed_formats));
+                }
             };
         }
 
@@ -554,6 +566,7 @@ impl Command {
             push!(&format!("{width}x{height}"));
         }
 
+        guard_the_input!();
         push!("-i");
         // Pushed as a path rather than a string: a name starting with a dash
         // must never be read as an option.
@@ -565,6 +578,7 @@ impl Command {
                     push!("-ss");
                     push!(&format_seconds(start));
                 }
+                guard_the_input!();
                 push!("-i");
                 args.push(self.input.path.clone().into_os_string());
                 1
@@ -1010,7 +1024,7 @@ mod tests {
 
     fn arguments(command: &Command) -> Vec<String> {
         command
-            .to_arguments()
+            .to_arguments("matroska,webm,mov,mp4,m4a")
             .into_iter()
             .map(|value| value.to_string_lossy().into_owned())
             .collect()
@@ -1069,7 +1083,7 @@ mod tests {
             Input::new("/media/-strange-name.mkv"),
             Output::File(PathBuf::from("/tmp/out.mp4")),
         );
-        let args = command.to_arguments();
+        let args = command.to_arguments("matroska,webm,mov,mp4,m4a");
         let input = args
             .iter()
             .position(|value| value == "-i")
@@ -1210,8 +1224,12 @@ mod tests {
             .collect();
         assert_eq!(inputs.len(), 2, "{args:?}");
         assert_eq!(args[inputs[1] + 1], "/media/film.mkv");
+        // The format guard is spliced in right before each reading, so the
+        // opening that seeks to where the first one did is the pair just
+        // ahead of that guard.
+        assert_eq!(args[inputs[1] - 2], "-format_whitelist", "{args:?}");
         assert_eq!(
-            args[inputs[1] - 2..inputs[1]],
+            args[inputs[1] - 4..inputs[1] - 2],
             ["-ss".to_string(), "65.000".to_string()],
             "the second opening starts where the first does"
         );

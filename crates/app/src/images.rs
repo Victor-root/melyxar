@@ -190,7 +190,7 @@ async fn store(
         if by_hand.iter().any(|field| field == kind.as_str()) {
             continue;
         }
-        match store_one(state, provider, &tools.ffmpeg, kind, &owner_id, path).await {
+        match store_one(state, provider, tools, kind, &owner_id, path).await {
             Ok(None) => {}
             Ok(Some(picture)) => {
                 prepared += 1;
@@ -260,9 +260,9 @@ pub(crate) async fn store_own_picture(
     let original = poster_folder(state, work_id)
         .await?
         .join(format!("{}-{fingerprint}.png", kind.as_str()));
-    melyxar_ffmpeg::images::upright_picture(&tools.ffmpeg, file, at, orientation, &original)
+    melyxar_ffmpeg::images::upright_picture(tools, file, at, orientation, &original)
         .await?;
-    let written = store_poster(state, &tools.ffmpeg, work_id, &fingerprint, &original).await;
+    let written = store_poster(state, tools, work_id, &fingerprint, &original).await;
     tokio::fs::remove_file(&original).await.ok();
     written
 }
@@ -289,7 +289,7 @@ pub(crate) async fn store_poster_from_file(
         return Ok(false);
     };
     poster_folder(state, work_id).await?;
-    store_poster(state, &tools.ffmpeg, work_id, &stamp(made_from), picture).await
+    store_poster(state, tools, work_id, &stamp(made_from), picture).await
 }
 
 /// Prepares the poster of a work from the bytes of a picture, such as the
@@ -311,7 +311,7 @@ pub(crate) async fn store_poster_from_bytes(
         Kind::Poster.as_str()
     ));
     tokio::fs::write(&original, bytes).await?;
-    let written = store_poster(state, &tools.ffmpeg, work_id, &fingerprint, &original).await;
+    let written = store_poster(state, tools, work_id, &fingerprint, &original).await;
     tokio::fs::remove_file(&original).await.ok();
     written
 }
@@ -333,14 +333,14 @@ async fn poster_folder(state: &AppState, work_id: WorkId) -> Result<PathBuf> {
 /// card with the picture's colour.
 async fn store_poster(
     state: &AppState,
-    tool: &Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     work_id: WorkId,
     fingerprint: &str,
     original: &Path,
 ) -> Result<bool> {
     let written = write_every_size(
         state,
-        tool,
+        tools,
         Kind::Poster,
         &work_id.to_db_string(),
         fingerprint,
@@ -422,7 +422,7 @@ pub async fn choose_picture(
     let prepared = store_one(
         state,
         provider,
-        &tools.ffmpeg,
+        tools,
         kind,
         &owner_id,
         provider_path,
@@ -510,18 +510,18 @@ where
     // something.
     let limit = state.config().limits.concurrent_image_jobs;
     let owned_state = state.clone();
-    let tool = tools.ffmpeg.clone();
+    let tools = tools.clone();
     let shared = Arc::clone(provider);
 
     let prepared = melyxar_jobs::for_each_bounded(wanted, limit, move |(owner_id, path)| {
         let state = owned_state.clone();
-        let tool = tool.clone();
+        let tools = tools.clone();
         let provider = Arc::clone(&shared);
         async move {
             match store_one(
                 &state,
                 provider.as_ref(),
-                &tool,
+                &tools,
                 Kind::Photo,
                 &owner_id,
                 &path,
@@ -555,7 +555,7 @@ struct Prepared {
 async fn store_one(
     state: &AppState,
     provider: &impl MetadataProvider,
-    tool: &Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     kind: Kind,
     owner_id: &str,
     provider_path: &str,
@@ -598,7 +598,7 @@ async fn store_one(
     // The picture as it arrived is kept only while the sizes are made from it.
     let original = folder.join(format!("{}-{fingerprint}.source", kind.as_str()));
     tokio::fs::write(&original, &bytes).await?;
-    let written = write_every_size(state, tool, kind, owner_id, &fingerprint, &original).await;
+    let written = write_every_size(state, tools, kind, owner_id, &fingerprint, &original).await;
     tokio::fs::remove_file(&original).await.ok();
     written
 }
@@ -610,7 +610,7 @@ async fn store_one(
 /// left where it is, for whoever made it to take away.
 async fn write_every_size(
     state: &AppState,
-    tool: &Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     kind: Kind,
     owner_id: &str,
     fingerprint: &str,
@@ -624,7 +624,7 @@ async fn write_every_size(
     // poster; nothing anywhere shows the average colour of a backdrop or of a
     // face, and reading one costs a run of the tool per picture.
     let colour = match kind.carries_the_colour_of_its_work() {
-        true => melyxar_ffmpeg::images::average_colour(tool, original)
+        true => melyxar_ffmpeg::images::average_colour(tools, original)
             .await
             .ok(),
         false => None,
@@ -650,7 +650,7 @@ async fn write_every_size(
         .collect();
 
     let mut prepared = Vec::new();
-    match melyxar_ffmpeg::images::resize(tool, original, &borrowed).await {
+    match melyxar_ffmpeg::images::resize(tools, original, &borrowed).await {
         Ok(()) => {
             for (width, name) in &names {
                 prepared.push(StoredImage {
@@ -723,7 +723,7 @@ fn widths_worth_writing(wanted: &[u32], source_width: Option<i32>) -> Vec<u32> {
 /// space for it before it loads.
 async fn source_dimensions(state: &AppState, path: &Path) -> Option<(i32, i32)> {
     let tools = state.tools()?;
-    let report = melyxar_ffmpeg::probe::probe(&tools.ffprobe, path)
+    let report = melyxar_ffmpeg::probe::probe(tools, path)
         .await
         .ok()?;
     let stream = report.streams.first()?;
