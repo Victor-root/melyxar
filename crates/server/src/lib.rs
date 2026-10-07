@@ -50,6 +50,7 @@ use std::net::SocketAddr;
 
 use melyxar_app::AppState;
 use axum::http::header;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::compression::CompressionLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
@@ -82,7 +83,7 @@ pub fn build(state: AppState) -> axum::Router {
     routes::router(state.clone())
         // Card listings are mostly text and compress very well, which is what
         // keeps a page of a hundred cards small on the wire.
-        .layer(CompressionLayer::new())
+        .layer(CompressionLayer::new().compress_when(worth_packing()))
         // Outside the compression and inside the timer: nothing is worth
         // packing for somebody who is not going to be answered, and a refusal
         // is a request this server spent time on like any other.
@@ -104,6 +105,16 @@ pub fn build(state: AppState) -> axum::Router {
         .layer(guarded(header::X_FRAME_OPTIONS, "DENY"))
         .layer(guarded(header::REFERRER_POLICY, "same-origin"))
         .layer(TraceLayer::new_for_http())
+}
+
+/// What is worth compressing on its way out: neither a film nor a song,
+/// which arrive packed as tightly as they go and would only cost the
+/// machine a pass over every segment while somebody watches, nor what the
+/// library leaves out already (pictures, live lines, the very small).
+fn worth_packing() -> impl Predicate {
+    DefaultPredicate::new()
+        .and(NotForContentType::const_new("video/"))
+        .and(NotForContentType::const_new("audio/"))
 }
 
 /// A header every response carries, unless a route already set its own.
@@ -133,4 +144,26 @@ pub async fn serve(
     })
     .await;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn answered_as(kind: &'static str) -> axum::http::Response<String> {
+        axum::http::Response::builder()
+            .header(header::CONTENT_TYPE, kind)
+            .body("x".repeat(4096))
+            .expect("a response")
+    }
+
+    #[test]
+    fn a_film_or_a_song_on_its_way_is_never_packed_again() {
+        for kind in ["video/iso.segment", "video/mp4", "video/x-matroska", "audio/ogg", "audio/mpeg"] {
+            assert!(!worth_packing().should_compress(&answered_as(kind)), "{kind}");
+        }
+        for kind in ["application/json", "text/html; charset=utf-8", "application/vnd.apple.mpegurl"] {
+            assert!(worth_packing().should_compress(&answered_as(kind)), "{kind}");
+        }
+    }
 }
