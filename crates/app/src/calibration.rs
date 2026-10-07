@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
-use melyxar_core::id::PlaybackClientId;
+use melyxar_core::id::{DeviceId, PlaybackClientId};
 use melyxar_core::time::Millis;
 use melyxar_ffmpeg::RunningProcess;
 
@@ -528,14 +528,38 @@ fn is_whole(offered: &[Clip], codecs: &[CodecResult]) -> bool {
         })
 }
 
+/// The browser asking about a calibration: the device it is signed in as,
+/// and the name it gave itself when it signed in.
+pub struct Asking<'a> {
+    pub device: DeviceId,
+    pub client: Option<&'a str>,
+}
+
+/// Refuses a calibration of any browser but the one asking, which is the only
+/// one a browser ever asks about: kept under any name it liked, a calibration
+/// would be another row for every name made up. A device signed in before
+/// browsers said which they are takes the first name its browser asks under.
+async fn of_this_browser(state: &AppState, asking: &Asking<'_>, asked: PlaybackClientId) -> Result<()> {
+    let own = match asking.client {
+        Some(own) => own.parse::<PlaybackClientId>().is_ok_and(|own| own == asked),
+        None => state.database().adopt_client(asking.device, &asked.to_db_string()).await?,
+    };
+    match own {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::not_found("calibration"))),
+    }
+}
+
 /// Keeps one device's whole calibration.
 pub async fn record(
     state: &AppState,
     who: &melyxar_core::user::User,
+    asking: &Asking<'_>,
     client_id: PlaybackClientId,
     calibration_version: i32,
     codecs: Vec<CodecResult>,
 ) -> Result<()> {
+    of_this_browser(state, asking, client_id).await?;
     if calibration_version != CALIBRATION_VERSION {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
             "this calibration was made by another recipe",
@@ -579,8 +603,10 @@ pub async fn record(
 /// One device's calibration, when it has one made by this recipe.
 pub async fn calibration_of(
     state: &AppState,
+    asking: &Asking<'_>,
     client_id: PlaybackClientId,
 ) -> Result<Option<DeviceCalibration>> {
+    of_this_browser(state, asking, client_id).await?;
     Ok(state
         .database()
         .device_calibration(client_id, CALIBRATION_VERSION)
@@ -588,7 +614,8 @@ pub async fn calibration_of(
 }
 
 /// Forgets one device's calibration.
-pub async fn forget(state: &AppState, client_id: PlaybackClientId) -> Result<()> {
+pub async fn forget(state: &AppState, asking: &Asking<'_>, client_id: PlaybackClientId) -> Result<()> {
+    of_this_browser(state, asking, client_id).await?;
     tracing::info!(client = %client_id, "a device's calibration was forgotten");
     Ok(state.database().forget_device_calibration(client_id).await?)
 }
@@ -596,6 +623,40 @@ pub async fn forget(state: &AppState, client_id: PlaybackClientId) -> Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_browser_reads_and_forgets_its_own_calibration_and_no_other() {
+        let (_directory, state) = crate::an_empty_server().await;
+        let database = state.database();
+        let user = database
+            .create_user("somebody", Some("a stored form"), &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account")
+            .id;
+        let mine = PlaybackClientId::new();
+        let mine_text = mine.to_db_string();
+        let at = melyxar_core::time::now();
+        let named = database
+            .open_session(user, "named", "named", melyxar_database::sessions::Remembered::Yes, at, Some(&mine_text))
+            .await
+            .expect("opened");
+        let older = database
+            .open_session(user, "older", "older", melyxar_database::sessions::Remembered::Yes, at, None)
+            .await
+            .expect("opened");
+        let named = Asking { device: named, client: Some(&mine_text) };
+
+        assert!(calibration_of(&state, &named, mine).await.is_ok());
+        assert!(calibration_of(&state, &named, PlaybackClientId::new()).await.is_err());
+        assert!(forget(&state, &named, PlaybackClientId::new()).await.is_err());
+
+        // Signed in before browsers said which they are: the first name asked
+        // under becomes its own, and no other after it.
+        let older = Asking { device: older, client: None };
+        let adopted = PlaybackClientId::new();
+        assert!(calibration_of(&state, &older, adopted).await.is_ok());
+        assert!(calibration_of(&state, &older, PlaybackClientId::new()).await.is_err());
+    }
 
     fn clip(codec: &str, height: i32) -> Clip {
         Clip {

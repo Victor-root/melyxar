@@ -14,7 +14,7 @@ use melyxar_app::calibration::{CodecResult, Readiness, CALIBRATION_VERSION};
 use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
-use crate::account::Viewer;
+use crate::account::{ThisBrowser, Viewer};
 use crate::error::Result;
 use crate::identifiers::parse_client;
 
@@ -131,6 +131,7 @@ struct RecordBody {
 async fn record(
     State(state): State<AppState>,
     Viewer(who): Viewer,
+    browser: ThisBrowser,
     RoutePath(client): RoutePath<String>,
     Json(body): Json<RecordBody>,
 ) -> Result<Json<serde_json::Value>> {
@@ -138,6 +139,7 @@ async fn record(
     melyxar_app::calibration::record(
         &state,
         &who,
+        &asking(&browser),
         client_id,
         body.calibration_version,
         body.codecs,
@@ -158,11 +160,11 @@ struct CalibrationView {
 /// way this server makes them now.
 async fn calibration(
     State(state): State<AppState>,
-    Viewer(_): Viewer,
+    browser: ThisBrowser,
     RoutePath(client): RoutePath<String>,
 ) -> Result<Json<Option<CalibrationView>>> {
     let client_id = parse_client(&client)?;
-    let kept = melyxar_app::calibration::calibration_of(&state, client_id).await?;
+    let kept = melyxar_app::calibration::calibration_of(&state, &asking(&browser), client_id).await?;
     Ok(Json(kept.map(|kept| CalibrationView {
         calibration_version: kept.calibration_version,
         measured_at: kept.measured_at,
@@ -173,12 +175,20 @@ async fn calibration(
 /// Forgets one device's calibration.
 async fn forget(
     State(state): State<AppState>,
-    Viewer(_): Viewer,
+    browser: ThisBrowser,
     RoutePath(client): RoutePath<String>,
 ) -> Result<Json<serde_json::Value>> {
     let client_id = parse_client(&client)?;
-    melyxar_app::calibration::forget(&state, client_id).await?;
+    melyxar_app::calibration::forget(&state, &asking(&browser), client_id).await?;
     Ok(Json(serde_json::json!({ "forgotten": true })))
+}
+
+/// The browser behind a request, as the calibration asks about it.
+fn asking(browser: &ThisBrowser) -> melyxar_app::calibration::Asking<'_> {
+    melyxar_app::calibration::Asking {
+        device: browser.device,
+        client: browser.client.as_deref(),
+    }
 }
 
 #[cfg(test)]
