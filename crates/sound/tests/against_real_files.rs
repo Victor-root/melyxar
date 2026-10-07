@@ -129,7 +129,7 @@ async fn the_opening_survives_being_encoded_and_read_back() {
     let mut listened = Vec::new();
     for episode in [&first, &second] {
         let samples = melyxar_ffmpeg::sound::samples_of(
-            &tools.ffmpeg,
+            &tools,
             episode,
             0,
             Millis::ZERO,
@@ -188,7 +188,7 @@ async fn two_real_episodes_sharing_no_opening_share_nothing() {
     let mut listened = Vec::new();
     for episode in [&first, &second] {
         let samples = melyxar_ffmpeg::sound::samples_of(
-            &tools.ffmpeg,
+            &tools,
             episode,
             0,
             Millis::ZERO,

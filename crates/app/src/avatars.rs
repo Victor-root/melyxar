@@ -122,7 +122,7 @@ pub async fn set(state: &AppState, user_id: UserId, bytes: &[u8]) -> Result<Stri
             .await
             .unwrap_or_default();
     let made =
-        melyxar_ffmpeg::images::avatar(&tools.ffmpeg, &sent, orientation, &folder.join(&name))
+        melyxar_ffmpeg::images::avatar(tools, &sent, orientation, &folder.join(&name))
             .await;
     tokio::fs::remove_file(&sent).await.ok();
     if let Err(error) = made {

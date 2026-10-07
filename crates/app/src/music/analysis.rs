@@ -9,7 +9,6 @@
 //! where it was: each batch asks what is left, so nothing about where it got
 //! to has to be written down.
 
-use std::path::Path;
 
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
@@ -94,7 +93,7 @@ async fn analyse_the_songs_of(
         if batch.is_empty() {
             break;
         }
-        let tool = tools.ffmpeg.clone();
+        let tools = tools.clone();
         let owned_database = database.clone();
         let owned_handle = handle.clone();
         let asked_to_stop = AskedToStop::when(handle.cancelled_when());
@@ -102,7 +101,7 @@ async fn analyse_the_songs_of(
             batch,
             state.config().limits.concurrent_probes,
             move |song| {
-                let tool = tool.clone();
+                let tools = tools.clone();
                 let database = owned_database.clone();
                 let handle = owned_handle.clone();
                 let asked_to_stop = asked_to_stop.clone();
@@ -115,7 +114,7 @@ async fn analyse_the_songs_of(
                         .file_name()
                         .map(|name| name.to_string_lossy().into_owned());
                     handle.now_working_on(name.as_deref()).await;
-                    let Some(outcome) = read(&tool, &song, asked_to_stop).await else {
+                    let Some(outcome) = read(&tools, &song, asked_to_stop).await else {
                         return false;
                     };
                     let gave_something = outcome.loudness.is_some() || outcome.spectrum.is_some();
@@ -154,7 +153,11 @@ struct Outcome {
 }
 
 /// Reads a song for what it lacks, or nothing when the reading was stopped.
-async fn read(tool: &Path, song: &SongToAnalyse, asked_to_stop: AskedToStop) -> Option<Outcome> {
+async fn read(
+    tools: &melyxar_ffmpeg::ToolPaths,
+    song: &SongToAnalyse,
+    asked_to_stop: AskedToStop,
+) -> Option<Outcome> {
     let wanted = Wanted {
         loudness: song.needs_loudness,
         spectrum: song.needs_spectrum,
@@ -164,7 +167,7 @@ async fn read(tool: &Path, song: &SongToAnalyse, asked_to_stop: AskedToStop) -> 
     // gigabytes. A reading costs a few transforms, small beside the time the
     // tool takes to hand over the next piece.
     let reading = std::sync::Mutex::new(SpectrumReading::default());
-    let heard = analyse(tool, &song.path, wanted, asked_to_stop, &|samples| {
+    let heard = analyse(tools, &song.path, wanted, asked_to_stop, &|samples| {
         reading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

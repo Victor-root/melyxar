@@ -174,13 +174,9 @@ pub async fn make(
     // the reading says it, and a film of two hours is a long time to say
     // nothing.
     builder.args(["-progress", "pipe:2", "-nostats"]);
-    builder.args(arguments(
-        source,
-        into,
-        layout,
-        tone_map,
-        standing_pictures_only,
-    ));
+    let mut args = arguments(source, into, layout, tone_map, standing_pictures_only);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    builder.args(args);
     let output = crate::process::output_streaming(
         builder,
         watch.asked_to_stop,
@@ -216,7 +212,7 @@ pub async fn make(
     // pixels are not square comes out a different shape than its numbers say,
     // and the page places every thumbnail by these two numbers.
     let first = sheet_at(into, 0);
-    let (sheet_width, sheet_height) = size_of(&tools.ffprobe, &first).await?;
+    let (sheet_width, sheet_height) = size_of(tools, &first).await?;
     Ok(Thumbnails {
         every: layout.every,
         width: sheet_width / layout.columns.max(1),
@@ -229,8 +225,8 @@ pub async fn make(
 }
 
 /// How large a picture is, asked of the analyser.
-async fn size_of(analyser: &Path, picture: &Path) -> Result<(u32, u32)> {
-    let report = crate::probe::probe(analyser, picture).await?;
+async fn size_of(tools: &ToolPaths, picture: &Path) -> Result<(u32, u32)> {
+    let report = crate::probe::probe(tools, picture).await?;
     report
         .streams
         .iter()

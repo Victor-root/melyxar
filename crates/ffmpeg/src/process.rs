@@ -15,7 +15,6 @@
 //! A browser tab that closes never tells the server anything, so none of this
 //! is optional.
 
-use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -283,13 +282,13 @@ impl RunningProcess {
     /// nobody is keeping up: progress is a courtesy, and it must never slow
     /// down the process producing the stream someone is watching.
     pub fn start(
-        tool: &Path,
+        tools: &crate::ToolPaths,
         command: &Command,
         progress: Option<mpsc::Sender<Progress>>,
     ) -> Result<Self> {
-        let mut builder = TokioCommand::new(tool);
+        let mut builder = TokioCommand::new(&tools.ffmpeg);
         builder
-            .args(command.to_arguments())
+            .args(command.to_arguments(tools.allowed_formats()))
             .stdin(Stdio::null())
             .stdout(if progress.is_some() {
                 Stdio::piped()
@@ -471,6 +470,7 @@ mod tests {
     use super::*;
     use crate::command::{AudioOutput, Input, Output, VideoOutput, WhereToCut};
     use crate::ToolPaths;
+    use std::path::Path;
 
     #[test]
     fn the_progress_lines_are_told_apart_from_what_the_tool_complains_of() {
@@ -571,7 +571,7 @@ mod tests {
         let command = Command::new(Input::new(&source), Output::File(destination.clone()));
 
         let process =
-            RunningProcess::start(&tools.ffmpeg, &command, None).expect("the process starts");
+            RunningProcess::start(&tools, &command, None).expect("the process starts");
         process.wait().await.expect("the process succeeds");
 
         assert!(destination.exists(), "the output file was produced");
@@ -590,7 +590,7 @@ mod tests {
         );
 
         let process =
-            RunningProcess::start(&tools.ffmpeg, &command, None).expect("the process starts");
+            RunningProcess::start(&tools, &command, None).expect("the process starts");
         let error = process.wait().await.expect_err("a missing input must fail");
 
         match error {
@@ -622,7 +622,7 @@ mod tests {
         .reporting_progress();
 
         let (sender, mut receiver) = mpsc::channel(16);
-        let process = RunningProcess::start(&tools.ffmpeg, &command, Some(sender))
+        let process = RunningProcess::start(&tools, &command, Some(sender))
             .expect("the process starts");
 
         let mut reports = Vec::new();
@@ -668,7 +668,7 @@ mod tests {
         .with_video(VideoOutput::Encode(encode));
 
         let mut process =
-            RunningProcess::start(&tools.ffmpeg, &command, None).expect("the process starts");
+            RunningProcess::start(&tools, &command, None).expect("the process starts");
         let pid = process.id().expect("the process has an identifier");
         assert!(!process.has_exited());
 
@@ -767,7 +767,7 @@ mod tests {
         .with_audio(AudioOutput::Copy);
 
         let process =
-            RunningProcess::start(&tools.ffmpeg, &command, None).expect("the process starts");
+            RunningProcess::start(&tools, &command, None).expect("the process starts");
         process.wait().await.expect("the process succeeds");
 
         let mut produced: Vec<String> = std::fs::read_dir(&session)

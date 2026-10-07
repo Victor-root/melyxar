@@ -90,6 +90,6 @@ pub async fn sound_of(
         start_ms = start.get(),
         "a song is converted on the way"
     );
-    let song = convert(&tools.ffmpeg, &file.path, start, into, kbps)?;
+    let song = convert(tools, &file.path, start, into, kbps)?;
     Ok(Some(Sound::Converted { song, into }))
 }

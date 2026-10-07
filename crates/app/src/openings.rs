@@ -157,7 +157,7 @@ pub(crate) async fn listen_to_the_seasons_of(
         "listening to the seasons of this library for the titles their episodes share"
     );
 
-    let tool = tools.ffmpeg.clone();
+    let tools = tools.clone();
     let mut listened = 0;
     let mut still_waiting = waiting;
     loop {
@@ -178,7 +178,7 @@ pub(crate) async fn listen_to_the_seasons_of(
                 break;
             }
             handle.now_working_on(Some(&naming(season))).await;
-            if listen_to_one_season(state, &tool, season, handle)
+            if listen_to_one_season(state, &tools, season, handle)
                 .await?
                 .is_some()
             {
@@ -312,7 +312,7 @@ pub async fn listen_again_to(
     handle.at_step(JobStep::ListeningForOpenings).await;
     handle.set_total(seasons.len() as i64).await;
 
-    let tool = tools.ffmpeg.clone();
+    let tools = tools.clone();
     let mut went = Vec::with_capacity(seasons.len());
     for season in seasons {
         if handle.is_cancelled() {
@@ -327,7 +327,7 @@ pub async fn listen_again_to(
             "what was known about this season is forgotten, so it is read again"
         );
 
-        let Some(how) = listen_to_one_season(state, &tool, season, handle).await? else {
+        let Some(how) = listen_to_one_season(state, &tools, season, handle).await? else {
             break;
         };
         went.push(how);
@@ -354,7 +354,7 @@ pub struct HowASeasonWent {
 /// Listens to one season right through. Answers nothing if somebody stopped it.
 async fn listen_to_one_season(
     state: &AppState,
-    tool: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     season: &SeasonToListenTo,
     handle: &JobHandle,
 ) -> Result<Option<HowASeasonWent>> {
@@ -410,7 +410,7 @@ async fn listen_to_one_season(
         .cloned()
         .zip(chosen.iter().copied())
         .collect();
-    let owned_tool = tool.to_path_buf();
+    let owned_tools = tools.clone();
     // A season alone is counted by its episodes, the last tenth being left for
     // the comparison that follows them.
     let to_hear = wanted.len().max(1);
@@ -420,12 +420,12 @@ async fn listen_to_one_season(
         wanted,
         state.config().limits.concurrent_probes,
         move |(episode, track)| {
-            let tool = owned_tool.clone();
+            let tools = owned_tools.clone();
             let asked_to_stop = asked_to_stop.clone();
             let handle = owned_handle.clone();
             let heard_so_far = heard_so_far.clone();
             async move {
-                let how = listen_to_one_file(&tool, &episode, track, asked_to_stop).await;
+                let how = listen_to_one_file(&tools, &episode, track, asked_to_stop).await;
                 let heard = heard_so_far.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 handle.element_at(0.9 * heard as f64 / to_hear as f64);
                 how
@@ -502,16 +502,16 @@ async fn listen_to_one_season(
              either missing or cut off by the edge of what was read"
         );
         let asked_to_stop = AskedToStop::when(handle.cancelled_when());
-        let owned_tool = tool.to_path_buf();
+        let owned_tools = tools.clone();
         let deeper = melyxar_jobs::for_each_bounded(
             again,
             state.config().limits.concurrent_probes,
             move |(at, how_far, episode, track)| {
-                let tool = owned_tool.clone();
+                let tools = owned_tools.clone();
                 let asked_to_stop = asked_to_stop.clone();
                 async move {
                     let heard = listen_further_into_the_beginning_of(
-                        &tool,
+                        &tools,
                         &episode,
                         track,
                         how_far,
@@ -685,7 +685,7 @@ struct ListenedTo {
 
 /// Reads the two ends of one episode and writes them down.
 async fn listen_to_one_file(
-    tool: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     episode: &EpisodeToListenTo,
     track: Option<i32>,
     asked_to_stop: AskedToStop,
@@ -701,7 +701,7 @@ async fn listen_to_one_file(
 
     let (beginning, ending) = the_two_ends_of(episode.duration);
     let beginning = match samples(
-        tool,
+        tools,
         &episode.path,
         track,
         Millis::ZERO,
@@ -724,7 +724,7 @@ async fn listen_to_one_file(
 
     let mut heard_at_the_end = None;
     if let Some((at, how_long)) = ending {
-        match samples(tool, &episode.path, track, at, how_long, &asked_to_stop).await {
+        match samples(tools, &episode.path, track, at, how_long, &asked_to_stop).await {
             Read::Some(samples) => heard_at_the_end = Some((at, samples)),
             Read::Stopped => return HowItWent::Stopped,
             // The beginning is what the opening needs, and it is already read.
@@ -774,7 +774,7 @@ async fn listen_to_one_file(
 /// episode and are not in question, and reading them twice would double the
 /// cost of a pass for nothing.
 async fn listen_further_into_the_beginning_of(
-    tool: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     episode: &EpisodeToListenTo,
     track: Option<i32>,
     how_far: Millis,
@@ -782,7 +782,7 @@ async fn listen_further_into_the_beginning_of(
 ) -> Option<Listened> {
     let track = track?;
     let Read::Some(samples) = samples(
-        tool,
+        tools,
         &episode.path,
         track,
         Millis::ZERO,
@@ -807,7 +807,7 @@ enum Read {
 }
 
 async fn samples(
-    tool: &std::path::Path,
+    tools: &melyxar_ffmpeg::ToolPaths,
     path: &Path,
     track: i32,
     from: Millis,
@@ -815,7 +815,7 @@ async fn samples(
     asked_to_stop: &AskedToStop,
 ) -> Read {
     match melyxar_ffmpeg::sound::samples_of(
-        tool,
+        tools,
         path,
         track,
         from,

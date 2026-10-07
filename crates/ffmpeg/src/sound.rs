@@ -79,15 +79,17 @@ pub fn samples_arguments(file: &Path, track: i32, from: Millis, how_long: Millis
 /// Asking for the last four minutes of a file the analyser said was longer
 /// than it is says nothing about the file being unreadable.
 pub async fn samples_of(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     file: &Path,
     track: i32,
     from: Millis,
     how_long: Millis,
     asked_to_stop: AskedToStop,
 ) -> Result<Vec<i16>> {
-    let mut builder = TokioCommand::new(tool);
-    builder.args(samples_arguments(file, track, from, how_long));
+    let mut builder = TokioCommand::new(&tools.ffmpeg);
+    let mut args = samples_arguments(file, track, from, how_long);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    builder.args(args);
     let output = crate::process::output_of(builder, asked_to_stop).await?;
 
     if !output.status.success() {
@@ -224,7 +226,7 @@ mod tests {
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let samples = samples_of(
-            &tools.ffmpeg,
+            &tools,
             &film,
             1,
             Millis::new(2_000),
@@ -258,7 +260,7 @@ mod tests {
         for track in [1, 2] {
             read.push(
                 samples_of(
-                    &tools.ffmpeg,
+                    &tools,
                     &film,
                     track,
                     Millis::new(1_000),
@@ -293,7 +295,7 @@ mod tests {
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let samples = samples_of(
-            &tools.ffmpeg,
+            &tools,
             &film,
             1,
             Millis::new(600_000),
@@ -313,7 +315,7 @@ mod tests {
 
         let (say, asked) = tokio::sync::watch::channel(true);
         let error = samples_of(
-            &tools.ffmpeg,
+            &tools,
             &film,
             1,
             Millis::ZERO,
@@ -334,7 +336,7 @@ mod tests {
 
         assert!(
             samples_of(
-                &tools.ffmpeg,
+                &tools,
                 &film,
                 9,
                 Millis::ZERO,

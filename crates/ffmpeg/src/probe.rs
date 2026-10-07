@@ -283,8 +283,8 @@ fn seconds_to_ms(value: &str) -> Option<i64> {
 ///
 /// The path is handed over as a path rather than as text, so that a name
 /// beginning with a dash cannot be read as an option.
-pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
-    let output = TokioCommand::new(analyser)
+pub async fn probe(tools: &crate::ToolPaths, media: &Path) -> Result<ProbeReport> {
+    let output = TokioCommand::new(&tools.ffprobe)
         .args([
             "-hide_banner",
             "-loglevel",
@@ -295,6 +295,9 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
             "-show_streams",
             "-show_chapters",
         ])
+        // The file is read only as one of the formats it may be, never as a
+        // reader that would open other files it names.
+        .args(crate::formats::only_as(tools.allowed_formats()))
         .arg(media)
         .stdin(Stdio::null())
         .output()
@@ -351,22 +354,22 @@ pub async fn probe(analyser: &Path, media: &Path) -> Result<ProbeReport> {
 /// index of its own that `melyxar_container` can read. It is also the only one
 /// that is always available, which is why it is what everything falls back to.
 pub async fn key_frames(
-    analyser: &Path,
+    tools: &crate::ToolPaths,
     media: &Path,
     asked_to_stop: AskedToStop,
 ) -> Result<Vec<Millis>> {
-    key_frames_reporting(analyser, media, asked_to_stop, &|_| {}).await
+    key_frames_reporting(tools, media, asked_to_stop, &|_| {}).await
 }
 
 /// The same, telling `on_position` how far into the film the listing has got,
 /// as it comes: the time of the last packet listed.
 pub async fn key_frames_reporting(
-    analyser: &Path,
+    tools: &crate::ToolPaths,
     media: &Path,
     asked_to_stop: AskedToStop,
     on_position: &(dyn Fn(Millis) + Sync),
 ) -> Result<Vec<Millis>> {
-    let mut builder = TokioCommand::new(analyser);
+    let mut builder = TokioCommand::new(&tools.ffprobe);
     builder
         .args([
             "-hide_banner",
@@ -379,6 +382,7 @@ pub async fn key_frames_reporting(
             "-of",
             "csv=p=0",
         ])
+        .args(crate::formats::only_as(tools.allowed_formats()))
         .arg(media);
     // The last line heard so far is whole only up to its newline: what comes
     // after it waits for the rest of its line.
@@ -686,7 +690,7 @@ mod tests {
 
         let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
         let furthest = std::sync::atomic::AtomicI64::new(0);
-        let found = key_frames_reporting(&tools.ffprobe, &source, AskedToStop::never(), &|position| {
+        let found = key_frames_reporting(&tools, &source, AskedToStop::never(), &|position| {
             furthest.fetch_max(position.get(), std::sync::atomic::Ordering::Relaxed);
         })
         .await
@@ -732,6 +736,16 @@ mod tests {
         script
     }
 
+    /// The fake analyser as a pair of tool paths, with no formats of its own
+    /// to allow: this analyser reads nothing, it only prints.
+    fn tools_of(analyser: PathBuf) -> crate::ToolPaths {
+        crate::ToolPaths {
+            ffmpeg: analyser.clone(),
+            ffprobe: analyser,
+            allowed_formats: String::new().into(),
+        }
+    }
+
     const A_REAL_ENOUGH_REPORT: &str = r#"{
         "streams": [
             {"index": 0, "codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080},
@@ -747,7 +761,7 @@ mod tests {
         // again at every scan. The description is what matters; the status
         // alone is not the whole of what the analyser said.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let analyser = analyser_that_complains(directory.path(), A_REAL_ENOUGH_REPORT, 1);
+        let analyser = tools_of(analyser_that_complains(directory.path(), A_REAL_ENOUGH_REPORT, 1));
 
         let report = probe(&analyser, Path::new("/films/Quiet.Harbour.2019.mkv"))
             .await
@@ -763,7 +777,7 @@ mod tests {
         // worse than saying the file could not be read.
         let directory = tempfile::tempdir().expect("temporary directory");
         for prints in ["{}", r#"{"streams":[],"format":{}}"#, "not json at all"] {
-            let analyser = analyser_that_complains(directory.path(), prints, 1);
+            let analyser = tools_of(analyser_that_complains(directory.path(), prints, 1));
             assert!(
                 probe(&analyser, Path::new("/films/Quiet.Harbour.2019.mkv"))
                     .await
@@ -776,11 +790,11 @@ mod tests {
     #[tokio::test]
     async fn a_report_with_no_container_named_is_not_a_film() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let analyser = analyser_that_complains(
+        let analyser = tools_of(analyser_that_complains(
             directory.path(),
             r#"{"streams":[{"index":0,"codec_type":"video"}],"format":{}}"#,
             1,
-        );
+        ));
         assert!(probe(&analyser, Path::new("/films/x.mkv")).await.is_err());
     }
 
@@ -871,13 +885,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_file_disguised_as_a_video_but_made_of_a_playlist_is_refused() {
+        // A reader that opens other files it names, handed a file that looks
+        // like an ordinary video. Refused before it can go and read whatever
+        // it points at. The manifest here names nothing: being read as one of
+        // those readers at all is what is refused.
+        let Ok(tools) = ToolPaths::discover(None, None) else {
+            eprintln!("no media tool here, nothing was probed");
+            return;
+        };
+        assert!(
+            !tools.allowed_formats().is_empty(),
+            "this build gave a list of readers to hold a file to"
+        );
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let disguised = directory.path().join("looks-like-a-film.mkv");
+        std::fs::write(
+            &disguised,
+            concat!(
+                "<?xml version=\"1.0\"?>\n",
+                "<MPD xmlns=\"urn:mpeg:dash:schema:mpd:2011\" type=\"static\" ",
+                "mediaPresentationDuration=\"PT2S\" ",
+                "profiles=\"urn:mpeg:dash:profile:isoff-on-demand:2011\">",
+                "<Period><AdaptationSet contentType=\"video\">",
+                "<Representation id=\"1\" bandwidth=\"1\"></Representation>",
+                "</AdaptationSet></Period></MPD>",
+            ),
+        )
+        .expect("the file is written");
+
+        assert!(
+            probe(&tools, &disguised).await.is_err(),
+            "a playlist disguised as a video must not be opened as one"
+        );
+    }
+
+    #[tokio::test]
     async fn a_real_file_is_described_down_to_its_tracks() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let media = directory.path().join("sample.mp4");
         make_clip(&media).await;
 
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let report = probe(&tools.ffprobe, &media)
+        let report = probe(&tools, &media)
             .await
             .expect("the file analyses");
 
@@ -912,7 +962,7 @@ mod tests {
     #[tokio::test]
     async fn analysing_a_missing_file_fails_with_a_reason() {
         let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let error = probe(&tools.ffprobe, Path::new("/nowhere/missing.mkv"))
+        let error = probe(&tools, Path::new("/nowhere/missing.mkv"))
             .await
             .expect_err("a missing file must fail");
         match error {

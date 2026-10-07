@@ -117,12 +117,14 @@ pub fn average_colour_arguments(source: &Path) -> Vec<OsString> {
 }
 
 /// Writes one picture at every width the interface serves.
-pub async fn resize(tool: &Path, source: &Path, destinations: &[(u32, &Path)]) -> Result<()> {
+pub async fn resize(tools: &crate::ToolPaths, source: &Path, destinations: &[(u32, &Path)]) -> Result<()> {
     if destinations.is_empty() {
         return Ok(());
     }
-    let output = TokioCommand::new(tool)
-        .args(resize_arguments(source, destinations))
+    let mut arguments = resize_arguments(source, destinations);
+    crate::formats::guard_the_one_input(&mut arguments, tools.allowed_formats());
+    let output = TokioCommand::new(&tools.ffmpeg)
+        .args(arguments)
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -134,9 +136,11 @@ pub async fn resize(tool: &Path, source: &Path, destinations: &[(u32, &Path)]) -
 }
 
 /// Reads the average colour of a picture, as it is written in a stylesheet.
-pub async fn average_colour(tool: &Path, source: &Path) -> Result<String> {
-    let output = TokioCommand::new(tool)
-        .args(average_colour_arguments(source))
+pub async fn average_colour(tools: &crate::ToolPaths, source: &Path) -> Result<String> {
+    let mut arguments = average_colour_arguments(source);
+    crate::formats::guard_the_one_input(&mut arguments, tools.allowed_formats());
+    let output = TokioCommand::new(&tools.ffmpeg)
+        .args(arguments)
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -308,50 +312,51 @@ fn sent_picture_arguments(
 
 /// Makes a profile picture out of an image somebody sent.
 pub async fn avatar(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     orientation: Orientation,
     destination: &Path,
 ) -> Result<()> {
-    make(tool, avatar_arguments(source, orientation, destination)).await
+    make(tools, avatar_arguments(source, orientation, destination)).await
 }
 
 /// Makes a server's logo out of an image the administrator sent.
 pub async fn logo(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     orientation: Orientation,
     destination: &Path,
 ) -> Result<()> {
-    make(tool, logo_arguments(source, orientation, destination)).await
+    make(tools, logo_arguments(source, orientation, destination)).await
 }
 
 /// Makes the picture behind the sign in screen out of an image the
 /// administrator sent.
 pub async fn door_picture(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     orientation: Orientation,
     destination: &Path,
 ) -> Result<()> {
-    make(tool, door_picture_arguments(source, orientation, destination)).await
+    make(tools, door_picture_arguments(source, orientation, destination)).await
 }
 
 /// Makes one square icon out of the image sent for a server's logo.
 pub async fn logo_icon(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     orientation: Orientation,
     inset: bool,
     destination: &Path,
 ) -> Result<()> {
-    make(tool, logo_icon_arguments(source, orientation, inset, destination)).await
+    make(tools, logo_icon_arguments(source, orientation, inset, destination)).await
 }
 
 /// Runs the tool on what it was given to make one picture, stopping it past
 /// [`LONGEST_MAKING`] or as soon as nobody is waiting for it any more.
-async fn make(tool: &Path, arguments: Vec<OsString>) -> Result<()> {
-    let running = TokioCommand::new(tool)
+async fn make(tools: &crate::ToolPaths, mut arguments: Vec<OsString>) -> Result<()> {
+    crate::formats::guard_the_one_input(&mut arguments, tools.allowed_formats());
+    let running = TokioCommand::new(&tools.ffmpeg)
         .args(arguments)
         .stdin(Stdio::null())
         .kill_on_drop(true)
@@ -427,19 +432,16 @@ fn turn_of(orientation: Orientation) -> Option<&'static str> {
 
 /// Takes one picture, the right way up, out of a video or a photo.
 pub async fn upright_picture(
-    tool: &Path,
+    tools: &crate::ToolPaths,
     source: &Path,
     at: Option<Millis>,
     orientation: Orientation,
     destination: &Path,
 ) -> Result<()> {
-    let output = TokioCommand::new(tool)
-        .args(upright_picture_arguments(
-            source,
-            at,
-            orientation,
-            destination,
-        ))
+    let mut arguments = upright_picture_arguments(source, at, orientation, destination);
+    crate::formats::guard_the_one_input(&mut arguments, tools.allowed_formats());
+    let output = TokioCommand::new(&tools.ffmpeg)
+        .args(arguments)
         .stdin(Stdio::null())
         .output()
         .await?;
@@ -538,13 +540,10 @@ mod tests {
 
         let small = folder.path().join("poster-200.webp");
         let large = folder.path().join("poster-800.webp");
-        resize(
-            Path::new("ffmpeg"),
-            &source,
-            &[(200, &small), (800, &large)],
-        )
-        .await
-        .expect("the tool accepted the command");
+        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        resize(&tools, &source, &[(200, &small), (800, &large)])
+            .await
+            .expect("the tool accepted the command");
 
         for (path, least) in [(&small, 100), (&large, 1_000)] {
             let written = std::fs::metadata(path).expect("a file was written");
@@ -765,7 +764,8 @@ mod tests {
         }
 
         let written = folder.path().join("logo-340.webp");
-        resize(Path::new("ffmpeg"), &source, &[(340, &written)])
+        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        resize(&tools, &source, &[(340, &written)])
             .await
             .expect("the tool accepted the command");
 

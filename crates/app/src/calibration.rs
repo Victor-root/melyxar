@@ -419,7 +419,7 @@ async fn make_clips(
             &aside,
         );
         let began = std::time::Instant::now();
-        RunningProcess::start(&tools.ffmpeg, &command, None)?
+        RunningProcess::start(tools, &command, None)?
             .wait()
             .await?;
         tokio::fs::rename(&aside, &finished)
