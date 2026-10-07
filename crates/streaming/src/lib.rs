@@ -33,6 +33,8 @@ pub enum StreamingError {
     TooSlow,
     #[error("too many films are being converted at once")]
     TooManyAtOnce,
+    #[error("this account already holds as many films at once as it may")]
+    TooManyOfOneAccount,
     #[error("the transcode cache is full even once what was watched is removed")]
     NoRoomLeft,
 }
