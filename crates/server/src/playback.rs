@@ -1216,13 +1216,15 @@ async fn heard_from(
 /// administrator asks, and its end, however it ends, is the player gone.
 ///
 /// Refused for a film its device is no longer playing: a player left behind
-/// by a newer one is told so, and a browser stops trying a line refused.
+/// by a newer one is told so, and a browser stops trying a line refused. And
+/// for a film this account may not play, which is a film not playing.
 async fn player_line(
     State(state): State<AppState>,
+    Viewer(who): Viewer,
     Watcher(watcher): Watcher,
     RoutePath(work): RoutePath<String>,
 ) -> Result<Response> {
-    let line = melyxar_app::watching::line(&state, watcher, parse_work(&work)?)
+    let line = melyxar_app::watching::line(&state, &who, watcher, parse_work(&work)?)
         .await
         .ok_or_else(|| ServerError::not_found("that film is not playing on this device"))?;
     let told = futures_util::stream::unfold(Some(line), |line| async move {

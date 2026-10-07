@@ -439,3 +439,41 @@ async fn a_picture_of_a_work_out_of_reach_is_a_picture_that_is_not_there() {
         "the face of a person is the provider's, and in many works"
     );
 }
+
+#[tokio::test]
+async fn nobody_is_shown_playing_a_work_they_may_not_play() {
+    let here = two_libraries().await;
+    let on_a_device = |who: &User| melyxar_app::watching::Viewer {
+        user: who.id,
+        user_name: who.name.clone(),
+        device: melyxar_core::id::DeviceId::new(),
+        device_name: "a browser".to_string(),
+        browser: None,
+    };
+    let said_playing = |who: &User, work: WorkId| {
+        let state = here.state.clone();
+        let who = who.clone();
+        let viewer = on_a_device(&who);
+        async move {
+            melyxar_app::watching::heard(&state, &who, viewer, work, None, Some(false), true)
+                .await
+                .is_ok()
+        }
+    };
+    let line_opened = |who: &User, work: WorkId| {
+        let state = here.state.clone();
+        let who = who.clone();
+        let viewer = on_a_device(&who);
+        async move { melyxar_app::watching::line(&state, &who, viewer, work).await.is_some() }
+    };
+
+    // What shows on the administration's list of what is being watched, and
+    // what is written down of it once it ends.
+    assert!(!said_playing(&here.granted_the_films, here.a_series).await);
+    assert!(!line_opened(&here.granted_the_films, here.a_series).await);
+    assert!(!said_playing(&here.anybody, WorkId::new()).await, "a work that is not there");
+    assert!(!line_opened(&here.anybody, WorkId::new()).await, "a work that is not there");
+
+    assert!(said_playing(&here.granted_the_films, here.a_film).await);
+    assert!(line_opened(&here.granted_the_films, here.a_film).await);
+}
