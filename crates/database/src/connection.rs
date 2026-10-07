@@ -736,6 +736,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_length_past_a_week_read_before_the_rule_is_forgotten() {
+        // The migration writes the week out in figures, being SQL.
+        assert_eq!(melyxar_core::media::LONGEST_BELIEVABLE.get(), 604_800_000);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(105, &pool)
+            .await
+            .expect("migrated to just before the lengths are checked");
+        sqlx::query(
+            "INSERT INTO libraries (id, name, kind, created_at, updated_at)
+             VALUES ('films', 'Films', 'movies', '2026-10-07T00:00:00Z', '2026-10-07T00:00:00Z');
+             INSERT INTO library_roots (id, library_id, label, path)
+             VALUES ('disk', 'films', 'disk', '/films');
+             INSERT INTO works (id, library_id, kind, title, sort_title, added_at, updated_at)
+             VALUES ('film', 'films', 'movie', 'film', 'film', '2026-10-07T00:00:00Z', '2026-10-07T00:00:00Z');",
+        )
+        .execute(&pool)
+        .await
+        .expect("library and work written");
+        for (source, duration) in [
+            ("a_film", Some(7_245_120_i64)),
+            ("a_week", Some(604_800_000)),
+            ("past_a_week", Some(604_800_001)),
+            ("years", Some(56_097_532_003)),
+            ("unknown", None),
+        ] {
+            sqlx::query(
+                "INSERT INTO media_sources
+                    (id, work_id, root_id, relative_path, duration_ms, size_bytes, modified_at, added_at)
+                 VALUES (?1, 'film', 'disk', ?1, ?2, 1, '2026-10-07T00:00:00Z', '2026-10-07T00:00:00Z')",
+            )
+            .bind(source)
+            .bind(duration)
+            .execute(&pool)
+            .await
+            .expect("source written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, Option<i64>)> =
+            sqlx::query_as("SELECT id, duration_ms FROM media_sources ORDER BY id")
+                .fetch_all(&pool)
+                .await
+                .expect("read");
+        assert_eq!(
+            rows,
+            vec![
+                ("a_film".to_string(), Some(7_245_120)),
+                ("a_week".to_string(), Some(604_800_000)),
+                ("past_a_week".to_string(), None),
+                ("unknown".to_string(), None),
+                ("years".to_string(), None),
+            ]
+        );
+    }
+
+    #[tokio::test]
     async fn running_migrations_twice_changes_nothing() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("melyxar.db");

@@ -112,7 +112,7 @@ impl AnalysedFile {
                 .and_then(|value| value.parse::<f64>().ok())
                 .filter(|seconds| *seconds > 0.0)
                 .map(Millis::from_seconds_f64)
-                .filter(|duration| *duration <= melyxar_core::media::LONGEST_BELIEVABLE),
+                .and_then(melyxar_core::media::believed),
             overall_bitrate: report
                 .format
                 .bit_rate
