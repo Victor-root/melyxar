@@ -368,6 +368,15 @@ async fn record_listen(
 struct GenreView {
     name: String,
     albums: i64,
+    /// The albums it is shown by, their covers and their colours.
+    shown: Vec<GenreAlbumView>,
+}
+
+#[derive(Debug, Serialize)]
+struct GenreAlbumView {
+    id: String,
+    color: Option<String>,
+    cover: Vec<ImageView>,
 }
 
 async fn genres(
@@ -382,6 +391,15 @@ async fn genres(
             .map(|genre: &MusicGenre| GenreView {
                 name: genre.name.clone(),
                 albums: genre.albums,
+                shown: genre
+                    .shown
+                    .iter()
+                    .map(|album| GenreAlbumView {
+                        id: album.id.to_string(),
+                        color: album.color.clone(),
+                        cover: album.cover.iter().map(image_view).collect(),
+                    })
+                    .collect(),
             })
             .collect(),
     ))
