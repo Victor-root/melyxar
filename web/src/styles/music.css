@@ -1293,7 +1293,9 @@
 .music-bar-dock .player-button,
 .music-now .player-button,
 .music-bar-dock .player-clock,
-.music-now .player-clock {
+.music-now .player-clock,
+.music-bar-dock .player-preview-time,
+.music-now .player-preview-time {
   color: var(--text);
   text-shadow: none;
 }
