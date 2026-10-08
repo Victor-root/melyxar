@@ -1247,4 +1247,31 @@ mod tests {
             vec![("#", 2, 0), ("a", 2, 1), ("z", 1, 3)]
         );
     }
+
+    /// A list read by title comes out of its index already in order, ties
+    /// included, so a page of it reads that page and no more.
+    #[tokio::test]
+    async fn a_list_read_by_title_is_never_sorted_by_hand() {
+        let (database, library, _) = empty_music_library().await;
+        for kind in ["album", "artist", "song"] {
+            let plan: Vec<String> = sqlx::query(AssertSqlSafe(format!(
+                "EXPLAIN QUERY PLAN
+                 SELECT w.id FROM works w
+                  WHERE w.library_id = ? AND w.kind = '{kind}'
+                  ORDER BY {} LIMIT 1",
+                SongOrder::Title.clause(false)
+            )))
+            .bind(library.to_db_string())
+            .fetch_all(database.reader())
+            .await
+            .expect("planned")
+            .iter()
+            .map(|step| step.try_get("detail").expect("a step says what it does"))
+            .collect();
+            assert!(
+                plan.iter().all(|step| !step.contains("TEMP B-TREE")),
+                "{kind}: {plan:?}"
+            );
+        }
+    }
 }
