@@ -1338,6 +1338,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: var(--gap);
+  cursor: pointer;
 }
 
 .music-bar-now {
