@@ -122,6 +122,22 @@
   transition: box-shadow var(--calm) var(--ease);
 }
 
+/* What a video of one's own holds, run through under a resting pointer over
+   its picture, under everything drawn on top of the picture. */
+.card-preview {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  animation: card-preview-in var(--quick) var(--ease);
+}
+
+@keyframes card-preview-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* An episode and a film left halfway lie down: a still is a wide picture, and
    a row of them that stood up would be a row of cropped middles. */
 .card-lying {

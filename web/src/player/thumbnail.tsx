@@ -32,6 +32,20 @@ export function spotOf(
   };
 }
 
+/**
+ * Moments spread evenly through a film, one in the middle of each of as many
+ * equal stretches: what a card runs through to show what a video holds,
+ * leaving out its very first and very last pictures, which are as often black
+ * as not.
+ */
+export function previewMoments(thumbnails: PlaybackThumbnails, count: number): number[] {
+  const length = thumbnails.counted * thumbnails.every_seconds;
+  if (length <= 0 || count <= 0) {
+    return [];
+  }
+  return Array.from({ length: count }, (_, at) => ((at + 0.5) / count) * length);
+}
+
 /** The sheet that holds the thumbnail of a moment, if the film has one. */
 export function sheetUrlOf(thumbnails: PlaybackThumbnails, seconds: number): string | null {
   const spot = spotOf(thumbnails, seconds);
