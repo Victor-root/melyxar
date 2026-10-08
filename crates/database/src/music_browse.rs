@@ -434,19 +434,19 @@ impl Database {
         };
         // Where a letter begins is how many sort before its first title:
         // titles beginning with no letter sit at both ends of the list, and
-        // lead to the first of them.
+        // lead to the first of them. Read off one walk down the list in
+        // order, each title knowing its place in it: counted again for every
+        // letter instead, a library of a thousand albums took half a second.
         let rows = sqlx::query(AssertSqlSafe(format!(
-            "WITH letters AS (
-                 SELECT {} AS letter, count(*) AS count, min(w.sort_title) AS first
+            "WITH placed AS (
+                 SELECT {} AS letter,
+                        row_number() OVER (ORDER BY w.sort_title) - 1 AS place
                    FROM works w
-                  WHERE w.library_id = ?1 AND {narrowing}
-                  GROUP BY letter
+                  WHERE w.library_id = ? AND {narrowing}
              )
-             SELECT letter, count,
-                    (SELECT count(*) FROM works w
-                      WHERE w.library_id = ?1 AND {narrowing}
-                        AND w.sort_title < letters.first) AS offset
-               FROM letters
+             SELECT letter, count(*) AS count, min(place) AS offset
+               FROM placed
+              GROUP BY letter
               ORDER BY letter",
             initial_of_a_title!()
         )))
@@ -803,7 +803,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::music_testing::collection;
+    use crate::music_testing::{collection, empty_music_library, named};
 
     fn titles(albums: &[AlbumCard]) -> Vec<&str> {
         albums.iter().map(|album| album.title.as_str()).collect()
@@ -1187,6 +1187,64 @@ mod tests {
                 .map(|l| (l.letter.as_str(), l.count, l.offset))
                 .collect::<Vec<_>>(),
             vec![("e", 1, 0), ("n", 1, 1), ("r", 1, 2), ("s", 1, 3)]
+        );
+    }
+
+    /// Titles that begin with no letter sit at both ends of the list, and two
+    /// albums can share a title: each letter still leads to where its first
+    /// title stands.
+    #[tokio::test]
+    async fn a_letter_leads_to_its_first_title_wherever_the_others_sort() {
+        use melyxar_core::id::MediaSourceId;
+        use melyxar_core::music::{AlbumFiling, SongFiling};
+        use melyxar_core::time::now;
+        use std::path::PathBuf;
+
+        let (database, library, root) = empty_music_library().await;
+        let albums = [
+            ("Zoo", "X"),
+            ("~Tilde", "X"),
+            ("Arrival", "X"),
+            ("10 Years", "X"),
+            ("Arrival", "Y"),
+        ];
+        let files: Vec<crate::music::MusicFile> = albums
+            .iter()
+            .enumerate()
+            .map(|(place, (album, artist))| crate::music::MusicFile {
+                source_id: MediaSourceId::new(),
+                song: None,
+                relative_path: PathBuf::from(format!("{place}.flac")),
+                size_bytes: 10,
+                modified_at: now(),
+                filing: SongFiling {
+                    title: named("Song"),
+                    artists: vec![named(artist)],
+                    album: Some(AlbumFiling {
+                        title: named(album),
+                        artists: vec![named(artist)],
+                        is_compilation: false,
+                    }),
+                    track: Some(1),
+                    disc: Some(1),
+                    year: None,
+                    genres: Vec::new(),
+                },
+                reading: Err("not read in this test".to_string()),
+            })
+            .collect();
+        database.file_music(library, root, &files).await.expect("filed");
+
+        let letters = database
+            .music_initials(library, false, false)
+            .await
+            .expect("read");
+        assert_eq!(
+            letters
+                .iter()
+                .map(|l| (l.letter.as_str(), l.count, l.offset))
+                .collect::<Vec<_>>(),
+            vec![("#", 2, 0), ("a", 2, 1), ("z", 1, 3)]
         );
     }
 }
