@@ -215,8 +215,9 @@ export function SongList({
 
 /** One line of a list. It watches on its own whether its song is the one
  *  playing, so a song starting or pausing draws two lines again, not every
- *  list on the screen. */
-const SongLine = memo(function SongLine({
+ *  list on the screen. A list put in order by hand holds each line in one of
+ *  its own, so there the line is not a list item itself. */
+export const SongLine = memo(function SongLine({
   song,
   index,
   first,
@@ -227,6 +228,7 @@ const SongLine = memo(function SongLine({
   inline,
   onPlay,
   extra,
+  inItsOwnLine = false,
 }: {
   song: Song;
   index: number;
@@ -238,6 +240,7 @@ const SongLine = memo(function SongLine({
   inline: number;
   onPlay?: (index: number) => void;
   extra?: MenuLine[];
+  inItsOwnLine?: boolean;
 }) {
   const { t } = useSettings();
   const { toggle } = useMusicControls();
@@ -249,9 +252,10 @@ const SongLine = memo(function SongLine({
       ? []
       : song.artists;
   const label = current ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: song.title });
+  const Line = inItsOwnLine ? "div" : "li";
   return (
-    <li
-      className={`music-song music-song-full${current ? " music-song-playing" : ""}`}
+    <Line
+      className={`music-song music-song-full${current ? " music-song-playing" : ""}${inItsOwnLine ? " music-song-in-a-playlist" : ""}`}
       data-index={first + index}
       onClick={
         compact
@@ -310,6 +314,6 @@ const SongLine = memo(function SongLine({
           {song.seconds === null ? "" : asClock(song.seconds)}
         </span>
       )}
-    </li>
+    </Line>
   );
 });

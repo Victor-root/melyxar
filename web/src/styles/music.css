@@ -558,6 +558,10 @@
 
 /* A song of a playlist sits on a line that is dragged: the line draws the
    rule between songs, and the song only its own columns. */
+.music-playlist-lines .order-line {
+  border-top: 0;
+}
+
 .music-song-in-a-playlist {
   flex: 1;
   min-width: 0;
@@ -656,8 +660,10 @@
 
 /* What separates two lines is what separates "continue watching" from
    "up next" on the home page: the accent, faint, and the light falling off
-   it, fading out at both ends rather than cut off. */
-.music-song-full + .music-song-full::before {
+   it, fading out at both ends rather than cut off. In a playlist each song
+   sits in a line that is dragged, and the line draws it. */
+.music-song-full + .music-song-full::before,
+.music-playlist-lines .order-line + .order-line::before {
   content: "";
   position: absolute;
   top: 0;

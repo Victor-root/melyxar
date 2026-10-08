@@ -10,24 +10,25 @@
 
 import { PageBackdrop } from "../components/backdrop";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
 import { Sortable } from "../components/sortable";
 import { refusalKey } from "../i18n";
 import { DeleteIcon, EditIcon, PlayIcon } from "../icons";
-import { asClock } from "../clock";
+import { PHONE, useMediaQuery } from "../media-query";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { MusicPlaylistPage, Song } from "./api";
 import { minutesOf } from "./discs";
-import { Heart } from "./heart";
 import { useMusicMarks } from "./marks";
 import { ShuffleIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
 import { SongMenuButton } from "./song-menu";
-import { PlaylistCover, namesOf } from "./tiles";
+import type { MenuLine } from "./song-menu";
+import { SongLine } from "./songs";
+import { PlaylistCover } from "./tiles";
 import { useTabPage } from "../tab-page";
 
 /** A song of the playlist, with a name of its own on the page: the same song
@@ -51,6 +52,10 @@ export function MusicPlaylistPage() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const named = useRef(0);
+  /* On a phone the lines are those of every other list of songs there, and
+     renaming and deleting go into the playlist's menu, as an album's tools
+     do into its own. */
+  const phone = useMediaQuery(PHONE);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -101,6 +106,15 @@ export function MusicPlaylistPage() {
       setRefused(refusalOf(error));
     }
   };
+  const play = (at: number) => player.play(songs, at);
+  const inTheMenu: MenuLine[] = phone
+    ? [
+        ...(renaming === null
+          ? [{ key: "rename", said: t("lists.rename"), mark: <EditIcon size={17} />, act: () => setRenaming(playlist.name) }]
+          : []),
+        { key: "delete", said: t("playlists.delete"), mark: <DeleteIcon size={17} />, act: () => setDeleting(true) },
+      ]
+    : [];
   const attempt = async (doing: () => Promise<unknown>) => {
     setRefused(null);
     try {
@@ -174,16 +188,27 @@ export function MusicPlaylistPage() {
               <ShuffleIcon size={18} />
               {t("music.shuffle")}
             </button>
-            {renaming === null && (
-              <button type="button" className="button" onClick={() => setRenaming(playlist.name)}>
-                <EditIcon size={16} />
-                {t("lists.rename")}
-              </button>
+            {phone ? (
+              <SongMenuButton
+                songs={songs}
+                label={t("music.more_about", { title: playlist.name })}
+                className="music-hero-heart"
+                extra={inTheMenu}
+              />
+            ) : (
+              <>
+                {renaming === null && (
+                  <button type="button" className="button" onClick={() => setRenaming(playlist.name)}>
+                    <EditIcon size={16} />
+                    {t("lists.rename")}
+                  </button>
+                )}
+                <button type="button" className="button button-quiet" onClick={() => setDeleting(true)}>
+                  <DeleteIcon size={16} />
+                  {t("playlists.delete")}
+                </button>
+              </>
             )}
-            <button type="button" className="button button-quiet" onClick={() => setDeleting(true)}>
-              <DeleteIcon size={16} />
-              {t("playlists.delete")}
-            </button>
           </div>
         </div>
       </header>
@@ -192,53 +217,34 @@ export function MusicPlaylistPage() {
       {lines.length === 0 ? (
         <p className="notice">{t("music.playlist_empty")}</p>
       ) : (
-        <div className="music-playlist-lines">
+        <div className={`music-playlist-lines music-songs${phone ? " music-songs-compact" : ""}`}>
           <Sortable
             items={lines}
             keyOf={(line) => line.key}
             nameOf={(line) => line.song.title}
             onMove={(moved) => void change(moved)}
           >
-            {(line) => {
-              const at = lines.indexOf(line);
-              return (
-                <div className="music-song music-song-in-a-playlist">
-                  <span className="music-song-number">{at + 1}</span>
-                  <span className="music-song-words">
-                    <button
-                      type="button"
-                      className="music-song-title music-song-play"
-                      onClick={() => player.play(songs, at)}
-                      title={t("music.play_song", { title: line.song.title })}
-                    >
-                      {line.song.title}
-                    </button>
-                    <span className="music-song-artists">{namesOf(line.song.artists)}</span>
-                  </span>
-                  <span className="music-song-album">
-                    {line.song.album && (
-                      <Link to={`/music/album/${line.song.album.id}`}>{line.song.album.name}</Link>
-                    )}
-                  </span>
-                  <Heart id={line.song.id} size={16} />
-                  <SongMenuButton
-                    songs={[line.song]}
-                    label={t("music.more_about", { title: line.song.title })}
-                    extra={[
-                      {
-                        key: "take_out",
-                        said: t("music.take_out_of_playlist"),
-                        mark: <DeleteIcon size={17} />,
-                        act: () => void change(lines.filter((one) => one !== line)),
-                      },
-                    ]}
-                  />
-                  <span className="music-song-length">
-                    {line.song.seconds === null ? "" : asClock(line.song.seconds)}
-                  </span>
-                </div>
-              );
-            }}
+            {(line) => (
+              <SongLine
+                song={line.song}
+                index={lines.indexOf(line)}
+                first={0}
+                numbered="place"
+                showAlbum
+                compact={phone}
+                inline={0}
+                onPlay={play}
+                inItsOwnLine
+                extra={[
+                  {
+                    key: "take_out",
+                    said: t("music.take_out_of_playlist"),
+                    mark: <DeleteIcon size={17} />,
+                    act: () => void change(lines.filter((one) => one !== line)),
+                  },
+                ]}
+              />
+            )}
           </Sortable>
         </div>
       )}
