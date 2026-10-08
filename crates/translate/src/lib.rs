@@ -17,6 +17,15 @@ pub use engine::{Engine, Error};
 pub use sentences::sentences;
 pub use subrip::{Cue, parse, render};
 
+/// What the listening writes around a line that is sung rather than said.
+const NOTES: [char; 3] = ['♪', '♫', '♬'];
+
+/// Whether a cue is music: the notes are what says so, in the language it was
+/// heard in.
+fn is_sung(text: &str) -> bool {
+    text.contains(NOTES)
+}
+
 /// How many sentences are handed to the model at once. A model reads a batch
 /// together, so more is faster, up to the point where a long film's worth of
 /// memory is held for nothing.
@@ -29,11 +38,18 @@ const IN_ONE_BATCH: usize = 32;
 /// subtitle is a line of speech nobody can read. The answers are put back
 /// together in the cue they came from. `translate` is asked for each batch of
 /// sentences and must answer as many lines as it was given.
+///
+/// A sung cue is kept as it was heard, notes and words: the model does not
+/// know a note, drops it or leaves nothing at all, and what it makes of lyrics
+/// is worse than the words that were sung.
 pub fn translate_cues<E>(
     cues: &[Cue],
     mut translate: impl FnMut(&[String]) -> Result<Vec<String>, E>,
 ) -> Result<Vec<Cue>, E> {
-    let cut: Vec<Vec<String>> = cues.iter().map(|cue| sentences(&cue.text)).collect();
+    let cut: Vec<Vec<String>> = cues
+        .iter()
+        .map(|cue| if is_sung(&cue.text) { Vec::new() } else { sentences(&cue.text) })
+        .collect();
     let every: Vec<String> = cut.iter().flatten().cloned().collect();
 
     let mut answered = Vec::with_capacity(every.len());
@@ -47,13 +63,16 @@ pub fn translate_cues<E>(
         .zip(&cut)
         .map(|(cue, own)| Cue {
             timing: cue.timing.clone(),
-            text: own
-                .iter()
-                .filter_map(|_| answers.next())
-                .map(|line| line.trim().to_string())
-                .filter(|line| !line.is_empty())
-                .collect::<Vec<_>>()
-                .join(" "),
+            text: if is_sung(&cue.text) {
+                cue.text.clone()
+            } else {
+                own.iter()
+                    .filter_map(|_| answers.next())
+                    .map(|line| line.trim().to_string())
+                    .filter(|line| !line.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            },
         })
         .filter(|cue| !cue.text.is_empty())
         .collect())
@@ -110,6 +129,28 @@ mod tests {
         })
         .expect("translated");
         assert_eq!(done, [cue("t2", "Fine.")]);
+    }
+
+    #[test]
+    fn a_sung_cue_is_kept_as_heard_and_never_sent_to_the_model() {
+        let cues = [
+            cue("t1", "♪ Cat with their ills ♪"),
+            cue("t2", "♪"),
+            cue("t3", "Who is there?"),
+            cue("t4", "♫ la la la"),
+        ];
+        let mut batches = Vec::new();
+        let done = translate_cues(&cues, shouting(&mut batches)).expect("translated");
+        assert_eq!(batches, [1], "only the spoken sentence went in");
+        assert_eq!(
+            done,
+            [
+                cue("t1", "♪ Cat with their ills ♪"),
+                cue("t2", "♪"),
+                cue("t3", "WHO IS THERE?"),
+                cue("t4", "♫ la la la"),
+            ]
+        );
     }
 
     #[test]
