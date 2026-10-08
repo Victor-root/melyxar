@@ -21,6 +21,11 @@ const SHORTEST_LINE: usize = 20;
 const SHORTEST_BEFORE_COMMA: usize = 30;
 /// A line is shown at least this long when what follows leaves the room.
 const SHORTEST_SHOWN_MS: u64 = 1_000;
+/// A line is shown no longer than this plus the time to say its characters
+/// slowly: a block often runs on over music or silence after a few words,
+/// and the words would stay up over nothing being said.
+const SHOWN_AT_MOST_BASE_MS: u64 = 1_500;
+const SHOWN_AT_MOST_PER_CHARACTER_MS: u64 = 120;
 /// How many blocks in a row repeating the ones before them make a loop.
 const SHORTEST_LOOP: usize = 6;
 
@@ -116,8 +121,10 @@ fn cut(block: &Block, lines: &mut Vec<Line>) {
         let length: usize = words[start..end].iter().map(|word| word.len() + 1).sum();
         let from = block.offsets.from + duration * said as u64 / total as u64;
         said += length;
-        let to = block.offsets.from + duration * said as u64 / total as u64;
-        lines.push(Line { from, to, text: words[start..end].join(" ") });
+        let shared_to = block.offsets.from + duration * said as u64 / total as u64;
+        let text = words[start..end].join(" ");
+        let at_most = SHOWN_AT_MOST_BASE_MS + SHOWN_AT_MOST_PER_CHARACTER_MS * text.chars().count() as u64;
+        lines.push(Line { from, to: shared_to.min(from + at_most), text });
         start = end;
     }
 }
@@ -206,13 +213,13 @@ mod tests {
 
     #[test]
     fn lines_never_leave_the_block_they_come_from() {
-        let blocks = [("One two three. Four five six. Seven eight nine.", 5_000, 12_000), ("Ten eleven.", 20_000, 23_000)];
+        let blocks = [("One two three. Four five six. Seven eight nine.", 5_000, 12_000), ("Ten eleven.", 20_000, 22_000)];
         let written = subrip_of(&report(&blocks)).expect("a report");
         let times: Vec<&str> = written.lines().filter(|line| line.contains(" --> ")).collect();
         assert_eq!(times.len(), 4);
         assert!(times[0].starts_with("00:00:05,000"), "{times:?}");
         assert!(times[2].starts_with("00:00:09,"), "{times:?}");
-        assert!(times[3].starts_with("00:00:20,000") && times[3].ends_with("00:00:23,000"), "{times:?}");
+        assert!(times[3].starts_with("00:00:20,000") && times[3].ends_with("00:00:22,000"), "{times:?}");
     }
 
     #[test]
@@ -230,6 +237,12 @@ mod tests {
         let text = "slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly slowly";
         let written = subrip_of(&report(&[(text, 0, 24_000)])).expect("a report");
         assert!(texts(&written).len() >= 3, "{written}");
+    }
+
+    #[test]
+    fn a_few_words_in_a_block_that_runs_on_do_not_stay_up_over_the_silence() {
+        let written = subrip_of(&report(&[("All right, get out.", 932_000, 956_000)])).expect("a report");
+        assert!(written.contains("00:15:32,000 --> 00:15:35,780"), "{written}");
     }
 
     #[test]
