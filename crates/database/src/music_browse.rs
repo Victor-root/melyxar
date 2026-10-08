@@ -86,12 +86,27 @@ pub struct SongRow {
     pub album_lufs: Option<f64>,
 }
 
-/// One genre, and how many albums carry it.
+/// One genre, how many albums carry it, and a few of them to show it by.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MusicGenre {
     pub name: String,
     pub albums: i64,
+    /// The albums that arrived last, those with a cover first, at most
+    /// [`ALBUMS_SHOWING_A_GENRE`].
+    pub shown: Vec<GenreAlbum>,
 }
+
+/// An album a genre is shown by: its cover and its colour.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenreAlbum {
+    pub id: WorkId,
+    pub color: Option<String>,
+    /// Every size of its cover, largest first.
+    pub cover: Vec<StoredImage>,
+}
+
+/// How many albums a genre is shown by.
+pub const ALBUMS_SHOWING_A_GENRE: i64 = 3;
 
 /// A letter of the list of albums or artists, and how many are filed under it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -413,10 +428,11 @@ impl Database {
         })
     }
 
-    /// Every genre the albums of a library carry, by name.
+    /// Every genre the albums of a library carry, by name, each with the
+    /// albums it is shown by.
     pub async fn music_genres(&self, library_id: LibraryId) -> Result<Vec<MusicGenre>> {
         let rows = sqlx::query(
-            "SELECT g.name, count(*) AS albums
+            "SELECT g.id, g.name, count(*) AS albums
                FROM genres g
                JOIN work_genres wg ON wg.genre_id = g.id
                JOIN works w ON w.id = wg.work_id
@@ -427,11 +443,56 @@ impl Database {
         .bind(library_id.to_db_string())
         .fetch_all(self.reader())
         .await?;
+
+        // The last ones to arrive of each genre, read in one go: a cover
+        // first, since a genre is shown by its pictures.
+        let shown_rows = sqlx::query(
+            "WITH ranked AS (
+               SELECT wg.genre_id, w.id, w.dominant_color,
+                      row_number() OVER (
+                        PARTITION BY wg.genre_id
+                        ORDER BY EXISTS (SELECT 1 FROM images i
+                                          WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                                            AND i.image_kind = 'poster') DESC,
+                                 w.added_at DESC, w.id
+                      ) AS place
+                 FROM work_genres wg
+                 JOIN works w ON w.id = wg.work_id
+                WHERE w.library_id = ? AND w.kind = 'album')
+             SELECT genre_id, id, dominant_color FROM ranked
+              WHERE place <= ?
+              ORDER BY genre_id, place",
+        )
+        .bind(library_id.to_db_string())
+        .bind(ALBUMS_SHOWING_A_GENRE)
+        .fetch_all(self.reader())
+        .await?;
+        let mut shown: HashMap<String, Vec<(WorkId, Option<String>)>> = HashMap::new();
+        for row in &shown_rows {
+            shown
+                .entry(row.try_get("genre_id")?)
+                .or_default()
+                .push((parse_id(&row.try_get::<String, _>("id")?)?, row.try_get("dominant_color")?));
+        }
+        let albums: Vec<WorkId> = shown.values().flatten().map(|(id, _)| *id).collect();
+        let covers = self.posters_of(&albums).await?;
+
         rows.iter()
             .map(|row| {
+                let genre: String = row.try_get("id")?;
                 Ok(MusicGenre {
                     name: row.try_get("name")?,
                     albums: row.try_get("albums")?,
+                    shown: shown
+                        .remove(&genre)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .map(|(id, color)| GenreAlbum {
+                            id,
+                            color,
+                            cover: covers.get(&id).cloned().unwrap_or_default(),
+                        })
+                        .collect(),
                 })
             })
             .collect()
@@ -1220,9 +1281,9 @@ mod tests {
         assert_eq!(
             genres
                 .iter()
-                .map(|g| (g.name.as_str(), g.albums))
+                .map(|g| (g.name.as_str(), g.albums, g.shown.len()))
                 .collect::<Vec<_>>(),
-            vec![("Folk", 1), ("Pop", 2), ("Rock", 1)]
+            vec![("Folk", 1, 1), ("Pop", 2, 2), ("Rock", 1, 1)]
         );
 
         let letters = database
@@ -1236,6 +1297,94 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![("e", 1, 0), ("n", 1, 1), ("r", 1, 2), ("s", 1, 3)]
         );
+    }
+
+    /// A genre is shown by its albums with a cover before those without, and
+    /// by no more of them than a tile holds.
+    #[tokio::test]
+    async fn a_genre_is_shown_by_its_albums_with_a_cover_first() {
+        use crate::images::StoredImage;
+        use crate::music::MusicFile;
+        use melyxar_core::id::MediaSourceId;
+        use melyxar_core::music::{AlbumFiling, SongFiling};
+        use melyxar_core::time::now;
+        use std::path::PathBuf;
+
+        let (database, library, root) = collection().await;
+        let pop = database
+            .music_albums(
+                library,
+                &AlbumsWanted {
+                    genre: Some("Pop".to_string()),
+                    by: None,
+                },
+                AlbumOrder::Title,
+                false,
+                0,
+                10,
+            )
+            .await
+            .expect("read")
+            .items;
+        assert_eq!(pop.len(), 2);
+        // Whichever would come first otherwise, the one given a cover leads.
+        for pictured in &pop {
+            for album in &pop {
+                database
+                    .replace_images("work", &album.id.to_db_string(), "poster", &[])
+                    .await
+                    .expect("cleared");
+            }
+            let poster = StoredImage {
+                owner_kind: "work".to_string(),
+                owner_id: pictured.id.to_db_string(),
+                image_kind: "poster".to_string(),
+                relative_path: format!("works/{}/poster-400.webp", pictured.id),
+                width: Some(400),
+                height: Some(400),
+                fingerprint: "a cover".to_string(),
+                dominant_color: Some("#335577".to_string()),
+            };
+            database
+                .replace_images("work", &pictured.id.to_db_string(), "poster", &[poster])
+                .await
+                .expect("stored");
+            let genres = database.music_genres(library).await.expect("read");
+            let shown = &genres.iter().find(|g| g.name == "Pop").expect("pop").shown;
+            assert_eq!(shown[0].id, pictured.id);
+            assert_eq!(shown[0].cover.len(), 1);
+            assert!(shown[1].cover.is_empty());
+        }
+
+        // A genre carried by more albums than a tile holds shows that many.
+        let more: Vec<_> = (0..5)
+            .map(|at| MusicFile {
+                source_id: MediaSourceId::new(),
+                song: None,
+                relative_path: PathBuf::from(format!("More/{at}/01.flac")),
+                size_bytes: 10,
+                modified_at: now(),
+                filing: SongFiling {
+                    title: named("A song"),
+                    artists: vec![named("Somebody")],
+                    album: Some(AlbumFiling {
+                        title: named(&format!("Album {at}")),
+                        artists: vec![named("Somebody")],
+                        is_compilation: false,
+                    }),
+                    track: Some(1),
+                    disc: Some(1),
+                    year: Some(2020),
+                    genres: vec!["Pop".to_string()],
+                },
+                reading: Err("not read in this test".to_string()),
+            })
+            .collect();
+        database.file_music(library, root, &more).await.expect("filed");
+        let genres = database.music_genres(library).await.expect("read");
+        let pop = genres.iter().find(|g| g.name == "Pop").expect("pop");
+        assert_eq!(pop.albums, 7);
+        assert_eq!(pop.shown.len() as i64, ALBUMS_SHOWING_A_GENRE);
     }
 
     /// Titles that begin with no letter sit at both ends of the list, and two
