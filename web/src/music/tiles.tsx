@@ -1,10 +1,13 @@
 /*
  * An album and an artist, as a grid shows them: the card of the rest of the
  * interface over a square cover under which the album is named with whose it
- * is, and over a round picture for an artist.
+ * is, and over a round picture for an artist. A genre, as a tile of its own
+ * colour.
  */
 
 import { memo, useContext, useState } from "react";
+import { Link } from "react-router-dom";
+import { mostColourfulOf } from "../colour";
 import { InARow, ROOM_IN_A_ROW } from "../components/card";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, HeartIcon, PlayIcon } from "../icons";
@@ -13,7 +16,7 @@ import { QuietLink } from "../navigating";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
-import type { Album, Artist, Credited, MusicPlaylist, Song } from "./api";
+import type { Album, Artist, Credited, Genre, GenreAlbum, MusicPlaylist, Song } from "./api";
 import { useLiking } from "./marks";
 import { useMusicControls, useMusicNow } from "./player/player";
 
@@ -279,5 +282,58 @@ export function LetterStarts({ offset, letter, round }: { offset: number; letter
       <span>{letter.toUpperCase()}</span>
       <ChevronRightIcon size={40} />
     </div>
+  );
+}
+
+/**
+ * A genre: its name on a tile of the colour of its albums, over a fan of
+ * their covers, the last one to arrive in front. Pressed, the albums of the
+ * genre.
+ */
+export function GenreTile({ genre }: { genre: Genre }) {
+  const { t } = useSettings();
+  /* The liveliest colour of its albums: the first one's is as often a
+     shade of black as anything. */
+  const color = mostColourfulOf(genre.shown.flatMap((album) => (album.color ? [album.color] : [])));
+  return (
+    <Link
+      className="music-genre"
+      to={`?${new URLSearchParams({ tab: "albums", genre: genre.name }).toString()}`}
+      style={color ? { ["--genre-color" as string]: color } : undefined}
+    >
+      <span className="music-genre-words">
+        <span className="music-genre-name">{genre.name}</span>
+        <span className="music-genre-count">{howMany(genre.albums, "music.albums_count", t)}</span>
+      </span>
+      <span className="music-genre-fan" aria-hidden="true">
+        {/* The front one last, so it is drawn over the others. */}
+        {[...genre.shown].reverse().map((album) => (
+          <GenreCover key={album.id} album={album} />
+        ))}
+      </span>
+    </Link>
+  );
+}
+
+function GenreCover({ album }: { album: GenreAlbum }) {
+  const { picture, itDidNotLoad } = useShownPicture(album.cover);
+  return (
+    <span
+      className="music-genre-cover"
+      style={album.color ? { ["--cover-color" as string]: album.color } : undefined}
+    >
+      {picture && (
+        <img
+          src={picture.src}
+          srcSet={picture.srcSet || undefined}
+          sizes="(max-width: 600px) 80px, 130px"
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={itDidNotLoad}
+        />
+      )}
+    </span>
   );
 }

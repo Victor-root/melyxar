@@ -66,6 +66,14 @@ export interface Song {
 export interface Genre {
   name: string;
   albums: number;
+  /** The albums it is shown by: the last to arrive, those with a cover first. */
+  shown: GenreAlbum[];
+}
+
+export interface GenreAlbum {
+  id: string;
+  color: string | null;
+  cover: Picture[];
 }
 
 /** A letter of a list, and where its first entry stands in it. */
