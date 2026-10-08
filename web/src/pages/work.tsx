@@ -76,6 +76,16 @@ import { useTabPage } from "../tab-page";
  *  would show with an initial where the others have a picture. */
 const FACES_SHOWN = 18;
 
+/**
+ * How wide the picture at the head of the page is drawn, in plain lengths the
+ * browser can read before the stylesheet, which draws them: 150 points on a
+ * narrow screen, then a share of the window between two bounds. Said as a
+ * share of the window on a phone instead, the poster came at twice the size
+ * it is drawn at, and the still of an episode at four times.
+ */
+const ROOM_FOR_A_POSTER = "(max-width: 860px) 150px, (max-width: 947px) 180px, (min-width: 1579px) 300px, 19vw";
+const ROOM_FOR_A_STILL = "(max-width: 860px) 150px, (max-width: 867px) 260px, (min-width: 1600px) 480px, 30vw";
+
 export function WorkPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -339,7 +349,7 @@ function TopOfTheWork({
           <img
             src={poster.src}
             srcSet={poster.srcSet}
-            sizes={lying ? "(max-width: 800px) 60vw, 480px" : "(max-width: 800px) 40vw, 300px"}
+            sizes={lying ? ROOM_FOR_A_STILL : ROOM_FOR_A_POSTER}
             alt=""
             onError={posterFailed}
           />
