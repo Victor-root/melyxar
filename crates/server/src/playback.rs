@@ -74,6 +74,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::get(subtitle),
         )
         .route(
+            "/api/v1/playback/{id}/thumbnails",
+            axum::routing::get(thumbnails_of_a_copy),
+        )
+        .route(
             "/api/v1/playback/{id}/thumbnails/{sheet}",
             axum::routing::get(thumbnail_sheet),
         )
@@ -465,16 +469,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         subtitles,
         thumbnails: plan
             .thumbnails
-            .filter(|made| made.counted > 0)
-            .map(|made| ThumbnailsView {
-                url: format!("/api/v1/playback/{}/thumbnails", plan.source_id),
-                every_seconds: made.every.as_seconds_f64(),
-                width: made.width,
-                height: made.height,
-                columns: made.columns,
-                rows: made.rows,
-                counted: made.counted,
-            }),
+            .and_then(|made| thumbnails_view(plan.source_id, made)),
         chapters: plan
             .chapters
             .iter()
@@ -704,6 +699,38 @@ async fn serve_subtitle(
 // ---------------------------------------------------------------------------
 // The little pictures of the bar
 // ---------------------------------------------------------------------------
+
+/// How the thumbnails of a copy are cut out of their sheets, or nothing when
+/// it holds none: a file that holds no picture has been read and has none.
+fn thumbnails_view(
+    source_id: MediaSourceId,
+    made: melyxar_core::thumbnails::Thumbnails,
+) -> Option<ThumbnailsView> {
+    (made.counted > 0).then(|| ThumbnailsView {
+        url: format!("/api/v1/playback/{source_id}/thumbnails"),
+        every_seconds: made.every.as_seconds_f64(),
+        width: made.width,
+        height: made.height,
+        columns: made.columns,
+        rows: made.rows,
+        counted: made.counted,
+    })
+}
+
+/// The thumbnails of one copy, without preparing it to be played: what a
+/// card of a video of one's own runs through under the pointer.
+async fn thumbnails_of_a_copy(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    RoutePath(id): RoutePath<String>,
+) -> Result<Json<ThumbnailsView>> {
+    let source_id = parse_source(&id)?;
+    melyxar_app::thumbnails::of_the_copy(&state, &who, source_id)
+        .await?
+        .and_then(|made| thumbnails_view(source_id, made))
+        .map(Json)
+        .ok_or_else(|| ServerError::not_found("thumbnails"))
+}
 
 /// Hands over one sheet of thumbnails.
 ///

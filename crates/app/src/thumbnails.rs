@@ -296,6 +296,17 @@ pub async fn make_for(
     Ok(made)
 }
 
+/// What the thumbnails of a copy are, for an account that may read it, or
+/// nothing while the copy has not been read for them.
+pub async fn of_the_copy(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: MediaSourceId,
+) -> Result<Option<Thumbnails>> {
+    crate::reach::may_read_the_copy(state, who, source_id).await?;
+    Ok(state.database().thumbnails_of(source_id).await?)
+}
+
 /// Where one sheet of a film is, for the route that hands it over.
 ///
 /// Only sheets this server wrote, and only by the number it gave them: nothing
