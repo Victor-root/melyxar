@@ -164,6 +164,20 @@ impl SongOrder {
             (Self::Added, true) => "w.added_at, w.id",
         }
     }
+
+    /// What finding a page in this order reads beside the song itself: the
+    /// album and the disc only for the order that sorts on them, since joining
+    /// them for every song passed over cost a deep page most of its time.
+    fn sorted_on(self) -> &'static str {
+        match self {
+            Self::Album => {
+                "w.id, al.sort_title AS album_sort FROM works w
+                   LEFT JOIN music_songs ms ON ms.work_id = w.id
+                   LEFT JOIN works al ON al.id = w.parent_id"
+            }
+            Self::Title | Self::Added => "w.id FROM works w",
+        }
+    }
 }
 
 /// What narrows a list of albums.
@@ -304,6 +318,10 @@ impl Database {
     }
 
     /// A page of the songs of a library.
+    ///
+    /// The songs of the page are found first and only they are then described:
+    /// described while being sorted, every song passed over on the way to a
+    /// deep page had its sources and loudness read for nothing.
     pub async fn music_songs(
         &self,
         library_id: LibraryId,
@@ -317,14 +335,18 @@ impl Database {
                 .bind(library_id.to_db_string())
                 .fetch_one(self.reader())
                 .await?;
+        let sorted = order.clause(descending);
         let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT {A_SONG}
-               FROM works w
+            "WITH page AS (
+               SELECT {} WHERE w.library_id = ? AND w.kind = 'song'
+                ORDER BY {sorted} LIMIT ? OFFSET ?)
+             SELECT {A_SONG}
+               FROM page p
+               JOIN works w ON w.id = p.id
                LEFT JOIN music_songs ms ON ms.work_id = w.id
                LEFT JOIN works al ON al.id = w.parent_id
-              WHERE w.library_id = ? AND w.kind = 'song'
-              ORDER BY {} LIMIT ? OFFSET ?",
-            order.clause(descending)
+              ORDER BY {sorted}",
+            order.sorted_on()
         )))
         .bind(library_id.to_db_string())
         .bind(limit)
@@ -493,6 +515,9 @@ impl Database {
 
     /// One artist, with the albums that are theirs and the ones they only
     /// play on, the earliest first.
+    ///
+    /// Both found from the artist's own credits: asked of every album of the
+    /// library in turn, the albums they play on took a second on a large one.
     pub async fn music_artist(
         &self,
         artist: WorkId,
@@ -509,8 +534,8 @@ impl Database {
         let order = AlbumOrder::Year.clause(false);
         let theirs = sqlx::query(AssertSqlSafe(format!(
             "SELECT {AN_ALBUM} FROM works w JOIN music_albums ma ON ma.work_id = w.id
-              WHERE EXISTS (SELECT 1 FROM music_credits c WHERE c.work_id = w.id
-                             AND c.role = 'album_artist' AND c.artist_id = ?1)
+              WHERE w.id IN (SELECT c.work_id FROM music_credits c
+                              WHERE c.artist_id = ?1 AND c.role = 'album_artist')
               ORDER BY {order}"
         )))
         .bind(artist.to_db_string())
@@ -518,9 +543,9 @@ impl Database {
         .await?;
         let played_on = sqlx::query(AssertSqlSafe(format!(
             "SELECT {AN_ALBUM} FROM works w JOIN music_albums ma ON ma.work_id = w.id
-              WHERE EXISTS (SELECT 1 FROM works song
-                              JOIN music_credits c ON c.work_id = song.id AND c.role = 'artist'
-                             WHERE song.parent_id = w.id AND c.artist_id = ?1)
+              WHERE w.id IN (SELECT song.parent_id FROM music_credits c
+                               JOIN works song ON song.id = c.work_id
+                              WHERE c.artist_id = ?1 AND c.role = 'artist')
                 AND NOT EXISTS (SELECT 1 FROM music_credits c WHERE c.work_id = w.id
                                  AND c.role = 'album_artist' AND c.artist_id = ?1)
               ORDER BY {order}"
@@ -1002,6 +1027,29 @@ mod tests {
             vec!["The Lanterns", "Amber Field"]
         );
         assert!(road.source_id.is_some(), "a song is played from its file");
+    }
+
+    #[tokio::test]
+    async fn songs_read_page_by_page_come_in_the_order_of_the_whole_list() {
+        let (database, library, _) = collection().await;
+        for order in [SongOrder::Title, SongOrder::Album, SongOrder::Added] {
+            for descending in [false, true] {
+                let whole = database
+                    .music_songs(library, order, descending, 0, 10)
+                    .await
+                    .expect("read");
+                let mut paged = Vec::new();
+                for offset in (0..whole.total).step_by(2) {
+                    let page = database
+                        .music_songs(library, order, descending, offset, 2)
+                        .await
+                        .expect("read");
+                    paged.extend(page.items.into_iter().map(|song| song.id));
+                }
+                let ids: Vec<_> = whole.items.into_iter().map(|song| song.id).collect();
+                assert_eq!(paged, ids, "{order:?} descending {descending}");
+            }
+        }
     }
 
     #[tokio::test]
