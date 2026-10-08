@@ -808,7 +808,7 @@
   }
 
   /* Stepped aside with the bar at the top while a page is read down. */
-  :root:has(.header-away) .browse-piece.music-tabs[data-unrolled="no"] {
+  :root[data-bar-away] .browse-piece.music-tabs[data-unrolled="no"] {
     transform: translateY(calc(-100% - 24px));
   }
 
@@ -963,14 +963,16 @@
   /* Only the room the rail takes beyond the page's own margin, so the
      covers keep their two to a line. Kept from the first drawing of a grid
      read by title, before it is known which letters there are. */
-  .grid-with-letters:has(> .letters),
+  .grid-with-letters-shown,
   .grid-with-letters-kept {
     padding-right: 22px;
   }
 
   /* The bar of a list stops short of the rail, which runs down the same
-     margin from just under it. */
-  .page:has(.letters, .grid-with-letters-kept) .browse-head {
+     margin from just under it. Said by the page, not asked of it: a rule
+     asking whether the page held letters anywhere was checked again at every
+     change in it, and had the whole page styled again each time a grid grew. */
+  .page-beside-letters .browse-head {
     padding-right: 22px;
   }
 

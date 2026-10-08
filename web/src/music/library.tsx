@@ -8,7 +8,7 @@
  * going back to the library finds it the way it was left.
  */
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
@@ -42,8 +42,17 @@ import { AlbumTile, ArtistTile, LetterStarts } from "./tiles";
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
 const SONG_ORDERS: SongOrder[] = ["title", "album", "added"];
 
+/** Told by a list whether it shows its letters beside it, for the head of
+ *  the page to keep clear of them. */
+const BesideLetters = createContext<(shown: boolean) => void>(() => {});
+
 export function MusicLibraryPage({ library }: { library: Library }) {
   const [params, setParams] = useSearchParams();
+  /* Said by the list rather than asked of the page by the stylesheet: a rule
+     asking whether the page holds letters anywhere was checked again at
+     every change anywhere in it, a list growing as it is scrolled included,
+     and had a phone style the whole page again each time. */
+  const [besideLetters, setBesideLetters] = useState(false);
   useTabPage(library.name);
   const { preferences } = useMusicControls();
   /* The same list from one drawing to the next: the bar of tabs measures
@@ -57,7 +66,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const barred = tab === "albums" || tab === "album_artists" || tab === "artists" || tab === "songs";
 
   return (
-    <main className="page music-page">
+    <main className={`page music-page${besideLetters ? " page-beside-letters" : ""}`}>
       <PageBackdrop />
       <div className="browse-head">
         <div className="section-head">
@@ -69,6 +78,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         </div>
       </div>
 
+      <BesideLetters.Provider value={setBesideLetters}>
       <div className="music-tab-content">
         {tab === "for_you" && <ForYouTab library={library.id} />}
         {tab === "albums" && <AlbumsTab library={library.id} tools={tools} />}
@@ -79,6 +89,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         {tab === "favourites" && <FavouritesTab library={library.id} />}
         {tab === "genres" && <GenresTab library={library.id} />}
       </div>
+      </BesideLetters.Provider>
     </main>
   );
 }
@@ -400,6 +411,12 @@ function Lettered<T>({
   }, [landing, items]);
 
   const shownLetters = letters && letters.length > 1 ? letters : null;
+  const sayBesideLetters = useContext(BesideLetters);
+  const besideLetters = shownLetters !== null;
+  useLayoutEffect(() => {
+    sayBesideLetters(besideLetters);
+    return () => sayBesideLetters(false);
+  }, [sayBesideLetters, besideLetters]);
   const drop = useRef<DropHandle>(null);
   const scrub = useRailScrub((index) => {
     if (shownLetters) {
@@ -411,7 +428,7 @@ function Lettered<T>({
       {paged.failed && <p className="notice">{t("error.unreachable")}</p>}
       {!paged.failed && paged.total === 0 && <p className="notice">{t(empty)}</p>}
       <div
-        className="grid-with-letters"
+        className={`grid-with-letters${besideLetters ? " grid-with-letters-shown" : ""}`}
         ref={holder}
       >
         <div className="music-list">
