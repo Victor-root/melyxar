@@ -306,6 +306,16 @@ enum Seen {
         /// Whether the film went on playing, read by the browser itself.
         browser_took_over: bool,
     },
+    /// The library met trouble and got over it by itself, in its own words.
+    ///
+    /// Silent on the screen, since nothing is lost, but it is where a segment
+    /// fetched again and again would say why. A few per film are said, not
+    /// all of them.
+    LibraryHiccup {
+        because: String,
+        /// The segment it was fetching or appending, when it names one.
+        segment: Option<u32>,
+    },
     /// Where the film stood a few seconds after the browser was handed it.
     ///
     /// Said once, whatever the answer. Every other fact here follows a film
@@ -978,6 +988,13 @@ async fn what_the_page_saw(
             browser_took_over,
             "the library gave up on this film"
         ),
+        Seen::LibraryHiccup { because, segment } => tracing::debug!(
+            session,
+            source,
+            because = cut_short(&because),
+            segment,
+            "the library met trouble and got over it"
+        ),
         Seen::HowItStarted {
             after_ms,
             at_second,
@@ -1414,6 +1431,15 @@ mod tests {
                 "read as a fact: {tried}"
             );
         }
+    }
+
+    #[test]
+    fn trouble_the_library_got_over_is_a_fact_with_a_name() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"library_hiccup","because":"mediaError · bufferFullError","segment":2}"#,
+        )
+        .expect("read");
+        assert!(matches!(said.seen, Seen::LibraryHiccup { segment: Some(2), .. }));
     }
 
     #[test]
