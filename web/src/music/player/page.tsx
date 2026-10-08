@@ -107,7 +107,7 @@ export function MusicNowPlaying() {
   return (
     <div
       ref={page}
-      className={`music-now music-dark${leaving ? " music-now-leaving" : ""}`}
+      className={`music-now${leaving ? " music-now-leaving" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={t("music.now_playing")}
