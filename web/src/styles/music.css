@@ -138,6 +138,12 @@
   margin-bottom: var(--gap-wide);
 }
 
+/* The count is written on the same line as the sort it follows. */
+.music-bar > .browse-piece,
+.music-bar > .count {
+  align-self: baseline;
+}
+
 /* The list beside the letters takes the whole width it is given, the rail
    gone under it on a narrow screen included. */
 .music-list {
