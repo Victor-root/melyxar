@@ -56,8 +56,7 @@ export function MusicBar() {
   if (music.song) {
     last.current = music.song;
   }
-
-
+  const toggleThePage = nowPlaying.marked ? nowPlaying.close : nowPlaying.open;
 
   const song = shown ? music.song : last.current;
   if ((!shown && !leaving) || !song) {
@@ -68,11 +67,21 @@ export function MusicBar() {
     <div className={`music-bar-dock${leaving ? " music-bar-leaving" : ""}`} role="region" aria-label={t("music.player")}>
       <BehindThePlayer still={covered} />
       <Rail music={music} />
-      <div className="music-bar-row">
+      {/* The bare room between the buttons opens the page as well; the
+          button of what is playing is the way to it from the keyboard. */}
+      <div
+        className="music-bar-row"
+        onClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (target === event.currentTarget || target.classList.contains("player-zone")) {
+            toggleThePage();
+          }
+        }}
+      >
         <button
           type="button"
           className="music-bar-now"
-          onClick={nowPlaying.marked ? nowPlaying.close : nowPlaying.open}
+          onClick={toggleThePage}
           title={t(nowPlaying.marked ? "music.close_player" : "music.open_player")}
         >
           <Cover pictures={song.cover} />
