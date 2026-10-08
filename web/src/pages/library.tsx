@@ -4,7 +4,7 @@
 
 import { BrowseBubble } from "../components/browse-bubble";
 import { UploadButton } from "../components/upload-button";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
@@ -52,7 +52,14 @@ export function LibraryPage({
      other grid holds what the server read, whatever its marks. */
   const marks = useMarks();
   const keeps = favourites ? marks.favouriteOf : watchLater ? marks.watchLaterOf : null;
-  const cards = useMemo(() => (keeps ? read.filter(keeps) : read), [read, keeps]);
+  /* A card deleted from here leaves at once as well, and leaves the grid
+     rather than a hole in it. The same list when nothing left, so the grid
+     is not drawn again for a mark that took nothing out of it. */
+  const { goneOf } = marks;
+  const cards = useMemo(() => {
+    const kept = read.filter((card) => !goneOf(card.id) && (keeps === null || keeps(card)));
+    return kept.length === read.length ? read : kept;
+  }, [read, keeps, goneOf]);
   const library = libraries.find((entry) => entry.id === narrowing.library);
   const shape = cardShapeOf(library?.kind ?? narrowing.kind);
   useTabPage(
@@ -213,17 +220,22 @@ export function LibraryPage({
      most of what the page did while it was being scrolled. */
   const drawn = useMemo(
     () =>
-      cards.map((card) => (
-        <Fragment key={card.id}>
-          {starts?.work === card.id && (
-            <div className={`letter-starts letter-starts-${shape}`} data-starts={card.id} aria-hidden="true">
-              <span>{starts.letter.toUpperCase()}</span>
-              <ChevronRightIcon size={40} />
-            </div>
-          )}
-          <Card card={card} shape={shape} />
-        </Fragment>
-      )),
+      cards.flatMap((card) => [
+        ...(starts?.work === card.id
+          ? [
+              <div
+                key={`starts:${card.id}`}
+                className={`letter-starts letter-starts-${shape}`}
+                data-starts={card.id}
+                aria-hidden="true"
+              >
+                <span>{starts.letter.toUpperCase()}</span>
+                <ChevronRightIcon size={40} />
+              </div>,
+            ]
+          : []),
+        <Card key={card.id} card={card} shape={shape} />,
+      ]),
     [cards, shape, starts],
   );
 

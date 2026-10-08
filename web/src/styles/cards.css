@@ -29,6 +29,28 @@
   }
 }
 
+/* A block of a few whole rows of a grid, laid out across all of its columns
+   as a grid of its own, and skipped by the browser while it is off the
+   screen. What is skipped stands at the height its rows are guessed at until
+   it has been drawn once, and at its real height from then on.
+
+   A block skipped or not clips what is drawn in it, so it reaches a little
+   past its cards on every side, the room a card takes as it grows under the
+   pointer, and gives that room back with a margin of the same size: the
+   cards stand exactly where they stood in one grid. */
+.grid-block {
+  --card-guess: 320px;
+  grid-column: 1 / -1;
+  margin: -8px;
+  padding: 8px;
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto calc(var(--rows) * var(--card-guess) + (var(--rows) - 1) * var(--gap-wide) + 16px);
+}
+
+.grid-lying.grid-block {
+  --card-guess: 190px;
+}
+
 /* Text that only a screen reader needs: taken out of the page without being
    taken out of the accessibility tree, which display:none would do. */
 .visually-hidden {
