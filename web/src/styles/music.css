@@ -1559,6 +1559,10 @@
   min-height: 0;
   margin: 0;
   padding: 0;
+  /* Only up and down. The bubble that names a button, invisible until a hand
+     is on it, is as wide as the song's name and hangs past the edge of the
+     list: counted as something to scroll to, it drew a bar across the foot. */
+  overflow-x: hidden;
   overflow-y: auto;
   will-change: scroll-position;
   overscroll-behavior: contain;
