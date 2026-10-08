@@ -72,6 +72,7 @@ import {
   DashboardIcon,
 } from "../icons";
 import { ServerMark } from "./server-mark";
+import { sayTheBarIsOut } from "../bar-room";
 import { music } from "../music/api";
 import { musicScopeOf, quickLinesOf } from "../music/search";
 import type { QuickLine } from "../music/search";
@@ -338,17 +339,12 @@ export function Header({
       forget();
     };
   }, []);
-  /* How much of the top of the page the bar covers right now, written on the
-     page as its width is: all of its band while it is out, none once it has
-     stepped aside. What puts something at the top of the screen reads it, so
-     that thing lands under the bar rather than behind it. */
+  /* How much of the top of the page the bar covers right now: all of its
+     band while it is out, none once it has stepped aside. */
   const shown = out || looking;
   useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--header-room", shown ? "var(--header-height)" : "0px");
-    return () => {
-      root.style.removeProperty("--header-room");
-    };
+    sayTheBarIsOut(shown);
+    return () => sayTheBarIsOut(null);
   }, [shown]);
 
   /* A scan is the one thing an administrator needs from wherever they happen
