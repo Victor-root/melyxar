@@ -96,22 +96,55 @@ export interface WorkMenu {
  * the work alike: the same lines, answering the same way.
  *
  * The panels are held here rather than by the menu, which is taken away the
- * moment one of its lines is pressed.
+ * moment one of its lines is pressed. They are made the first time the menu
+ * is opened, and kept from then on so that a panel outlives the menu it was
+ * opened from. Made for every card of a grid instead, the state each of them
+ * keeps was a good part of what drawing a large grid cost.
  */
-export function useWorkMenu(
-  card: Card,
-  after: {
-    /** Said once the work was named by hand. */
-    identified: () => void;
-    /** Said whenever the pictures it wears changed. */
-    picturesChanged: () => void;
-    /** Said once its details were written by hand. */
-    detailsChanged: () => void;
-    /** Said once it is gone, for a page that has nothing left to show. */
-    deleted?: () => void;
-  },
-): WorkMenu {
-  const [from, setFrom] = useState<{ rect: DOMRect; button: HTMLElement } | null>(null);
+export function useWorkMenu(card: Card, after: WorkMenuAfter): WorkMenu {
+  const [from, setFrom] = useState<MenuFrom | null>(null);
+  const [opened, setOpened] = useState(false);
+  const shut = useCallback(() => setFrom(null), []);
+
+  const toggle = useCallback((button: HTMLElement | null) => {
+    setOpened(true);
+    setFrom((was) => (was || !button ? null : { rect: button.getBoundingClientRect(), button }));
+  }, []);
+
+  const drawn = opened ? <WorkMenuPanels card={card} from={from} shut={shut} after={after} /> : null;
+  return { open: from !== null, toggle, drawn };
+}
+
+/** What a work's menu was opened from: the button, and where it stood. */
+interface MenuFrom {
+  rect: DOMRect;
+  button: HTMLElement;
+}
+
+/** What the page around a work's menu is told once something changed. */
+interface WorkMenuAfter {
+  /** Said once the work was named by hand. */
+  identified: () => void;
+  /** Said whenever the pictures it wears changed. */
+  picturesChanged: () => void;
+  /** Said once its details were written by hand. */
+  detailsChanged: () => void;
+  /** Said once it is gone, for a page that has nothing left to show. */
+  deleted?: () => void;
+}
+
+/** The menu, while it is open, and the panels its lines open. */
+function WorkMenuPanels({
+  card,
+  from,
+  shut,
+  after,
+}: {
+  card: Card;
+  from: MenuFrom | null;
+  shut: () => void;
+  after: WorkMenuAfter;
+}) {
   const [identifying, setIdentifying] = useState(false);
   const [choosingPictures, setChoosingPictures] = useState(false);
   const [writingDetails, setWritingDetails] = useState(false);
@@ -139,13 +172,8 @@ export function useWorkMenu(
     }
   };
   const [deleting, setDeleting] = useState(false);
-  const shut = useCallback(() => setFrom(null), []);
 
-  const toggle = useCallback((button: HTMLElement | null) => {
-    setFrom((was) => (was || !button ? null : { rect: button.getBoundingClientRect(), button }));
-  }, []);
-
-  const drawn = (
+  return (
     <>
       {from && (
         <CardMenu
@@ -234,8 +262,6 @@ export function useWorkMenu(
       )}
     </>
   );
-
-  return { open: from !== null, toggle, drawn };
 }
 
 export function CardMenu({
