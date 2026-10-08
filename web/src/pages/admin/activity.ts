@@ -10,7 +10,7 @@
 import type { ActivityFamily, ActivityLine } from "../../api";
 import type { AttentionPoint } from "../../notifications/api";
 import { deviceName } from "../../devices";
-import { fullnessOf, howLong, howMany, releaseOf } from "../../readable";
+import { fullnessOf, howLong, howMany, releaseOf, writtenMoment } from "../../readable";
 import type { Wording } from "../../readable";
 
 /** The family a kind of line belongs to, for its icon and its filter. */
@@ -185,7 +185,7 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
  *  day and the time further back. */
 export function whenItHappened(at: string, now: Date, language: string, t: Wording): string {
   const instant = new Date(at);
-  const time = instant.toLocaleTimeString(language, { hour: "2-digit", minute: "2-digit" });
+  const time = writtenMoment(instant, language, { hour: "2-digit", minute: "2-digit" });
   const dayOf = (moment: Date) =>
     new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
   const daysAgo = Math.round((dayOf(now) - dayOf(instant)) / 86_400_000);
@@ -195,7 +195,7 @@ export function whenItHappened(at: string, now: Date, language: string, t: Wordi
   if (daysAgo === 1) {
     return t("activity.yesterday", { time });
   }
-  const day = instant.toLocaleDateString(language, {
+  const day = writtenMoment(instant, language, {
     day: "numeric",
     month: "short",
     year: instant.getFullYear() === now.getFullYear() ? undefined : "numeric",

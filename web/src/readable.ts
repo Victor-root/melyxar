@@ -474,6 +474,21 @@ function written(value: number, language: string, options: Intl.NumberFormatOpti
   return format.format(value);
 }
 
+/** One way of writing a moment in a language, made once for the same reason:
+ *  a list of a hundred lines each written by `toLocaleTimeString` with options
+ *  made a hundred of them every time it was drawn. */
+const momentFormats = new Map<string, Intl.DateTimeFormat>();
+
+export function writtenMoment(when: Date, language: string, options: Intl.DateTimeFormatOptions): string {
+  const key = `${language} ${JSON.stringify(options)}`;
+  let format = momentFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(language, options);
+    momentFormats.set(key, format);
+  }
+  return format.format(when);
+}
+
 export function amountOfData(bytes: number, language: string): string {
   const units = DATA_UNITS[language] ?? DATA_UNITS.en;
   let value = bytes;
