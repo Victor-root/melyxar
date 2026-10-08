@@ -27,6 +27,7 @@ import { useSettings } from "../settings";
 import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
 import { useWorkMenu } from "./cardmenu";
+import { RunningPreview, useHoverPreview } from "./hover-preview";
 import { SelectMark, useChoosingPress } from "./selection";
 import { SeenMark } from "./seen";
 import { HeartIcon, IdentifyIcon, ToolIcon, PlayIcon } from "../icons";
@@ -243,6 +244,8 @@ export const Card = memo(function Card({
   const [reached, setReached] = useState(false);
   const reach = () => setReached(true);
   const shown = reached || menu.open;
+  /* A video of one's own runs through what it holds under a resting pointer. */
+  const preview = useHoverPreview(card.kind === "video" && card.source !== null);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   const seen = marks.seenOf(card);
@@ -272,7 +275,13 @@ export const Card = memo(function Card({
       className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card={card.id}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
-      onPointerEnter={(event) => event.pointerType !== "touch" && reach()}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch") {
+          reach();
+          preview.begin();
+        }
+      }}
+      onPointerLeave={preview.end}
       onFocus={reach}
     >
       <div className="card-picture">
@@ -292,6 +301,7 @@ export const Card = memo(function Card({
             {card.title.slice(0, 1)}
           </span>
         )}
+        {preview.on && card.source !== null && <RunningPreview source={card.source} />}
 
         {/* The whole card leads to the work. Stretched over the picture
             rather than wrapped around everything, so the buttons drawn on top

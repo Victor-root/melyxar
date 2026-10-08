@@ -2129,6 +2129,10 @@ export const api = {
   setOpenSubtitles: (key: string, username: string, password: string) =>
     put<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles", { key, username, password }),
   forgetOpenSubtitles: () => remove<OpenSubtitlesSettings>("/api/v1/settings/opensubtitles"),
+  /** The thumbnails of a copy, without preparing it to be played. Refused
+   *  while the copy has not been read for them. */
+  thumbnailsOf: (source: string, signal?: AbortSignal) =>
+    get<PlaybackThumbnails>(`/api/v1/playback/${source}/thumbnails`, signal),
   subtitleTracks: (source: string, signal?: AbortSignal) =>
     get<SubtitleTrackInfo[]>(`/api/v1/playback/${source}/subtitles`, signal),
   subtitleOffers: (source: string, languages: string[], signal?: AbortSignal) =>

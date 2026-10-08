@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlaybackThumbnails } from "../api";
-import { cutOut, sheetUrlOf, sheetUrls, turnedBox } from "./thumbnail";
+import { cutOut, previewMoments, sheetUrlOf, sheetUrls, turnedBox } from "./thumbnail";
 
 const sheets: PlaybackThumbnails = {
   url: "/sheets",
@@ -66,5 +66,18 @@ describe("turnedBox", () => {
   it("keeps them for no turn and for a half turn", () => {
     expect(turnedBox(240, 135, 0)).toEqual({ across: 240, down: 135 });
     expect(turnedBox(240, 135, 180)).toEqual({ across: 240, down: 135 });
+  });
+});
+
+describe("previewMoments", () => {
+  const thumbnails: PlaybackThumbnails = { ...sheets, counted: 60 };
+
+  it("spreads the moments through the film, one in the middle of each stretch", () => {
+    expect(previewMoments(thumbnails, 6)).toEqual([50, 150, 250, 350, 450, 550]);
+  });
+
+  it("asks for nothing of a film with no thumbnail", () => {
+    expect(previewMoments({ ...thumbnails, counted: 0 }, 6)).toEqual([]);
+    expect(previewMoments(thumbnails, 0)).toEqual([]);
   });
 });
