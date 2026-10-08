@@ -60,7 +60,7 @@ export function CollectionPage() {
   const { t } = useSettings();
   const leave = useLeave("/collections");
   const { account } = useAccount();
-  const { rowsMoved, rowsHaveMoved } = useMarks();
+  const { rowsMoved, rowsHaveMoved, goneOf } = useMarks();
   const asked = useAsked(
     (signal) => (id ? api.collection(id, signal) : Promise.resolve(null)),
     [id, rowsMoved],
@@ -115,9 +115,13 @@ export function CollectionPage() {
         ) : (
           <InOrder cards={collection.cards}>
             <Grid>
-              {collection.cards.map((card) => (
-                <Card key={card.id} card={card} />
-              ))}
+              {/* A card deleted from here leaves the grid rather than a hole
+                  in it. */}
+              {collection.cards
+                .filter((card) => !goneOf(card.id))
+                .map((card) => (
+                  <Card key={card.id} card={card} />
+                ))}
             </Grid>
           </InOrder>
         )}
