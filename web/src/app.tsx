@@ -71,8 +71,8 @@ import { MusicMarksProvider } from "./music/marks";
 import { Door } from "./pages/door";
 import { FirstSteps } from "./pages/first-steps";
 import { useFirstSteps } from "./screens/first-steps";
-import { LibrariesContext, useWatchedLibraries } from "./libraries";
-import { RunningContext, useWatchedWork } from "./running";
+import { LibrariesContext, useLibraries, useWatchedLibraries } from "./libraries";
+import { RunningContext, useRunning, useWatchedWork } from "./running";
 import { useAccount, useWhoIsThere, WhoProvider } from "./account";
 import { MarksProvider } from "./marks";
 import { useSettings } from "./settings";
@@ -115,6 +115,34 @@ export function App() {
  * component that is not drawn is a component that watches nothing.
  */
 function TheLibrary() {
+  return (
+    <WatchingWork>
+      <WatchingLibraries>
+        <BehindTheDoor />
+      </WatchingLibraries>
+    </WatchingWork>
+  );
+}
+
+/**
+ * What the server is busy with, watched here and handed down. Watched in the
+ * component that draws the pages instead, every look at it, once a second
+ * while work runs, drew every page again, a film playing included.
+ */
+function WatchingWork({ children }: { children: React.ReactNode }) {
+  const running = useWatchedWork();
+  return <RunningContext.Provider value={running}>{children}</RunningContext.Provider>;
+}
+
+/** The libraries, read again whenever the settings screen changes one, while
+ *  work runs and when it ends, and handed down the same way. */
+function WatchingLibraries({ children }: { children: React.ReactNode }) {
+  const running = useRunning();
+  const libraries = useWatchedLibraries(running.jobs.length > 0, running.finished);
+  return <LibrariesContext.Provider value={libraries}>{children}</LibrariesContext.Provider>;
+}
+
+function BehindTheDoor() {
   const { t, adopt } = useSettings();
   // What this account chose, once there is an account to ask about. The
   // browser's own copy drew the door a moment ago; this is what carries a
@@ -135,13 +163,9 @@ function TheLibrary() {
      read where it stands. */
   const scrolling = useRef<HTMLDivElement>(null);
 
-  // Watched here, where the bar that starts the work and the pages that show
-  // what it produced can both read it.
-  const running = useWatchedWork();
   // The libraries are what the whole navigation is built from, so they are
-  // held here rather than by every page that mentions them, and read again
-  // whenever the settings screen changes one, while work runs and when it ends.
-  const libraries = useWatchedLibraries(running.jobs.length > 0, running.finished);
+  // held above every page rather than by every page that mentions them.
+  const libraries = useLibraries();
   // A brand new server takes its administrator through its first steps
   // before anything else, and nothing is drawn until it has said whether.
   const firstSteps = useFirstSteps(useAccount().account?.is_administrator ?? false);
@@ -151,28 +175,21 @@ function TheLibrary() {
   }
   if (firstSteps.pending) {
     return (
-      <RunningContext.Provider value={running}>
-        <LibrariesContext.Provider value={libraries}>
-          {/* The administration's own panels are shown in the steps, with
-              what they lean on: the state of the server, and the notes they
-              raise. */}
-          <Toasts>
-            <OverviewProvider>
-              <FirstSteps
-                libraries={libraries.all}
-                onDeclared={libraries.refresh}
-                onFinish={firstSteps.finish}
-              />
-            </OverviewProvider>
-          </Toasts>
-        </LibrariesContext.Provider>
-      </RunningContext.Provider>
+      /* The administration's own panels are shown in the steps, with what
+         they lean on: the state of the server, and the notes they raise. */
+      <Toasts>
+        <OverviewProvider>
+          <FirstSteps
+            libraries={libraries.all}
+            onDeclared={libraries.refresh}
+            onFinish={firstSteps.finish}
+          />
+        </OverviewProvider>
+      </Toasts>
     );
   }
 
   return (
-    <RunningContext.Provider value={running}>
-      <LibrariesContext.Provider value={libraries}>
         <Toasts>
         <LiveLine>
         <AttentionProvider>
@@ -267,8 +284,6 @@ function TheLibrary() {
         </AttentionProvider>
         </LiveLine>
         </Toasts>
-      </LibrariesContext.Provider>
-    </RunningContext.Provider>
   );
 }
 

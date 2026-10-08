@@ -16,7 +16,7 @@
  * nothing is running while a scan grinds away is an interface that lies.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import { refusalOf, useTold } from "./asking";
 import type { Job, Library } from "./api";
@@ -70,7 +70,11 @@ export function useWatchedWork(): Running {
   const look = useCallback(async (signal?: AbortSignal) => {
     try {
       const answer = await api.jobs(signal);
-      setJobs(answer.running);
+      // The same work said again is the same work: what shows it is left
+      // alone until something in it really moved.
+      setJobs((before) =>
+        JSON.stringify(before) === JSON.stringify(answer.running) ? before : answer.running,
+      );
       setBusy(answer.running.length > 0 || Date.now() < graceUntil.current);
       const newest = answer.recent[0]?.id ?? null;
       const doneUnseen = lastDone.current !== undefined && newest !== lastDone.current;
@@ -108,7 +112,7 @@ export function useWatchedWork(): Running {
     void look();
   }, [look]);
 
-  return { jobs, watch, finished };
+  return useMemo(() => ({ jobs, watch, finished }), [jobs, watch, finished]);
 }
 
 /** What the server is doing, for any page or part of the bar that shows it. */
