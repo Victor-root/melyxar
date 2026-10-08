@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use tokio::process::Command as TokioCommand;
 
-use crate::process::{output_of, AskedToStop};
+use crate::process::{output_of, output_reporting, AskedToStop};
 use crate::spoken_lines::{loop_in, subrip_of};
 use crate::{find_on_path, FfmpegError, Result};
 
@@ -53,6 +53,15 @@ impl SpeechTool {
     }
 }
 
+/// What does the listening: the tool, the model it is given, and how many
+/// threads of the processor it may take.
+#[derive(Debug, Clone, Copy)]
+pub struct Listener<'a> {
+    pub tool: &'a SpeechTool,
+    pub model: &'a Path,
+    pub threads: usize,
+}
+
 /// What listening to a video gave.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Heard {
@@ -78,17 +87,18 @@ impl Drop for Scratch {
 /// Listens to the first sound track of a video and writes what it hears.
 ///
 /// `scratch` is a folder to work in, in the cache: the recording of a long
-/// video is a few hundred megabytes. `threads` bounds the processor taken, and
-/// the tool is run at the lowest priority there is, since this is work nobody
-/// is waiting for and the machine may be playing something.
+/// video is a few hundred megabytes. The listener's threads bound the
+/// processor taken, and the tool is run at the lowest priority there is,
+/// since this is work nobody is waiting for and the machine may be playing
+/// something. `on_progress` is told how far the tool has got, from nought to
+/// one, as it listens.
 pub async fn listen(
     tools: &crate::ToolPaths,
-    tool: &SpeechTool,
+    listener: Listener<'_>,
     video: &Path,
-    model: &Path,
     scratch: &Path,
-    threads: usize,
     asked_to_stop: AskedToStop,
+    on_progress: impl Fn(f64),
 ) -> Result<Heard> {
     let folder = scratch.join(format!("listening-{}", unique_suffix()));
     std::fs::create_dir_all(&folder)?;
@@ -105,12 +115,19 @@ pub async fn listen(
         return Err(FfmpegError::from_output("ffmpeg", &output));
     }
 
-    let mut listening = low_priority(tool.path());
-    let arguments = listening_arguments(model, &recording, &written, threads);
+    let mut listening = low_priority(listener.tool.path());
+    let arguments = listening_arguments(listener.model, &recording, &written, listener.threads);
     tracing::debug!(video = %video.display(), arguments = ?arguments, "the speech tool is being set going");
     listening.args(arguments);
     let started = std::time::Instant::now();
-    let output = output_of(listening, asked_to_stop).await?;
+    let output = output_reporting(listening, asked_to_stop, |line| match progress_in(line) {
+        Some(fraction) => {
+            on_progress(fraction);
+            true
+        }
+        None => false,
+    })
+    .await?;
     if !output.status.success() {
         return Err(FfmpegError::from_output("whisper-cli", &output));
     }
@@ -182,6 +199,14 @@ pub fn recording_arguments(video: &Path, recording: &Path) -> Vec<OsString> {
     arguments
 }
 
+/// How far along the tool says it is, from nought to one, when this line of
+/// its error output is one of the lines it reports that in.
+fn progress_in(line: &str) -> Option<f64> {
+    let (_, after) = line.split_once("progress = ")?;
+    let percent: f64 = after.trim().strip_suffix('%')?.trim().parse().ok()?;
+    Some((percent / 100.0).clamp(0.0, 1.0))
+}
+
 /// What the speech tool is told: the model, the recording, the language left
 /// for it to find, and the report it is to write: the lines are made from the
 /// blocks of that report, not by the tool. It is told too to carry no text
@@ -193,7 +218,7 @@ pub fn listening_arguments(model: &Path, recording: &Path, written: &Path, threa
     arguments.extend(["-f".into(), recording.as_os_str().to_os_string()]);
     arguments.extend(["-l".into(), "auto".into(), "-t".into(), threads.max(1).to_string().into()]);
     arguments.extend(["-mc".into(), "0".into()]);
-    arguments.extend(["-np".into(), "-oj".into()]);
+    arguments.extend(["-np".into(), "-pp".into(), "-oj".into()]);
     arguments.extend(["-of".into(), written.as_os_str().to_os_string()]);
     arguments
 }
@@ -243,6 +268,7 @@ mod tests {
         assert!(joined.contains("-l auto"));
         assert!(joined.contains("-mc 0"), "what was heard is not fed back to the model");
         assert!(joined.contains("-oj"), "the report carries what was heard");
+        assert!(joined.contains("-pp"), "how far it has got is asked for");
         assert!(!joined.contains("-osrt"), "the lines are made from the report");
         assert!(!joined.contains("-ml"), "the times of single words are not trusted");
         assert!(joined.contains("-of /tmp/heard"));
@@ -258,6 +284,15 @@ mod tests {
         assert_eq!(language_of(r#"{"result":{"language":""}}"#), None);
         assert_eq!(language_of(r#"{"result":{}}"#), None);
         assert_eq!(language_of("not a report"), None);
+    }
+
+    #[test]
+    fn how_far_the_tool_has_got_is_read_from_its_own_words() {
+        assert_eq!(progress_in("whisper_print_progress_callback: progress =  45%"), Some(0.45));
+        assert_eq!(progress_in("whisper_print_progress_callback: progress = 100%"), Some(1.0));
+        assert_eq!(progress_in("whisper_print_progress_callback: progress =   5%"), Some(0.05));
+        assert_eq!(progress_in("whisper_init_from_file: loading model"), None);
+        assert_eq!(progress_in("progress = soon"), None);
     }
 
     #[test]

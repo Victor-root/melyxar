@@ -19,7 +19,7 @@ use melyxar_core::id::{MediaSourceId, TrackId};
 use melyxar_core::job::{JobKind, JobPriority, JobStep};
 use melyxar_core::library::Library;
 use melyxar_core::media::{normalise_language, SubtitleDetails, SubtitleLayout, Track, TrackKind};
-use melyxar_ffmpeg::speech::{listen, SpeechTool};
+use melyxar_ffmpeg::speech::{listen, Listener, SpeechTool};
 use melyxar_ffmpeg::{AskedToStop, FfmpegError};
 use melyxar_jobs::JobHandle;
 use melyxar_metadata::speech_models::{self, DownloadError, Model};
@@ -366,7 +366,7 @@ pub(crate) async fn listen_to_the_videos_of(
                 handle.now_working_on(name.as_deref()).await;
             }
             let asked_to_stop = AskedToStop::when(handle.cancelled_when());
-            match listen_to_one(state, tools, &ready, source_id, threads, asked_to_stop).await {
+            match listen_to_one(state, tools, &ready, source_id, threads, asked_to_stop, handle).await {
                 Ok(lines) => {
                     listened += 1;
                     tracing::debug!(library = library.name, lines, "a video was listened to");
@@ -438,6 +438,7 @@ async fn listen_to_one(
     source_id: MediaSourceId,
     threads: usize,
     asked_to_stop: AskedToStop,
+    handle: &JobHandle,
 ) -> Result<usize> {
     let database = state.database();
     let source = crate::playable_file(database, source_id).await?;
@@ -446,12 +447,11 @@ async fn listen_to_one(
 
     let heard = listen(
         tools,
-        &ready.tool,
+        Listener { tool: &ready.tool, model: &ready.model, threads },
         &source.path,
-        &ready.model,
         &directories.speech_scratch(),
-        threads,
         asked_to_stop,
+        |fraction| handle.element_at(fraction),
     )
     .await?;
 
