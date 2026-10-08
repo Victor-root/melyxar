@@ -58,7 +58,7 @@ import {
 } from "./icons";
 import { GearIcon } from "../icons";
 import type { Mark } from "./logo";
-import { captionOf } from "../readable";
+import { captionOf, writtenMoment } from "../readable";
 import { Panels } from "./panels";
 import { Seek } from "./seek";
 import { ICON, SoundControl, levelOf } from "./sound";
@@ -655,7 +655,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
             // the machine is set to: somebody reading a French interface on an
             // American laptop is not asking for half past three in the
             // afternoon.
-            time: when.toLocaleTimeString(surroundings.language, {
+            time: writtenMoment(when, surroundings.language, {
               hour: "2-digit",
               minute: "2-digit",
             }),
