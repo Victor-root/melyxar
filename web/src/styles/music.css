@@ -1287,28 +1287,36 @@
   }
 }
 
-/* Part of the page, so in the colours of the theme it is read in: the
-   player's own white is for a picture that is always dark. */
+/* The bar and the page of what is playing are part of the interface, so in
+   the colours of the theme they are read in: the player's own white is for a
+   picture that is always dark. */
 .music-bar-dock .player-button,
-.music-bar-dock .player-clock {
+.music-now .player-button,
+.music-bar-dock .player-clock,
+.music-now .player-clock {
   color: var(--text);
   text-shadow: none;
 }
 
-.music-bar-dock .player-button:hover:not(:disabled) {
+.music-bar-dock .player-button:hover:not(:disabled),
+.music-now .player-button:hover:not(:disabled) {
   color: var(--accent-bright);
 }
 
-.music-bar-dock .player-button-lit {
+.music-bar-dock .player-button-lit,
+.music-now .player-button-lit {
   color: var(--accent-bright);
 }
 
 .music-bar-dock .player-rail-track,
-.music-bar-dock .player-loudness::before {
+.music-now .player-rail-track,
+.music-bar-dock .player-loudness::before,
+.music-now .player-loudness::before {
   background: color-mix(in srgb, var(--text) 22%, transparent);
 }
 
-.music-bar-dock .player-rail-held {
+.music-bar-dock .player-rail-held,
+.music-now .player-rail-held {
   background: color-mix(in srgb, var(--text) 34%, transparent);
 }
 
