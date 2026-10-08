@@ -550,8 +550,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .card:hover .select-mark,
 .card:has(:focus-visible, [aria-expanded="true"]) .select-mark,
-.own-cell:hover .select-mark,
-.own-cell:focus-within .select-mark,
 .selecting .select-mark {
   opacity: 1;
   pointer-events: auto;
@@ -579,10 +577,6 @@ button.seen-mark:not(.seen-mark-on):hover {
 .card-chosen .card-picture::after,
 .card-chosen:hover .card-picture::after {
   box-shadow: inset 0 0 0 3px var(--accent);
-}
-
-.own-chosen .own-picture {
-  box-shadow: 0 0 0 3px var(--accent);
 }
 
 /* While choosing, a press chooses: the button that would play instead is

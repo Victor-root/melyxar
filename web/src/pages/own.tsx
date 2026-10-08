@@ -2,29 +2,34 @@
  * What somebody filmed or photographed themselves: a folder, and a photo.
  *
  * Neither looks like the page of a film. A folder is what it holds, laid out
- * as wide tiles because what is filmed and photographed is mostly wider than
- * tall. A photo is the photo, as large as the window allows, with the way to
- * the next one under the hand.
+ * as the library's own grid of wide cards, because what is filmed and
+ * photographed is mostly wider than tall. A photo is the photo, as large as
+ * the window allows, with the way to the next one under the hand.
  */
 
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { Child, Work } from "../api";
+import type { Work } from "../api";
 import { WayBackUp } from "../components/ancestry";
+import { Card } from "../components/card";
 import { DeleteButton } from "../components/deletion";
-import { SelectMark, Selecting, useChoosingPress } from "../components/selection";
-import { useShownPicture } from "../components/picture";
-import { ChevronLeftIcon, ChevronRightIcon, HomeMediaIcon } from "../icons";
+import { Grid } from "../components/grid";
+import { InOrder } from "../components/in-order";
+import { Selecting } from "../components/selection";
+import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 
-/** A folder of one's own: its folders first, then its videos and photos. */
+/** A folder of one's own: its folders first, then its videos and photos,
+ *  drawn as the grid of its library draws them, so a video looks the same
+ *  in a folder as at the top of the library. */
 export function FolderView({ work }: { work: Work }) {
   const { t } = useSettings();
   const navigate = useNavigate();
   const marks = useMarks();
   const children = work.children.filter((child) => !marks.goneOf(child.card.id));
+  const cards = children.map((child) => child.card);
 
   return (
     <main className="page own-folder">
@@ -37,74 +42,26 @@ export function FolderView({ work }: { work: Work }) {
       {children.length === 0 ? (
         <p className="notice">{t("own.empty")}</p>
       ) : (
-        <Selecting items={children.map((child) => child.card)}>
-          <div className="own-grid">
-            {children.map((child) => (
-              <OwnTile key={child.card.id} child={child} />
-            ))}
-          </div>
+        <Selecting items={cards}>
+          <InOrder cards={cards}>
+            <Grid shape="lying">
+              {children.map((child) => (
+                <Card
+                  key={child.card.id}
+                  card={child.card}
+                  shape="lying"
+                  note={
+                    child.card.kind === "folder"
+                      ? howMany(child.child_count, "own.item_count", t)
+                      : undefined
+                  }
+                />
+              ))}
+            </Grid>
+          </InOrder>
         </Selecting>
       )}
     </main>
-  );
-}
-
-/** One thing a folder holds. A video starts playing at once, which is what
- *  somebody opening a video of their own wants; a folder and a photo open. */
-function OwnTile({ child }: { child: Child }) {
-  const { t } = useSettings();
-  const { card } = child;
-  const { picture, itDidNotLoad } = useShownPicture(card.poster);
-  const playable = card.source !== null;
-  const to = card.kind === "video" && playable ? `/work/${card.id}?play` : `/work/${card.id}`;
-  const choosing = useChoosingPress(card.id);
-
-  return (
-    <div
-      className={`own-cell${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " own-chosen" : ""}`}
-    >
-      <Link
-        to={to}
-        className={`own-tile own-tile-${card.kind}`}
-        style={{ ["--card-color" as string]: card.color ?? "var(--surface)" }}
-        onClick={choosing.onClick}
-      >
-        <div className="own-picture">
-          {picture ? (
-            <img
-              src={picture.src}
-              srcSet={picture.srcSet}
-              sizes="(max-width: 800px) 45vw, 280px"
-              alt=""
-              loading="lazy"
-              onError={itDidNotLoad}
-            />
-          ) : (
-            <div className="own-picture-empty" aria-hidden="true">
-              <HomeMediaIcon size={32} />
-            </div>
-          )}
-          {card.kind === "folder" && (
-            <span className="own-badge">{howMany(child.child_count, "own.item_count", t)}</span>
-          )}
-          {card.kind === "video" && (
-            <span className="own-badge">
-              <span className="play-mark" aria-hidden="true" />
-              {card.runtime_minutes ? t("work.minutes", { count: card.runtime_minutes }) : ""}
-            </span>
-          )}
-        </div>
-        <span className="own-name">{card.title}</span>
-        {!playable && card.kind !== "folder" && (
-          <span className="own-missing">{t("work.not_on_disk")}</span>
-        )}
-      </Link>
-      {/* Beside the link rather than in it, laid over the corner of the
-          picture: a button inside a link is a press that goes two ways. */}
-      <div className="own-select">
-        <SelectMark id={card.id} />
-      </div>
-    </div>
   );
 }
 
