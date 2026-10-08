@@ -599,10 +599,12 @@ export function usePlayback({
 
   /* Asked for while the picture is not there yet, and not a moment longer:
      once the film is playing this would be a request a second for something
-     nobody is looking at. */
+     nobody is looking at. Nor once the film has failed, which leaves the
+     picture never there: asked on behind the words saying so, it was four
+     requests a second for as long as the player stayed open. */
   useEffect(() => {
     const name = stream?.id;
-    if (!name || readyPicture === pictureKey) {
+    if (!name || readyPicture === pictureKey || failed !== null) {
       return;
     }
     const controller = new AbortController();
@@ -631,7 +633,7 @@ export function usePlayback({
       window.clearInterval(timer);
       controller.abort();
     };
-  }, [stream?.id, readyPicture, pictureKey, noteWritten, enterLoadingStage]);
+  }, [stream?.id, readyPicture, pictureKey, failed, noteWritten, enterLoadingStage]);
 
   /* Feeding the segments in.
 
