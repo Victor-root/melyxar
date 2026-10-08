@@ -135,9 +135,6 @@ function rowsOf(box: HTMLElement): HTMLElement[] {
   return Array.from(box.querySelectorAll<HTMLElement>(".row-track"));
 }
 
-function placeOf(box: HTMLElement): Place {
-  return { top: box.scrollTop, rows: rowsOf(box).map((row) => row.scrollLeft) };
-}
 
 function readStored(): Map<string, Place> {
   try {
@@ -260,7 +257,10 @@ function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
     const step = () => {
       const now = performance.now();
       box.scrollTop = wanted.top;
-      rowsOf(box).forEach((row, index) => {
+      /* Looked for once a frame: looked for twice, a grid of thousands of
+         cards was walked through twice on each frame of the way back. */
+      const rows = rowsOf(box);
+      rows.forEach((row, index) => {
         if (wanted.rows[index] !== undefined) {
           row.scrollLeft = wanted.rows[index];
         }
@@ -269,7 +269,7 @@ function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
         tall = box.scrollHeight;
         stillSince = now;
       }
-      const there = isThere(placeOf(box), wanted);
+      const there = isThere({ top: box.scrollTop, rows: rows.map((row) => row.scrollLeft) }, wanted);
       if (there || now - began > HIDDEN_AT_MOST_MS) {
         show();
       }
