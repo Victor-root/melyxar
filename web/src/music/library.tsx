@@ -10,7 +10,7 @@
 
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import type { Library } from "../api";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
@@ -36,7 +36,7 @@ import { LibraryTools } from "./library-tools";
 import { TabsBar } from "./tabs-bar";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
-import { AlbumTile, ArtistTile, LetterStarts } from "./tiles";
+import { AlbumTile, ArtistTile, GenreTile, LetterStarts } from "./tiles";
 
 
 const ALBUM_ORDERS: AlbumOrder[] = ["title", "artist", "year", "added"];
@@ -289,14 +289,7 @@ function GenresTab({ library }: { library: string }) {
   return (
     <div className="music-genres">
       {genres.map((genre) => (
-        <Link
-          key={genre.name}
-          className="music-genre"
-          to={`?${new URLSearchParams({ tab: "albums", genre: genre.name }).toString()}`}
-        >
-          <span className="music-genre-name">{genre.name}</span>
-          <span className="card-year">{howMany(genre.albums, "music.albums_count", t)}</span>
-        </Link>
+        <GenreTile key={genre.name} genre={genre} />
       ))}
     </div>
   );

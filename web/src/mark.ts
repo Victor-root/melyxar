@@ -10,6 +10,7 @@
  * logo comes out duller than the red it was drawn in.
  */
 
+import { fromHsl, hslOf } from "./colour";
 import { safeWrite } from "./i18n";
 
 /** How much more saturated than the accent the logo is drawn. */
@@ -27,33 +28,8 @@ const STORED_TAB = "melyxar.tab";
 
 /** The colour the logo is drawn in for an accent: its hue, made vivid. */
 export function vividOf(accent: string): string {
-  const [red, green, blue] = [1, 3, 5].map((at) => parseInt(accent.slice(at, at + 2), 16) / 255);
-  const highest = Math.max(red, green, blue);
-  const lowest = Math.min(red, green, blue);
-  const spread = highest - lowest;
-  const lightness = (highest + lowest) / 2;
-  const saturation = spread === 0 ? 0 : spread / (1 - Math.abs(2 * lightness - 1));
-  const hue =
-    spread === 0
-      ? 0
-      : highest === red
-        ? ((green - blue) / spread + 6) % 6
-        : highest === green
-          ? (blue - red) / spread + 2
-          : (red - green) / spread + 4;
-  return fromHsl(hue * 60, Math.min(1, saturation * MADE_VIVID), LIGHTNESS);
-}
-
-function fromHsl(hue: number, saturation: number, lightness: number): string {
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-  const channel = (offset: number) => {
-    const turn = (offset + hue / 30) % 12;
-    const value = lightness - chroma / 2 * Math.max(-1, Math.min(turn - 3, 9 - turn, 1));
-    return Math.round(value * 255)
-      .toString(16)
-      .padStart(2, "0");
-  };
-  return `#${channel(0)}${channel(8)}${channel(4)}`;
+  const { hue, saturation } = hslOf(accent);
+  return fromHsl(hue, Math.min(1, saturation * MADE_VIVID), LIGHTNESS);
 }
 
 /** The colour the tab was last asked to be drawn in, and the icon of the
