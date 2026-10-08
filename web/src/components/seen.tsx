@@ -40,11 +40,17 @@ export function SeenMark({
   episodes = 0,
   unwatched = 0,
   onPress,
+  /** Whether the greyed button is drawn on a card that has nothing to say,
+      which is once the pointer or the keyboard has reached it. Drawn on
+      every card of a grid, invisible, it was four elements of each card the
+      browser styled and laid out for nothing. */
+  offered = false,
 }: {
   watched: boolean;
   episodes?: number;
   unwatched?: number;
   onPress?: (watched: boolean) => void;
+  offered?: boolean;
 }) {
   const { t } = useSettings();
   const counting = episodes > 0 && unwatched > 0;
@@ -76,6 +82,9 @@ export function SeenMark({
         <span className="seen-mark-said">{inside}</span>
       </span>
     ) : null;
+  }
+  if (!marked && !offered) {
+    return null;
   }
   return (
     <button

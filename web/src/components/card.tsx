@@ -266,6 +266,7 @@ export const Card = memo(function Card({
             episodes={card.episodes}
             unwatched={marks.unwatchedOf(card)}
             onPress={(watched) => marks.setWatched(card, watched)}
+            offered={shown}
           />
         )}
 
