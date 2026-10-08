@@ -1413,6 +1413,30 @@
   );
 }
 
+/* On a wide screen the song has all the height under the tabs, and the cover
+   gives up whatever the words need, one line of title or four. Reserving a
+   fixed room for them under a cover sized from the screen only held for a
+   short title: a long one ran under the bar. The cover and the words are
+   centred on the same line, so the cover stays above them as it shrinks. */
+@media (min-width: 761px) {
+  .music-now-playing {
+    --now-cover: min(100%, 520px);
+    grid-row: 2 / 4;
+    align-items: center;
+    width: var(--now-cover);
+    min-height: 0;
+    container-type: inline-size;
+  }
+
+  /* As tall as it is wide until the words need the room, and square all the
+     way down: its width follows its height. */
+  .music-now-playing .music-now-cover-large {
+    flex: 0 1 100cqw;
+    width: auto;
+    min-height: 96px;
+  }
+}
+
 .music-now-tabs {
   grid-column: 2;
   grid-row: 1;
