@@ -592,7 +592,7 @@
 }
 
 /* Over a film, which has no bar of the page above it. */
-body:has(.player) .toasts,
+:root[data-film-on-screen] .toasts,
 .player-stage .toasts {
   top: 24px;
 }
