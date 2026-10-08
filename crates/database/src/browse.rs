@@ -2803,6 +2803,16 @@ mod tests {
                 "w.community_rating DESC",
                 "works_well_rated",
             ),
+            (
+                "AND w.library_id = 'a library'",
+                "w.sort_title, w.id",
+                "works_met_by_title",
+            ),
+            (
+                "AND w.library_id = 'a library'",
+                "w.added_at DESC, w.id DESC",
+                "works_met_in_a_library_by_added_at",
+            ),
         ] {
             let plan: Vec<String> = sqlx::query(AssertSqlSafe(format!(
                 "EXPLAIN QUERY PLAN
@@ -2819,5 +2829,32 @@ mod tests {
             .collect();
             assert!(plan.iter().any(|step| step.contains(index)), "{plan:?}");
         }
+    }
+
+    /// The episodes of a series are counted on every card of it, and asked
+    /// only of the index: read from the table to tell them from the seasons,
+    /// a grid of two hundred series took twice as long.
+    #[tokio::test]
+    async fn the_episodes_on_a_card_are_counted_from_the_index_alone() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let plan: Vec<String> = sqlx::query(
+            "EXPLAIN QUERY PLAN
+             SELECT count(*) FROM works e
+              WHERE e.kind = 'episode'
+                AND e.parent_id IN (SELECT 'a series'
+                                    UNION ALL
+                                    SELECT id FROM works WHERE parent_id = 'a series')",
+        )
+        .fetch_all(database.reader())
+        .await
+        .expect("planned")
+        .iter()
+        .map(|step| step.try_get("detail").expect("a step says what it does"))
+        .collect();
+        assert!(
+            plan.iter()
+                .any(|step| step.contains("COVERING INDEX works_by_parent_and_kind")),
+            "{plan:?}"
+        );
     }
 }
