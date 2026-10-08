@@ -47,6 +47,9 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
      card that drew nothing would end on a row with a hole in it. */
   const items = useMemo(() => Children.toArray(children), [children]);
   const blocks = useMemo(() => {
+    if (columns === null) {
+      return [];
+    }
     const size = columns * ROWS_A_BLOCK;
     const cut: ReactNode[] = [];
     for (let start = 0; start < items.length; start += size) {
@@ -92,10 +95,10 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
         next = current - 1;
         break;
       case "ArrowDown":
-        next = current + columns;
+        next = current + (columns ?? 1);
         break;
       case "ArrowUp":
-        next = current - columns;
+        next = current - (columns ?? 1);
         break;
       case "Home":
         next = 0;
@@ -132,7 +135,10 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
 }
 
 /** The columns last read for each shape of card, so a grid opened again is
- *  cut into blocks of the right size from its first drawing. */
+ *  cut into blocks of the right size from its first drawing. A grid of a shape
+ *  never read yet holds no card until its columns are read, still before the
+ *  frame is drawn: cut by a guess, every card was made twice, once in the
+ *  blocks of the guess and again in the right ones. */
 const counted = new Map<CardShape, number>();
 
 /**
@@ -141,8 +147,8 @@ const counted = new Map<CardShape, number>();
  * changes width, and put in place before the frame is drawn, so the blocks
  * never show a row cut in two.
  */
-function useColumns(grid: RefObject<HTMLDivElement | null>, shape: CardShape): number {
-  const [columns, setColumns] = useState(() => counted.get(shape) ?? 1);
+function useColumns(grid: RefObject<HTMLDivElement | null>, shape: CardShape): number | null {
+  const [columns, setColumns] = useState(() => counted.get(shape) ?? null);
   useLayoutEffect(() => {
     const element = grid.current;
     if (!element) {
