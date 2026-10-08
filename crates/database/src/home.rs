@@ -336,9 +336,10 @@ impl Database {
                            JOIN works e ON e.id = q.work_id AND e.kind = 'episode'
                           WHERE q.user_id = ?1
                             AND q.state <> 'not_started'
-                            AND (e.parent_id = w.id
-                                 OR e.parent_id IN (SELECT id FROM works
-                                                     WHERE parent_id = w.id))))
+                            AND e.parent_id IN (SELECT w.id
+                                                UNION ALL
+                                                SELECT id FROM works
+                                                 WHERE parent_id = w.id)))
                 -- Nothing watched yet leaves every genre open, which is the
                 -- only honest answer before there is anything to go on.
                 AND (NOT EXISTS (SELECT 1 FROM watched_genres)
