@@ -20,6 +20,7 @@ import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
 import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { useMarks } from "../marks";
+import { barRoom } from "../bar-room";
 import { landOn, scrollerOf } from "../landing";
 import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
@@ -164,6 +165,14 @@ export function LibraryPage({
       return;
     }
     const filedUnder = new Map(cards.map((card) => [card.id, card.initial]));
+    /* The cards drawn, looked for again only once the grid has changed:
+       looked for on every frame of a scroll, the thousands of a library were
+       walked through each time. */
+    let drawn: NodeListOf<HTMLElement> | null = null;
+    const changed = new MutationObserver(() => {
+      drawn = null;
+    });
+    changed.observe(grid, { childList: true, subtree: true });
     let asked = 0;
     const read = () => {
       asked = 0;
@@ -173,7 +182,8 @@ export function LibraryPage({
         return;
       }
       held.current = null;
-      setReading(letterAtTheTop(grid, box, filedUnder));
+      drawn ??= grid.querySelectorAll<HTMLElement>("[data-card]");
+      setReading(letterAtTheTop(drawn, box, filedUnder));
     };
     const soon = () => {
       if (!asked) {
@@ -185,6 +195,7 @@ export function LibraryPage({
     return () => {
       box.removeEventListener("scroll", soon);
       cancelAnimationFrame(asked);
+      changed.disconnect();
     };
   }, [cards, showsLetters]);
   const lit = jumping ?? reading;
@@ -411,12 +422,11 @@ const A_NUDGE = 2;
 /** The letter of the titles at the top of the grid, where the bar at the top
  *  of the screen stops. */
 function letterAtTheTop(
-  grid: HTMLElement,
+  drawn: NodeListOf<HTMLElement>,
   box: HTMLElement,
   filedUnder: Map<string, string>,
 ): string | null {
-  const room = parseFloat(getComputedStyle(box).getPropertyValue("--header-room")) || 0;
-  const drawn = grid.querySelectorAll<HTMLElement>("[data-card]");
+  const room = barRoom();
   return letterOfTheTopRow(
     drawn.length,
     (index) => {

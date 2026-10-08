@@ -5,6 +5,8 @@
  * in the same way.
  */
 
+import { barRoom } from "./bar-room";
+
 /** How many frames in a row a jump has to stand where it was sent before it
  *  counts as there: enough for the bar at the top to have answered it. */
 const STILL_FRAMES = 6;
@@ -44,12 +46,11 @@ export function landOn(target: HTMLElement, box: HTMLElement, done: (scrollTop: 
   const style = getComputedStyle(box);
   const air = parseFloat(style.getPropertyValue("--gap-wide")) || 0;
   const below = () => target.getBoundingClientRect().top - box.getBoundingClientRect().top;
-  const clearOfTheBar = () => parseFloat(style.getPropertyValue("--header-room")) || 0;
   let frames = 0;
   let still = 0;
   let next = 0;
   const land = () => {
-    const off = below() - clearOfTheBar() - air;
+    const off = below() - barRoom() - air;
     if (Math.abs(off) > 1) {
       box.scrollBy({ top: off, behavior: "instant" });
       still = 0;
