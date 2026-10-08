@@ -172,12 +172,17 @@ export function LibraryPage({
       return;
     }
     const filedUnder = new Map(cards.map((card) => [card.id, card.initial]));
-    /* The cards drawn, looked for again only once the grid has changed:
+    /* The cards drawn, looked for again only once a card has come or gone:
        looked for on every frame of a scroll, the thousands of a library were
-       walked through each time. */
+       walked through each time. The buttons a card makes under the pointer
+       come and go too, and say nothing about which cards there are. */
     let drawn: NodeListOf<HTMLElement> | null = null;
-    const changed = new MutationObserver(() => {
-      drawn = null;
+    const isACard = (node: Node) =>
+      node instanceof HTMLElement && (node.matches("[data-card]") || node.querySelector("[data-card]") !== null);
+    const changed = new MutationObserver((records) => {
+      if (records.some((record) => [...record.addedNodes, ...record.removedNodes].some(isACard))) {
+        drawn = null;
+      }
     });
     changed.observe(grid, { childList: true, subtree: true });
     let asked = 0;
