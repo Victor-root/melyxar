@@ -66,7 +66,7 @@ export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
  * twice the size it is drawn at, four times the pixels to fetch and decode
  * for a picture that looks the same.
  */
-const ROOM_IN_A_ROW = "(max-width: 860px) 132px, (min-width: 1400px) 186px, 168px";
+export const ROOM_IN_A_ROW = "(max-width: 860px) 132px, (min-width: 1400px) 186px, 168px";
 
 /** Whether the cards drawn here stand in a row of their own width, said by
  *  the row. A row showing one card at a time on a phone gives it the whole
