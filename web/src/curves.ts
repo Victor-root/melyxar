@@ -17,6 +17,42 @@ export function ceilingOf(values: (number | null)[], fixed?: number): number {
   return highest > 0 ? highest * 1.15 : 1;
 }
 
+/** One unbroken run of a line: its path, and where it begins and ends across
+ *  the box, which is what the wash under it is closed down from. */
+interface Run {
+  path: string;
+  from: number;
+  to: number;
+}
+
+function runsOf(values: (number | null)[], ceiling: number, width: number, height: number): Run[] {
+  const runs: Run[] = [];
+  let piece: string[] = [];
+  let from = 0;
+  let to = 0;
+  const step = values.length > 1 ? width / (values.length - 1) : 0;
+  values.forEach((value, index) => {
+    if (value === null) {
+      if (piece.length > 0) {
+        runs.push({ path: piece.join(" "), from, to });
+        piece = [];
+      }
+      return;
+    }
+    const x = round(values.length > 1 ? index * step : width / 2);
+    const y = round(height - (Math.min(value, ceiling) / ceiling) * height);
+    if (piece.length === 0) {
+      from = x;
+    }
+    to = x;
+    piece.push(`${piece.length === 0 ? "M" : "L"}${x} ${y}`);
+  });
+  if (piece.length > 0) {
+    runs.push({ path: piece.join(" "), from, to });
+  }
+  return runs;
+}
+
 /**
  * The line through the values, as the pieces of an SVG path, one piece per
  * unbroken run. The box is `width` by `height` with nought at its foot.
@@ -27,40 +63,20 @@ export function linePieces(
   width: number,
   height: number,
 ): string[] {
-  const pieces: string[] = [];
-  let piece: string[] = [];
-  const step = values.length > 1 ? width / (values.length - 1) : 0;
-  values.forEach((value, index) => {
-    if (value === null) {
-      if (piece.length > 0) {
-        pieces.push(piece.join(" "));
-        piece = [];
-      }
-      return;
-    }
-    const x = values.length > 1 ? index * step : width / 2;
-    const y = height - (Math.min(value, ceiling) / ceiling) * height;
-    piece.push(`${piece.length === 0 ? "M" : "L"}${round(x)} ${round(y)}`);
-  });
-  if (piece.length > 0) {
-    pieces.push(piece.join(" "));
-  }
-  return pieces;
+  return runsOf(values, ceiling, width, height).map((run) => run.path);
 }
 
-/** The same pieces closed down to the foot of the box, for the wash under the line. */
+/** The same pieces closed down to the foot of the box, for the wash under the
+ *  line, from the same runs rather than read back out of the line's text. */
 export function areaPieces(
   values: (number | null)[],
   ceiling: number,
   width: number,
   height: number,
 ): string[] {
-  return linePieces(values, ceiling, width, height).map((piece) => {
-    const points = piece.split(/[ML]/).filter(Boolean);
-    const first = points[0].trim().split(" ")[0];
-    const last = points[points.length - 1].trim().split(" ")[0];
-    return `${piece} L${last} ${height} L${first} ${height} Z`;
-  });
+  return runsOf(values, ceiling, width, height).map(
+    (run) => `${run.path} L${run.to} ${height} L${run.from} ${height} Z`,
+  );
 }
 
 /** Which point a pointer at this share of the width is over. */

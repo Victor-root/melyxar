@@ -27,6 +27,13 @@ describe("areaPieces", () => {
   it("closes each run down to the foot", () => {
     expect(areaPieces([0.5, 0.5], 1, 10, 10)).toEqual(["M0 5 L10 5 L10 10 L0 10 Z"]);
   });
+
+  it("closes every run on its own where the line breaks", () => {
+    expect(areaPieces([1, null, 0.5, 0.5], 1, 30, 10)).toEqual([
+      "M0 0 L0 10 L0 10 Z",
+      "M20 5 L30 5 L30 10 L20 10 Z",
+    ]);
+  });
 });
 
 describe("pointUnder", () => {
