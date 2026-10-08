@@ -66,10 +66,11 @@ function aLink(rel: string): () => HTMLLinkElement {
 export function markTheApp(): void {
   const mark = tokenOf("--mark-colour");
   const ground = tokenOf("--app-ground");
-  if (!mark || !ground) {
+  const accent = tokenOf("--accent");
+  if (!mark || !ground || !accent) {
     return;
   }
-  const manifest = `${THE_APP}/manifest?mark=${mark}&ground=${ground}`;
+  const manifest = `${THE_APP}/manifest?mark=${mark}&ground=${ground}&accent=${accent}`;
   const touch = logoWorn ? `${logoWorn}/${ground}` : `${THE_APP}/icon/${mark}/${ground}`;
   const manifestLink = headElement('link[rel="manifest"]', aLink("manifest"));
   if (manifestLink.getAttribute("href") !== manifest) {
@@ -84,13 +85,13 @@ export function markTheApp(): void {
 }
 
 /**
- * Colours the browser's own bar, above the page on a telephone and around
- * the window of the installed application, with the ground of the page as
- * the theme draws it now. Called whenever the theme changes.
+ * Colours the browser's own bar, above the page on a telephone and the title
+ * bar of the installed application on a computer, with the accent. Called
+ * whenever the accent changes: it is the same in both themes.
  */
 export function colourTheWindow(): void {
-  const ground = tokenOf("--surface-deep");
-  if (!ground) {
+  const accent = tokenOf("--accent");
+  if (!accent) {
     return;
   }
   const meta = headElement('meta[name="theme-color"]', () => {
@@ -98,5 +99,5 @@ export function colourTheWindow(): void {
     made.name = "theme-color";
     return made;
   });
-  meta.content = `#${ground}`;
+  meta.content = `#${accent}`;
 }

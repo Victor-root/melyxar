@@ -70,6 +70,10 @@ pub fn logo_icon_url(logo: &str) -> String {
 struct Colours {
     mark: String,
     ground: String,
+    /// The colour of the title bar. Absent from the address an application
+    /// installed before it existed keeps asking for, which then keeps its bar
+    /// on the ground.
+    accent: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -100,6 +104,9 @@ async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>)
     ) else {
         return ServerError::invalid_input("a colour is six hexadecimal digits").into_response();
     };
+    let Some(bar) = title_bar(colours.accent.as_deref(), ground) else {
+        return ServerError::invalid_input("a colour is six hexadecimal digits").into_response();
+    };
     // Named after the server as its administrator named it, the name the
     // sign in screen shows, and wearing the logo it was given if it was.
     let settings = match state.database().server_settings().await {
@@ -110,6 +117,7 @@ async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>)
         &settings.server_name,
         mark,
         ground,
+        bar,
         settings.logo_path.as_deref(),
     );
     (
@@ -125,10 +133,26 @@ async fn manifest(State(state): State<AppState>, Query(colours): Query<Colours>)
         .into_response()
 }
 
-/// The manifest for these colours, or for the server's own logo. The same
-/// address every time for the application itself, so a change of colour or of
-/// logo updates the one installed rather than making another.
-fn manifest_for(name: &str, mark: Colour, ground: Colour, logo: Option<&str>) -> Manifest {
+/// The colour of the title bar: the accent asked for, the ground when none was
+/// asked for, nothing when what was asked for is not a colour.
+fn title_bar(accent: Option<&str>, ground: Colour) -> Option<Colour> {
+    match accent {
+        None => Some(ground),
+        Some(accent) => Colour::from_hex(accent),
+    }
+}
+
+/// The manifest for these colours, or for the server's own logo, with its
+/// title bar in `bar`. The same address every time for the application
+/// itself, so a change of colour or of logo updates the one installed rather
+/// than making another.
+fn manifest_for(
+    name: &str,
+    mark: Colour,
+    ground: Colour,
+    bar: Colour,
+    logo: Option<&str>,
+) -> Manifest {
     let ground_hex = ground.hex();
     let alone = match logo {
         Some(logo) => logo_icon_url(logo),
@@ -142,7 +166,7 @@ fn manifest_for(name: &str, mark: Colour, ground: Colour, logo: Option<&str>) ->
         scope: "/",
         display: "standalone",
         background_color: format!("#{ground_hex}"),
-        theme_color: format!("#{ground_hex}"),
+        theme_color: format!("#{}", bar.hex()),
         icons: [
             Icon {
                 src: alone.clone(),
@@ -316,8 +340,10 @@ mod tests {
     fn the_manifest_names_its_icons_in_its_own_colours() {
         let mark = Colour::from_hex("1C7ED6").expect("a colour");
         let ground = Colour::from_hex("0c0d10").expect("a colour");
+        let bar = Colour::from_hex("c81e1e").expect("a colour");
         let manifest =
-            serde_json::to_value(manifest_for("Home Cinema", mark, ground, None)).expect("json");
+            serde_json::to_value(manifest_for("Home Cinema", mark, ground, bar, None))
+                .expect("json");
 
         assert_eq!(manifest["id"], "/");
         assert_eq!(manifest["name"], "Home Cinema");
@@ -325,6 +351,7 @@ mod tests {
         assert_eq!(manifest["start_url"], "/");
         assert_eq!(manifest["display"], "standalone");
         assert_eq!(manifest["background_color"], "#0c0d10");
+        assert_eq!(manifest["theme_color"], "#c81e1e");
         assert_eq!(
             manifest["icons"][0]["src"],
             "/api/v1/public/app/icon/1c7ed6"
@@ -339,12 +366,24 @@ mod tests {
     }
 
     #[test]
+    fn the_title_bar_wears_the_accent_or_the_ground_when_none_is_asked_for() {
+        let ground = Colour::from_hex("0c0d10").expect("a colour");
+
+        let accent = title_bar(Some("C81E1E"), ground).expect("a colour");
+        assert_eq!(accent.hex(), "c81e1e");
+        let kept = title_bar(None, ground).expect("an application installed before");
+        assert_eq!(kept.hex(), "0c0d10");
+        assert!(title_bar(Some("not a colour"), ground).is_none());
+    }
+
+    #[test]
     fn a_server_with_a_logo_of_its_own_wears_it_once_installed() {
         let mark = Colour::from_hex("1C7ED6").expect("a colour");
         let ground = Colour::from_hex("0c0d10").expect("a colour");
         let manifest = serde_json::to_value(manifest_for(
             "Home Cinema",
             mark,
+            ground,
             ground,
             Some("logo-abc.webp"),
         ))

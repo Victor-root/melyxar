@@ -239,7 +239,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         ? "light"
         : "dark";
       root.dataset.theme = theme === "system" ? system : theme;
-      colourTheWindow();
     };
     apply();
 
@@ -263,6 +262,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       root.style.removeProperty("--mark-colour");
       void markTheTab(null);
       markTheApp();
+      colourTheWindow();
       return;
     }
     root.dataset.accent = "chosen";
@@ -273,6 +273,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--mark-colour", vivid);
     void markTheTab(vivid);
     markTheApp();
+    colourTheWindow();
   }, [accent]);
 
   // The banner writes two numbers onto the document, the way the accent
