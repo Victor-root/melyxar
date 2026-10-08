@@ -678,12 +678,15 @@ impl Database {
                     -- Episodes below this one, at either depth: a season holds
                     -- them directly, a series holds them under its seasons.
                     -- Asked only of the two kinds that can hold any, so a grid
-                    -- of films walks nothing at all.
+                    -- of films walks nothing at all. Both depths are one list
+                    -- of parents, each read through the index: asked as two
+                    -- conditions joined by an or, it took three times as long.
                     CASE WHEN w.kind IN ('series', 'season') THEN
                         (SELECT count(*) FROM works e
                           WHERE e.kind = 'episode'
-                            AND (e.parent_id = w.id
-                                 OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
+                            AND e.parent_id IN (SELECT w.id
+                                                UNION ALL
+                                                SELECT id FROM works WHERE parent_id = w.id))
                     ELSE 0 END AS episodes,
                     CASE WHEN w.kind IN ('series', 'season') AND l.keeps_watched_marks THEN
                         (SELECT count(*) FROM works e
@@ -691,8 +694,9 @@ impl Database {
                                   ON q.work_id = e.id AND q.user_id = ?1
                           WHERE e.kind = 'episode'
                             AND coalesce(q.state, 'not_started') <> 'watched'
-                            AND (e.parent_id = w.id
-                                 OR e.parent_id IN (SELECT id FROM works WHERE parent_id = w.id)))
+                            AND e.parent_id IN (SELECT w.id
+                                                UNION ALL
+                                                SELECT id FROM works WHERE parent_id = w.id))
                     ELSE 0 END AS unwatched,
                     -- How long the copy a play button starts lasts, for a
                     -- work somebody stopped partway through, and only then.
@@ -2783,5 +2787,37 @@ mod tests {
         assert!(page.cards.is_empty());
         assert!(page.next.is_none());
         assert!(database.genres_in_use(None).await.expect("read").is_empty());
+    }
+
+    /// A partial index is used only when the question names exactly what it
+    /// holds. The two drifted apart once, and every row of newest works and
+    /// of suggestions then read the whole table: this is what says so the
+    /// day they drift again.
+    #[tokio::test]
+    async fn the_works_met_on_their_own_are_read_through_their_indexes() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        for (also, order, index) in [
+            ("", "w.added_at DESC, w.id DESC", "works_met_by_added_at"),
+            (
+                "AND w.community_rating IS NOT NULL",
+                "w.community_rating DESC",
+                "works_well_rated",
+            ),
+        ] {
+            let plan: Vec<String> = sqlx::query(AssertSqlSafe(format!(
+                "EXPLAIN QUERY PLAN
+                 SELECT w.id FROM works w
+                  WHERE {} {also}
+                  ORDER BY {order} LIMIT 1",
+                met_on_its_own("w.")
+            )))
+            .fetch_all(database.reader())
+            .await
+            .expect("planned")
+            .iter()
+            .map(|step| step.try_get("detail").expect("a step says what it does"))
+            .collect();
+            assert!(plan.iter().any(|step| step.contains(index)), "{plan:?}");
+        }
     }
 }
