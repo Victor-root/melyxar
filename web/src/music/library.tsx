@@ -292,7 +292,7 @@ function GenresTab({ library }: { library: string }) {
         <Link
           key={genre.name}
           className="music-genre"
-          to={`?${new URLSearchParams({ genre: genre.name }).toString()}`}
+          to={`?${new URLSearchParams({ tab: "albums", genre: genre.name }).toString()}`}
         >
           <span className="music-genre-name">{genre.name}</span>
           <span className="card-year">{howMany(genre.albums, "music.albums_count", t)}</span>
