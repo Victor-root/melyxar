@@ -9,6 +9,7 @@ import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { asClock } from "../clock";
 import { useShownPicture } from "../components/picture";
 import { HeartIcon, PlayIcon } from "../icons";
+import { PHONE, useMediaQuery } from "../media-query";
 import { QuietLink } from "../navigating";
 import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
@@ -151,7 +152,6 @@ export function SongList({
   showAlbum = true,
   hideArtists,
   menuOnly,
-  compact,
   first = 0,
   onPlay,
   moreFor,
@@ -166,9 +166,6 @@ export function SongList({
   /** Every action but the heart goes into the menu of the line, whatever the
       room: the name keeps all of it. */
   menuOnly?: boolean;
-  /** For a phone's narrow lists: no number and no heart on the line, the
-      name taking the room, and the heart in the menu of the line. */
-  compact?: boolean;
   /** The place of the first line in the whole list. */
   first?: number;
   /** Plays the list from the line pressed. */
@@ -177,9 +174,14 @@ export function SongList({
   moreFor?: (index: number) => MenuLine[];
 }) {
   const list = useRef<HTMLOListElement>(null);
+  /* On a phone every list is drawn as the lines of what was listened to: no
+     number, no length and no heart on the line, the name taking the room,
+     the whole line playing it and everything else in its menu. Laid out as
+     on a computer, a name had five letters left. */
+  const compact = useMediaQuery(PHONE);
   /* A list whose lines put every action in their menu has nothing to
      measure. */
-  const inline = useActionsThatFit(list, showAlbum, !menuOnly);
+  const inline = useActionsThatFit(list, showAlbum, !menuOnly && !compact);
   const gone = useGoneSongs();
   /* One way to play for the whole list, the same from one drawing to the
      next, so a line is drawn again only when its own song is. */

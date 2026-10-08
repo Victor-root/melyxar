@@ -7,8 +7,11 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { howMany } from "../readable";
 import { useAccount } from "../account";
-import { PlayIcon, TagIcon } from "../icons";
+import { PlayIcon, TagIcon, UploadIcon } from "../icons";
 import { useLibraries, useLibraryVersion } from "../libraries";
+import { PHONE, useMediaQuery } from "../media-query";
+import { useGoTo } from "../navigating";
+import { UploadDialog } from "../components/upload";
 import { UploadButton } from "../components/upload-button";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -17,6 +20,7 @@ import { byDisc, minutesOf } from "./discs";
 import { Heart } from "./heart";
 import { useKeptState } from "./keeping";
 import { SongMenuButton } from "./song-menu";
+import type { MenuLine } from "./song-menu";
 import { ShuffleIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
 import { SongList } from "./songs";
@@ -34,6 +38,11 @@ export function MusicAlbumPage() {
   const version = useLibraryVersion(album?.library);
   const inLibrary = useLibraries().all.find((library) => library.id === album?.library);
   const [failed, setFailed] = useState(false);
+  /* On a phone, writing the tags and adding a file go into the menu of the
+     album: two more buttons under the others took a third of the screen. */
+  const phone = useMediaQuery(PHONE);
+  const goTo = useGoTo();
+  const [uploading, setUploading] = useState(false);
   useTabPage(album?.title);
 
   useEffect(() => {
@@ -69,6 +78,18 @@ export function MusicAlbumPage() {
 
   const discs = byDisc(album.tracks);
   const whose = album.compilation ? null : namesOf(album.artists);
+  const mayEditTags = !!account?.may_edit_tags;
+  const mayUpload = !!inLibrary && !!account?.may_upload;
+  const inTheMenu: MenuLine[] = phone
+    ? [
+        ...(mayEditTags
+          ? [{ key: "tags", said: t("music.edit_tags"), mark: <TagIcon size={17} />, act: () => goTo(`/music/album/${album.id}/tags`) }]
+          : []),
+        ...(mayUpload
+          ? [{ key: "upload", said: t("upload.button_album"), mark: <UploadIcon size={17} />, act: () => setUploading(true) }]
+          : []),
+      ]
+    : [];
   return (
     <main className="page music-page">
       <PageBackdrop />
@@ -113,14 +134,15 @@ export function MusicAlbumPage() {
               songs={album.tracks}
               label={t("music.more_about", { title: album.title })}
               className="music-hero-heart"
+              extra={inTheMenu}
             />
-            {account?.may_edit_tags && (
+            {!phone && mayEditTags && (
               <Link className="button button-quiet" to={`/music/album/${album.id}/tags`}>
                 <TagIcon size={16} />
                 {t("music.edit_tags")}
               </Link>
             )}
-            {inLibrary && (
+            {!phone && inLibrary && (
               <UploadButton
                 library={inLibrary}
                 album={{ id: album.id, title: album.title }}
@@ -139,6 +161,9 @@ export function MusicAlbumPage() {
           </p>
         </div>
       </header>
+      {uploading && inLibrary && (
+        <UploadDialog library={inLibrary} album={{ id: album.id, title: album.title }} onClose={() => setUploading(false)} />
+      )}
 
       {discs.map((disc) => (
         <section className="music-disc" key={disc.number ?? "one"}>
