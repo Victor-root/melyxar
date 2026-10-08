@@ -13,9 +13,13 @@
 
 let out: boolean | null = null;
 
-/** Said by the bar: whether it is out, or null once it is gone. */
+/** Said by the bar: whether it is out, or null once it is gone. Said to the
+ *  stylesheet too, by a mark on the root, for what moves aside with the bar:
+ *  asked of the page instead, by a rule for a page holding a bar that is
+ *  away, the rule was checked again at every change anywhere in the page. */
 export function sayTheBarIsOut(shown: boolean | null): void {
   out = shown;
+  document.documentElement.toggleAttribute("data-bar-away", shown === false);
 }
 
 /** The room the bar takes at the top of the screen right now, in pixels. */

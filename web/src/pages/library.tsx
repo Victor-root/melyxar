@@ -325,7 +325,7 @@ export function LibraryPage({
   );
 
   return (
-    <main className="page library-page">
+    <main className={`page library-page${keepsRoomForLetters ? " page-beside-letters" : ""}`}>
       {/* What the grid is and how it is read, which on a wide screen rise
           together into the band of the bar at the top. */}
       <div className="browse-head">
