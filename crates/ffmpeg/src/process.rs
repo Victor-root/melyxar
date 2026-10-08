@@ -134,20 +134,44 @@ pub(crate) async fn output_streaming(
     on_stdout: &(dyn Fn(&[u8]) + Sync),
     on_position: &(dyn Fn(Millis) + Sync),
 ) -> Result<std::process::Output> {
-    read_through(builder, asked_to_stop, on_position, |mut stdout| async move {
-        use tokio::io::AsyncReadExt;
-        let mut all = Vec::new();
-        let mut chunk = [0_u8; CHUNK];
-        loop {
-            let read = stdout.read(&mut chunk).await?;
-            if read == 0 {
-                return Ok(all);
-            }
-            on_stdout(&chunk[..read]);
-            all.extend_from_slice(&chunk[..read]);
+    let mut current = Progress::default();
+    let on_error_line = move |line: &str| {
+        if !is_progress_line(line) {
+            return false;
         }
-    })
-    .await
+        if absorb_progress_line(&mut current, line).is_some() {
+            on_position(current.position);
+        }
+        true
+    };
+    read_through(builder, asked_to_stop, on_error_line, |stdout| read_all(stdout, on_stdout)).await
+}
+
+/// The same, for a tool that says how far along it is in its own words on its
+/// error output: `on_error_line` is given each line, and answers whether it
+/// was a progress line, which is then kept out of what the tool said so a
+/// failure is reported with its own words only.
+pub(crate) async fn output_reporting(
+    builder: TokioCommand,
+    asked_to_stop: AskedToStop,
+    on_error_line: impl FnMut(&str) -> bool,
+) -> Result<std::process::Output> {
+    read_through(builder, asked_to_stop, on_error_line, |stdout| read_all(stdout, &|_| {})).await
+}
+
+/// Everything the tool writes, given piece by piece to `on_stdout` as it comes.
+async fn read_all(mut stdout: tokio::process::ChildStdout, on_stdout: &(dyn Fn(&[u8]) + Sync)) -> std::io::Result<Vec<u8>> {
+    use tokio::io::AsyncReadExt;
+    let mut all = Vec::new();
+    let mut chunk = [0_u8; CHUNK];
+    loop {
+        let read = stdout.read(&mut chunk).await?;
+        if read == 0 {
+            return Ok(all);
+        }
+        on_stdout(&chunk[..read]);
+        all.extend_from_slice(&chunk[..read]);
+    }
 }
 
 /// The same, keeping nothing of what the tool writes: for a tool that writes
@@ -163,7 +187,7 @@ pub(crate) async fn output_handed_over(
     asked_to_stop: AskedToStop,
     mut on_stdout: impl FnMut(&[u8]) + Send + 'static,
 ) -> Result<std::process::Output> {
-    read_through(builder, asked_to_stop, &|_| {}, |stdout| async move {
+    read_through(builder, asked_to_stop, |_| false, |stdout| async move {
         // Handed back blocking, which is what a thread of its own reads.
         let mut stdout = std::fs::File::from(stdout.into_owned_fd()?);
         tokio::task::spawn_blocking(move || {
@@ -192,7 +216,7 @@ const CHUNK: usize = 8192;
 async fn read_through<Read, Written>(
     mut builder: TokioCommand,
     mut asked_to_stop: AskedToStop,
-    on_position: &(dyn Fn(Millis) + Sync),
+    mut on_error_line: impl FnMut(&str) -> bool,
     read_written: Read,
 ) -> Result<std::process::Output>
 where
@@ -217,13 +241,9 @@ where
         let written = read_written(stdout);
         let said = async {
             let mut kept = Vec::new();
-            let mut current = Progress::default();
             let mut lines = BufReader::new(stderr).lines();
             while let Some(line) = lines.next_line().await? {
-                if is_progress_line(&line) {
-                    if absorb_progress_line(&mut current, &line).is_some() {
-                        on_position(current.position);
-                    }
+                if on_error_line(&line) {
                     continue;
                 }
                 kept.extend_from_slice(line.as_bytes());
