@@ -4,7 +4,8 @@
  * is, and over a round picture for an artist.
  */
 
-import { memo, useState } from "react";
+import { memo, useContext, useState } from "react";
+import { InARow, ROOM_IN_A_ROW } from "../components/card";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, HeartIcon, PlayIcon } from "../icons";
 import { PauseIcon } from "../player/icons";
@@ -110,6 +111,7 @@ function Tile({
   );
   const likes = useLiking(liking ?? "");
   const { picture, itDidNotLoad } = useShownPicture(pictures);
+  const inARow = useContext(InARow);
   /* Made the first time the tile is reached, like the card of a film: a
      grid of thousands does not hold thousands of hidden buttons. */
   const [reached, setReached] = useState(false);
@@ -140,7 +142,7 @@ function Tile({
           <img
             src={picture.src}
             srcSet={picture.srcSet || undefined}
-            sizes="(max-width: 700px) 40vw, 186px"
+            sizes={inARow ? ROOM_IN_A_ROW : "(max-width: 700px) 40vw, 186px"}
             alt=""
             loading="lazy"
             decoding="async"
