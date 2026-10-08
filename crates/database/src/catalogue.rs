@@ -47,6 +47,12 @@ const HOW_DEEP_IT_GOES: usize = 2;
 /// before the files, the way every file manager shows them.
 const IN_THE_ONE_ORDER: &str = "ORDER BY ordinal, kind <> 'folder', sort_title";
 
+/// The seasons `s` of the series or the one season named `?2`: that work and
+/// what hangs under it. Asked as "is `?2` this season or its series", the
+/// question went through every episode of the server to find the few here.
+const SEASONS_WITHIN: &str =
+    "s.id IN (SELECT ?2 UNION ALL SELECT id FROM works WHERE parent_id = ?2)";
+
 /// A file as `stored_source_from_row` reads it, the disk it lives on included.
 const A_STORED_SOURCE: &str = "SELECT s.id, s.work_id, s.relative_path, s.size_bytes, s.modified_at,
         s.missing_since, s.added_at, r.label AS root_label, r.path AS root_path
@@ -559,7 +565,7 @@ impl Database {
              JOIN works s ON s.id = e.parent_id
              JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
              JOIN libraries l ON l.id = e.library_id AND l.keeps_resume_points
-             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode' AND p.position_ms > 0
+             WHERE {SEASONS_WITHIN} AND e.kind = 'episode' AND p.position_ms > 0
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
              ORDER BY p.last_played_at DESC
@@ -622,7 +628,7 @@ impl Database {
              JOIN works s ON s.id = e.parent_id
              JOIN libraries l ON l.id = e.library_id
              LEFT JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
-             WHERE ?2 IN (s.parent_id, s.id) AND e.kind = 'episode'
+             WHERE {SEASONS_WITHIN} AND e.kind = 'episode'
                AND EXISTS (SELECT 1 FROM media_sources m
                             WHERE m.work_id = e.id AND m.missing_since IS NULL)
                AND (?3 = 0 OR (s.ordinal, e.ordinal) > (?4, ?5))
@@ -3415,4 +3421,26 @@ pub(crate) mod tests {
             .is_empty());
     }
 
+    #[tokio::test]
+    async fn the_episodes_of_a_series_are_reached_through_its_seasons() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let plan: Vec<String> = sqlx::query(AssertSqlSafe(format!(
+            "EXPLAIN QUERY PLAN
+             SELECT e.id FROM works e
+               JOIN works s ON s.id = e.parent_id
+              WHERE {SEASONS_WITHIN} AND e.kind = 'episode'"
+        )))
+        .bind("a series")
+        .fetch_all(database.reader())
+        .await
+        .expect("planned")
+        .iter()
+        .map(|step| step.try_get("detail").expect("a step says what it does"))
+        .collect();
+        assert!(
+            plan.iter()
+                .any(|step| step.starts_with("SEARCH e USING") && step.contains("(parent_id=?")),
+            "{plan:?}"
+        );
+    }
 }
