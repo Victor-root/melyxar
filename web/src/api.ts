@@ -1251,6 +1251,12 @@ export type PageFact =
       browser_took_over: boolean;
     }
   | {
+      saw: "library_hiccup";
+      /** What the library met and got over by itself, in its own words. */
+      because: string;
+      segment: number | null;
+    }
+  | {
       saw: "how_it_started";
       /** How long after the browser was handed the film. */
       after_ms: number;

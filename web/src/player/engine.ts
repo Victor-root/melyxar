@@ -801,13 +801,8 @@ export function usePlayback({
         firstPieceArrived = true;
         enterLoadingStage(stream.id, "first_fragment_loaded");
       });
+      let hiccupsSaid = 0;
       feed.on(Library.Events.ERROR, (_event, trouble) => {
-        // Anything short of fatal is retried on its own, and saying so would
-        // turn an invisible hiccup into an error the viewer has to read.
-        if (!trouble.fatal || gaveUp) {
-          return;
-        }
-        gaveUp = true;
         const because = [
           trouble.type,
           trouble.details,
@@ -816,6 +811,29 @@ export function usePlayback({
         ]
           .filter(Boolean)
           .join(" · ");
+        // Anything short of fatal is retried on its own, and saying so to the
+        // viewer would turn an invisible hiccup into an error to read. The
+        // journal hears of the first few, since a segment fetched again and
+        // again is only explained there.
+        if (!trouble.fatal) {
+          if (hiccupsSaid < HICCUPS_SAID_PER_FILM) {
+            hiccupsSaid += 1;
+            const segment = trouble.frag?.sn;
+            api
+              .tellTheJournal({
+                session: stream.id,
+                saw: "library_hiccup",
+                because,
+                segment: typeof segment === "number" ? segment : null,
+              })
+              .catch(() => {});
+          }
+          return;
+        }
+        if (gaveUp) {
+          return;
+        }
+        gaveUp = true;
 
         /* A browser that reads a playlist on its own is handed the address
            rather than the viewer being handed an error. It has its own way
@@ -1450,6 +1468,9 @@ function sayWhereItBegan(Library: HlsLibrary, feed: Hls, session: string) {
 
 /** How many segments of each run of the tool are said to the journal. */
 const SEGMENTS_SAID_PER_RUN = 3;
+
+/** How many troubles the library got over are said to the journal per film. */
+const HICCUPS_SAID_PER_FILM = 20;
 
 /**
  * Tells the journal where the first segments of each run of the tool were
