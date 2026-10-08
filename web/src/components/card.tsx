@@ -20,10 +20,9 @@
 
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Link } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
-import { useGoTo } from "../navigating";
+import { QuietLink, useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { playsOnItsOwn } from "../works";
 import { useShownPicture } from "./picture";
@@ -232,7 +231,7 @@ export const Card = memo(function Card({
         {/* The whole card leads to the work. Stretched over the picture
             rather than wrapped around everything, so the buttons drawn on top
             are buttons and not parts of a link. */}
-        <Link
+        <QuietLink
           className="card-open"
           to={`/work/${card.id}`}
           title={card.title}
@@ -241,7 +240,7 @@ export const Card = memo(function Card({
           onClick={choosing.onClick}
         >
           <span className="visually-hidden">{card.title}</span>
-        </Link>
+        </QuietLink>
 
         {/* The reason wins over the state: knowing a film is not identified is
             what the grid already showed, knowing why is what sends somebody to
