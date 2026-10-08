@@ -72,6 +72,7 @@
   border-radius: var(--radius-card);
   background: var(--panel-glass);
   content-visibility: auto;
+  overflow-clip-margin: var(--shadow-room);
   contain-intrinsic-size: auto 190px;
 }
 

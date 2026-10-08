@@ -633,6 +633,7 @@
   padding: 6px var(--gap);
   border-bottom: 1px solid var(--border);
   content-visibility: auto;
+  overflow-clip-margin: var(--shadow-room);
   contain-intrinsic-size: auto 52px;
   transition: background var(--quick) var(--ease);
 }

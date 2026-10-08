@@ -44,6 +44,7 @@
   margin: -8px;
   padding: 8px;
   content-visibility: auto;
+  overflow-clip-margin: var(--shadow-room);
   contain-intrinsic-block-size: auto calc(var(--rows) * var(--card-guess) + (var(--rows) - 1) * var(--gap-wide) + 16px);
 }
 
@@ -74,6 +75,7 @@
      library of thousands scrolling smoothly without a virtualisation
      library and the hand measured heights one needs. */
   content-visibility: auto;
+  overflow-clip-margin: var(--shadow-room);
   contain-intrinsic-size: auto 320px;
   transition: transform var(--calm) var(--ease);
 }
