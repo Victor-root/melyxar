@@ -44,6 +44,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
+  /* Lines are not stretched to fill the height, which would leave what stands
+     on a line of writing at the top of it and the presses in the middle. */
+  align-content: center;
   min-height: 42px;
   padding: 4px;
   border-radius: 21px;
@@ -86,6 +89,14 @@
   color: var(--text-faint);
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* The name and what it is set to stand on one line of writing. Each centred
+   in a box of its own height, the bigger letters of the value sat a pixel or
+   two lower than the name. */
+.browse-label,
+.browse-field .picker {
+  align-self: baseline;
 }
 
 /* The lists' own field, taken down to a word on the glass: no box of its
