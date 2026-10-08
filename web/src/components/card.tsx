@@ -18,7 +18,7 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { memo, useEffect, useRef, useState } from "react";
+import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -58,6 +58,20 @@ export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
   standing: "(max-width: 700px) 40vw, (min-width: 1400px) 186px, 168px",
   lying: "(max-width: 700px) 70vw, (min-width: 1400px) 301px, 272px",
 };
+
+/**
+ * The same for a standing card in a row, which keeps its width where a grid
+ * shares the screen out: 132 points on a narrow screen. Asked for at the
+ * width of a grid's card instead, every poster of a row on a phone came at
+ * twice the size it is drawn at, four times the pixels to fetch and decode
+ * for a picture that looks the same.
+ */
+const ROOM_IN_A_ROW = "(max-width: 860px) 132px, (min-width: 1400px) 186px, 168px";
+
+/** Whether the cards drawn here stand in a row of their own width, said by
+ *  the row. A row showing one card at a time on a phone gives it the whole
+ *  width, so it says nothing. */
+export const InARow = createContext(false);
 
 /**
  * The pictures a grid or a row holds, fetched ahead rather than as they near
@@ -198,6 +212,7 @@ export const Card = memo(function Card({
   const { t } = useSettings();
   const navigate = useGoTo();
   const marks = useMarks();
+  const inARow = useContext(InARow);
   /* A lying card is nearly twice as wide as it is tall and a poster is two
      thirds as wide as it is tall: filling one with the other cuts a band out
      of the middle of the picture. So such a row is given something wide, and
@@ -265,7 +280,7 @@ export const Card = memo(function Card({
           <img
             src={poster.src}
             srcSet={poster.srcSet}
-            sizes={ROOM_FOR_A_PICTURE[shape]}
+            sizes={inARow && shape === "standing" ? ROOM_IN_A_ROW : ROOM_FOR_A_PICTURE[shape]}
             alt=""
             loading="lazy"
             decoding="async"

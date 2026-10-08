@@ -16,7 +16,7 @@ import { Children, isValidElement, useCallback, useEffect, useRef, useState } fr
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useDragToScroll } from "../dragging";
-import { useFetchingAhead } from "./card";
+import { InARow, useFetchingAhead } from "./card";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 
@@ -222,7 +222,7 @@ export function Row({
           onKeyDown={onKeyDown}
           {...drag}
         >
-          {children}
+          <InARow.Provider value={!single}>{children}</InARow.Provider>
         </div>
       </div>
 
