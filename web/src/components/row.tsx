@@ -16,7 +16,7 @@ import { Children, isValidElement, useCallback, useEffect, useRef, useState } fr
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useDragToScroll } from "../dragging";
-import { PicturesAhead, useFetchingAhead } from "./card";
+import { useFetchingAhead } from "./card";
 import { useSettings } from "../settings";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 
@@ -66,7 +66,7 @@ export function Row({
   const [canGoOn, setCanGoOn] = useState(false);
   // Held down and pulled, the way the player's own rows already worked.
   const drag = useDragToScroll(track);
-  const ahead = useFetchingAhead(track);
+  useFetchingAhead(track);
 
   /* Who is in the row, by name: the observers below are made again when the
      cards change, not each time the row is drawn. Watching `children` itself
@@ -222,7 +222,7 @@ export function Row({
           onKeyDown={onKeyDown}
           {...drag}
         >
-          <PicturesAhead.Provider value={ahead}>{children}</PicturesAhead.Provider>
+          {children}
         </div>
       </div>
 

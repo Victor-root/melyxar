@@ -21,7 +21,7 @@
 import { Children, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { flushSync } from "react-dom";
-import { PicturesAhead, useFetchingAhead } from "./card";
+import { useFetchingAhead } from "./card";
 import type { CardShape } from "./card";
 import { useReachEnd } from "./reach-end";
 
@@ -64,7 +64,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
     return cut;
   }, [items, columns, shape]);
 
-  const ahead = useFetchingAhead(grid);
+  useFetchingAhead(grid);
 
   // The next page is fetched when the end comes into view rather than when the
   // viewer hits the bottom, so the grid grows before it runs out.
@@ -124,7 +124,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
   return (
     <div>
       <div className={`grid grid-${shape}`} ref={grid} onKeyDown={onKeyDown}>
-        <PicturesAhead.Provider value={ahead}>{blocks}</PicturesAhead.Provider>
+        {blocks}
       </div>
       <div ref={sentinel} aria-hidden="true" />
     </div>

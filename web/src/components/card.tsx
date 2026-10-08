@@ -18,7 +18,7 @@
  * rewrite when it comes rather than an adjustment.
  */
 
-import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { Card as CardData } from "../api";
 import { useMarks } from "../marks";
@@ -60,53 +60,104 @@ export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
 };
 
 /**
- * Whether cards fetch their pictures now rather than as they near the screen.
+ * The pictures a grid or a row holds, fetched ahead rather than as they near
+ * the screen.
  *
- * A grid or a row says so once the page it stands on has been drawn, and
- * every picture off the screen is fetched then, in the order of the cards.
- * Fetched only as they neared the screen instead, the pictures arrived while
- * the page or the row was being scrolled, and each had to be put in place in
- * the middle of it: the stutter of a first scroll through a library that was
- * gone the second time.
- */
-export interface FetchingAhead {
-  now: boolean;
-}
-
-export const PicturesAhead = createContext<FetchingAhead>({ now: false });
-
-/**
- * Whether the cards a grid or a row holds fetch their pictures ahead yet:
- * as soon as the browser has a moment, which is once what is on screen has
- * been drawn and asked for. Those were asked for first, so they still come
- * first.
+ * A grid or a row starts once the page it stands on has been drawn, and every
+ * picture off the screen is fetched then, in the order of the cards. Fetched
+ * only as they neared the screen instead, the pictures arrived while the page
+ * or the row was being scrolled, and each had to be put in place in the
+ * middle of it: the stutter of a first scroll through a library that was gone
+ * the second time.
+ *
+ * A few at a time, the next one asked for as one arrives. The browser fetches
+ * no more than a handful at once anyway, and asked for all of them in one go
+ * it queued thousands, then handled each answer while the page was opening:
+ * on a phone, seconds of a frozen page for the two thousand posters of a
+ * library of films. The cards drawn later are found as they arrive.
  *
  * Said to the pictures themselves rather than to the cards. It was a state
  * the cards read, so each row drew every one of its cards again when the
  * moment came, one row after another, as the page was opening: measured on a
  * home page slowed four times, four or five frames of a hundred milliseconds
- * each right after it was drawn. A picture's own setting is changed in place,
- * and the cards drawn later read the box.
+ * each right after it was drawn. A picture's own setting is changed in place.
  */
-export function useFetchingAhead(holder: RefObject<HTMLElement | null>): FetchingAhead {
-  const ahead = useRef<FetchingAhead>({ now: false }).current;
+export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
   useEffect(() => {
-    const fetchAhead = () => {
-      ahead.now = true;
-      holder.current?.querySelectorAll<HTMLImageElement>("img[loading=lazy]").forEach((picture) => {
+    /* The pictures still waiting, in the order of the cards, looked for again
+       once a picture has come or gone. */
+    let waiting: HTMLImageElement[] | null = null;
+    let at = 0;
+    /* The ones asked for and not arrived yet. A card taken away takes its
+       picture with it, which then never says it arrived. */
+    const asking = new Set<HTMLImageElement>();
+    let started = false;
+    const askMore = () => {
+      waiting ??= Array.from(holder.current?.querySelectorAll<HTMLImageElement>("img[loading=lazy]") ?? []);
+      while (asking.size < FETCHED_AHEAD_AT_ONCE && at < waiting.length) {
+        const picture = waiting[at];
+        at += 1;
+        if (picture.loading !== "lazy" || !picture.isConnected) {
+          continue;
+        }
         picture.loading = "eager";
-      });
+        // One already there says nothing more, and leaves its place free.
+        if (picture.complete) {
+          continue;
+        }
+        asking.add(picture);
+        const arrived = () => {
+          picture.removeEventListener("load", arrived);
+          picture.removeEventListener("error", arrived);
+          asking.delete(picture);
+          askMore();
+        };
+        picture.addEventListener("load", arrived);
+        picture.addEventListener("error", arrived);
+      }
+    };
+    const holdsAPicture = (node: Node) =>
+      node instanceof HTMLElement && (node.matches("img") || node.querySelector("img") !== null);
+    const changed = new MutationObserver((records) => {
+      if (records.some((record) => [...record.addedNodes, ...record.removedNodes].some(holdsAPicture))) {
+        waiting = null;
+        at = 0;
+        for (const picture of asking) {
+          if (!picture.isConnected) {
+            asking.delete(picture);
+          }
+        }
+        if (started) {
+          askMore();
+        }
+      }
+    });
+    if (holder.current) {
+      changed.observe(holder.current, { childList: true, subtree: true });
+    }
+    const start = () => {
+      started = true;
+      askMore();
     };
     // Safari has no idle moments to offer, so it is given a second instead.
     if (typeof window.requestIdleCallback === "function") {
-      const asked = window.requestIdleCallback(fetchAhead, { timeout: 2000 });
-      return () => window.cancelIdleCallback(asked);
+      const asked = window.requestIdleCallback(start, { timeout: 2000 });
+      return () => {
+        window.cancelIdleCallback(asked);
+        changed.disconnect();
+      };
     }
-    const asked = setTimeout(fetchAhead, 1000);
-    return () => clearTimeout(asked);
-  }, [ahead, holder]);
-  return ahead;
+    const asked = setTimeout(start, 1000);
+    return () => {
+      clearTimeout(asked);
+      changed.disconnect();
+    };
+  }, [holder]);
 }
+
+/** How many pictures are fetched ahead at once: a little more than a browser
+ *  fetches at the same time from one server. */
+const FETCHED_AHEAD_AT_ONCE = 8;
 
 export const Card = memo(function Card({
   card,
@@ -147,7 +198,6 @@ export const Card = memo(function Card({
   const { t } = useSettings();
   const navigate = useGoTo();
   const marks = useMarks();
-  const ahead = useContext(PicturesAhead).now;
   /* A lying card is nearly twice as wide as it is tall and a poster is two
      thirds as wide as it is tall: filling one with the other cuts a band out
      of the middle of the picture. So such a row is given something wide, and
@@ -217,7 +267,7 @@ export const Card = memo(function Card({
             srcSet={poster.srcSet}
             sizes={ROOM_FOR_A_PICTURE[shape]}
             alt=""
-            loading={ahead ? "eager" : "lazy"}
+            loading="lazy"
             decoding="async"
             draggable={false}
             onError={itDidNotLoad}
