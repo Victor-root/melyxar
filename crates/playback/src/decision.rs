@@ -279,19 +279,16 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
         .as_deref()
         .is_some_and(|container| request.profile.supports_container(container));
 
-    // Picking a track other than the default means the client would have to
+    // Picking a sound other than the default means the client would have to
     // switch inside the container, which browsers cannot do.
     let track_choice_forces_rebuild = !request.profile.can_switch_tracks_in_container
-        && chose_a_non_default_track(source, audio, request);
+        && chose_a_non_default_audio_track(source, audio);
 
     let method = if video_action == StreamAction::Transcode {
         PlaybackMethod::FullTranscode
     } else if audio_action == StreamAction::Transcode {
         PlaybackMethod::TranscodeAudio
-    } else if !container_supported
-        || track_choice_forces_rebuild
-        || delivery != SubtitleDelivery::None
-    {
+    } else if !container_supported || track_choice_forces_rebuild {
         if !container_supported && let Some(container) = &container {
             reasons.push(Reason::ContainerNotSupported {
                 container: container.clone(),
@@ -434,7 +431,10 @@ fn chosen_subtitle(requested: Option<&Track>) -> Option<(&Track, &SubtitleDetail
     }
 }
 
-/// Whether the chosen track is one a browser left to itself would not show.
+/// Whether the chosen sound is one a browser left to itself would not play.
+///
+/// Only sound: a text subtitle is sent beside the file and drawn by the page,
+/// whichever way the film itself reaches it.
 ///
 /// "Left to itself" turned out to mean something narrower than the file's own
 /// idea of a default. A real file marked its French track the one to default
@@ -446,14 +446,10 @@ fn chosen_subtitle(requested: Option<&Track>) -> Option<(&Track, &SubtitleDetail
 /// here is the first track, and reaching for anything else, automatically or
 /// by hand, costs a rebuild that hands over exactly the one track wanted and
 /// leaves a browser nothing to guess at.
-fn chose_a_non_default_track(
+fn chose_a_non_default_audio_track(
     source: &MediaSource,
     audio: Option<(&Track, &AudioDetails)>,
-    request: &PlaybackRequest<'_>,
 ) -> bool {
-    if request.subtitle_track.is_some() {
-        return true;
-    }
     let Some((chosen, _)) = audio else {
         return false;
     };
@@ -1283,7 +1279,11 @@ mod tests {
     }
 
     #[test]
-    fn text_subtitles_travel_beside_the_video_and_stay_switchable() {
+    fn text_subtitles_travel_beside_the_file_and_leave_it_as_it_is() {
+        // The page draws them over the video whichever way the film reaches
+        // it, so asking for one is no reason to rebuild a film the client
+        // plays as it is: a rebuild of a heavy film costs far more than the
+        // words do.
         let mut profile = ClientProfile::conservative_browser();
         profile.containers.push("matroska".into());
         let tracks = vec![
@@ -1303,20 +1303,32 @@ mod tests {
         );
 
         assert_eq!(decision.subtitles, SubtitleDelivery::External);
-        assert_eq!(
-            decision.video,
-            StreamAction::Copy,
-            "the picture is untouched"
+        assert_eq!(decision.method, PlaybackMethod::DirectPlay);
+        assert!(decision.reasons.contains(&Reason::EverythingSupported));
+    }
+
+    #[test]
+    fn a_text_subtitle_is_still_sent_beside_a_film_that_has_to_be_rebuilt() {
+        let profile = ClientProfile::conservative_browser();
+        let tracks = vec![
+            video_track(0, "h264", 1080, None),
+            audio_track(1, "aac", 2, true),
+            subtitle_track(2, "subrip", SubtitleLayout::Text),
+        ];
+        let source = source("matroska,webm", tracks);
+        let subtitle = source.tracks[2].clone();
+
+        let decision = decide(
+            &source,
+            &PlaybackRequest {
+                subtitle_track: Some(&subtitle),
+                ..request(&profile)
+            },
         );
+
+        assert_eq!(decision.subtitles, SubtitleDelivery::External);
         assert_eq!(decision.method, PlaybackMethod::Remux);
-        assert!(
-            !decision.is_direct_play(),
-            "a stream that had to be rebuilt in any way is not direct play"
-        );
-        assert!(
-            !decision.reasons.contains(&Reason::EverythingSupported),
-            "everything was not supported: the subtitle had to be sent apart"
-        );
+        assert!(!decision.reasons.contains(&Reason::EverythingSupported));
     }
 
     #[test]
@@ -1346,34 +1358,6 @@ mod tests {
         );
 
         assert_eq!(decision.subtitle_track_id, Some(second.id));
-    }
-
-    #[test]
-    fn a_stream_rebuilt_only_to_carry_a_subtitle_is_not_called_untouched() {
-        // A client that can switch tracks inside the container asks for a
-        // subtitle and nothing else stands in the way: the answer is still a
-        // rebuild, and saying everything was supported would be a lie.
-        let mut profile = ClientProfile::conservative_browser();
-        profile.containers.push("matroska".into());
-        profile.can_switch_tracks_in_container = true;
-        let tracks = vec![
-            video_track(0, "h264", 1080, None),
-            audio_track(1, "aac", 2, true),
-            subtitle_track(2, "subrip", SubtitleLayout::Text),
-        ];
-        let source = source("matroska,webm", tracks);
-        let subtitle = source.tracks[2].clone();
-
-        let decision = decide(
-            &source,
-            &PlaybackRequest {
-                subtitle_track: Some(&subtitle),
-                ..request(&profile)
-            },
-        );
-
-        assert_eq!(decision.method, PlaybackMethod::Remux);
-        assert!(!decision.reasons.contains(&Reason::EverythingSupported));
     }
 
     #[test]
