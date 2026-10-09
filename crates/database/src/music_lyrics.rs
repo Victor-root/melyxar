@@ -46,6 +46,15 @@ impl Database {
         .transpose()
     }
 
+    /// Forgets what was found for a song, so that it is looked up again.
+    pub async fn forget_looked_up_lyrics(&self, song: WorkId) -> Result<()> {
+        sqlx::query("DELETE FROM music_lyrics WHERE song_id = ?")
+            .bind(song.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     pub async fn keep_looked_up_lyrics(
         &self,
         song: WorkId,
@@ -190,5 +199,8 @@ mod tests {
             database.looked_up_lyrics(song).await.expect("read"),
             Some(found)
         );
+
+        database.forget_looked_up_lyrics(song).await.expect("forgotten");
+        assert_eq!(database.looked_up_lyrics(song).await.expect("read"), None);
     }
 }
