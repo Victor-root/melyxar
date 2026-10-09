@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { asClock } from "../../clock";
 import { HeartIcon } from "../../icons";
 import {
@@ -36,18 +36,74 @@ const KEY_STEP = 5;
 /** How wide the time shown over the bar is, for keeping it inside it. */
 const TIME_ACROSS = 64;
 
+/** How long the play button of the bar is held to stop the music for good. */
+const HOLD_TO_STOP_MS = 2000;
+
+/** A press that toggles, or that stops when held for HOLD_TO_STOP_MS while
+ *  `stop` is given. The ring fills under the finger, and the click that ends a
+ *  held press is not a toggle. */
+function usePressToggle(toggle: () => void, stop: (() => void) | null) {
+  const [holding, setHolding] = useState(false);
+  const timer = useRef(0);
+  const stopped = useRef(false);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const release = () => {
+    window.clearTimeout(timer.current);
+    setHolding(false);
+  };
+  return {
+    holding,
+    press: {
+      onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+        if (!stop || event.button !== 0) {
+          return;
+        }
+        stopped.current = false;
+        setHolding(true);
+        timer.current = window.setTimeout(() => {
+          stopped.current = true;
+          setHolding(false);
+          stop();
+        }, HOLD_TO_STOP_MS);
+      },
+      onPointerUp: release,
+      onPointerLeave: release,
+      onPointerCancel: release,
+      onContextMenu: (event: MouseEvent<HTMLButtonElement>) => {
+        if (stop) {
+          event.preventDefault();
+        }
+      },
+      onClick: () => {
+        if (stopped.current) {
+          stopped.current = false;
+        } else {
+          toggle();
+        }
+      },
+    },
+  };
+}
+
 /** The play and pause button. As a disc it is the one a song's line has at its
- *  left while it is the one playing, only larger. */
-export function PlayButton({ music, disc = false }: { music: Music; disc?: boolean }) {
+ *  left while it is the one playing, only larger. The bar's own holds to stop. */
+export function PlayButton({ music, disc = false, holdToStop = false }: { music: Music; disc?: boolean; holdToStop?: boolean }) {
   const { t } = useSettings();
+  const { holding, press } = usePressToggle(music.toggle, holdToStop ? music.stop : null);
   return (
     <button
       type="button"
       className={`${disc ? "music-song-toggle music-song-toggle-lit" : "player-button player-button-play"}${music.waiting ? " music-waiting" : ""}`}
-      onClick={music.toggle}
+      title={holdToStop ? t("music.hold_to_stop") : undefined}
       aria-label={t(music.playing ? "music.pause" : "music.play")}
+      {...press}
     >
       {music.playing ? <PauseIcon size={disc ? 26 : PLAY_ICON} /> : <PlayIcon size={disc ? 26 : PLAY_ICON} />}
+      {holding && (
+        <svg className="player-hold-ring" viewBox="0 0 100 100" aria-hidden="true" style={{ animationDuration: `${HOLD_TO_STOP_MS}ms` }}>
+          <circle cx="50" cy="50" r="47" pathLength="100" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -102,6 +158,7 @@ export function Transport({
   greyedWhenNone,
   withStop = true,
   disc,
+  holdToStop,
 }: {
   music: Music;
   greyedWhenNone?: boolean;
@@ -109,12 +166,14 @@ export function Transport({
   withStop?: boolean;
   /** The play button drawn as a disc. */
   disc?: boolean;
+  /** Held to stop the music, as the bar does. */
+  holdToStop?: boolean;
 }) {
   return (
     <>
       <SongStepButton music={music} back greyedWhenNone={greyedWhenNone} />
       <SecondsButton music={music} back />
-      <PlayButton music={music} disc={disc} />
+      <PlayButton music={music} disc={disc} holdToStop={holdToStop} />
       <SecondsButton music={music} back={false} />
       <SongStepButton music={music} back={false} greyedWhenNone={greyedWhenNone} />
       {withStop && <StopButton music={music} />}
