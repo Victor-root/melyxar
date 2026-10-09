@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use tokio::process::Command as TokioCommand;
 
 use crate::process::{output_of, output_reporting, AskedToStop};
+use crate::heard_words::{words_of, HeardWord};
 use crate::spoken_lines::{loop_in, subrip_of};
 use crate::{find_on_path, FfmpegError, Result};
 
@@ -100,39 +101,8 @@ pub async fn listen(
     asked_to_stop: AskedToStop,
     on_progress: impl Fn(f64),
 ) -> Result<Heard> {
-    let folder = scratch.join(format!("listening-{}", unique_suffix()));
-    std::fs::create_dir_all(&folder)?;
-    let folder = Scratch(folder);
-    let recording = folder.0.join("sound.wav");
-    let written = folder.0.join("heard");
-
-    let mut recording_of_it = TokioCommand::new(&tools.ffmpeg);
-    let mut args = recording_arguments(video, &recording);
-    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
-    recording_of_it.args(args);
-    let output = output_of(recording_of_it, asked_to_stop.clone()).await?;
-    if !output.status.success() {
-        return Err(FfmpegError::from_output("ffmpeg", &output));
-    }
-
-    let mut listening = low_priority(listener.tool.path());
-    let arguments = listening_arguments(listener.model, &recording, &written, listener.threads);
-    tracing::debug!(video = %video.display(), arguments = ?arguments, "the speech tool is being set going");
-    listening.args(arguments);
     let started = std::time::Instant::now();
-    let output = output_reporting(listening, asked_to_stop, |line| match progress_in(line) {
-        Some(fraction) => {
-            on_progress(fraction);
-            true
-        }
-        None => false,
-    })
-    .await?;
-    if !output.status.success() {
-        return Err(FfmpegError::from_output("whisper-cli", &output));
-    }
-
-    let report = std::fs::read_to_string(written.with_extension("json"))?;
+    let report = report_of_listening(tools, listener, video, scratch, asked_to_stop, on_progress, Cut::Lines).await?;
     if let Some(stuck) = loop_in(&report) {
         tracing::warn!(
             video = %video.display(),
@@ -159,6 +129,81 @@ pub async fn listen(
         subrip,
         language,
     })
+}
+
+/// Listens to the first sound track of a song and writes down each word it
+/// hears with the moment it starts. Everything else is as for `listen`.
+pub async fn listen_for_words(
+    tools: &crate::ToolPaths,
+    listener: Listener<'_>,
+    song: &Path,
+    scratch: &Path,
+    asked_to_stop: AskedToStop,
+    on_progress: impl Fn(f64),
+) -> Result<Vec<HeardWord>> {
+    let started = std::time::Instant::now();
+    let report = report_of_listening(tools, listener, song, scratch, asked_to_stop, on_progress, Cut::Words).await?;
+    let words = words_of(&report)
+        .ok_or_else(|| FfmpegError::MalformedReport("the report of what was heard".to_string()))?;
+    tracing::debug!(
+        song = %song.display(),
+        words = words.len(),
+        took_seconds = started.elapsed().as_secs(),
+        "the speech tool heard the words of a song"
+    );
+    Ok(words)
+}
+
+/// How the tool is asked to cut its report: into blocks of a few sentences,
+/// or into one block for each word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Cut {
+    Lines,
+    Words,
+}
+
+/// Makes the recording, has the tool listen to it, and hands back the report
+/// it wrote. The folder both are written into is removed on the way out.
+async fn report_of_listening(
+    tools: &crate::ToolPaths,
+    listener: Listener<'_>,
+    input: &Path,
+    scratch: &Path,
+    asked_to_stop: AskedToStop,
+    on_progress: impl Fn(f64),
+    cut: Cut,
+) -> Result<String> {
+    let folder = scratch.join(format!("listening-{}", unique_suffix()));
+    std::fs::create_dir_all(&folder)?;
+    let folder = Scratch(folder);
+    let recording = folder.0.join("sound.wav");
+    let written = folder.0.join("heard");
+
+    let mut recording_of_it = TokioCommand::new(&tools.ffmpeg);
+    let mut args = recording_arguments(input, &recording);
+    crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
+    recording_of_it.args(args);
+    let output = output_of(recording_of_it, asked_to_stop.clone()).await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("ffmpeg", &output));
+    }
+
+    let mut listening = low_priority(listener.tool.path());
+    let arguments = listening_arguments(listener.model, &recording, &written, listener.threads, cut == Cut::Words);
+    tracing::debug!(input = %input.display(), arguments = ?arguments, "the speech tool is being set going");
+    listening.args(arguments);
+    let output = output_reporting(listening, asked_to_stop, |line| match progress_in(line) {
+        Some(fraction) => {
+            on_progress(fraction);
+            true
+        }
+        None => false,
+    })
+    .await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("whisper-cli", &output));
+    }
+    Ok(std::fs::read_to_string(written.with_extension("json"))?)
 }
 
 /// A name no other reading of the same moment can have.
@@ -212,12 +257,23 @@ fn progress_in(line: &str) -> Option<f64> {
 /// blocks of that report, not by the tool. It is told too to carry no text
 /// from one stretch of the recording to the next: left to do so, a single
 /// stretch where it repeats itself is read back as what is being said and
-/// goes on being repeated until the end of the video.
-pub fn listening_arguments(model: &Path, recording: &Path, written: &Path, threads: usize) -> Vec<OsString> {
+/// goes on being repeated until the end of the video. For the words of a song
+/// it is asked to write a block for each word, cut at the word and not in the
+/// middle of it.
+pub fn listening_arguments(
+    model: &Path,
+    recording: &Path,
+    written: &Path,
+    threads: usize,
+    word_by_word: bool,
+) -> Vec<OsString> {
     let mut arguments: Vec<OsString> = vec!["-m".into(), model.as_os_str().to_os_string()];
     arguments.extend(["-f".into(), recording.as_os_str().to_os_string()]);
     arguments.extend(["-l".into(), "auto".into(), "-t".into(), threads.max(1).to_string().into()]);
     arguments.extend(["-mc".into(), "0".into()]);
+    if word_by_word {
+        arguments.extend(["-ml".into(), "1".into(), "-sow".into()]);
+    }
     arguments.extend(["-np".into(), "-pp".into(), "-oj".into()]);
     arguments.extend(["-of".into(), written.as_os_str().to_os_string()]);
     arguments
@@ -259,6 +315,7 @@ mod tests {
             Path::new("/tmp/sound.wav"),
             Path::new("/tmp/heard"),
             0,
+            false,
         )
         .into_iter()
         .map(|argument| argument.to_string_lossy().into_owned())
@@ -273,6 +330,23 @@ mod tests {
         assert!(!joined.contains("-ml"), "the times of single words are not trusted");
         assert!(joined.contains("-of /tmp/heard"));
         assert!(joined.contains("-t 1"), "at least one thread, whatever was asked");
+    }
+
+    #[test]
+    fn the_words_of_a_song_are_asked_for_one_block_each() {
+        let joined: Vec<String> = listening_arguments(
+            Path::new("/data/model.bin"),
+            Path::new("/tmp/sound.wav"),
+            Path::new("/tmp/heard"),
+            4,
+            true,
+        )
+        .into_iter()
+        .map(|argument| argument.to_string_lossy().into_owned())
+        .collect();
+        let joined = joined.join(" ");
+        assert!(joined.contains("-ml 1 -sow"));
+        assert!(joined.contains("-mc 0"));
     }
 
     #[test]

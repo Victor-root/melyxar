@@ -17,6 +17,7 @@ pub mod calibration;
 pub mod capabilities;
 pub mod command;
 pub mod hardware;
+pub mod heard_words;
 pub mod images;
 pub mod listening;
 pub mod painting;
