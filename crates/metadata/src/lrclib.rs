@@ -403,8 +403,25 @@ fn rare_words_of(title: &str) -> Vec<String> {
     words
 }
 
+/// A text with the words of a name run together written apart again, at each
+/// capital that follows a small letter: "CaravanPalace" is "Caravan Palace".
+/// LRCLIB finds an artist by the words of its name and not by its letters.
+fn written_apart(text: &str) -> String {
+    let mut apart = String::with_capacity(text.len() + 4);
+    let mut before: Option<char> = None;
+    for letter in text.chars() {
+        if before.is_some_and(char::is_lowercase) && letter.is_uppercase() {
+            apart.push(' ');
+        }
+        apart.push(letter);
+        before = Some(letter);
+    }
+    apart
+}
+
 /// The ways a song is searched for, from the narrowest to the widest: by
-/// artist and title as they are, by the title alone in the free text (which
+/// artist and title as they are, by the same with the words of their names
+/// written apart when they were run together, by the title alone in the free text (which
 /// finds a song whose title carries its artist), by both in it, then by the
 /// pieces of the title and by its rarest words, for a title that finds
 /// nothing as a whole. An empty artist is left out.
@@ -418,6 +435,14 @@ fn searches(artist: &str, title: &str) -> Vec<(&'static str, Vec<(&'static str, 
             "by artist and title",
             vec![("artist_name", artist.to_string()), ("track_name", title.to_string())],
         ));
+    }
+    let (apart_artist, apart_title) = (written_apart(artist), written_apart(title));
+    if apart_artist != artist || apart_title != title {
+        ways.push((
+            "by artist and title with their words apart",
+            vec![("artist_name", apart_artist.clone()), ("track_name", apart_title.clone())],
+        ));
+        ways.push(("by artist and title with their words apart in free text", vec![("q", format!("{apart_artist} {apart_title}"))]));
     }
     ways.push(("by the title in free text", vec![("q", title.to_string())]));
     if !artist.is_empty() {
@@ -680,6 +705,32 @@ mod tests {
             }
         });
         format!("http://{address}")
+    }
+
+    #[test]
+    fn names_run_together_are_written_apart_at_their_capitals() {
+        assert_eq!(written_apart("CaravanPalace"), "Caravan Palace");
+        assert_eq!(written_apart("Caravan Palace - MAD"), "Caravan Palace - MAD");
+        assert_eq!(written_apart("AC/DC"), "AC/DC");
+        assert_eq!(written_apart("deadmau5"), "deadmau5");
+    }
+
+    #[test]
+    fn an_artist_run_together_is_also_searched_for_with_its_words_apart() {
+        let ways = searches("CaravanPalace", "MAD");
+        assert!(ways.iter().any(|(_, query)| query.contains(&("artist_name", "Caravan Palace".to_string()))), "{ways:?}");
+        let ways = searches("Caravan Palace", "MAD");
+        assert!(!ways.iter().any(|(way, _)| way.contains("words apart")), "nothing to write apart");
+    }
+
+    #[tokio::test]
+    async fn an_artist_written_without_its_space_still_finds_the_song() {
+        let song = r#"[{"trackName":"MAD","artistName":"Caravan Palace","duration":167.0,"plainLyrics":"words","syncedLyrics":"[00:01.00] words","instrumental":false}]"#;
+        let url = serving_by_route(vec![("/get", "404 Not Found", "{}"), ("/search?artist_name=Caravan+Palace", "200 OK", song), ("/search", "200 OK", "[]")]).await;
+        let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
+        let asked = Asked { artist: "CaravanPalace", title: "MAD", album: None, seconds: Some(166) };
+        let found = client.lyrics(&asked).await.expect("answered").expect("found with the space put back");
+        assert_eq!(found.plain.as_deref(), Some("words"));
     }
 
     #[tokio::test]
