@@ -10,12 +10,13 @@
  * filling. Nobody but an administrator asks at all.
  */
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
 import { notesApi } from "./api";
 import type { AttentionPoint } from "./api";
 import { useJournalNews } from "../live";
+import { lookWhileSeen } from "../polling";
 
 /** How often the points are asked for again. */
 const LOOKED_AT_EVERY_MS = 30_000;
@@ -63,8 +64,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
       setPoints(null);
       return;
     }
-    const timer = window.setInterval(look, LOOKED_AT_EVERY_MS);
-    return () => window.clearInterval(timer);
+    return lookWhileSeen(look, LOOKED_AT_EVERY_MS);
   }, [administrator, look]);
 
   const markSeen = useCallback(async () => {
@@ -72,7 +72,7 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     setPoints(answer.points);
   }, []);
 
-  return (
-    <AttentionContext.Provider value={{ points, markSeen }}>{children}</AttentionContext.Provider>
-  );
+  const attention = useMemo(() => ({ points, markSeen }), [points, markSeen]);
+
+  return <AttentionContext.Provider value={attention}>{children}</AttentionContext.Provider>;
 }

@@ -13,7 +13,7 @@
  * nothing was said to it meanwhile.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "./account";
 import { api } from "./api";
@@ -193,20 +193,12 @@ export function LiveLine({ children }: { children: ReactNode }) {
     return () => setHiddenKeepers((count) => count - 1);
   }, []);
 
-  return (
-    <LineContext.Provider
-      value={{
-        followJournal,
-        followPlaying,
-        followNotifications,
-        followRequests,
-        followLibraries,
-        keepWhileHidden,
-      }}
-    >
-      {children}
-    </LineContext.Provider>
+  const line = useMemo(
+    () => ({ followJournal, followPlaying, followNotifications, followRequests, followLibraries, keepWhileHidden }),
+    [followJournal, followPlaying, followNotifications, followRequests, followLibraries, keepWhileHidden],
   );
+
+  return <LineContext.Provider value={line}>{children}</LineContext.Provider>;
 }
 
 /** Calls `look` every time a line of the journal is written, and when the

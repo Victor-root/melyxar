@@ -12,7 +12,7 @@
  * asked for it and the page is hidden.
  */
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { pictureSet } from "../api";
@@ -251,22 +251,10 @@ export function NotesProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  return (
-    <NotesContext.Provider
-      value={{
-        ...held,
-        loaded,
-        loadOlder,
-        markRead,
-        markUnread,
-        remove,
-        choices,
-        changeChoices,
-        system,
-        setSystem,
-      }}
-    >
-      {children}
-    </NotesContext.Provider>
+  const notes = useMemo(
+    () => ({ ...held, loaded, loadOlder, markRead, markUnread, remove, choices, changeChoices, system, setSystem }),
+    [held, loaded, loadOlder, markRead, markUnread, remove, choices, changeChoices, system, setSystem],
   );
+
+  return <NotesContext.Provider value={notes}>{children}</NotesContext.Provider>;
 }
