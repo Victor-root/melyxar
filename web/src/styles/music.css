@@ -1712,6 +1712,25 @@
   list-style: none;
 }
 
+/* The room kept for the lines that are not made, above and below the ones
+   that are. Lines of their own and not padding: a box cannot be shorter than
+   its padding, so a long queue made the list as tall as all its lines and the
+   box it scrolls in no longer the height it shows, which put the song playing
+   out of the middle and the list back at its top. */
+.music-queue::before,
+.music-queue::after {
+  content: "";
+  display: block;
+}
+
+.music-queue::before {
+  height: var(--queue-room-before, 0);
+}
+
+.music-queue::after {
+  height: var(--queue-room-after, 0);
+}
+
 /* A line of the queue is a line of a list of songs, with the cross that takes
    it out and the grip that moves it after its length. */
 .music-queue .music-queue-line {
