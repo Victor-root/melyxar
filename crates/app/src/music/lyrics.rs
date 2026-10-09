@@ -46,20 +46,23 @@ pub struct SongLyrics {
     pub source: Source,
     /// A song known to have no words, which is said rather than left blank.
     pub instrumental: bool,
-    /// How the lines were moved to fall where the voice starts, when they were.
+    /// What came of the last attempt to line the lines up with the song, and
+    /// how they were moved if they were.
     pub synchronised: Option<Synchronised>,
 }
 
 /// What was moved of the stamps of a song, as it is told.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Synchronised {
+    /// The word of `Conclusion` for how the attempt ended.
+    pub conclusion: String,
     pub shift_ms: i64,
     pub lines_moved: u32,
     pub confidence: f32,
 }
 
 /// The lyrics of a song, or nothing when none were found anywhere, their
-/// lines as they were moved to fall where the voice starts if they were.
+/// lines as they were moved to fall where their words are heard if they were.
 pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Option<SongLyrics>> {
     let Some(mut found) = found_lyrics(state, who, song).await? else {
         return Ok(None);
@@ -70,6 +73,16 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
     let Some(timing) = state.database().lyrics_timing(song).await? else {
         return Ok(Some(found));
     };
+    let told = Synchronised {
+        conclusion: timing.conclusion.clone(),
+        shift_ms: timing.shift_ms,
+        lines_moved: timing.lines_moved,
+        confidence: timing.confidence,
+    };
+    if timing.moves_ms.is_empty() {
+        found.synchronised = Some(told);
+        return Ok(Some(found));
+    }
     if timing.moves_ms.len() != found.lyrics.synced.len() {
         tracing::debug!(
             %song,
@@ -83,11 +96,7 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
         line.at = melyxar_core::time::Millis::new((line.at.get() + moved).max(0));
     }
     found.lyrics.synced.sort_by_key(|line| line.at);
-    found.synchronised = Some(Synchronised {
-        shift_ms: timing.shift_ms,
-        lines_moved: timing.lines_moved,
-        confidence: timing.confidence,
-    });
+    found.synchronised = Some(told);
     Ok(Some(found))
 }
 
