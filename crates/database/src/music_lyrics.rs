@@ -166,6 +166,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_answers_kept_as_a_song_without_words_are_forgotten_and_the_ones_with_words_stay() {
+        let (database, library, _) = collection().await;
+        let songs = database
+            .music_songs(library, SongOrder::Title, false, 0, 2)
+            .await
+            .expect("read")
+            .items;
+        let (wordless, found) = (songs[0].id, songs[1].id);
+        let words = LookedUpLyrics { plain: Some("words".into()), instrumental: true, ..LookedUpLyrics::default() };
+        let without = LookedUpLyrics { instrumental: true, ..LookedUpLyrics::default() };
+        for (song, answer) in [(wordless, &without), (found, &words)] {
+            database
+                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now())
+                .await
+                .expect("kept");
+        }
+
+        sqlx::query(include_str!("../migrations/0112_forget_wordless_lyrics_answers.sql"))
+            .execute(database.writer())
+            .await
+            .expect("run");
+
+        assert_eq!(database.looked_up_lyrics(wordless).await.expect("read"), None);
+        assert_eq!(database.looked_up_lyrics(found).await.expect("read"), Some(words));
+    }
+
+    #[tokio::test]
     async fn what_was_found_online_is_kept_found_or_not() {
         let (database, library, _) = collection().await;
         let song = database
