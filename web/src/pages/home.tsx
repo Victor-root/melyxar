@@ -40,8 +40,8 @@ const EVERYTHING_NEWEST = "/search?order=added_at&descending=true";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t, bannerShown } = useSettings();
-  const { home, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
-  const newestAlbums = useNewestAlbums(libraries, home);
+  const { home, moved, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
+  const newestAlbums = useNewestAlbums(libraries, moved);
 
   if (failed) {
     return (

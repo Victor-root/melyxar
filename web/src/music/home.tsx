@@ -8,8 +8,8 @@
  * shows them here without the page being reloaded.
  */
 
-import { useEffect, useState } from "react";
 import type { Library } from "../api";
+import { useAsked } from "../asking";
 import { Row, RowHead } from "../components/row";
 import { KindIcon } from "../icons";
 import { newestOfKind, whereAKindLeads } from "../libraries";
@@ -35,29 +35,30 @@ export function inTurn<T>(lists: T[][], room: number): T[] {
   return taken;
 }
 
+const NO_ALBUMS: Album[] = [];
+
 /** The newest albums of every library of music, read once for the whole
- *  home page and again whenever `readAgain` changes. */
-export function useNewestAlbums(libraries: Library[], readAgain: unknown): Album[] {
-  const [albums, setAlbums] = useState<Album[]>([]);
+ *  home page and again whenever one of `readAgain` changes. Kept for when
+ *  the page is walked back to, like the rest of it. */
+export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Album[] {
   const ids = libraries
     .filter((library) => library.kind === "music")
     .map((library) => library.id)
     .join(",");
 
-  useEffect(() => {
-    if (!ids) {
-      setAlbums([]);
-      return;
-    }
-    const stop = new AbortController();
-    Promise.all(
-      ids.split(",").map((library) => music.albums(library, "added", false, 0, ON_A_SHELF, {}, stop.signal)),
-    )
-      .then((pages) => setAlbums(inTurn(pages.map((page) => page.items), ON_A_SHELF)))
-      .catch(() => {});
-    return () => stop.abort();
-  }, [ids, readAgain]);
-  return albums;
+  const asked = useAsked(
+    async (signal) => {
+      const pages = await Promise.all(
+        (ids ? ids.split(",") : []).map((library) =>
+          music.albums(library, "added", false, 0, ON_A_SHELF, {}, signal),
+        ),
+      );
+      return inTurn(pages.map((page) => page.items), ON_A_SHELF);
+    },
+    [ids, ...readAgain],
+    "home-albums",
+  );
+  return asked.answer ?? NO_ALBUMS;
 }
 
 export function NewestMusic({ libraries, albums }: { libraries: Library[]; albums: Album[] }) {
