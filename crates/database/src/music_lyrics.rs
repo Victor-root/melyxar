@@ -55,24 +55,53 @@ impl Database {
         Ok(())
     }
 
+    /// Forgets what was kept for a song when it knew no words, if that was
+    /// found by a way older than `method` or longer ago than `older_than_seconds`:
+    /// a song unknown to a poorer way of looking, or unknown for a long
+    /// time, is worth asking again. What had words is never forgotten here.
+    pub async fn forget_unknown_lyrics_out_of_date(
+        &self,
+        song: WorkId,
+        method: i64,
+        older_than_seconds: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            "DELETE FROM music_lyrics
+              WHERE song_id = ? AND plain IS NULL AND synced IS NULL
+                AND (method < ?
+                     OR CAST(strftime('%s', 'now') AS INTEGER)
+                        - CAST(strftime('%s', looked_up_at) AS INTEGER) > ?)",
+        )
+        .bind(song.to_db_string())
+        .bind(method)
+        .bind(older_than_seconds)
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
+    /// Keeps what was found for a song, with the way of looking it was found by.
     pub async fn keep_looked_up_lyrics(
         &self,
         song: WorkId,
         found: &LookedUpLyrics,
         at: Timestamp,
+        method: i64,
     ) -> Result<()> {
         sqlx::query(
-            "INSERT INTO music_lyrics (song_id, plain, synced, instrumental, looked_up_at)
-             VALUES (?, ?, ?, ?, ?)
+            "INSERT INTO music_lyrics (song_id, plain, synced, instrumental, looked_up_at, method)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT (song_id) DO UPDATE SET
                 plain = excluded.plain, synced = excluded.synced,
-                instrumental = excluded.instrumental, looked_up_at = excluded.looked_up_at",
+                instrumental = excluded.instrumental, looked_up_at = excluded.looked_up_at,
+                method = excluded.method",
         )
         .bind(song.to_db_string())
         .bind(&found.plain)
         .bind(&found.synced)
         .bind(found.instrumental)
         .bind(timestamp_to_text(at))
+        .bind(method)
         .execute(self.writer())
         .await?;
         Ok(())
@@ -150,7 +179,7 @@ mod tests {
         let without = LookedUpLyrics { instrumental: true, ..LookedUpLyrics::default() };
         for (song, answer) in [(unknown, &LookedUpLyrics::default()), (found, &words), (instrumental, &without)] {
             database
-                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now())
+                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now(), 0)
                 .await
                 .expect("kept");
         }
@@ -178,7 +207,7 @@ mod tests {
         let without = LookedUpLyrics { instrumental: true, ..LookedUpLyrics::default() };
         for (song, answer) in [(wordless, &without), (found, &words)] {
             database
-                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now())
+                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now(), 0)
                 .await
                 .expect("kept");
         }
@@ -190,6 +219,36 @@ mod tests {
 
         assert_eq!(database.looked_up_lyrics(wordless).await.expect("read"), None);
         assert_eq!(database.looked_up_lyrics(found).await.expect("read"), Some(words));
+    }
+
+    #[tokio::test]
+    async fn an_unknown_song_is_asked_again_when_a_better_way_of_looking_exists_or_a_long_time_has_passed() {
+        let (database, library, _) = collection().await;
+        let songs = database
+            .music_songs(library, SongOrder::Title, false, 0, 3)
+            .await
+            .expect("read")
+            .items;
+        let (old_way, recent, with_words) = (songs[0].id, songs[1].id, songs[2].id);
+        let words = LookedUpLyrics { plain: Some("words".into()), ..LookedUpLyrics::default() };
+        let nothing = LookedUpLyrics::default();
+        let now = melyxar_core::time::now();
+        database.keep_looked_up_lyrics(old_way, &nothing, now, 1).await.expect("kept");
+        database.keep_looked_up_lyrics(recent, &nothing, now, 2).await.expect("kept");
+        database.keep_looked_up_lyrics(with_words, &words, now, 1).await.expect("kept");
+
+        for song in [old_way, recent, with_words] {
+            database.forget_unknown_lyrics_out_of_date(song, 2, 3600).await.expect("forgotten");
+        }
+        assert_eq!(database.looked_up_lyrics(old_way).await.expect("read"), None);
+        assert_eq!(database.looked_up_lyrics(recent).await.expect("read"), Some(nothing.clone()));
+        assert_eq!(database.looked_up_lyrics(with_words).await.expect("read"), Some(words), "words are not forgotten");
+
+        // The same answer, kept long ago, is asked again whatever its way.
+        let long_ago = now - time::Duration::days(40);
+        database.keep_looked_up_lyrics(recent, &nothing, long_ago, 2).await.expect("kept");
+        database.forget_unknown_lyrics_out_of_date(recent, 2, 30 * 86_400).await.expect("forgotten");
+        assert_eq!(database.looked_up_lyrics(recent).await.expect("read"), None);
     }
 
     #[tokio::test]
@@ -205,7 +264,7 @@ mod tests {
 
         let nothing = LookedUpLyrics::default();
         database
-            .keep_looked_up_lyrics(song, &nothing, melyxar_core::time::now())
+            .keep_looked_up_lyrics(song, &nothing, melyxar_core::time::now(), 0)
             .await
             .expect("kept");
         assert_eq!(
@@ -219,7 +278,7 @@ mod tests {
             instrumental: false,
         };
         database
-            .keep_looked_up_lyrics(song, &found, melyxar_core::time::now())
+            .keep_looked_up_lyrics(song, &found, melyxar_core::time::now(), 0)
             .await
             .expect("kept again");
         assert_eq!(
