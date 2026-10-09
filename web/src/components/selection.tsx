@@ -8,7 +8,7 @@
  * account may do, and applies to the chosen cards it makes sense for.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
 import type { Card } from "../api";
@@ -62,13 +62,20 @@ export function Selecting({ items, children }: { items: Card[]; children: ReactN
   const picked = useMemo(() => shown.filter((item) => chosen.has(item.id)), [shown, chosen]);
   const selecting = picked.length > 0;
 
-  const press = useCallback(
-    (id: string, range: boolean) => {
-      setChosen((before) => pressed(order, before, id, from, range));
-      setFrom(id);
-    },
-    [order, from],
-  );
+  /* What a press reads is held aside, so that the press handed to every card
+     is the same one from the first drawing to the last: a mark pressed on one
+     card changes `order`, and a press that followed it drew every card of the
+     grid again. */
+  const reading = useRef({ order, from });
+  useLayoutEffect(() => {
+    reading.current = { order, from };
+  });
+
+  const press = useCallback((id: string, range: boolean) => {
+    const { order: inOrder, from: last } = reading.current;
+    setChosen((before) => pressed(inOrder, before, id, last, range));
+    setFrom(id);
+  }, []);
 
   const letGo = useCallback(() => {
     setChosen(new Set());
