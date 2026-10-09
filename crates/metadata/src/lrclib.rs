@@ -131,32 +131,42 @@ impl LrcLibClient {
         tracing::debug!(
             artist = asked.artist,
             title = asked.title,
-            "LRCLIB did not know the song as asked, so it is searched for by artist and title"
+            "LRCLIB did not know the song as asked, so it is searched for"
         );
-        let query = [
-            ("artist_name", asked.artist.to_string()),
-            ("track_name", asked.title.to_string()),
-        ];
-        let (status, body) = self.ask("search", &query).await?;
-        let found = chosen_of(status, &body, asked)?;
-        tracing::debug!(found = found.is_some(), "the search for the song is over");
-        Ok(found)
+        for (way, query) in searches(asked.artist, asked.title) {
+            let entries = self.search(&query).await?;
+            tracing::debug!(way, entries = entries.len(), "a search of LRCLIB");
+            if let Some(found) = chosen_among(entries, asked) {
+                tracing::debug!(way, "the song is among them");
+                return Ok(Some(found));
+            }
+        }
+        tracing::debug!("the song is in none of the searches");
+        Ok(None)
+    }
+
+    /// One search of LRCLIB: the entries it answers, none when it knows none.
+    async fn search(&self, query: &[(&str, String)]) -> Result<Vec<Answer>> {
+        let (status, body) = self.ask("search", query).await?;
+        match status {
+            200 => entries_of(&body),
+            404 => Ok(Vec::new()),
+            other => answer_of(other, &body).map(|_| Vec::new()),
+        }
     }
 
     /// What LRCLIB holds under an artist and a title, as a person chooses
     /// among them: an entry for each album and length a song came out with.
     /// The artist may be left empty.
     pub async fn offers(&self, artist: &str, title: &str) -> Result<Vec<Offer>> {
-        let mut query = vec![("track_name", title.to_string())];
-        if !artist.trim().is_empty() {
-            query.push(("artist_name", artist.to_string()));
+        for (way, query) in searches(artist, title) {
+            let offers: Vec<Offer> = self.search(&query).await?.into_iter().filter_map(offer_of).take(MOST_OFFERS).collect();
+            if !offers.is_empty() {
+                tracing::debug!(way, offers = offers.len(), "a search of LRCLIB by hand");
+                return Ok(offers);
+            }
         }
-        let (status, body) = self.ask("search", &query).await?;
-        match status {
-            200 => Ok(entries_of(&body)?.into_iter().filter_map(offer_of).take(MOST_OFFERS).collect()),
-            404 => Ok(Vec::new()),
-            other => answer_of(other, &body).map(|_| Vec::new()),
-        }
+        Ok(Vec::new())
     }
 
     /// The words of one entry of LRCLIB, chosen from its offers.
@@ -266,15 +276,6 @@ impl Answer {
 /// times stop lining up with the song.
 const SYNCED_TO_WITHIN_SECONDS: f64 = 5.0;
 
-/// Only letters and digits, in lower case: the way two spellings of a name
-/// are told to be the same ("Fontaines D.C.", "FONTAINES DC").
-fn plain_name(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect()
-}
-
 /// An entry of a search as it is offered, when it says what it is.
 fn offer_of(entry: Answer) -> Option<Offer> {
     let has_words = |words: &Option<String>| words.as_deref().is_some_and(|words| !words.trim().is_empty());
@@ -290,48 +291,136 @@ fn offer_of(entry: Answer) -> Option<Offer> {
     })
 }
 
+/// The ways a song is searched for, from the narrowest to the widest: by
+/// artist and title as they are, then by the title alone in the free text
+/// (which finds a song whose title carries its artist), then by both in it.
+/// An empty artist is left out.
+fn searches(artist: &str, title: &str) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
+    let (artist, title) = (artist.trim(), title.trim());
+    let mut ways = Vec::new();
+    if artist.is_empty() {
+        ways.push(("by title", vec![("track_name", title.to_string())]));
+    } else {
+        ways.push((
+            "by artist and title",
+            vec![("artist_name", artist.to_string()), ("track_name", title.to_string())],
+        ));
+    }
+    ways.push(("by the title in free text", vec![("q", title.to_string())]));
+    if !artist.is_empty() {
+        ways.push(("by artist and title in free text", vec![("q", format!("{artist} {title}"))]));
+    }
+    ways
+}
+
 fn entries_of(body: &str) -> Result<Vec<Answer>> {
     serde_json::from_str(body).map_err(|error| ProviderError::Unexpected(error.to_string()))
 }
 
-/// The entry of a search that is the song asked for, if there is one.
-///
-/// Same title and same artist once spelling is set aside, then the one nearest
-/// in length. A stamped version far from the length of the file is given as
-/// plain words, since its times would not line up.
-fn chosen_of(status: u16, body: &str, asked: &Asked<'_>) -> Result<Option<FoundLyrics>> {
-    match status {
-        200 => {}
-        404 => return Ok(None),
-        other => return answer_of(other, body),
+/// Letters without their accents, in lower case.
+fn plain_letter(letter: char) -> char {
+    match letter {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' => 'a',
+        'ç' | 'ć' | 'č' => 'c',
+        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ę' => 'e',
+        'ì' | 'í' | 'î' | 'ï' | 'ī' => 'i',
+        'ñ' | 'ń' => 'n',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' | 'ū' => 'u',
+        'ý' | 'ÿ' => 'y',
+        'ß' => 's',
+        other => other,
     }
-    let entries = entries_of(body)?;
-    let (title, artist) = (plain_name(asked.title), plain_name(asked.artist));
+}
+
+/// Words that say who made a song or how it was published, and tell nothing
+/// of which song it is: they are on one side of a comparison and not the other.
+const NOISE: [&str; 11] =
+    ["feat", "ft", "featuring", "prod", "by", "x", "official", "video", "audio", "lyrics", "lyric"];
+
+/// The words of a name or a title, in lower case and without accents, the
+/// full stops of an abbreviation dropped ("D.C." is "dc") and the rest of
+/// the punctuation a gap between words.
+fn words_of(text: &str) -> std::collections::BTreeSet<String> {
+    let spelled: String = text
+        .chars()
+        .filter(|c| !matches!(c, '.' | '\'' | '’'))
+        .flat_map(char::to_lowercase)
+        .map(plain_letter)
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    spelled
+        .split_whitespace()
+        .filter(|word| !NOISE.contains(word))
+        .map(str::to_string)
+        .collect()
+}
+
+/// How much two sets of words say the same, from nought to one: twice what
+/// they share over what they hold together.
+fn likeness(asked: &std::collections::BTreeSet<String>, found: &std::collections::BTreeSet<String>) -> f64 {
+    let total = asked.len() + found.len();
+    if total == 0 {
+        return 0.0;
+    }
+    2.0 * asked.intersection(found).count() as f64 / total as f64
+}
+
+/// How alike the words of an entry and the words asked for must be.
+const ALIKE_ENOUGH: f64 = 0.8;
+/// How alike they must be when the length of the entry is the file's own, to
+/// the second or nearly: a title written in its own way, the file name for
+/// one, then still finds its entry.
+const ALIKE_WHEN_THE_LENGTH_AGREES: f64 = 0.5;
+/// How near in length, in seconds, counts as the same recording.
+const THE_SAME_LENGTH: f64 = 3.0;
+
+/// The entry among these that is the song asked for, if there is one.
+///
+/// The words of the artist and the title, taken together, must be alike
+/// enough in both: a title that carries its artist, a file name for a title,
+/// a spelling with or without accents all come to the same words. Then the
+/// likest wins, with words before no words, and the nearest in length
+/// among equals. A stamped version far from the length of the file is given
+/// as plain words, since its times would not line up.
+fn chosen_among(entries: Vec<Answer>, asked: &Asked<'_>) -> Option<FoundLyrics> {
+    let wanted = {
+        let mut words = words_of(asked.artist);
+        words.extend(words_of(asked.title));
+        words
+    };
     let away = |entry: &Answer| match (entry.duration, asked.seconds) {
-        (Some(there), Some(here)) => (there - here as f64).abs(),
-        _ => 0.0,
+        (Some(there), Some(here)) => Some((there - here as f64).abs()),
+        _ => None,
     };
     let best = entries
         .into_iter()
-        .filter(|entry| {
-            entry.track_name.as_deref().map(plain_name).as_deref() == Some(title.as_str())
-                && entry.artist_name.as_deref().map(plain_name).is_some_and(|name| {
-                    !name.is_empty() && (name.contains(&artist) || artist.contains(&name))
-                })
+        .filter_map(|entry| {
+            let has_words = entry.plain_lyrics.as_deref().is_some_and(|words| !words.trim().is_empty());
+            if !has_words && !entry.instrumental {
+                return None;
+            }
+            let mut found = words_of(entry.artist_name.as_deref().unwrap_or_default());
+            found.extend(words_of(entry.track_name.as_deref().unwrap_or_default()));
+            let alike = likeness(&wanted, &found);
+            let distance = away(&entry);
+            let agrees = distance.is_some_and(|distance| distance <= THE_SAME_LENGTH);
+            let enough = alike >= ALIKE_ENOUGH || (agrees && alike >= ALIKE_WHEN_THE_LENGTH_AGREES);
+            enough.then_some((has_words, alike, distance, entry))
         })
-        .filter(|entry| {
-            entry.instrumental
-                || entry.plain_lyrics.as_deref().is_some_and(|words| !words.trim().is_empty())
-        })
-        .map(|entry| (away(&entry), entry))
-        .min_by(|(near, _), (far, _)| near.total_cmp(far));
-    Ok(best.map(|(distance, entry)| {
+        .max_by(|(words, alike, distance, _), (other_words, other_alike, other_distance, _)| {
+            words
+                .cmp(other_words)
+                .then(alike.total_cmp(other_alike))
+                .then(other_distance.unwrap_or(f64::MAX).total_cmp(&distance.unwrap_or(f64::MAX)))
+        });
+    best.map(|(_, _, distance, entry)| {
         let mut found = entry.into_found();
-        if distance > SYNCED_TO_WITHIN_SECONDS {
+        if distance.is_some_and(|distance| distance > SYNCED_TO_WITHIN_SECONDS) {
             found.synced = None;
         }
         found
-    }))
+    })
 }
 
 /// What an answer says, read apart from asking so it can be tested.
@@ -448,24 +537,74 @@ mod tests {
 
     #[test]
     fn a_search_takes_the_same_song_in_another_spelling_nearest_in_length() {
-        let found = chosen_of(200, SEARCH, &asked(Some("Romance"), Some(221))).expect("read").expect("found");
+        let found = chosen_among(entries_of(SEARCH).expect("read"), &asked(Some("Romance"), Some(221))).expect("found");
         assert_eq!(found.plain.as_deref(), Some("near"));
         assert_eq!(found.synced.as_deref(), Some("[00:01.00] near"));
     }
 
     #[test]
     fn a_stamped_version_far_from_the_length_of_the_file_is_given_as_plain_words() {
-        let found = chosen_of(200, SEARCH, &asked(None, Some(250))).expect("read").expect("found");
+        let found = chosen_among(entries_of(SEARCH).expect("read"), &asked(None, Some(250))).expect("found");
         assert_eq!(found.plain.as_deref(), Some("far"));
         assert_eq!(found.synced, None, "its times would not line up");
     }
 
     #[test]
+    fn a_file_name_for_a_title_and_a_folder_for_an_artist_still_find_the_entry() {
+        let entries = r#"[
+            {"trackName":"Se Me Nota","artistName":"Hansel Y Raul","duration":279.0,"plainLyrics":"other song","syncedLyrics":null,"instrumental":false},
+            {"trackName":"Se Me Nota (Agárrame)","artistName":"Chimbala & Omega","duration":176.0,"plainLyrics":"this","syncedLyrics":"[00:01.00] this","instrumental":false},
+            {"trackName":"Se Me Nota - Agarrame","artistName":"Chimbala x Omega","duration":177.0,"plainLyrics":"best","syncedLyrics":"[00:01.00] best","instrumental":false}
+        ]"#;
+        let asked = Asked {
+            artist: "Stream Chimbala X Omega",
+            title: "Chimbala x Omega - Se Me Nota - (Agarrame)",
+            album: Some("Stream Chimbala X Omega"),
+            seconds: Some(177),
+        };
+        let found = chosen_among(entries_of(entries).expect("read"), &asked).expect("found");
+        assert_eq!(found.plain.as_deref(), Some("best"));
+    }
+
+    #[test]
+    fn words_are_compared_without_accents_capitals_or_the_full_stops_of_an_abbreviation() {
+        assert_eq!(words_of("Fontaines D.C."), words_of("FONTAINES DC"));
+        assert_eq!(words_of("Se Me Nota (Agárrame)"), words_of("se me nota - agarrame"));
+        assert_eq!(words_of("Tides feat. Somebody"), words_of("Tides Somebody"));
+        assert!(likeness(&words_of("a b c d"), &words_of("a b c d")) > 0.99);
+        assert!(likeness(&words_of("a b"), &words_of("c d")) < 0.01);
+    }
+
+    #[test]
+    fn an_entry_with_words_wins_over_one_without_and_a_song_without_any_is_still_known() {
+        let entries = r#"[
+            {"trackName":"Starburster","artistName":"Fontaines D.C.","duration":221.0,"plainLyrics":null,"syncedLyrics":null,"instrumental":true},
+            {"trackName":"Starburster","artistName":"Fontaines D.C.","duration":225.0,"plainLyrics":"words","syncedLyrics":null,"instrumental":false}
+        ]"#;
+        let found = chosen_among(entries_of(entries).expect("read"), &asked(None, Some(221))).expect("found");
+        assert_eq!(found.plain.as_deref(), Some("words"));
+
+        let only = r#"[{"trackName":"Starburster","artistName":"Fontaines D.C.","duration":221.0,"plainLyrics":null,"syncedLyrics":null,"instrumental":true}]"#;
+        assert!(chosen_among(entries_of(only).expect("read"), &asked(None, Some(221))).expect("found").instrumental);
+    }
+
+    #[test]
+    fn the_searches_go_from_the_narrowest_to_the_widest_and_leave_out_a_missing_artist() {
+        let ways = searches("Artist", "Title");
+        assert_eq!(ways.len(), 3);
+        assert_eq!(ways[0].1[0].0, "artist_name");
+        assert_eq!(ways[1].1, [("q", "Title".to_string())]);
+        assert_eq!(ways[2].1, [("q", "Artist Title".to_string())]);
+        let without = searches(" ", "Title");
+        assert_eq!(without.len(), 2);
+        assert_eq!(without[0].1, [("track_name", "Title".to_string())]);
+    }
+
+    #[test]
     fn a_search_with_no_such_song_in_it_finds_nothing() {
         let other = Asked { artist: "Nobody", title: "Starburster", album: None, seconds: None };
-        assert_eq!(chosen_of(200, SEARCH, &other).expect("read"), None);
-        assert_eq!(chosen_of(200, "[]", &asked(None, None)).expect("read"), None);
-        assert!(chosen_of(503, "busy", &asked(None, None)).expect_err("refused").is_worth_retrying());
+        assert_eq!(chosen_among(entries_of(SEARCH).expect("read"), &other), None);
+        assert_eq!(chosen_among(Vec::new(), &asked(None, None)), None);
     }
 
     #[test]
