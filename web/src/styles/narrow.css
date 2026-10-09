@@ -742,9 +742,14 @@
     transform: none;
   }
 
-  .row-single .card:hover .card-picture,
-  .row-single .card:has(:focus-visible, [aria-expanded="true"]) .card-picture {
-    box-shadow: var(--shadow-tile);
+  .row-single .card:hover::before,
+  .row-single .card:has(:focus-visible, [aria-expanded="true"])::before {
+    opacity: 0;
+  }
+
+  .row-single .card:hover::after,
+  .row-single .card:has(:focus-visible, [aria-expanded="true"])::after {
+    opacity: 1;
   }
 
   .row-single > .row-arrow-back {
