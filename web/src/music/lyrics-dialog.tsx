@@ -17,7 +17,7 @@ import { Modal } from "../components/modal";
 import { CloseIcon, DownloadIcon, SubtitlesIcon } from "../icons";
 import { useSettings } from "../settings";
 import { music } from "./api";
-import type { LyricsOffer, Song } from "./api";
+import type { LyricsOffer, LyricsSyncOutcome, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
 
@@ -49,7 +49,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   const [artist, setArtist] = useState(song.artists[0]?.name ?? "");
   const [title, setTitle] = useState(song.title);
   const [offers, setOffers] = useState<LyricsOffer[] | null>(null);
-  const [busy, setBusy] = useState<number | "search" | null>(null);
+  const [busy, setBusy] = useState<number | "search" | "sync" | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -90,6 +90,25 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
       lyricsHaveMoved();
     });
 
+  const synchronise = () => {
+    setBusy("sync");
+    setSaid(null);
+    void attempt(async () => {
+      const outcome = await music.synchroniseLyrics(song.id);
+      setSaid(syncSaid(t, outcome));
+      setAgain((count) => count + 1);
+      lyricsHaveMoved();
+    });
+  };
+
+  const unsynchronise = () =>
+    void attempt(async () => {
+      await music.unsynchroniseLyrics(song.id);
+      setSaid(t("lyrics_dialog.sync_undone"));
+      setAgain((count) => count + 1);
+      lyricsHaveMoved();
+    });
+
   const lyrics = current.answer;
   return (
     <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="modal-subtitles">
@@ -120,6 +139,43 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
             )}
           </li>
         </ul>
+      )}
+
+      {lyrics !== null && lyrics.lines.length > 0 && (
+        <>
+          <h3 className="subtitles-heading">{t("lyrics_dialog.sync")}</h3>
+          <p className="settings-why">{t("lyrics_dialog.sync_why")}</p>
+          <ul className="subtitles-lines">
+            <li className="subtitles-line">
+              <span className="subtitles-release">
+                {lyrics.synchronised
+                  ? t("lyrics_dialog.sync_on", {
+                      lines: lyrics.synchronised.lines_moved,
+                      seconds: shiftSaid(lyrics.synchronised.shift_ms),
+                    })
+                  : busy === "sync"
+                    ? t("lyrics_dialog.sync_running")
+                    : ""}
+              </span>
+              {lyrics.synchronised ? (
+                <button
+                  type="button"
+                  className="subtitles-off"
+                  aria-label={t("lyrics_dialog.sync_undo")}
+                  title={t("lyrics_dialog.sync_undo")}
+                  disabled={busy !== null}
+                  onClick={unsynchronise}
+                >
+                  <CloseIcon size={15} />
+                </button>
+              ) : (
+                <button type="button" className="button button-small" disabled={busy !== null} onClick={synchronise}>
+                  {t("lyrics_dialog.sync_run")}
+                </button>
+              )}
+            </li>
+          </ul>
+        </>
       )}
 
       <h3 className="subtitles-heading">{t("lyrics_dialog.search")}</h3>
@@ -195,4 +251,17 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
       )}
     </Modal>
   );
+}
+
+/** A shift in seconds, to a tenth, with its sign. */
+function shiftSaid(milliseconds: number): string {
+  const seconds = (milliseconds / 1000).toFixed(1);
+  return milliseconds > 0 ? `+${seconds}` : seconds;
+}
+
+function syncSaid(t: ReturnType<typeof useSettings>["t"], outcome: LyricsSyncOutcome): string {
+  if (outcome.conclusion === "aligned") {
+    return t("lyrics_dialog.sync_done", { lines: outcome.lines_moved, seconds: shiftSaid(outcome.shift_ms) });
+  }
+  return t(`lyrics_dialog.sync_result.${outcome.conclusion}`);
 }
