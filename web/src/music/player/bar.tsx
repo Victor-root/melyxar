@@ -92,10 +92,10 @@ export function MusicBar() {
         </button>
 
         <div className="player-zone music-bar-transport">
-          <Transport music={music} greyedWhenNone />
+          <Transport music={music} greyedWhenNone holdToStop />
         </div>
         <div className="player-zone music-bar-phone">
-          <PlayButton music={music} />
+          <PlayButton music={music} holdToStop />
         </div>
 
         <div className="player-zone player-zone-bottom-right music-bar-tools">
