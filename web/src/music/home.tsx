@@ -56,7 +56,7 @@ export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Alb
       return inTurn(pages.map((page) => page.items), ON_A_SHELF);
     },
     [ids, ...readAgain],
-    "home-albums",
+    `home-albums:${ids}`,
   );
   return asked.answer ?? NO_ALBUMS;
 }
