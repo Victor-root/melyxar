@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import { asClock } from "../../clock";
 import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
 import { scrollerOf } from "../../landing";
@@ -305,7 +305,9 @@ export function QueuePanel() {
     <ol
       ref={list}
       className={`music-queue${drag ? " music-queue-sorting" : ""}`}
-      style={{ paddingTop: shown.from * line, paddingBottom: (count - shown.to) * line }}
+      style={
+        { "--queue-room-before": `${shown.from * line}px`, "--queue-room-after": `${(count - shown.to) * line}px` } as CSSProperties
+      }
     >
       {queue.order.slice(shown.from, shown.to).map((place, index) => {
         const at = shown.from + index;
