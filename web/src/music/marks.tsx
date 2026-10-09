@@ -31,8 +31,6 @@ export interface MusicMarks {
       lyrics on screen to be read again. */
   lyricsAt: number;
   lyricsHaveMoved: () => void;
-  /** Said once songs are deleted, for every list showing them to drop them. */
-  setGone: (ids: string[]) => void;
 }
 
 const MarksContext = createContext<MusicMarks | null>(null);
@@ -76,6 +74,14 @@ export function useLiking(id: string): { liked: boolean; setLiked: (now: boolean
   return { liked, setLiked: (now: boolean) => setLiked(id, now) };
 }
 const GoneContext = createContext<ReadonlySet<string>>(new Set());
+const SetGoneContext = createContext<(ids: string[]) => void>(() => {});
+
+/** The way to say songs were deleted, for every list showing them to drop
+ *  them. The same from the first drawing to the last: whoever only says it is not drawn again when a heart
+ *  moves or a listen is counted. */
+export function useSetGone(): (ids: string[]) => void {
+  return useContext(SetGoneContext);
+}
 
 /** The songs deleted since the page was opened. */
 export function useGoneSongs(): ReadonlySet<string> {
@@ -128,13 +134,14 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
       playlistsHaveMoved,
       lyricsAt,
       lyricsHaveMoved,
-      setGone,
     }),
-    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved, setGone],
+    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved],
   );
   return (
     <MarksContext.Provider value={marks}>
-      <GoneContext.Provider value={gone}>{children}</GoneContext.Provider>
+      <SetGoneContext.Provider value={setGone}>
+        <GoneContext.Provider value={gone}>{children}</GoneContext.Provider>
+      </SetGoneContext.Provider>
     </MarksContext.Provider>
   );
 }

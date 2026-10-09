@@ -11,13 +11,13 @@ import { DeleteDialog } from "../components/deletion";
 import { DeleteIcon } from "../icons";
 import { useSettings } from "../settings";
 import type { Song } from "./api";
-import { useMusicMarks } from "./marks";
+import { useSetGone } from "./marks";
 import type { MenuLine } from "./song-menu";
 
 export function useSongDeletion(songs: Song[]): { lines: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const { account } = useAccount();
-  const marks = useMusicMarks();
+  const setGone = useSetGone();
   const [asking, setAsking] = useState(false);
   const song = songs.length === 1 ? songs[0] : null;
   if (!song || account?.may_delete !== true) {
@@ -31,7 +31,7 @@ export function useSongDeletion(songs: Song[]): { lines: MenuLine[]; dialog: Rea
         onClose={() => setAsking(false)}
         onDeleted={() => {
           setAsking(false);
-          marks.setGone([song.id]);
+          setGone([song.id]);
         }}
       />
     ) : null,
