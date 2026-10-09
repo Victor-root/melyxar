@@ -25,7 +25,6 @@
  * mark, faint, where the posters will stand once there are any.
  */
 
-import { Fragment } from "react";
 import { Link } from "react-router-dom";
 import type { Card, Home, Library, LibraryKind, Picture } from "../api";
 import { useShownPicture } from "./picture";
@@ -100,7 +99,9 @@ export function Band({
     <nav className="band" aria-label={t("home.band")}>
       <Water />
       {tiles.map(({ kind, tile }) => (
-        <Fragment key={kind}>{tile}</Fragment>
+        <div key={kind} className="band-slot">
+          {tile}
+        </div>
       ))}
     </nav>
   );

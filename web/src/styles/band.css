@@ -26,12 +26,77 @@
   will-change: transform;
 }
 
-/* The same size and the same shape it has always had, wide picture or no
+/* What a tile stands in. It gives the tile its place in the band, and draws
+   the light that falls off it, since the tile clips what it holds and a
+   shadow is not inside it. Two shadows, one lit at rest and one under the
+   pointer, and the slot goes from one to the other by fading, which the
+   graphics card does by itself. Both were one shadow of the tile that
+   changed its size and its blur on every frame of the hover, with the whole
+   tile drawn again each time.
+
+   The same size and the same shape it has always had, wide picture or no
    wide picture: a band of ways in is read in one glance across, and a taller
    tile pushes everything the page has to say further down for the sake of a
-   few points of poster.
+   few points of poster. */
+.band-slot {
+  position: relative;
+  flex: 1 1 200px;
+  /* A server of films alone has one way in, and one tile stretched across a
+     whole page reads as a banner rather than as a way in. The bound grows
+     with the screen, so a large monitor gets larger ways in rather than the
+     same small ones with a field of background beside them. */
+  max-width: clamp(220px, 20vw, 340px);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-card);
+  transition: transform var(--quick) var(--ease);
+}
 
-   The panel behind the fan is painted rather than flat: the deep surface,
+.band-slot::before,
+.band-slot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transition: opacity var(--quick) var(--ease);
+}
+
+/* The air just off the rim below, one layer of it: these stand several to
+   a row, so what the door's card gets in three widening blooms gets one
+   here. */
+.band-slot::after {
+  box-shadow: 0 0 22px -8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.band-slot::before {
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  opacity: 0;
+}
+
+/* The same growing as a card and as every button: one gesture for "this
+   comes forward", not a tile that nudges upwards while the posters below it
+   grow. The rim itself lights up on the tile's own edge, below; what is
+   added around it is only light falling off it, with no edge of its own: a
+   band of glow drawn solid read as a second, duller rim around the first. */
+.band-slot:hover,
+.band-slot:has(.band-tile:focus-visible) {
+  transform: scale(1.035);
+  z-index: 1;
+}
+
+.band-slot:hover::before,
+.band-slot:has(.band-tile:focus-visible)::before {
+  opacity: 1;
+}
+
+.band-slot:hover::after,
+.band-slot:has(.band-tile:focus-visible)::after {
+  opacity: 0;
+}
+
+/* The panel behind the fan is painted rather than flat: the deep surface,
    a breath of the newest work's own colour, and two pools of light coming
    in from the top corners with a third low behind the fan's feet. It is the
    door's own painting said in three gradients instead of a dozen, for a
@@ -48,16 +113,10 @@
      and where that reflection is cut off. */
   --ground: 69%;
 
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: flex-end;
-  flex: 1 1 200px;
-  /* A server of films alone has one way in, and one tile stretched across a
-     whole page reads as a banner rather than as a way in. The bound grows
-     with the screen, so a large monitor gets larger ways in rather than the
-     same small ones with a field of background beside them. */
-  max-width: clamp(220px, 20vw, 340px);
-  aspect-ratio: 16 / 9;
   /* Less at the foot, so the name and its arrow sit low, clear of the
      reflection above them, and as little on the right, so the arrow stands
      as far from the side as from the foot. */
@@ -96,26 +155,10 @@
     );
   color: var(--text);
   text-decoration: none;
-  /* The air just off the rim below, one layer of it: these stand several to
-     a row, so what the door's card gets in three widening blooms gets one
-     here. */
-  box-shadow: 0 0 22px -8px color-mix(in srgb, var(--accent) 45%, transparent);
-  transition: transform var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
 }
 
-/* The same growing as a card and as every button: one gesture for "this
-   comes forward", not a tile that nudges upwards while the posters below it
-   grow. The rim itself lights up on the tile's own edge, below; what is
-   added around it is only light falling off it, with no edge of its own: a
-   band of glow drawn solid read as a second, duller rim around the first. */
-.band-tile:hover,
 .band-tile:focus-visible {
   outline: none;
-  transform: scale(1.035);
-  z-index: 1;
-  box-shadow:
-    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
-    0 0 26px 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* The picture a tile is on a phone, which has no fan. Drawn there and
@@ -751,7 +794,8 @@
    the ring that say which tile they are on; what they do not get is the
    growing and the fan opening under them. */
 @media (prefers-reduced-motion: reduce) {
-  .band-tile:hover {
+  .band-slot:hover,
+  .band-slot:has(.band-tile:focus-visible) {
     transform: none;
   }
 
