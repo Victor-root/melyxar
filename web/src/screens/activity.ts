@@ -19,6 +19,7 @@ import { api } from "../api";
 import type { Job, RefreshMode, ScheduledTasks, TaskName } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { useRunning } from "../running";
+import { lookWhileSeen } from "../polling";
 
 /** Everything the activity screen is handed to draw itself and be driven by. */
 export interface ActivityScreen {
@@ -85,8 +86,7 @@ export function useActivityScreen(): ActivityScreen {
     if (!busy) {
       return;
     }
-    const beat = window.setInterval(lookAgain, 3_000);
-    return () => window.clearInterval(beat);
+    return lookWhileSeen(lookAgain, 3_000);
   }, [busy, lookAgain]);
 
   const startOn = useCallback(

@@ -11,6 +11,7 @@ import { Panel, Picker, Setting } from "../../components/panel";
 import { DeleteIcon, SubtitlesIcon } from "../../icons";
 import { asSize } from "../../player/describe";
 import { useSettings } from "../../settings";
+import { lookWhileSeen } from "../../polling";
 
 /** Every effort listening may take, as it is kept. */
 const EFFORTS: SpeechEffort[] = ["quiet", "balanced", "maximum"];
@@ -28,8 +29,7 @@ export function SpeechPanel() {
 
   useEffect(() => {
     if (!downloading) return;
-    const beat = window.setInterval(asked.look, WHILE_DOWNLOADING_MS);
-    return () => window.clearInterval(beat);
+    return lookWhileSeen(asked.look, WHILE_DOWNLOADING_MS);
   }, [downloading, asked.look]);
 
   const told = useTold(async (act: () => Promise<unknown>) => {

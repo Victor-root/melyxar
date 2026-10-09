@@ -20,6 +20,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from "./api";
 import { refusalOf, useTold } from "./asking";
 import type { Job, Library } from "./api";
+import { lookWhileSeen } from "./polling";
 
 /** How often the server is asked while it is busy. */
 const WHILE_BUSY_MS = 1000;
@@ -96,9 +97,9 @@ export function useWatchedWork(): Running {
   useEffect(() => {
     const controller = new AbortController();
     look(controller.signal);
-    const timer = window.setInterval(() => look(), busy ? WHILE_BUSY_MS : WHEN_IDLE_MS);
+    const stopLooking = lookWhileSeen(() => look(), busy ? WHILE_BUSY_MS : WHEN_IDLE_MS);
     return () => {
-      window.clearInterval(timer);
+      stopLooking();
       controller.abort();
     };
   }, [busy, look]);

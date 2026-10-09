@@ -21,6 +21,7 @@ import { howMany } from "../../readable";
 import type { Wording } from "../../readable";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
+import { lookWhileSeen } from "../../polling";
 
 /** What the server answers a request carrying more than it takes. */
 const TOO_LARGE = 413;
@@ -310,8 +311,7 @@ function useMyDevices(): Asked<SignedInDevice[]> {
   const { look } = devices;
   useJournalNews(look);
   useEffect(() => {
-    const beat = window.setInterval(look, DEVICES_LOOKED_AT_EVERY_MS);
-    return () => window.clearInterval(beat);
+    return lookWhileSeen(look, DEVICES_LOOKED_AT_EVERY_MS);
   }, [look]);
   return devices;
 }
