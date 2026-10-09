@@ -27,6 +27,10 @@ export interface MusicMarks {
       screen showing one to read it again. */
   playlistsAt: number;
   playlistsHaveMoved: () => void;
+  /** Moves each time the lyrics of a song are chosen or forgotten, for the
+      lyrics on screen to be read again. */
+  lyricsAt: number;
+  lyricsHaveMoved: () => void;
   /** Said once songs are deleted, for every list showing them to drop them. */
   setGone: (ids: string[]) => void;
 }
@@ -90,9 +94,11 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   const liked = useSyncExternalStore(likes.subscribe, () => likes.held);
   const [listenedAt, setListenedAt] = useState(0);
   const [playlistsAt, setPlaylistsAt] = useState(0);
+  const [lyricsAt, setLyricsAt] = useState(0);
   const [gone, setGoneHere] = useState<ReadonlySet<string>>(new Set());
   const setGone = useCallback((ids: string[]) => setGoneHere((was) => new Set([...was, ...ids])), []);
   const playlistsHaveMoved = useCallback(() => setPlaylistsAt(Date.now()), []);
+  const lyricsHaveMoved = useCallback(() => setLyricsAt(Date.now()), []);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -114,8 +120,17 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const marks = useMemo<MusicMarks>(
-    () => ({ liked: (id) => liked.has(id), listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone }),
-    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, setGone],
+    () => ({
+      liked: (id) => liked.has(id),
+      listenedAt,
+      listened,
+      playlistsAt,
+      playlistsHaveMoved,
+      lyricsAt,
+      lyricsHaveMoved,
+      setGone,
+    }),
+    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved, setGone],
   );
   return (
     <MarksContext.Provider value={marks}>

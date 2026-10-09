@@ -11,11 +11,13 @@ import { memo, useEffect, useRef, useState } from "react";
 import { useSettings } from "../../settings";
 import { music as server } from "../api";
 import type { LyricLine, SongLyrics } from "../api";
+import { useMusicMarks } from "../marks";
 import { lineAt } from "./lyrics";
 import { useMusicControls, useMusicTime } from "./player";
 
 export function LyricsPanel({ song }: { song: string }) {
   const { t } = useSettings();
+  const { lyricsAt } = useMusicMarks();
   const [lyrics, setLyrics] = useState<SongLyrics | null | undefined>(undefined);
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function LyricsPanel({ song }: { song: string }) {
         }
       });
     return () => stop.abort();
-  }, [song]);
+  }, [song, lyricsAt]);
 
   if (lyrics === undefined) {
     return <p className="music-lyrics-note">{t("library.loading")}</p>;
