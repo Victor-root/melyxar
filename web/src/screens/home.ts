@@ -77,6 +77,10 @@ export function laidOut(sections: readonly HomeSection[]): Laid[] {
 export interface HomeScreen {
   /** What arrived last, or nothing until the server has said. */
   home: Home | null;
+  /** What changes whenever something moved that makes a row of the server's
+      stale: work that ended, a mark that moved a row. For whatever else the
+      page reads from the server, to read it again at the same moments. */
+  moved: unknown[];
   /** Whether the server could not be asked at all. */
   failed: boolean;
   /** Ask it again, for whoever offers another go. */
@@ -155,6 +159,7 @@ export function useHomeScreen(libraries: Library[]): HomeScreen {
 
   return {
     home,
+    moved: [finished, marks.rowsMoved],
     failed: asked.failure !== null,
     again: asked.again,
     jobs,
