@@ -21,6 +21,7 @@ import { useAsked, wasAbandoned } from "../asking";
 import { keep, recall } from "../kept";
 import { KINDS } from "../libraries";
 import { useMarks } from "../marks";
+import { keepTheUnchanged } from "../unchanged";
 
 /** How many cards a jump reads at once, the most the server hands out: a
  *  jump is one wait, and the fewer questions it takes the shorter it is. */
@@ -87,17 +88,17 @@ interface Gathered {
 /** The same grid read again from the top, at least as far as it had been. */
 async function gatherAgain(
   narrowing: Narrowing,
-  as: number,
+  before: readonly Card[],
   signal: AbortSignal,
 ): Promise<Omit<Gathered, "choices">> {
   const cards: Card[] = [];
   let next: string | null = null;
   do {
-    const page = await api.works({ ...narrowing, after: next ?? undefined }, signal);
+    const page = await api.works({ ...narrowing, after: next ?? undefined, limit: PAGE_FOR_A_JUMP }, signal);
     cards.push(...page.cards);
     next = page.next;
-  } while (next !== null && cards.length < as);
-  return { cards, next };
+  } while (next !== null && cards.length < before.length);
+  return { cards: keepTheUnchanged(before, cards), next };
 }
 
 /** Everything a grid is handed to draw itself and to be driven by. */
@@ -203,7 +204,7 @@ export function useBrowsing(): Browsing {
     rowsSeen.current = rowsMoved;
     const controller = new AbortController();
     const held = latest.current;
-    gatherAgain(narrowing, held.cards.length, controller.signal)
+    gatherAgain(narrowing, held.cards, controller.signal)
       .then((fresh) => {
         const now = latest.current;
         if (now.choices === held.choices && now.cards.length === held.cards.length) {
@@ -229,7 +230,7 @@ export function useBrowsing(): Browsing {
     if (known) {
       setGathered(known);
       setLoading(false);
-      gatherAgain(narrowing, known.cards.length, controller.signal)
+      gatherAgain(narrowing, known.cards, controller.signal)
         .then((fresh) => {
           const now = latest.current;
           if (now.choices === choices && now.cards.length === known.cards.length) {
