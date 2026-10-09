@@ -51,26 +51,52 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
     may_read_the_work(state, who, song).await?;
     let database = state.database();
 
-    if let Some(file) = database.music_song_file(song).await?
+    let file = database.music_song_file(song).await?;
+    tracing::debug!(
+        %song,
+        file = file.as_ref().map(|file| file.path.display().to_string()),
+        "lyrics: asked for, looking in the file and beside it first"
+    );
+    if let Some(file) = file
         && let Some(found) = near(&file.path).await
     {
+        tracing::debug!(%song, source = found.source.as_str(), "lyrics: found near the song, nothing is asked online");
         return Ok(Some(found));
     }
     if let Some(kept) = database.looked_up_lyrics(song).await? {
+        tracing::debug!(
+            %song,
+            plain_chars = kept.plain.as_ref().map(|words| words.len()),
+            synced_chars = kept.synced.as_ref().map(|words| words.len()),
+            instrumental = kept.instrumental,
+            "lyrics: an earlier online answer is kept, so LRCLIB is not asked again"
+        );
         return Ok(online(&kept));
     }
 
     let Some(asked) = database.song_to_look_up(song).await? else {
+        tracing::debug!(%song, "lyrics: this work is not a song the database can look up, so nothing is asked");
         return Ok(None);
     };
-    if !database
+    let online_allowed = database
         .music_library_options(asked.library_id)
         .await?
-        .lyrics_online
-    {
+        .lyrics_online;
+    tracing::debug!(
+        %song,
+        title = %asked.title,
+        artist = asked.artist.as_deref(),
+        album = asked.album.as_deref(),
+        duration_ms = asked.duration_ms,
+        online_allowed,
+        "lyrics: what the database knows of the song"
+    );
+    if !online_allowed {
+        tracing::debug!(%song, "lyrics: looking up online is switched off for this library, so nothing is asked");
         return Ok(None);
     }
     let Some(artist) = asked.artist.as_deref() else {
+        tracing::debug!(%song, "lyrics: the song has no artist credit, and LRCLIB cannot be asked without one");
         return Ok(None);
     };
     let client = match LrcLibClient::new() {
@@ -91,12 +117,24 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
         })
         .await;
     let kept = match answer {
-        Ok(Some(found)) => LookedUpLyrics {
-            plain: found.plain,
-            synced: found.synced,
-            instrumental: found.instrumental,
-        },
-        Ok(None) => LookedUpLyrics::default(),
+        Ok(Some(found)) => {
+            tracing::debug!(
+                %song,
+                plain_chars = found.plain.as_ref().map(|words| words.len()),
+                synced_chars = found.synced.as_ref().map(|words| words.len()),
+                instrumental = found.instrumental,
+                "lyrics: LRCLIB knows the song, and its answer is kept"
+            );
+            LookedUpLyrics {
+                plain: found.plain,
+                synced: found.synced,
+                instrumental: found.instrumental,
+            }
+        }
+        Ok(None) => {
+            tracing::debug!(%song, "lyrics: LRCLIB does not know the song as asked, and that is kept: it is not asked again");
+            LookedUpLyrics::default()
+        }
         Err(error) => {
             tracing::debug!(
                 song = %asked.title,
@@ -123,6 +161,11 @@ async fn near(path: &Path) -> Option<SongLyrics> {
             .and_then(|read| read.ok())
             .flatten()
     };
+    tracing::debug!(
+        file = %path.display(),
+        chars = inside.as_ref().map(|text| text.len()),
+        "lyrics: what the file carries inside it"
+    );
     if let Some(found) = inside
         .map(|text| read_lyrics(&text))
         .filter(|found| !found.is_empty())
@@ -133,9 +176,14 @@ async fn near(path: &Path) -> Option<SongLyrics> {
             instrumental: false,
         });
     }
-    let beside = tokio::fs::read_to_string(path.with_extension("lrc"))
-        .await
-        .ok()?;
+    let beside_path = path.with_extension("lrc");
+    let beside = tokio::fs::read_to_string(&beside_path).await;
+    tracing::debug!(
+        file = %beside_path.display(),
+        result = ?beside.as_ref().map(|text| text.len()).map_err(|error| error.kind()),
+        "lyrics: the file of the same name beside the song"
+    );
+    let beside = beside.ok()?;
     let found = read_lyrics(&beside);
     (!found.is_empty()).then_some(SongLyrics {
         lyrics: found,

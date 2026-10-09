@@ -76,12 +76,23 @@ impl LrcLibClient {
             .query(&query)
             .send()
             .await
-            .map_err(|error| ProviderError::Unreachable(error.to_string()))?;
+            .map_err(|error| {
+                tracing::debug!(?query, %error, "LRCLIB could not be reached");
+                ProviderError::Unreachable(error.to_string())
+            })?;
+        let asked_at = response.url().to_string();
         let status = response.status().as_u16();
         let body = response
             .text()
             .await
             .map_err(|error| ProviderError::Unreachable(error.to_string()))?;
+        tracing::debug!(
+            url = %asked_at,
+            status,
+            body_chars = body.len(),
+            body_start = %body.chars().take(300).collect::<String>(),
+            "LRCLIB answered"
+        );
         answer_of(status, &body)
     }
 }
