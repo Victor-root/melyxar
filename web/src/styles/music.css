@@ -1680,6 +1680,9 @@
 }
 
 .music-lyrics-now button {
+  /* Scaled up from its left edge, it is made narrower by as much so that its
+     right edge stays where the others end and nothing overflows the list. */
+  width: calc(100% / 1.03);
   color: var(--accent-bright);
   transform: scale(1.03);
   transform-origin: left center;
