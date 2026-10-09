@@ -130,6 +130,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
   const words = useRef<HTMLDivElement>(null);
   const synopsis = useRef<HTMLParagraphElement>(null);
   const [lines, setLines] = useState(FEWEST_LINES + 1);
+  const touched = useRef<{ x: number; y: number } | null>(null);
 
   const many = items.length > 1;
   /* Nothing at all while the banner holds nothing, which is answered further
@@ -202,7 +203,6 @@ export function Hero({ items }: { items: HeroItem[] }) {
      and to the right for the one before. Where the finger went down is all
      that is kept: the page itself is left to the browser, which keeps the
      vertical scrolling and gives this the sideways one. */
-  const touched = useRef<{ x: number; y: number } | null>(null);
   const swipe = {
     onPointerDown: (event: React.PointerEvent) => {
       touched.current =
