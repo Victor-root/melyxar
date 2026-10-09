@@ -72,8 +72,12 @@ export function Arrival({ children }: { children: ReactNode }) {
     // Read once the page is laid out, which is a frame after it is drawn.
     const frame = requestAnimationFrame(() => {
       const reach = window.innerHeight * SCREENS_WAITED_FOR;
+      /* Only the pictures that are drawn: one inside a box the stylesheet
+         hides, such as the wide picture of a tile that a desktop does not
+         show, is never fetched and so never decoded, and waiting for it
+         held the loader for the whole of the longest hold, every time. */
       const pictures = Array.from(box.current?.querySelectorAll("img") ?? []).filter(
-        (picture) => picture.getBoundingClientRect().top < reach,
+        (picture) => picture.getClientRects().length > 0 && picture.getBoundingClientRect().top < reach,
       );
       void Promise.allSettled(pictures.map((picture) => picture.decode())).then(show);
     });
