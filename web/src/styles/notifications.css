@@ -90,8 +90,13 @@
   height: 4px;
 }
 
+/* Slid out through the left side rather than shortened: its end, its light
+   and its length stay what they were, and the toast, which clips what leaves
+   it, cuts it where its edge was. A width changing on every frame had the
+   page laid out and drawn again on every frame it stayed. */
 .toast-time-left {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   background: var(--accent);
@@ -105,11 +110,8 @@
 }
 
 @keyframes toast-time-runs {
-  from {
-    width: 100%;
-  }
   to {
-    width: 0;
+    transform: translateX(-100%);
   }
 }
 
