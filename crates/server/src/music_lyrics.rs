@@ -1,6 +1,7 @@
 //! The lyrics of a song chosen by hand, for an administrator: what LRCLIB
 //! holds under an artist and a title, taking one of its entries as the words
-//! of a song, and forgetting what was taken or found so it is looked up again.
+//! of a song, forgetting what was taken or found so it is looked up again, and
+//! lining the stamps of the lines up with where the voice starts in the song.
 //!
 //! Reading the lyrics of a song is `music.rs`; this is only for changing them.
 
@@ -21,6 +22,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/music/songs/{id}/lyrics/online",
             axum::routing::post(choose).delete(forget),
+        )
+        .route(
+            "/api/v1/music/songs/{id}/lyrics/sync",
+            axum::routing::post(synchronise).delete(unsynchronise),
         )
 }
 
@@ -96,6 +101,41 @@ async fn choose(
 
 async fn forget(State(state): State<AppState>, Viewer(who): Viewer, Path(id): Path<String>) -> Result<Json<()>> {
     melyxar_app::music::lyrics::forget(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(()))
+}
+
+/// What came of lining the lines up with the song.
+#[derive(Debug, Serialize)]
+struct SynchronisedView {
+    /// aligned, already_fits, not_sure, too_few_lines, not_stamped or too_long.
+    conclusion: &'static str,
+    shift_ms: i64,
+    lines: u32,
+    lines_moved: u32,
+    confidence: f32,
+}
+
+async fn synchronise(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<SynchronisedView>> {
+    let outcome = melyxar_app::music::lyrics_sync::synchronise(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(SynchronisedView {
+        conclusion: outcome.conclusion.as_str(),
+        shift_ms: outcome.shift_ms,
+        lines: outcome.lines,
+        lines_moved: outcome.lines_moved,
+        confidence: outcome.confidence,
+    }))
+}
+
+async fn unsynchronise(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<()>> {
+    melyxar_app::music::lyrics_sync::forget(&state, &who, parse_work(&id)?).await?;
     Ok(Json(()))
 }
 

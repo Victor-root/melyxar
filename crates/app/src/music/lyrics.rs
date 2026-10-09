@@ -40,16 +40,59 @@ impl Source {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SongLyrics {
     pub lyrics: Lyrics,
     pub source: Source,
     /// A song known to have no words, which is said rather than left blank.
     pub instrumental: bool,
+    /// How the lines were moved to fall where the voice starts, when they were.
+    pub synchronised: Option<Synchronised>,
 }
 
-/// The lyrics of a song, or nothing when none were found anywhere.
+/// What was moved of the stamps of a song, as it is told.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Synchronised {
+    pub shift_ms: i64,
+    pub lines_moved: u32,
+    pub confidence: f32,
+}
+
+/// The lyrics of a song, or nothing when none were found anywhere, their
+/// lines as they were moved to fall where the voice starts if they were.
 pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Option<SongLyrics>> {
+    let Some(mut found) = found_lyrics(state, who, song).await? else {
+        return Ok(None);
+    };
+    if found.lyrics.synced.is_empty() {
+        return Ok(Some(found));
+    }
+    let Some(timing) = state.database().lyrics_timing(song).await? else {
+        return Ok(Some(found));
+    };
+    if timing.moves_ms.len() != found.lyrics.synced.len() {
+        tracing::debug!(
+            %song,
+            moved = timing.moves_ms.len(),
+            lines = found.lyrics.synced.len(),
+            "lyrics: they were moved when they had other lines, so they are shown as stamped"
+        );
+        return Ok(Some(found));
+    }
+    for (line, moved) in found.lyrics.synced.iter_mut().zip(&timing.moves_ms) {
+        line.at = melyxar_core::time::Millis::new((line.at.get() + moved).max(0));
+    }
+    found.lyrics.synced.sort_by_key(|line| line.at);
+    found.synchronised = Some(Synchronised {
+        shift_ms: timing.shift_ms,
+        lines_moved: timing.lines_moved,
+        confidence: timing.confidence,
+    });
+    Ok(Some(found))
+}
+
+/// The lyrics of a song as they were found, their stamps as they are written.
+pub(crate) async fn found_lyrics(state: &AppState, who: &User, song: WorkId) -> Result<Option<SongLyrics>> {
     may_read_the_work(state, who, song).await?;
     let database = state.database();
 
@@ -256,6 +299,7 @@ async fn near(path: &Path) -> Option<SongLyrics> {
             lyrics: found,
             source: Source::Song,
             instrumental: false,
+            synchronised: None,
         });
     }
     let beside_path = path.with_extension("lrc");
@@ -271,6 +315,7 @@ async fn near(path: &Path) -> Option<SongLyrics> {
         lyrics: found,
         source: Source::Beside,
         instrumental: false,
+        synchronised: None,
     })
 }
 
@@ -286,6 +331,7 @@ fn online(kept: &LookedUpLyrics) -> Option<SongLyrics> {
         lyrics,
         source: Source::Online,
         instrumental: kept.instrumental,
+        synchronised: None,
     })
 }
 
