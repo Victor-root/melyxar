@@ -21,7 +21,7 @@
 import { createContext, memo, useContext, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { Card as CardData } from "../api";
-import { useMarks } from "../marks";
+import { useMarkActions, useMarksOf } from "../marks";
 import { QuietLink, useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { playsOnItsOwn } from "../works";
@@ -212,7 +212,10 @@ export const Card = memo(function Card({
 }) {
   const { t } = useSettings();
   const navigate = useGoTo();
-  const marks = useMarks();
+  const marks = useMarkActions();
+  /* This card's own work and no other: a mark pressed on one card draws that
+     card again, not every card of the page. */
+  const { seen, favourite, resume, unwatched, gone } = useMarksOf(card);
   const inARow = useContext(InARow);
   /* A lying card is nearly twice as wide as it is tall and a poster is two
      thirds as wide as it is tall: filling one with the other cuts a band out
@@ -248,18 +251,15 @@ export const Card = memo(function Card({
   const preview = useHoverPreview(card.kind === "video" && card.source !== null);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
-  const seen = marks.seenOf(card);
-  const favourite = marks.favouriteOf(card);
   /* A series plays the episode it carries on with: its page works out which
      and hands over to it. */
   const playable = playsOnItsOwn(card);
   /* Gone once marked watched, which lets go of where it was left: said at
      once, not after the next reading of the page. */
-  const resume = marks.resumeOf(card);
   const length = lengthOfAPlay(card);
   const howFar = watched ?? (resume !== null && length ? resume / length : undefined);
 
-  if (marks.goneOf(card.id)) {
+  if (gone) {
     return null;
   }
 
@@ -339,7 +339,7 @@ export const Card = memo(function Card({
           <SeenMark
             watched={seen === "watched"}
             episodes={card.episodes}
-            unwatched={marks.unwatchedOf(card)}
+            unwatched={unwatched}
             onPress={(watched) => marks.setWatched(card, watched)}
             offered={shown}
           />
