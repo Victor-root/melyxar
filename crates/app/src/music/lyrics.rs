@@ -65,6 +65,9 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
         tracing::debug!(%song, source = found.source.as_str(), "lyrics: found near the song, nothing is asked online");
         return Ok(Some(found));
     }
+    database
+        .forget_unknown_lyrics_out_of_date(song, LOOKUP_METHOD, UNKNOWN_BELIEVED_SECONDS)
+        .await?;
     if let Some(kept) = database.looked_up_lyrics(song).await? {
         tracing::debug!(
             %song,
@@ -147,10 +150,18 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
         }
     };
     database
-        .keep_looked_up_lyrics(song, &kept, melyxar_core::time::now())
+        .keep_looked_up_lyrics(song, &kept, melyxar_core::time::now(), LOOKUP_METHOD)
         .await?;
     Ok(online(&kept))
 }
+
+/// The way songs are looked up, a number that rises each time finding them
+/// gets better: an answer of "unknown" kept by an older way is asked again,
+/// instead of being believed for good.
+const LOOKUP_METHOD: i64 = 2;
+
+/// How long an "unknown" is believed: LRCLIB gains songs every day.
+const UNKNOWN_BELIEVED_SECONDS: i64 = 30 * 24 * 3600;
 
 /// What an administrator may do about the lyrics of a song, beyond what is
 /// looked up on its own: search LRCLIB by hand, take one of its entries as
@@ -205,6 +216,7 @@ pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> R
             song,
             &LookedUpLyrics { plain: found.plain, synced: found.synced, instrumental: found.instrumental },
             melyxar_core::time::now(),
+            LOOKUP_METHOD,
         )
         .await?;
     Ok(())

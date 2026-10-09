@@ -128,26 +128,47 @@ impl LrcLibClient {
         if let Some(seconds) = asked.seconds {
             query.push(("duration", seconds.to_string()));
         }
-        let (status, body) = self.ask("get", &query).await?;
-        if let Some(found) = answer_of(status, &body)? {
-            return Ok(Some(found));
+        // A question LRCLIB could not answer is not an answer: the next way of
+        // asking may be answered, and when none finds the song and one failed,
+        // the song is not known to be absent, only not found, and is asked
+        // again another time.
+        let mut trouble = None;
+        let exact = self.ask("get", &query).await.and_then(|(status, body)| answer_of(status, &body));
+        match exact {
+            Ok(Some(found)) => return Ok(Some(found)),
+            Ok(None) => {}
+            Err(error @ ProviderError::TooManyRequests { .. }) => return Err(error),
+            Err(error) => trouble = Some(error),
         }
 
         tracing::debug!(
             artist = asked.artist,
             title = asked.title,
-            "LRCLIB did not know the song as asked, so it is searched for"
+            "LRCLIB did not give the song as asked, so it is searched for"
         );
         for (way, query) in searches(asked.artist, asked.title) {
-            let entries = self.search(&query).await?;
-            tracing::debug!(way, entries = entries.len(), "a search of LRCLIB");
-            if let Some(found) = chosen_among(entries, asked) {
-                tracing::debug!(way, "the song is among them");
-                return Ok(Some(found));
+            match self.search(&query).await {
+                Ok(entries) => {
+                    tracing::debug!(way, entries = entries.len(), "a search of LRCLIB");
+                    if let Some(found) = chosen_among(entries, asked) {
+                        tracing::debug!(way, "the song is among them");
+                        return Ok(Some(found));
+                    }
+                }
+                Err(error @ ProviderError::TooManyRequests { .. }) => return Err(error),
+                Err(error) => {
+                    tracing::debug!(way, %error, "a search of LRCLIB was not answered");
+                    trouble.get_or_insert(error);
+                }
             }
         }
-        tracing::debug!("the song is in none of the searches");
-        Ok(None)
+        match trouble {
+            Some(error) => Err(error),
+            None => {
+                tracing::debug!("the song is in none of the searches");
+                Ok(None)
+            }
+        }
     }
 
     /// One search of LRCLIB: the entries it answers, none when it knows none.
@@ -307,10 +328,71 @@ fn offer_of(entry: Answer) -> Option<Offer> {
     })
 }
 
+/// Words that say how a recording was made or published and name no song:
+/// searched alone they find every song that has them.
+const GENERIC: [&str; 12] = [
+    "remix", "version", "remastered", "remaster", "edit", "extended", "original", "radio", "instrumental",
+    "acoustic", "cover", "single",
+];
+
+/// The pieces of a title worth searching for on their own: what is left of
+/// it once what is in brackets is taken out, cut where a dash stands between
+/// spaces. A file named after its artist and its song, or a title with the
+/// version of the song in brackets, finds nothing as a whole and finds the song
+/// by one of its parts.
+fn pieces_of(title: &str) -> Vec<String> {
+    let mut outside = String::new();
+    let mut depth = 0usize;
+    for letter in title.chars() {
+        match letter {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => outside.push(letter),
+            _ => {}
+        }
+    }
+    let mut pieces: Vec<String> = vec![String::new()];
+    for word in outside.split_whitespace() {
+        if word == "-" || word == "\u{2013}" {
+            pieces.push(String::new());
+        } else if let Some(last) = pieces.last_mut() {
+            if !last.is_empty() {
+                last.push(' ');
+            }
+            last.push_str(word);
+        }
+    }
+    let mut kept: Vec<String> = Vec::new();
+    for piece in pieces {
+        if piece.chars().count() >= 3 && piece != title && !kept.contains(&piece) {
+            kept.push(piece);
+        }
+    }
+    kept.truncate(MOST_PIECES);
+    kept
+}
+
+/// How many pieces, and how many single words, of a title are searched for.
+const MOST_PIECES: usize = 2;
+const MOST_WORDS: usize = 2;
+
+/// The longest words of a title that name something: a rare word finds the
+/// song when nothing else does, as long as the entry spells it the same way.
+fn rare_words_of(title: &str) -> Vec<String> {
+    let mut words: Vec<String> = words_of(title)
+        .into_iter()
+        .filter(|word| word.chars().count() >= 5 && !GENERIC.contains(&word.as_str()))
+        .collect();
+    words.sort_by_key(|word| std::cmp::Reverse(word.chars().count()));
+    words.truncate(MOST_WORDS);
+    words
+}
+
 /// The ways a song is searched for, from the narrowest to the widest: by
-/// artist and title as they are, then by the title alone in the free text
-/// (which finds a song whose title carries its artist), then by both in it.
-/// An empty artist is left out.
+/// artist and title as they are, by the title alone in the free text (which
+/// finds a song whose title carries its artist), by both in it, then by the
+/// pieces of the title and by its rarest words, for a title that finds
+/// nothing as a whole. An empty artist is left out.
 fn searches(artist: &str, title: &str) -> Vec<(&'static str, Vec<(&'static str, String)>)> {
     let (artist, title) = (artist.trim(), title.trim());
     let mut ways = Vec::new();
@@ -325,6 +407,16 @@ fn searches(artist: &str, title: &str) -> Vec<(&'static str, Vec<(&'static str, 
     ways.push(("by the title in free text", vec![("q", title.to_string())]));
     if !artist.is_empty() {
         ways.push(("by artist and title in free text", vec![("q", format!("{artist} {title}"))]));
+    }
+    let pieces = pieces_of(title);
+    for piece in &pieces {
+        ways.push(("by a piece of the title in free text", vec![("q", piece.clone())]));
+    }
+    for word in rare_words_of(title) {
+        let already = |text: &str| text.eq_ignore_ascii_case(&word);
+        if !already(title) && !pieces.iter().any(|piece| already(piece)) {
+            ways.push(("by a rare word of the title in free text", vec![("q", word)]));
+        }
     }
     ways
 }
@@ -382,6 +474,38 @@ fn likeness(asked: &std::collections::BTreeSet<String>, found: &std::collections
     2.0 * asked.intersection(found).count() as f64 / total as f64
 }
 
+/// The letters and digits of a text, run together: how a name is spelled
+/// when nobody agrees where the spaces and the pictures go.
+fn run_together(text: &str) -> Vec<char> {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .map(plain_letter)
+        .filter(|c| c.is_alphanumeric())
+        .collect()
+}
+
+/// How much two texts say the same letter by letter, from nought to one:
+/// twice the pairs of letters in a row they share over all the pairs they
+/// hold. A title written with a picture for two letters, or with its words
+/// run together, still comes near.
+fn spelled_alike(asked: &str, found: &str) -> f64 {
+    let pairs = |text: &str| {
+        let letters = run_together(text);
+        let mut counted = std::collections::BTreeMap::<(char, char), u32>::new();
+        for pair in letters.windows(2) {
+            *counted.entry((pair[0], pair[1])).or_default() += 1;
+        }
+        counted
+    };
+    let (asked, found) = (pairs(asked), pairs(found));
+    let total: u32 = asked.values().sum::<u32>() + found.values().sum::<u32>();
+    if total == 0 {
+        return 0.0;
+    }
+    let shared: u32 = asked.iter().map(|(pair, count)| (*count).min(*found.get(pair).unwrap_or(&0))).sum();
+    2.0 * f64::from(shared) / f64::from(total)
+}
+
 /// How alike the words of an entry and the words asked for must be.
 const ALIKE_ENOUGH: f64 = 0.8;
 /// How alike they must be when the length of the entry is the file's own, to
@@ -393,8 +517,8 @@ const THE_SAME_LENGTH: f64 = 3.0;
 
 /// The entry among these that is the song asked for, if there is one.
 ///
-/// The words of the artist and the title, taken together, must be alike
-/// enough in both: a title that carries its artist, a file name for a title,
+/// The artist and the title, taken together, must be alike enough, by their
+/// words or by their letters, whichever comes nearer: a title that carries its artist, a file name for a title,
 /// a spelling with or without accents all come to the same words. Then the
 /// likest wins, with words before no words, and the nearest in length
 /// among equals. A stamped version far from the length of the file is given
@@ -405,6 +529,7 @@ fn chosen_among(entries: Vec<Answer>, asked: &Asked<'_>) -> Option<FoundLyrics> 
         words.extend(words_of(asked.title));
         words
     };
+    let wanted_text = format!("{} {}", asked.artist, asked.title);
     let away = |entry: &Answer| match (entry.duration, asked.seconds) {
         (Some(there), Some(here)) => Some((there - here as f64).abs()),
         _ => None,
@@ -418,7 +543,12 @@ fn chosen_among(entries: Vec<Answer>, asked: &Asked<'_>) -> Option<FoundLyrics> 
             }
             let mut found = words_of(entry.artist_name.as_deref().unwrap_or_default());
             found.extend(words_of(entry.track_name.as_deref().unwrap_or_default()));
-            let alike = likeness(&wanted, &found);
+            let found_text = format!(
+                "{} {}",
+                entry.artist_name.as_deref().unwrap_or_default(),
+                entry.track_name.as_deref().unwrap_or_default()
+            );
+            let alike = likeness(&wanted, &found).max(spelled_alike(&wanted_text, &found_text));
             let distance = away(&entry);
             let agrees = distance.is_some_and(|distance| distance <= THE_SAME_LENGTH);
             let enough = alike >= ALIKE_ENOUGH || (agrees && alike >= ALIKE_WHEN_THE_LENGTH_AGREES);
@@ -513,6 +643,30 @@ mod tests {
         {"trackName":"Starburster","artistName":"Somebody Else","duration":222.0,"plainLyrics":"other","syncedLyrics":null,"instrumental":false}
     ]"#;
 
+    /// A server answering by route: each answers with a status and a body,
+    /// whoever asks and however often.
+    async fn serving_by_route(routes: Vec<(&'static str, &'static str, &'static str)>) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bound");
+        let address = listener.local_addr().expect("address");
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut asked = [0u8; 2048];
+                let read = stream.read(&mut asked).await.unwrap_or(0);
+                let head = String::from_utf8_lossy(&asked[..read]).to_string();
+                let path = head.split_whitespace().nth(1).unwrap_or_default().to_string();
+                let (status, body) = routes
+                    .iter()
+                    .find(|(route, _, _)| path.starts_with(route))
+                    .map_or(("404 Not Found", "{}"), |(_, status, body)| (*status, *body));
+                let answer =
+                    format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                let _ = stream.write_all(answer.as_bytes()).await;
+            }
+        });
+        format!("http://{address}")
+    }
+
     /// A server answering its first question with a song, and its second with
     /// a request to be left alone for two seconds. It tells what it was asked.
     async fn serving_a_song_then_asking_to_be_left_alone() -> (String, tokio::sync::oneshot::Receiver<String>) {
@@ -538,8 +692,31 @@ mod tests {
         (format!("http://{address}"), heard)
     }
 
+    /// One test for what asks LRCLIB, since they share its one gate: a
+    /// question told to wait would hold up the others for as long as it says.
     #[tokio::test]
-    async fn lrclib_is_told_who_asks_and_is_left_alone_for_as_long_as_it_says() {
+    async fn what_asks_lrclib_goes_on_past_a_busy_answer_names_itself_and_leaves_it_alone_when_told() {
+        // Busy for the exact question and for one search, answered by another.
+        let song = r#"[{"trackName":"Castaner - C🅰️C🅰️ Staner (REMIX)","artistName":"Khaled Freak","duration":155.0,"plainLyrics":"this","syncedLyrics":null,"instrumental":false}]"#;
+        let url = serving_by_route(vec![
+            ("/get", "503 Service Unavailable", "busy"),
+            ("/search?q=Castaner+-+CacaStaner", "200 OK", "[]"),
+            ("/search?artist_name", "503 Service Unavailable", "busy"),
+            ("/search?q=Khaled", "200 OK", song),
+            ("/search", "200 OK", "[]"),
+        ])
+        .await;
+        let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
+        let asked = Asked { artist: "Khaled Freak", title: "Castaner - CacaStaner (REMIX)", album: None, seconds: Some(156) };
+        let found = client.lyrics(&asked).await.expect("answered").expect("found by a later search");
+        assert_eq!(found.plain.as_deref(), Some("this"));
+
+        // Busy for everything and nothing found: unasked, never "unknown".
+        let url = serving_by_route(vec![("/get", "503 Service Unavailable", "busy"), ("/search", "200 OK", "[]")]).await;
+        let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
+        let error = client.lyrics(&asked).await.expect_err("not known to be absent");
+        assert!(error.is_worth_retrying(), "{error:?}");
+
         let (url, heard) = serving_a_song_then_asking_to_be_left_alone().await;
         let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
         let query = [("track_name", "Tides".to_string())];
@@ -629,6 +806,39 @@ mod tests {
 
         let only = r#"[{"trackName":"Starburster","artistName":"Fontaines D.C.","duration":221.0,"plainLyrics":null,"syncedLyrics":null,"instrumental":true}]"#;
         assert!(chosen_among(entries_of(only).expect("read"), &asked(None, Some(221))).expect("found").instrumental);
+    }
+
+    #[test]
+    fn a_title_with_a_picture_for_letters_is_the_same_song_by_its_spelling() {
+        let entries = r#"[
+            {"trackName":"Castaner - C🅰️C🅰️ Staner (REMIX)","artistName":"Khaled Freak","duration":155.0,"plainLyrics":"this","syncedLyrics":null,"instrumental":false},
+            {"trackName":"Jean Marie Bigard (SYNTHWAVE REMIX)","artistName":"Khaled Freak","duration":155.0,"plainLyrics":"other","syncedLyrics":null,"instrumental":false}
+        ]"#;
+        let asked = Asked { artist: "Khaled Freak", title: "Castaner - CacaStaner (REMIX)", album: None, seconds: None };
+        let found = chosen_among(entries_of(entries).expect("read"), &asked).expect("found");
+        assert_eq!(found.plain.as_deref(), Some("this"));
+        assert!(spelled_alike("Khaled Freak Castaner - CacaStaner (REMIX)", "Khaled Freak Jean Marie Bigard (SYNTHWAVE REMIX)") < 0.5);
+    }
+
+    #[test]
+    fn a_title_that_finds_nothing_as_a_whole_is_searched_by_its_pieces_and_its_rare_words() {
+        let ways = searches("Khaled Freak", "Castaner - CacaStaner (REMIX)");
+        let free: Vec<&str> = ways
+            .iter()
+            .filter_map(|(_, query)| match query.as_slice() {
+                [("q", text)] => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(free.contains(&"Castaner"), "{free:?}");
+        assert!(free.contains(&"CacaStaner"), "{free:?}");
+        assert!(free.contains(&"castaner") || free.contains(&"Castaner"));
+        assert!(!free.contains(&"remix"), "a word every remix has finds every remix");
+        assert_eq!(pieces_of("A Title"), Vec::<String>::new(), "a title without a dash or a bracket has no pieces");
+        assert_eq!(
+            pieces_of("Chimbala x Omega - Se Me Nota - (Agarrame)"),
+            ["Chimbala x Omega", "Se Me Nota"]
+        );
     }
 
     #[test]
