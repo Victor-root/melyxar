@@ -489,13 +489,20 @@
     will-change: auto;
   }
 
-  .band-tile {
+  .band-slot {
     flex: 0 0 calc((100% - var(--band-gap)) / 2);
     max-width: none;
     aspect-ratio: 2 / 1;
+    border-radius: var(--radius-control);
+  }
+
+  .band-slot::after {
+    box-shadow: none;
+  }
+
+  .band-tile {
     padding: 0 8px 8px 10px;
     border-radius: var(--radius-control);
-    box-shadow: none;
     /* Over a picture whatever the theme, so the words are the light kind. */
     color: var(--on-app-ground);
   }
