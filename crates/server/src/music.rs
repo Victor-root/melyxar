@@ -525,12 +525,15 @@ struct LyricsView {
     /// Empty when the words carry no moments.
     lines: Vec<LineView>,
     instrumental: bool,
-    /// How the lines were moved to fall where the voice starts, when they were.
+    /// What came of lining the lines up with the song, and how they were moved
+    /// if they were.
     synchronised: Option<SynchronisedLines>,
 }
 
 #[derive(Debug, Serialize)]
 struct SynchronisedLines {
+    /// aligned, already_fits, not_sure, too_few_lines or too_long.
+    conclusion: String,
     shift_ms: i64,
     lines_moved: u32,
     confidence: f32,
@@ -558,6 +561,7 @@ async fn lyrics(
                 .collect(),
             instrumental: found.instrumental,
             synchronised: found.synchronised.map(|moved| SynchronisedLines {
+                conclusion: moved.conclusion,
                 shift_ms: moved.shift_ms,
                 lines_moved: moved.lines_moved,
                 confidence: moved.confidence,
