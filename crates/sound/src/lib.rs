@@ -44,9 +44,13 @@
 
 #![forbid(unsafe_code)]
 
+mod lyrics_alignment;
 mod spectrum;
 mod transform;
+mod voice;
 
+pub use lyrics_alignment::{Alignment, Stamp, Verdict, align};
+pub use voice::{ONSETS_A_SECOND, VOICE_SAMPLES_A_SECOND, voice_onsets};
 pub use spectrum::{
     SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, SPECTRUM_SAMPLES_A_SECOND, SpectrumReading,
 };

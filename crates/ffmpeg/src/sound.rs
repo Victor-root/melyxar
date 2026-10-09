@@ -38,22 +38,31 @@ pub const SAMPLES_A_SECOND: u32 = 8_000;
 
 /// Builds the reading of one stretch of one sound track.
 pub fn samples_arguments(file: &Path, track: i32, from: Millis, how_long: Millis) -> Vec<OsString> {
-    vec![
-        OsString::from("-hide_banner"),
-        OsString::from("-loglevel"),
-        OsString::from("error"),
-        OsString::from("-nostdin"),
+    arguments_of(file, Some(from), how_long, &format!("0:{track}"))
+}
+
+/// Builds the reading of the first sound track of a song, from its start and
+/// no further than `at_most` into it.
+pub fn song_arguments(file: &Path, at_most: Millis) -> Vec<OsString> {
+    arguments_of(file, None, at_most, "0:a:0")
+}
+
+fn arguments_of(file: &Path, from: Option<Millis>, how_long: Millis, map: &str) -> Vec<OsString> {
+    let mut arguments: Vec<OsString> =
+        ["-hide_banner", "-loglevel", "error", "-nostdin"].map(OsString::from).to_vec();
+    if let Some(from) = from {
         // Before the file, so that the tool moves to the right place instead
         // of reading everything up to it and throwing it away. The end of a
         // three quarter hour episode is otherwise the whole episode.
-        OsString::from("-ss"),
-        OsString::from(seconds(from)),
+        arguments.extend([OsString::from("-ss"), OsString::from(seconds(from))]);
+    }
+    arguments.extend([
         OsString::from("-i"),
         file.as_os_str().to_os_string(),
         OsString::from("-t"),
         OsString::from(seconds(how_long)),
         OsString::from("-map"),
-        OsString::from(format!("0:{track}")),
+        OsString::from(map),
         // Nothing but this one track. Without this the tool decodes the
         // picture of a film to write a few seconds of sound.
         OsString::from("-vn"),
@@ -66,7 +75,8 @@ pub fn samples_arguments(file: &Path, track: i32, from: Millis, how_long: Millis
         OsString::from("-f"),
         OsString::from("s16le"),
         OsString::from("-"),
-    ]
+    ]);
+    arguments
 }
 
 /// Reads one stretch of one sound track as plain single channel samples.
@@ -86,8 +96,22 @@ pub async fn samples_of(
     how_long: Millis,
     asked_to_stop: AskedToStop,
 ) -> Result<Vec<i16>> {
+    read(tools, samples_arguments(file, track, from, how_long), asked_to_stop).await
+}
+
+/// Reads the first sound track of a song, from its start and no further than
+/// `at_most` into it, as plain single channel samples.
+pub async fn song_samples(
+    tools: &crate::ToolPaths,
+    file: &Path,
+    at_most: Millis,
+    asked_to_stop: AskedToStop,
+) -> Result<Vec<i16>> {
+    read(tools, song_arguments(file, at_most), asked_to_stop).await
+}
+
+async fn read(tools: &crate::ToolPaths, mut args: Vec<OsString>, asked_to_stop: AskedToStop) -> Result<Vec<i16>> {
     let mut builder = TokioCommand::new(&tools.ffmpeg);
-    let mut args = samples_arguments(file, track, from, how_long);
     crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
     builder.args(args);
     let output = crate::process::output_of(builder, asked_to_stop).await?;
@@ -129,6 +153,15 @@ mod tests {
             .position(|value| value == option)
             .unwrap_or_else(|| panic!("{option} is asked for: {arguments:?}"));
         &arguments[at + 1]
+    }
+
+    #[test]
+    fn a_whole_song_is_read_from_its_first_sound_track_and_no_further_than_asked() {
+        let arguments = written(&song_arguments(&PathBuf::from("/music/a song.mp3"), Millis::new(900_000)));
+        assert_eq!(after(&arguments, "-map"), "0:a:0");
+        assert_eq!(after(&arguments, "-t"), "900.000");
+        assert_eq!(after(&arguments, "-ar"), SAMPLES_A_SECOND.to_string());
+        assert!(!arguments.contains(&"-ss".to_string()), "a song is read from its start");
     }
 
     #[test]
