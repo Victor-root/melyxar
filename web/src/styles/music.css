@@ -293,7 +293,9 @@
 
 .music-listened-pages {
   display: flex;
-  align-items: flex-start;
+  /* Its height is the screen's own less a peek of what follows, written by
+     the page: each list fills it and scrolls in it. */
+  align-items: stretch;
   gap: 16px;
   margin-inline: -8px;
   padding-inline: 8px;
@@ -311,6 +313,15 @@
 .music-listened-page {
   flex: 0 0 100%;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  /* Scrolled by the graphics card, for the reason given on the box the page
+     scrolls in. */
+  will-change: scroll-position;
+  /* Not the bar of the page: thinner than it. A list that has run out hands
+     the next swipe to the page, which is how the albums under it are
+     reached. */
+  --scrollbar-width: 7px;
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
