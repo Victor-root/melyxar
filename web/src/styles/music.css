@@ -321,8 +321,9 @@
   will-change: scroll-position;
   /* Reaching either end of a list stops there: a swipe that ran out of list
      carried on into the page. The albums under it are reached from outside
-     the list, by the peek left below it. */
-  overscroll-behavior: contain;
+     the list, by the peek left below it. Up and down only: a swipe sideways
+     is the row's, which brings the other list. */
+  overscroll-behavior-y: contain;
   /* Not the bar of the page: thinner than it. */
   --scrollbar-width: 7px;
   scroll-snap-align: start;
