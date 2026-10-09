@@ -1166,6 +1166,13 @@
   object-fit: cover;
 }
 
+/* The cover of the album of a song, which is square: shown whole in a square
+   of its own, where the wide frame of a film would cut it to a band. */
+.watch-picture-cover {
+  width: 112px;
+  aspect-ratio: 1;
+}
+
 /* Whether the film is moving, over the corner of its picture. */
 .watch-moving {
   position: absolute;
@@ -1392,6 +1399,11 @@
     width: auto;
     margin: 12px 12px 0;
     align-self: stretch;
+  }
+
+  .watch-picture-cover {
+    width: 112px;
+    align-self: flex-start;
   }
 }
 

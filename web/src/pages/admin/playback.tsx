@@ -279,7 +279,7 @@ function WatchCard({
   return (
     <article className={`watch${watched.stopping ? " watch-stopping" : ""}`}>
       <div className="watch-main">
-        <div className="watch-picture">
+        <div className={`watch-picture${watched.kind === "song" ? " watch-picture-cover" : ""}`}>
           {watched.picture ? (
             <img src={watched.picture} alt="" loading="lazy" />
           ) : (
