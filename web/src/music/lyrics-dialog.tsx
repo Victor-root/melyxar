@@ -8,16 +8,18 @@
  * taken are the words shown at once.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
 import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { Modal } from "../components/modal";
 import { CloseIcon, DownloadIcon, SubtitlesIcon } from "../icons";
+import { outOfAHundred, shiftInSeconds } from "../readable";
+import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import { music } from "./api";
-import type { LyricsOffer, LyricsSyncOutcome, Song } from "./api";
+import type { LyricsOffer, Song, SongLyrics } from "./api";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
 
@@ -42,14 +44,16 @@ export function useSongLyrics(songs: Song[]): { lines: MenuLine[]; dialog: React
 }
 
 function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const { lyricsHaveMoved } = useMusicMarks();
+  const { jobs, watch, finished } = useRunning();
   const [again, setAgain] = useState(0);
   const current = useAsked((signal) => music.lyrics(song.id, signal), [song.id, again]);
   const [artist, setArtist] = useState(song.artists[0]?.name ?? "");
   const [title, setTitle] = useState(song.title);
   const [offers, setOffers] = useState<LyricsOffer[] | null>(null);
-  const [busy, setBusy] = useState<number | "search" | "sync" | null>(null);
+  const [busy, setBusy] = useState<number | "search" | null>(null);
+  const [listenAsked, setListenAsked] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
@@ -91,13 +95,16 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
     });
 
   const synchronise = () => {
-    setBusy("sync");
     setSaid(null);
+    setListenAsked(true);
     void attempt(async () => {
-      const outcome = await music.synchroniseLyrics(song.id);
-      setSaid(syncSaid(t, outcome));
-      setAgain((count) => count + 1);
-      lyricsHaveMoved();
+      try {
+        await music.synchroniseLyrics(song.id);
+        watch();
+      } catch (error) {
+        setListenAsked(false);
+        throw error;
+      }
     });
   };
 
@@ -108,6 +115,20 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
       setAgain((count) => count + 1);
       lyricsHaveMoved();
     });
+
+  /* The listening is a job of the server's, followed with the others: when the
+     last one ends the lyrics are read again, here and wherever they are shown. */
+  const listening = jobs.find((job) => job.kind === "line_up_lyrics" && job.target === song.id) ?? null;
+  const listeningRuns = listenAsked || listening !== null;
+  const lastFinished = useRef(finished);
+  useEffect(() => {
+    if (finished !== lastFinished.current) {
+      lastFinished.current = finished;
+      setListenAsked(false);
+      setAgain((count) => count + 1);
+      lyricsHaveMoved();
+    }
+  }, [finished, lyricsHaveMoved]);
 
   const lyrics = current.answer;
   return (
@@ -148,16 +169,13 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
           <ul className="subtitles-lines">
             <li className="subtitles-line">
               <span className="subtitles-release">
-                {lyrics.synchronised
-                  ? t("lyrics_dialog.sync_on", {
-                      lines: lyrics.synchronised.lines_moved,
-                      seconds: shiftSaid(lyrics.synchronised.shift_ms),
-                    })
-                  : busy === "sync"
-                    ? t("lyrics_dialog.sync_running")
+                {listeningRuns
+                  ? t("lyrics_dialog.sync_running")
+                  : lyrics.synchronised
+                    ? syncSaid(t, language, lyrics.synchronised)
                     : ""}
               </span>
-              {lyrics.synchronised ? (
+              {lyrics.synchronised?.conclusion === "aligned" && !listeningRuns ? (
                 <button
                   type="button"
                   className="subtitles-off"
@@ -169,12 +187,25 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
                   <CloseIcon size={15} />
                 </button>
               ) : (
-                <button type="button" className="button button-small" disabled={busy !== null} onClick={synchronise}>
+                <button
+                  type="button"
+                  className="button button-small"
+                  disabled={busy !== null || listeningRuns}
+                  onClick={synchronise}
+                >
                   {t("lyrics_dialog.sync_run")}
                 </button>
               )}
             </li>
           </ul>
+          {listeningRuns && listening?.ratio != null && (
+            <div className="job-card-progress">
+              <span className="meter">
+                <span className="meter-fill" style={{ width: `${outOfAHundred(listening.ratio)}%` }} />
+              </span>
+              <span className="job-card-count">{outOfAHundred(listening.ratio)} %</span>
+            </div>
+          )}
         </>
       )}
 
@@ -253,15 +284,14 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   );
 }
 
-/** A shift in seconds, to a tenth, with its sign. */
-function shiftSaid(milliseconds: number): string {
-  const seconds = (milliseconds / 1000).toFixed(1);
-  return milliseconds > 0 ? `+${seconds}` : seconds;
-}
-
-function syncSaid(t: ReturnType<typeof useSettings>["t"], outcome: LyricsSyncOutcome): string {
-  if (outcome.conclusion === "aligned") {
-    return t("lyrics_dialog.sync_done", { lines: outcome.lines_moved, seconds: shiftSaid(outcome.shift_ms) });
+/** What came of the last attempt, as a sentence. */
+function syncSaid(
+  t: ReturnType<typeof useSettings>["t"],
+  language: string,
+  attempt: NonNullable<SongLyrics["synchronised"]>,
+): string {
+  if (attempt.conclusion === "aligned") {
+    return t("lyrics_dialog.sync_on", { lines: attempt.lines_moved, seconds: shiftInSeconds(attempt.shift_ms, language) });
   }
-  return t(`lyrics_dialog.sync_result.${outcome.conclusion}`);
+  return t(`lyrics_dialog.sync_result.${attempt.conclusion}`);
 }

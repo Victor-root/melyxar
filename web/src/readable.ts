@@ -489,6 +489,16 @@ export function writtenMoment(when: Date, language: string, options: Intl.DateTi
   return format.format(when);
 }
 
+/** A shift in milliseconds as seconds to a tenth, with its sign and the
+ *  decimal mark of the language: "+1.5" to one reader, "-1,4" to another. */
+export function shiftInSeconds(milliseconds: number, language: string): string {
+  return written(milliseconds / 1000, language, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+    signDisplay: "exceptZero",
+  });
+}
+
 export function amountOfData(bytes: number, language: string): string {
   const units = DATA_UNITS[language] ?? DATA_UNITS.en;
   let value = bytes;

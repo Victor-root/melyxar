@@ -26,6 +26,7 @@ import {
   nameOfPlayed,
   networkRate,
   outOfAHundred,
+  shiftInSeconds,
   outOfTen,
   fullnessOf,
   percentOf,
@@ -42,6 +43,14 @@ import {
  *  and not the sentence it ends up in. */
 const said: Wording = (key, values) =>
   values ? `${key}(${JSON.stringify(values)})` : key;
+
+describe("shiftInSeconds", () => {
+  it("writes a shift to a tenth of a second with its sign and the mark of the language", () => {
+    expect(shiftInSeconds(1500, "en")).toBe("+1.5");
+    expect(shiftInSeconds(-1440, "fr")).toBe("-1,4");
+    expect(shiftInSeconds(0, "en")).toBe("0.0");
+  });
+});
 
 describe("outOfAHundred", () => {
   it("rounds down, so a hundred is only ever a real hundred", () => {
