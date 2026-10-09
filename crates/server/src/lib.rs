@@ -30,6 +30,7 @@ pub mod libraries;
 pub mod live;
 pub mod music;
 pub mod music_playlists;
+pub mod lyrics_watch;
 pub mod music_lyrics;
 pub mod music_preferences;
 pub mod music_tags;

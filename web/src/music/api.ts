@@ -166,6 +166,33 @@ export interface LyricsOffer {
   instrumental: boolean;
 }
 
+/** One fact the page saw of the lyrics playing, for the journal. The server
+    names the facts: see its `lyrics_watch` module for the whole list. */
+export type LyricsSaw = { song: string } & (
+  | {
+      saw: "lyrics_read";
+      source: SongLyrics["source"];
+      lines: number;
+      first_at_ms: number | null;
+      last_at_ms: number | null;
+      out_of_order: number;
+      empty_lines: number;
+      instrumental: boolean;
+    }
+  | {
+      saw: "line_lit";
+      why: "first" | "played" | "after_a_jump";
+      position_ms: number;
+      active: number;
+      lines: number;
+      line_at_ms: number | null;
+      next_at_ms: number | null;
+      text: string;
+    }
+  | { saw: "line_not_lit"; position_ms: number; expected: number; shown: number; expected_at_ms: number | null }
+  | { saw: "clock_stood_still"; position_ms: number; for_ms: number }
+);
+
 /** What a library of music does beyond the rest. */
 export interface MusicLibraryOptions {
   lyrics_online: boolean;
@@ -327,6 +354,9 @@ export const music = {
   recordListen: (song: string) => post<{ listened: boolean }>(`/api/v1/music/songs/${song}/listened`),
   lyrics: (song: string, signal?: AbortSignal) =>
     get<SongLyrics | null>(`/api/v1/music/songs/${song}/lyrics`, signal),
+  /** Nothing waits on it: it is a line in a journal. */
+  tellTheJournalOfLyrics: (said: LyricsSaw) =>
+    post<{ written: boolean }>("/api/v1/system/journal/lyrics", said).catch(() => {}),
   /** What LRCLIB holds under an artist and a title, for an administrator. */
   lyricsOffers: (song: string, artist: string, title: string, signal?: AbortSignal) =>
     get<LyricsOffer[]>(`/api/v1/music/songs/${song}/lyrics/offers${query({ artist, title })}`, signal),
