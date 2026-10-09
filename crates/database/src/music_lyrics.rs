@@ -129,6 +129,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_empty_answers_kept_so_far_are_forgotten_and_the_found_ones_stay() {
+        let (database, library, _) = collection().await;
+        let songs = database
+            .music_songs(library, SongOrder::Title, false, 0, 3)
+            .await
+            .expect("read")
+            .items;
+        let (unknown, found, instrumental) = (songs[0].id, songs[1].id, songs[2].id);
+        let words = LookedUpLyrics { plain: Some("words".into()), ..LookedUpLyrics::default() };
+        let without = LookedUpLyrics { instrumental: true, ..LookedUpLyrics::default() };
+        for (song, answer) in [(unknown, &LookedUpLyrics::default()), (found, &words), (instrumental, &without)] {
+            database
+                .keep_looked_up_lyrics(song, answer, melyxar_core::time::now())
+                .await
+                .expect("kept");
+        }
+
+        sqlx::query(include_str!("../migrations/0111_forget_empty_lyrics_answers.sql"))
+            .execute(database.writer())
+            .await
+            .expect("run");
+
+        assert_eq!(database.looked_up_lyrics(unknown).await.expect("read"), None);
+        assert_eq!(database.looked_up_lyrics(found).await.expect("read"), Some(words));
+        assert_eq!(database.looked_up_lyrics(instrumental).await.expect("read"), Some(without));
+    }
+
+    #[tokio::test]
     async fn what_was_found_online_is_kept_found_or_not() {
         let (database, library, _) = collection().await;
         let song = database
