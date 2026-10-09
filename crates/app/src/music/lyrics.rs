@@ -210,7 +210,7 @@ pub(crate) async fn found_lyrics(state: &AppState, who: &User, song: WorkId) -> 
 /// The way songs are looked up, a number that rises each time finding them
 /// gets better: an answer of "unknown" kept by an older way is asked again,
 /// instead of being believed for good.
-const LOOKUP_METHOD: i64 = 2;
+const LOOKUP_METHOD: i64 = 3;
 
 /// How long an "unknown" is believed: LRCLIB gains songs every day.
 const UNKNOWN_BELIEVED_SECONDS: i64 = 30 * 24 * 3600;
