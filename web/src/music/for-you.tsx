@@ -69,18 +69,21 @@ export function ForYouTab({ library }: { library: string }) {
   if (newest && newest.length === 0) {
     return <p className="notice">{t("music.no_album")}</p>;
   }
+  const newestRow = newest && (
+    <section className="section">
+      <RowHead title={t("music.newest")} />
+      <Row>
+        {newest.map((album) => (
+          <AlbumTile key={album.id} album={album} />
+        ))}
+      </Row>
+    </section>
+  );
   return (
     <div className="music-for-you">
-      {newest && (
-        <section className="section">
-          <RowHead title={t("music.newest")} />
-          <Row>
-            {newest.map((album) => (
-              <AlbumTile key={album.id} album={album} />
-            ))}
-          </Row>
-        </section>
-      )}
+      {/* On a phone what was listened to comes first, under the thumb, and the
+          newest albums are what a scroll reaches after it. */}
+      {!phone && newestRow}
       {phone ? (
         <ListenedSwitch
           lists={[
@@ -100,6 +103,7 @@ export function ForYouTab({ library }: { library: string }) {
           <Listened title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
         </>
       )}
+      {phone && newestRow}
     </div>
   );
 }
