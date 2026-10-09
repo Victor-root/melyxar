@@ -314,13 +314,16 @@
   flex: 0 0 100%;
   min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   /* Scrolled by the graphics card, for the reason given on the box the page
      scrolls in. */
   will-change: scroll-position;
-  /* Not the bar of the page: thinner than it. A list that has run out hands
-     the next swipe to the page, which is how the albums under it are
-     reached. */
+  /* Reaching either end of a list stops there: a swipe that ran out of list
+     carried on into the page. The albums under it are reached from outside
+     the list, by the peek left below it. */
+  overscroll-behavior: contain;
+  /* Not the bar of the page: thinner than it. */
   --scrollbar-width: 7px;
   scroll-snap-align: start;
   scroll-snap-stop: always;
