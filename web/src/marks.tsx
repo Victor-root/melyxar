@@ -17,31 +17,16 @@
  * moving is a tick people press twice.
  */
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 import { api } from "./api";
 import type { Card, Seen } from "./api";
+import { createMarkStore } from "./marks-store";
+import type { Mark, MarkStore } from "./marks-store";
 import { markedWatched, whereaboutsOf } from "./watching";
-import type { Said, Whereabouts } from "./watching";
+import type { Whereabouts } from "./watching";
 
-/** What has been said about one work since the page was drawn. */
-interface Mark {
-  watched?: Said;
-  favourite?: boolean;
-  /** Put aside to watch later, and what the server had said when it was.
-      Seeing the work takes it off the list on the server's side, so a card
-      that has since come back saying otherwise is the server's newer word. */
-  watchLater?: { said: boolean; over: boolean };
-  /** On the server's own front shelf. Unlike those above, nothing is known
-      about this until somebody says it here: a card does not arrive saying
-      whether it is on the front page. */
-  pinned?: boolean;
-  /** Deleted from here. Nothing draws it again: a card that stays in a grid
-      after its work has gone is a card that fails when it is pressed. */
-  gone?: boolean;
-}
-
-interface Marks {
+interface Marks extends MarkActions {
   /** Where this viewer is in a work, their own answer winning. */
   seenOf: (card: Card) => Seen;
   /** Where to carry on from, in seconds, and nothing when there is nowhere. */
@@ -55,6 +40,17 @@ interface Marks {
   pinnedOf: (card: Card) => boolean | undefined;
   /** Whether this work was deleted from this page. */
   goneOf: (id: string) => boolean;
+  /** Bumped whenever something said here changes which works a row built by
+      the server holds: a work put on the front page, an episode ticked off
+      the row of what is unfinished. The screens standing on such a row read
+      it again rather than mending it here, since what replaces what left is
+      the server's answer and nobody else's. */
+  rowsMoved: number;
+}
+
+/** What can be said about a work. The same from the first drawing to the
+ *  last, so that whoever only says something is never drawn again for it. */
+interface MarkActions {
   /** Says works were deleted, everywhere at once. The server has already
       done it: this is what was answered, not what was hoped for. */
   setGone: (ids: string[]) => void;
@@ -64,12 +60,6 @@ interface Marks {
   setWatchLater: (card: Card, later: boolean) => void;
   /** Settled once the server holds it, for pins that have to land in turn. */
   setPinned: (card: Card, pinned: boolean) => Promise<void>;
-  /** Bumped whenever something said here changes which works a row built by
-      the server holds: a work put on the front page, an episode ticked off
-      the row of what is unfinished. The screens standing on such a row read
-      it again rather than mending it here, since what replaces what left is
-      the server's answer and nobody else's. */
-  rowsMoved: number;
   /** Says that something outside this store changed what a row of the server's
       holds: a work named by hand is a different card with a different title
       and a different poster. */
@@ -77,19 +67,20 @@ interface Marks {
 }
 
 const MarksContext = createContext<Marks | null>(null);
+const MarkActionsContext = createContext<MarkActions | null>(null);
+const MarkStoreContext = createContext<MarkStore | null>(null);
 
 export function MarksProvider({ children }: { children: ReactNode }) {
-  const [said, setSaid] = useState<Record<string, Mark>>({});
+  const [store] = useState(createMarkStore);
+  const said = useSyncExternalStore(store.subscribe, store.all);
   const [rowsMoved, setRowsMoved] = useState(0);
   const rowsHaveMoved = useCallback(() => setRowsMoved((count) => count + 1), []);
 
-  const say = useCallback((id: string, mark: Mark) => {
-    setSaid((before) => ({ ...before, [id]: { ...before[id], ...mark } }));
-  }, []);
+  const say = useCallback((id: string, mark: Mark) => store.say({ [id]: mark }), [store]);
 
   const setWatched = useCallback(
     (card: Card, watched: boolean) => {
-      const before = said[card.id]?.watched;
+      const before = store.of(card.id)?.watched;
       const sent = sentOf(card);
       say(card.id, {
         watched: {
@@ -109,25 +100,25 @@ export function MarksProvider({ children }: { children: ReactNode }) {
         .then(rowsHaveMoved)
         .catch(() => say(card.id, { watched: before }));
     },
-    [said, say, rowsHaveMoved],
+    [store, say, rowsHaveMoved],
   );
 
   const setFavourite = useCallback(
     (card: Card, favourite: boolean) => {
-      const before = said[card.id]?.favourite ?? card.favourite;
+      const before = store.of(card.id)?.favourite ?? card.favourite;
       say(card.id, { favourite });
       api.setFavourite(card.id, favourite).catch(() => say(card.id, { favourite: before }));
     },
-    [said, say],
+    [store, say],
   );
 
   const setWatchLater = useCallback(
     (card: Card, later: boolean) => {
-      const before = said[card.id]?.watchLater;
+      const before = store.of(card.id)?.watchLater;
       say(card.id, { watchLater: { said: later, over: card.watch_later } });
       api.setWatchLater(card.id, later).catch(() => say(card.id, { watchLater: before }));
     },
-    [said, say],
+    [store, say],
   );
 
   /* The banner of the home page is the one thing this changes, and it is the
@@ -137,7 +128,7 @@ export function MarksProvider({ children }: { children: ReactNode }) {
      banner is no longer there either. */
   const setPinned = useCallback(
     (card: Card, pinned: boolean) => {
-      const before = said[card.id]?.pinned;
+      const before = store.of(card.id)?.pinned;
       say(card.id, { pinned });
       rowsHaveMoved();
       return api.setPinned(card.id, pinned).then(
@@ -150,27 +141,27 @@ export function MarksProvider({ children }: { children: ReactNode }) {
         () => say(card.id, { pinned: before }),
       );
     },
-    [said, say, rowsHaveMoved],
+    [store, say, rowsHaveMoved],
   );
 
   /* What stood around a deleted work is the server's to redraw: a series
      that lost its last episode, a folder that lost a photo. */
   const setGone = useCallback(
     (ids: string[]) => {
-      setSaid((before) => {
-        const after = { ...before };
-        for (const id of ids) {
-          after[id] = { ...before[id], gone: true };
-        }
-        return after;
-      });
+      store.say(Object.fromEntries(ids.map((id) => [id, { gone: true }])));
       rowsHaveMoved();
     },
-    [rowsHaveMoved],
+    [store, rowsHaveMoved],
+  );
+
+  const actions = useMemo<MarkActions>(
+    () => ({ setWatched, setFavourite, setWatchLater, setPinned, setGone, rowsHaveMoved }),
+    [setWatched, setFavourite, setWatchLater, setPinned, setGone, rowsHaveMoved],
   );
 
   const value = useMemo<Marks>(
     () => ({
+      ...actions,
       seenOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).seen,
       resumeOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).resume,
       unwatchedOf: (card) => whereaboutsOf(sentOf(card), said[card.id]?.watched).unwatched,
@@ -181,18 +172,18 @@ export function MarksProvider({ children }: { children: ReactNode }) {
       },
       pinnedOf: (card) => said[card.id]?.pinned,
       goneOf: (id) => said[id]?.gone === true,
-      setWatched,
-      setFavourite,
-      setWatchLater,
-      setPinned,
-      setGone,
       rowsMoved,
-      rowsHaveMoved,
     }),
-    [said, setWatched, setFavourite, setWatchLater, setPinned, setGone, rowsMoved, rowsHaveMoved],
+    [actions, said, rowsMoved],
   );
 
-  return <MarksContext.Provider value={value}>{children}</MarksContext.Provider>;
+  return (
+    <MarkStoreContext.Provider value={store}>
+      <MarkActionsContext.Provider value={actions}>
+        <MarksContext.Provider value={value}>{children}</MarksContext.Provider>
+      </MarkActionsContext.Provider>
+    </MarkStoreContext.Provider>
+  );
 }
 
 /** Where the server said this viewer is in a work. */
@@ -200,10 +191,43 @@ function sentOf(card: Card): Whereabouts {
   return { seen: card.seen, resume: card.resume_from_seconds, unwatched: card.unwatched };
 }
 
+/** Everything said about every work, and what can be said. Drawn again at
+ *  every change of any of them: for a screen that reads across works. */
 export function useMarks(): Marks {
   const marks = useContext(MarksContext);
   if (!marks) {
     throw new Error("a mark was asked for outside its provider");
   }
   return marks;
+}
+
+/** What can be said about a work, without being drawn again when something
+ *  is: for whatever only says. */
+export function useMarkActions(): MarkActions {
+  const actions = useContext(MarkActionsContext);
+  if (!actions) {
+    throw new Error("a mark was asked for outside its provider");
+  }
+  return actions;
+}
+
+/** Where this viewer is in one work, and what they said about it. */
+export interface MarksOf extends Whereabouts {
+  favourite: boolean;
+  gone: boolean;
+}
+
+/** What was said about one work, and nothing about any other: the card is
+ *  drawn again when its own work changes and not when another one does. */
+export function useMarksOf(card: Card): MarksOf {
+  const store = useContext(MarkStoreContext);
+  if (!store) {
+    throw new Error("a mark was asked for outside its provider");
+  }
+  const said = useSyncExternalStore(store.subscribe, () => store.of(card.id));
+  return {
+    ...whereaboutsOf(sentOf(card), said?.watched),
+    favourite: said?.favourite ?? card.favourite,
+    gone: said?.gone === true,
+  };
 }
