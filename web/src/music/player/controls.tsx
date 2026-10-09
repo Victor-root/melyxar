@@ -37,7 +37,7 @@ const KEY_STEP = 5;
 const TIME_ACROSS = 64;
 
 /** How long the play button of the bar is held to stop the music for good. */
-const HOLD_TO_STOP_MS = 2000;
+const HOLD_TO_STOP_MS = 1000;
 
 /** A press that toggles, or that stops when held for HOLD_TO_STOP_MS while
  *  `stop` is given. The ring fills under the finger, and the click that ends a
