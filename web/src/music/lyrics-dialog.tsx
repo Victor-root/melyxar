@@ -20,12 +20,9 @@ import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { LyricsOffer, Song, SongLyrics } from "./api";
+import { offersMissingLines } from "./lyrics-offers";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
-
-/** How long without a line stamped is worth saying: the song runs on with
-    nothing lit. */
-const LONG_GAP_SECONDS = 12;
 
 /** The line of the menu and the window it opens, for one song and an
     administrator only. */
@@ -130,6 +127,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
     }
   }, [finished, lyricsHaveMoved]);
 
+  const missingLines = offersMissingLines(offers ?? []);
   const lyrics = current.answer;
   return (
     <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="modal-subtitles">
@@ -269,9 +267,9 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
                       {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
                     </span>
                     {offer.synced && <span>{t("lyrics_dialog.lines", { count: offer.synced_lines })}</span>}
-                    {offer.longest_gap_seconds !== null && offer.longest_gap_seconds >= LONG_GAP_SECONDS && (
+                    {missingLines.has(offer.id) && (
                       <span className="work-badge work-badge-warning" title={t("lyrics_dialog.gap_why")}>
-                        {t("lyrics_dialog.gap", { seconds: offer.longest_gap_seconds })}
+                        {t("lyrics_dialog.gap", { seconds: offer.longest_gap_seconds ?? 0 })}
                       </span>
                     )}
                   </>
