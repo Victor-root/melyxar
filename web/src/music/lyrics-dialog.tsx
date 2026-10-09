@@ -147,6 +147,11 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
                 {t(lyrics.lines.length > 0 ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
               </span>
             )}
+            {lyrics === null && (
+              <button type="button" className="button button-small" title={t("lyrics_dialog.look_again_why")} onClick={forget}>
+                {t("lyrics_dialog.look_again")}
+              </button>
+            )}
             {lyrics?.source === "online" && (
               <button
                 type="button"
