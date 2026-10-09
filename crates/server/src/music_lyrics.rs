@@ -37,6 +37,10 @@ struct OfferView {
     /// Whether it has words at all.
     plain: bool,
     instrumental: bool,
+    /// The lines that carry a moment, and the longest stretch without one in
+    /// seconds: where stamped words leave the song running with nothing lit.
+    synced_lines: u32,
+    longest_gap_seconds: Option<u32>,
 }
 
 impl From<Offer> for OfferView {
@@ -50,6 +54,8 @@ impl From<Offer> for OfferView {
             synced: offer.synced,
             plain: offer.plain,
             instrumental: offer.instrumental,
+            synced_lines: offer.synced_lines,
+            longest_gap_seconds: offer.longest_gap_seconds,
         }
     }
 }

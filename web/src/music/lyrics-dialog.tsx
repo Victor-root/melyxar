@@ -21,6 +21,10 @@ import type { LyricsOffer, Song } from "./api";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
 
+/** How long without a line stamped is worth saying: the song runs on with
+    nothing lit. */
+const LONG_GAP_SECONDS = 12;
+
 /** The line of the menu and the window it opens, for one song and an
     administrator only. */
 export function useSongLyrics(songs: Song[]): { lines: MenuLine[]; dialog: ReactNode } {
@@ -168,9 +172,17 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
                 {offer.instrumental ? (
                   <span className="work-badge">{t("lyrics_dialog.instrumental")}</span>
                 ) : (
-                  <span className={`work-badge${offer.synced ? " subtitles-fits" : ""}`}>
-                    {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
-                  </span>
+                  <>
+                    <span className={`work-badge${offer.synced ? " subtitles-fits" : ""}`}>
+                      {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
+                    </span>
+                    {offer.synced && <span>{t("lyrics_dialog.lines", { count: offer.synced_lines })}</span>}
+                    {offer.longest_gap_seconds !== null && offer.longest_gap_seconds >= LONG_GAP_SECONDS && (
+                      <span className="work-badge work-badge-warning" title={t("lyrics_dialog.gap_why")}>
+                        {t("lyrics_dialog.gap", { seconds: offer.longest_gap_seconds })}
+                      </span>
+                    )}
+                  </>
                 )}
               </span>
               <button type="button" className="button button-small" disabled={busy !== null} onClick={() => take(offer)}>

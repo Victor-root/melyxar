@@ -164,6 +164,10 @@ export interface LyricsOffer {
   /** Whether it has words at all. */
   plain: boolean;
   instrumental: boolean;
+  /** The lines that carry a moment, and the longest stretch without one, in
+      seconds: where the song runs on with nothing lit. */
+  synced_lines: number;
+  longest_gap_seconds: number | null;
 }
 
 /** One fact the page saw of the lyrics playing, for the journal. The server
