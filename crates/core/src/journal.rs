@@ -68,6 +68,10 @@ pub fn tag_of(module: &str) -> &'static str {
         // Ratings from elsewhere are what the metadata screen sets up.
         ("melyxar_app::ratings", "metadata"),
         ("melyxar_app::subtitles", "subtitles"),
+        // Where the words of a song were looked for and what LRCLIB said:
+        // together, since "why has this song no words" is answered by both.
+        ("melyxar_app::music::lyrics", "lyrics"),
+        ("melyxar_metadata::lrclib", "lyrics"),
         // Measuring what a device decodes: the clips, and every result kept.
         ("melyxar_app::calibration", "calibration"),
         ("melyxar_app::playback", "playback"),
@@ -308,6 +312,9 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::startup"), "startup");
         assert_eq!(tag_of("melyxar_app::upkeep"), "upkeep");
         assert_eq!(tag_of("melyxar_app::openings"), "openings");
+        assert_eq!(tag_of("melyxar_app::music::lyrics"), "lyrics");
+        assert_eq!(tag_of("melyxar_metadata::lrclib"), "lyrics");
+        assert_eq!(tag_of("melyxar_metadata::musicbrainz"), "metadata");
         assert_eq!(
             tag_of("melyxar_ffmpeg::sound"),
             "openings",
