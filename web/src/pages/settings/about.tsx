@@ -1,14 +1,14 @@
 /*
  * What Melyxar is, which one this server runs, under which licence, and where
- * the pictures, words and ratings about films come from, which their sources
- * ask to be said.
+ * the pictures, words and ratings about films, and the words of songs, come
+ * from, which their sources ask to be said.
  */
 
 import { useEffect, useState } from "react";
 import { api } from "../../api";
 import type { SystemInfo } from "../../api";
 import { PageHead, Panel, Setting } from "../../components/panel";
-import { InfoIcon, MelyxarMark, ServerIcon, ShieldIcon, TagIcon } from "../../icons";
+import { InfoIcon, MelyxarMark, MusicIcon, ServerIcon, ShieldIcon, TagIcon } from "../../icons";
 import { useSettings } from "../../settings";
 
 const REPOSITORY = "https://github.com/Victor-root/melyxar";
@@ -19,6 +19,7 @@ const PROVIDER = "https://www.themoviedb.org";
 const ICONS = "https://tabler.io/icons";
 const IMDB = "https://www.imdb.com";
 const OMDB = "https://www.omdbapi.com";
+const LRCLIB = "https://lrclib.net";
 
 export function MyAbout() {
   const { t } = useSettings();
@@ -97,6 +98,14 @@ export function MyAbout() {
         <Setting label="OMDb" why={t("about.omdb_why")}>
           <a className="button button-small" href={OMDB} target="_blank" rel="noopener noreferrer">
             omdbapi.com
+          </a>
+        </Setting>
+      </Panel>
+
+      <Panel icon={MusicIcon} title={t("about.lyrics")} lead={t("about.lyrics_lead")}>
+        <Setting label="LRCLIB" why={t("about.lyrics_why")}>
+          <a className="button button-small" href={LRCLIB} target="_blank" rel="noopener noreferrer">
+            lrclib.net
           </a>
         </Setting>
       </Panel>

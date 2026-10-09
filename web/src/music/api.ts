@@ -152,6 +152,20 @@ export interface SongLyrics {
   instrumental: boolean;
 }
 
+/** One entry of LRCLIB offered for a song, to be taken as its words. */
+export interface LyricsOffer {
+  id: number;
+  artist: string;
+  title: string;
+  album: string | null;
+  seconds: number | null;
+  /** Stamped line by line, so it follows the song. */
+  synced: boolean;
+  /** Whether it has words at all. */
+  plain: boolean;
+  instrumental: boolean;
+}
+
 /** What a library of music does beyond the rest. */
 export interface MusicLibraryOptions {
   lyrics_online: boolean;
@@ -313,6 +327,11 @@ export const music = {
   recordListen: (song: string) => post<{ listened: boolean }>(`/api/v1/music/songs/${song}/listened`),
   lyrics: (song: string, signal?: AbortSignal) =>
     get<SongLyrics | null>(`/api/v1/music/songs/${song}/lyrics`, signal),
+  /** What LRCLIB holds under an artist and a title, for an administrator. */
+  lyricsOffers: (song: string, artist: string, title: string, signal?: AbortSignal) =>
+    get<LyricsOffer[]>(`/api/v1/music/songs/${song}/lyrics/offers${query({ artist, title })}`, signal),
+  takeLyrics: (song: string, entry: number) => post<null>(`/api/v1/music/songs/${song}/lyrics/online`, { entry }),
+  forgetLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/online`),
   /** Nothing for a song whose sound was not read yet. */
   spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
     const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);

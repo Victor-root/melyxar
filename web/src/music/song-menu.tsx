@@ -17,6 +17,7 @@ import { useSettings } from "../settings";
 import type { Song } from "./api";
 import { AddToPlaylist } from "./add-to-playlist";
 import { useSongDeletion } from "./delete-song";
+import { useSongLyrics } from "./lyrics-dialog";
 import { QueueIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
 
@@ -33,7 +34,8 @@ const OFF_THE_EDGE = 8;
 
 /** What can be done with songs beyond pressing them, in the order a menu and
  *  a line of a list both offer them, and the windows that adding to a
- *  playlist and deleting open, to be drawn wherever the actions are. */
+ *  playlist, choosing lyrics and deleting open, to be drawn wherever the
+ *  actions are. */
 export function useSongActions(songs: Song[], deletable = false): { actions: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const navigate = useGoTo();
@@ -41,6 +43,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
   const [adding, setAdding] = useState(false);
   const one = songs.length === 1 ? songs[0] : null;
   const deletion = useSongDeletion(deletable ? songs : []);
+  const lyrics = useSongLyrics(songs);
   const actions: MenuLine[] = [
     { key: "next", said: t("music.play_next"), mark: <PlayAllIcon size={17} />, act: () => player.playNext(songs) },
     { key: "last", said: t("music.play_last"), mark: <QueueIcon size={17} />, act: () => player.playLast(songs) },
@@ -51,6 +54,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
     ...(one && one.artists.length > 0
       ? [{ key: "artist", said: t("music.go_to_artist"), mark: <ProfileIcon size={17} />, act: () => navigate(`/music/artist/${one.artists[0].id}`) }]
       : []),
+    ...lyrics.lines,
     ...deletion.lines,
   ];
   return {
@@ -58,6 +62,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
     dialog: (
       <>
         {adding && <AddToPlaylist songs={songs} onClose={() => setAdding(false)} />}
+        {lyrics.dialog}
         {deletion.dialog}
       </>
     ),
