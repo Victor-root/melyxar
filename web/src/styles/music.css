@@ -1650,8 +1650,11 @@
   position: relative;
   max-height: min(62vh, 640px);
   margin: 0;
-  padding: 0;
-  overflow-y: auto;
+  /* The line being sung grows from its left edge by 3%, and the room for it
+     is left on the right, so that growing and shrinking again never makes the
+     list wider than it is: a bar sideways under a list with all that room. */
+  padding: 0 4% 0 0;
+  overflow: hidden auto;
   list-style: none;
   overscroll-behavior: contain;
 }
@@ -1681,9 +1684,6 @@
 }
 
 .music-lyrics-now button {
-  /* Scaled up from its left edge, it is made narrower by as much so that its
-     right edge stays where the others end and nothing overflows the list. */
-  width: calc(100% / 1.03);
   color: var(--accent-bright);
   transform: scale(1.03);
   transform-origin: left center;
