@@ -169,12 +169,12 @@
 
 /* A tile is the card of the rest of the interface, with a square picture,
    or a round one for an artist whose name is then centred under it. */
-.card-square .card-picture {
-  aspect-ratio: 1;
+.card-square {
+  --picture-ratio: 1;
 }
 
-.card-round .card-picture {
-  border-radius: 50%;
+.card-round {
+  --picture-radius: 50%;
 }
 
 .card-round .card-line,
