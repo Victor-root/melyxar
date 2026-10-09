@@ -74,6 +74,11 @@ pub struct Offer {
     pub synced: bool,
     pub plain: bool,
     pub instrumental: bool,
+    /// How many lines carry a moment, and the longest time between two of
+    /// them in seconds: stamped words with a long gap leave the song running
+    /// with nothing lit.
+    pub synced_lines: u32,
+    pub longest_gap_seconds: Option<u32>,
 }
 
 /// The words LRCLIB holds for a song.
@@ -276,8 +281,17 @@ impl Answer {
 /// times stop lining up with the song.
 const SYNCED_TO_WITHIN_SECONDS: f64 = 5.0;
 
+/// How many lines a stamped text has, and the longest time between two of
+/// them in seconds.
+fn shape_of(synced: Option<&str>) -> (u32, Option<u32>) {
+    let lines = synced.map(melyxar_core::music_lyrics::read_lyrics).unwrap_or_default().synced;
+    let longest = lines.windows(2).map(|pair| pair[1].at.get() - pair[0].at.get()).max();
+    (lines.len() as u32, longest.map(|gap| (gap / 1000) as u32))
+}
+
 /// An entry of a search as it is offered, when it says what it is.
 fn offer_of(entry: Answer) -> Option<Offer> {
+    let (synced_lines, longest_gap_seconds) = shape_of(entry.synced_lyrics.as_deref());
     let has_words = |words: &Option<String>| words.as_deref().is_some_and(|words| !words.trim().is_empty());
     Some(Offer {
         id: entry.id?,
@@ -288,6 +302,8 @@ fn offer_of(entry: Answer) -> Option<Offer> {
         synced: has_words(&entry.synced_lyrics),
         plain: has_words(&entry.plain_lyrics),
         instrumental: entry.instrumental,
+        synced_lines,
+        longest_gap_seconds,
     })
 }
 
@@ -406,15 +422,22 @@ fn chosen_among(entries: Vec<Answer>, asked: &Asked<'_>) -> Option<FoundLyrics> 
             let distance = away(&entry);
             let agrees = distance.is_some_and(|distance| distance <= THE_SAME_LENGTH);
             let enough = alike >= ALIKE_ENOUGH || (agrees && alike >= ALIKE_WHEN_THE_LENGTH_AGREES);
-            enough.then_some((has_words, alike, distance, entry))
+            // Of the entries of the length of the file, the one with the most
+            // stamped lines is the one that has all of them: the same song is
+            // often stamped with lines missing, and the song then runs on
+            // with nothing lit.
+            let stamped = if agrees { shape_of(entry.synced_lyrics.as_deref()).0 } else { 0 };
+            enough.then_some((has_words, alike, agrees, stamped, distance, entry))
         })
-        .max_by(|(words, alike, distance, _), (other_words, other_alike, other_distance, _)| {
+        .max_by(|(words, alike, agrees, stamped, distance, _), (other_words, other_alike, other_agrees, other_stamped, other_distance, _)| {
             words
                 .cmp(other_words)
                 .then(alike.total_cmp(other_alike))
+                .then(agrees.cmp(other_agrees))
+                .then(stamped.cmp(other_stamped))
                 .then(other_distance.unwrap_or(f64::MAX).total_cmp(&distance.unwrap_or(f64::MAX)))
         });
-    best.map(|(_, _, distance, entry)| {
+    best.map(|(_, _, _, _, distance, entry)| {
         let mut found = entry.into_found();
         if distance.is_some_and(|distance| distance > SYNCED_TO_WITHIN_SECONDS) {
             found.synced = None;
@@ -567,6 +590,26 @@ mod tests {
     }
 
     #[test]
+    fn of_the_entries_of_the_length_of_the_file_the_one_with_the_most_stamped_lines_wins() {
+        let entries = r#"[
+            {"trackName":"Tides","artistName":"Amber Field","duration":177.0,"plainLyrics":"a","syncedLyrics":"[00:01.00] a\n[00:30.00] b","instrumental":false},
+            {"trackName":"Tides","artistName":"Amber Field","duration":176.0,"plainLyrics":"a","syncedLyrics":"[00:01.00] a\n[00:10.00] b\n[00:20.00] c\n[00:30.00] d","instrumental":false},
+            {"trackName":"Tides","artistName":"Amber Field","duration":260.0,"plainLyrics":"a","syncedLyrics":"[00:01.00] a\n[00:05.00] b\n[00:09.00] c\n[00:13.00] d\n[00:17.00] e","instrumental":false}
+        ]"#;
+        let asked = Asked { artist: "Amber Field", title: "Tides", album: None, seconds: Some(177) };
+        let found = chosen_among(entries_of(entries).expect("read"), &asked).expect("found");
+        assert!(found.synced.as_deref().is_some_and(|text| text.contains("[00:20.00] c")), "{found:?}");
+        assert!(!found.synced.as_deref().is_some_and(|text| text.contains("[00:17.00] e")), "too far in length");
+    }
+
+    #[test]
+    fn what_a_stamped_text_leaves_without_a_line_is_counted() {
+        assert_eq!(shape_of(Some("[00:01.00] a\n[00:08.50] b\n[00:30.00] c")), (3, Some(21)));
+        assert_eq!(shape_of(Some("no stamps")), (0, None));
+        assert_eq!(shape_of(None), (0, None));
+    }
+
+    #[test]
     fn words_are_compared_without_accents_capitals_or_the_full_stops_of_an_abbreviation() {
         assert_eq!(words_of("Fontaines D.C."), words_of("FONTAINES DC"));
         assert_eq!(words_of("Se Me Nota (Agárrame)"), words_of("se me nota - agarrame"));
@@ -627,6 +670,8 @@ mod tests {
                 synced: true,
                 plain: true,
                 instrumental: false,
+                synced_lines: 1,
+                longest_gap_seconds: None,
             }
         );
         assert_eq!(offers[1].album, None);
