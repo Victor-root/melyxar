@@ -19,6 +19,7 @@ import { useAsked } from "./asking";
 import type { Library, LibraryKind } from "./api";
 import type { CardShape } from "./components/card";
 import type { Wording } from "./readable";
+import { lookWhileSeen } from "./polling";
 
 export interface Libraries {
   all: Library[];
@@ -61,8 +62,7 @@ export function useWatchedLibraries(working: boolean, finished: number): Librari
     if (!working) {
       return;
     }
-    const timer = window.setInterval(look, WHILE_WORKING_MS);
-    return () => window.clearInterval(timer);
+    return lookWhileSeen(look, WHILE_WORKING_MS);
   }, [working, look]);
 
   // The same list read again is the same list: every screen built from it is

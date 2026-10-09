@@ -34,6 +34,7 @@ import { amountOfData, fullnessOf, networkRate, percentOf } from "../../readable
 import { safeRead, safeWrite } from "../../i18n";
 import { useSettings } from "../../settings";
 import { diskName, fullness, usedShare } from "./disks";
+import { lookWhileSeen } from "../../polling";
 
 /** How often the live figures are read. */
 const LIVE_EVERY_MS = 2_000;
@@ -62,8 +63,7 @@ export function SystemPanel({ card }: { card: string | null }) {
   const live = useAsked((signal) => api.measures(signal));
   const lookLive = live.look;
   useEffect(() => {
-    const timer = window.setInterval(lookLive, LIVE_EVERY_MS);
-    return () => window.clearInterval(timer);
+    return lookWhileSeen(lookLive, LIVE_EVERY_MS);
   }, [lookLive]);
 
   const kept = useAsked(
@@ -73,8 +73,7 @@ export function SystemPanel({ card }: { card: string | null }) {
   );
   const lookKept = kept.look;
   useEffect(() => {
-    const timer = window.setInterval(lookKept, CURVES_EVERY_MS);
-    return () => window.clearInterval(timer);
+    return lookWhileSeen(lookKept, CURVES_EVERY_MS);
   }, [lookKept]);
 
   const choose = (picked: Reach) => {

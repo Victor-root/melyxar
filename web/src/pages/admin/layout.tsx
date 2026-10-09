@@ -37,6 +37,7 @@ import {
 } from "../../icons";
 import { releaseOf } from "../../readable";
 import { useSettings } from "../../settings";
+import { lookWhileSeen } from "../../polling";
 
 /** How often the state of the server is looked at again while this is open. */
 const LOOKED_AT_EVERY_MS = 15_000;
@@ -121,8 +122,7 @@ export function OverviewProvider({ children }: { children: ReactNode }) {
   const { look } = overview;
 
   useEffect(() => {
-    const timer = window.setInterval(look, LOOKED_AT_EVERY_MS);
-    return () => window.clearInterval(timer);
+    return lookWhileSeen(look, LOOKED_AT_EVERY_MS);
   }, [look]);
 
   return (

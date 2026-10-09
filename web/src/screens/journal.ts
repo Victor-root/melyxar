@@ -17,6 +17,7 @@ import { api } from "../api";
 import type { Journal } from "../api";
 import { useAsked } from "../asking";
 import { handOver } from "../copying";
+import { lookWhileSeen } from "../polling";
 
 /** How often the screen looks again while it is open. */
 const EVERY_MS = 2_000;
@@ -65,8 +66,7 @@ export function useJournalScreen(): JournalScreen {
      screen must not blink twice a second. */
   const { look } = asked;
   useEffect(() => {
-    const beat = window.setInterval(look, EVERY_MS);
-    return () => window.clearInterval(beat);
+    return lookWhileSeen(look, EVERY_MS);
   }, [look]);
 
   /* A copy that failed is said until the server answers something, exactly as
