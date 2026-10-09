@@ -141,7 +141,10 @@ export function MusicNowPlaying() {
             ))}
           </nav>
 
-          <section className="music-now-queue" aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}>
+          <section
+            className={`music-now-queue${side === "lyrics" ? " music-now-lyrics" : ""}`}
+            aria-label={t(side === "queue" ? "music.queue" : "music.lyrics")}
+          >
             {side === "lyrics" ? <LyricsPanel song={song.id} /> : <QueuePanel />}
           </section>
         </div>
@@ -301,7 +304,7 @@ function PhonePages({
           <NowPlayingSong song={song} />
         </div>
         <div className="music-now-page music-now-page-words" ref={hold(2)}>
-          <section className="music-now-queue">
+          <section className="music-now-queue music-now-lyrics">
             <LyricsPanel song={song.id} />
           </section>
         </div>

@@ -1821,8 +1821,9 @@
     padding-bottom: var(--music-bar-height);
   }
 
-  /* What scrolls gives way to the bar as any page does, with the same fade. */
-  .music-now-queue {
+  /* What scrolls gives way to the bar as any page does, with the same fade.
+     The words of a song do not: they are read to their last line. */
+  .music-now-queue:not(.music-now-lyrics) {
     mask-image: var(--music-bar-fade);
     -webkit-mask-image: var(--music-bar-fade);
   }
