@@ -1,94 +1,97 @@
-//! Lining the stamps of lyrics up with where the voice starts in the song.
+//! Lining the stamps of lyrics up with the words heard in the song.
 //!
 //! The stamps of a file of lyrics say when each line starts being sung, and
 //! those of a file made on another version of the song, or timed by ear, are
-//! often off by a fraction of a second, the same fraction for every line or a
-//! little different for each. What the song says of where a voice starts is
-//! `voice_onsets`. Two things are looked for in it.
+//! often off by a fraction of a second or by a few seconds, the same for every
+//! line or a little different for each. The speech tool, listening to the
+//! song, writes down the words it hears and when. It is not asked what is
+//! sung: the words are known. What it heard is used only where it agrees with
+//! them, and whatever it makes up on top of the music finds no line to agree
+//! with and is left aside.
 //!
-//! First one shift for the whole song: the one that puts the most of the stamps
-//! on the most of the starts. It is looked for over a few seconds either way,
-//! a hundredth at a time, and believed only when it stands well clear of every
-//! other shift and of what chance gives: a song whose voice cannot be told from
-//! its instruments has no shift that does, and nothing is moved.
+//! The words heard are laid beside the words of the lyrics in the order of
+//! both, each heard word taking the lyric word it spells, if any. Each line
+//! that was heard at some of its words learns from them where it starts: the
+//! moment of a word less the time the words before it take. A line whose
+//! answer is far from those of the lines around it is a word taken for
+//! another one, a chorus heard twice, and is not believed. The others give
+//! their neighbours the move to make, smoothed over a handful of them, since
+//! the speech tool's moments wander by a few tenths of a second on music.
 //!
-//! Then, with that shift made, each line on its own: moved to the start of the
-//! voice near it when there is one start that stands clear of the others near
-//! it, and left where it is when there is none or two.
-//!
-//! Nothing here reads a file or launches anything: starts and stamps in,
-//! shifts out.
+//! Nothing here reads a file or launches anything: words and stamps in, moves
+//! out.
 
-use crate::voice::ONSETS_A_SECOND;
+use melyxar_core::text::fold_accents;
 
-/// One hundredth of a second, in milliseconds.
-const STEP_MS: i64 = 1_000 / ONSETS_A_SECOND as i64;
-
-/// How far the whole song may be shifted either way, in milliseconds.
-const MOST_SHIFT_MS: i64 = 4_000;
-/// How far a line may be moved on its own, beyond the shift of the song.
-const MOST_MOVE_MS: i64 = 350;
-/// How far from the best shift another counts as a different one.
-const APART_MS: i64 = 300;
-/// How wide a start is taken to be, in hundredths of a second either way: a
-/// stamp a little off its start still counts for it.
-const SPREAD: usize = 4;
-/// Fewer lines than this say nothing of where the song stands.
+/// Fewer sung lines than this say nothing of where the song stands.
 const FEWEST_LINES: usize = 6;
-/// How far the best shift must stand over what chance gives, in the spread of
-/// what chance gives.
-const CLEAR_OF_CHANCE: f32 = 5.0;
-/// How far the best shift must stand over the best of the shifts that are not
-/// near it, as a share of how far it stands over the mean.
-const CLEAR_OF_OTHERS: f32 = 0.2;
-/// A shift of the song smaller than this is no shift, in milliseconds.
-const NO_SHIFT_MS: i64 = 40;
-/// How much stronger a start must be than the next strongest near the line to
-/// be taken for the line's own.
-const CLEAR_OF_NEIGHBOURS: f32 = 1.25;
+/// Fewer lines heard than this are too few to believe.
+const FEWEST_HEARD: usize = 4;
+/// The share of the sung lines that must have been heard.
+const SMALLEST_SHARE: f32 = 0.25;
+/// How many of the lines heard on each side of a line say whether its answer
+/// is believed.
+const SAY_BY: usize = 3;
+/// How far from what the lines around it say an answer may be and be believed,
+/// in milliseconds.
+const BELIEVED_WITHIN_MS: i64 = 2_500;
+/// How many lines heard give a line its move: the nearest ones.
+const MOVE_FROM: usize = 5;
+/// A move smaller than this is no move: the speech tool is not that precise.
+const LEAST_MOVE_MS: i64 = 250;
 /// The least lines are kept apart after being moved, in milliseconds.
-const KEPT_APART_MS: i64 = 120;
-/// A line moves only for a start this high in the song's own starts: the share
-/// of them that are weaker.
-const STRONG_START_SHARE: f32 = 0.9;
+const KEPT_APART_MS: i64 = 100;
+/// What a word takes to be sung, at the least and at the most, in milliseconds.
+const SHORTEST_WORD_MS: i64 = 150;
+const LONGEST_WORD_MS: i64 = 600;
+/// The pace of the last line, which has no line after it to be read against.
+const LAST_LINE_WORD_MS: i64 = 400;
+/// The longest a line is taken to last.
+const LONGEST_LINE_MS: i64 = 6_000;
 
-/// One line of lyrics, as stamped.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Stamp {
+/// One line of lyrics, as stamped. A line with nothing in it marks where the
+/// singing stops.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LyricLine {
     pub at_ms: i64,
-    /// Whether anything is sung from here: a line with nothing in it marks
-    /// where the singing stops, which is not where a voice starts.
-    pub sung: bool,
+    pub text: String,
+}
+
+/// One word heard in the song, and when it starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeardWord {
+    pub text: String,
+    pub at_ms: i64,
 }
 
 /// What came of lining the lyrics up.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Alignment {
     pub verdict: Verdict,
-    /// The shift of the whole song, in milliseconds, nought unless believed.
+    /// What most of the song moves by, in milliseconds, nought unless lined up.
     pub shift_ms: i64,
-    /// How sure the shift is, from nought to one.
+    /// The share of the sung lines that were heard and believed, from nought
+    /// to one.
     pub confidence: f32,
-    /// How far the best shift stands over chance, in the spread of chance.
-    pub clear_of_chance: f32,
-    /// By how much each line is moved, in milliseconds: the shift of the song
-    /// and what the line's own start adds. All nought unless believed.
+    /// By how much each line is moved, in milliseconds. All nought unless
+    /// lined up.
     pub moves_ms: Vec<i64>,
-    /// How many lines are moved by 40 milliseconds or more.
+    /// How many lines are moved.
     pub lines_moved: usize,
+    /// How many lines were heard and believed.
+    pub lines_heard: usize,
 }
 
 /// Whether the song was lined up, and if not why.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
-    /// Lined up: the shift and the moves are the answer.
+    /// Lined up: the moves are the answer.
     Aligned,
-    /// The stamps already fall where the voice starts: nothing to move.
+    /// The stamps already fall where the words are heard: nothing to move.
     AlreadyFits,
     /// Too few lines to say.
     TooFewLines,
-    /// No shift stands clear of chance, or clear of the others: the voice
-    /// cannot be told from the rest of the sound.
+    /// Too few of the lines were heard to be sure of anything.
     NotSure,
 }
 
@@ -103,226 +106,425 @@ impl Verdict {
     }
 }
 
-/// Lines the stamps up with the starts.
-pub fn align(starts: &[f32], stamps: &[Stamp]) -> Alignment {
-    let nothing = |verdict, confidence, clear_of_chance| Alignment {
+/// Lines the stamps up with the words heard.
+pub fn align(lines: &[LyricLine], heard: &[HeardWord]) -> Alignment {
+    let nothing = |verdict, confidence, lines_heard| Alignment {
         verdict,
         shift_ms: 0,
         confidence,
-        clear_of_chance,
-        moves_ms: vec![0; stamps.len()],
+        moves_ms: vec![0; lines.len()],
         lines_moved: 0,
+        lines_heard,
     };
-    let sung: Vec<i64> = stamps.iter().filter(|stamp| stamp.sung).map(|stamp| stamp.at_ms).collect();
-    if sung.len() < FEWEST_LINES || starts.len() < 2 * SPREAD + 1 {
-        return nothing(Verdict::TooFewLines, 0.0, 0.0);
+    let words: Vec<Vec<String>> = lines.iter().map(|line| words_of(&line.text)).collect();
+    let sung = words.iter().filter(|words| !words.is_empty()).count();
+    if sung < FEWEST_LINES {
+        return nothing(Verdict::TooFewLines, 0.0, 0);
     }
 
-    let curve = smoothed(starts);
-    let shifts: Vec<i64> = (-MOST_SHIFT_MS / STEP_MS..=MOST_SHIFT_MS / STEP_MS).map(|step| step * STEP_MS).collect();
-    let scores: Vec<f32> = shifts.iter().map(|shift| score(&curve, &sung, *shift)).collect();
-    let (best, _) = scores
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.total_cmp(b))
-        .expect("there are shifts to try");
-    let best_score = scores[best];
-    let mean = scores.iter().sum::<f32>() / scores.len() as f32;
-    let spread = (scores.iter().map(|score| (score - mean).powi(2)).sum::<f32>() / scores.len() as f32).sqrt();
-    let clear_of_chance = if spread > 0.0 { (best_score - mean) / spread } else { 0.0 };
-    let best_of_others = shifts
-        .iter()
-        .zip(&scores)
-        .filter(|(shift, _)| (**shift - shifts[best]).abs() >= APART_MS)
-        .map(|(_, score)| *score)
-        .fold(f32::MIN, f32::max);
-    let clear_of_others = if best_score > mean { (best_score - best_of_others) / (best_score - mean) } else { 0.0 };
-    let confidence = (clear_of_others.clamp(0.0, 1.0) * (clear_of_chance / (2.0 * CLEAR_OF_CHANCE)).clamp(0.0, 1.0))
-        .clamp(0.0, 1.0);
-
-    if clear_of_chance < CLEAR_OF_CHANCE || clear_of_others < CLEAR_OF_OTHERS {
-        return nothing(Verdict::NotSure, confidence, clear_of_chance);
+    let answers = what_each_line_says(lines, &words, heard);
+    let believed = believed_among(&answers);
+    let share = believed.len() as f32 / sung as f32;
+    if believed.len() < FEWEST_HEARD || share < SMALLEST_SHARE {
+        return nothing(Verdict::NotSure, share, believed.len());
     }
 
-    let shift = if shifts[best].abs() < NO_SHIFT_MS { 0 } else { shifts[best] };
-    let moves = line_by_line(&curve, stamps, shift);
-    let lines_moved = moves.iter().filter(|moved| moved.abs() >= NO_SHIFT_MS).count();
+    let mut moves: Vec<i64> = (0..lines.len()).map(|line| move_of(line, &believed)).collect();
+    keep_in_order(lines, &mut moves);
+    let lines_moved = moves.iter().filter(|moved| **moved != 0).count();
+    let shift_ms = tenth_of_a_second(median(believed.iter().map(|(_, answer)| *answer).collect()));
     let verdict = if lines_moved == 0 { Verdict::AlreadyFits } else { Verdict::Aligned };
-    Alignment { verdict, shift_ms: shift, confidence, clear_of_chance, moves_ms: moves, lines_moved }
+    Alignment { verdict, shift_ms, confidence: share.min(1.0), moves_ms: moves, lines_moved, lines_heard: believed.len() }
 }
 
-/// The starts spread a little either way, so that a stamp a few hundredths off
-/// its start still lands on it.
-fn smoothed(starts: &[f32]) -> Vec<f32> {
-    let weights: Vec<f32> = (0..=SPREAD as i32)
-        .map(|distance| (-(distance as f32).powi(2) / (2.0 * (SPREAD as f32 / 2.0).powi(2))).exp())
-        .collect();
-    (0..starts.len())
-        .map(|at| {
-            let mut total = 0.0;
-            for (distance, weight) in weights.iter().enumerate() {
-                let before = at.checked_sub(distance).map_or(0.0, |index| starts[index]);
-                let after = starts.get(at + distance).copied().unwrap_or(0.0);
-                total += weight * if distance == 0 { before } else { before + after };
-            }
-            total
-        })
+/// The words of a text, in lower case and without accents or punctuation.
+fn words_of(text: &str) -> Vec<String> {
+    fold_accents(text)
+        .chars()
+        .filter(|letter| !matches!(letter, '\'' | '’'))
+        .flat_map(char::to_lowercase)
+        .map(|letter| if letter.is_alphanumeric() { letter } else { ' ' })
+        .collect::<String>()
+        .split_whitespace()
+        .map(str::to_string)
         .collect()
 }
 
-/// How much of the voice's starting the stamps catch when shifted by this.
-fn score(curve: &[f32], stamps_ms: &[i64], shift_ms: i64) -> f32 {
-    let mut total = 0.0;
-    let mut counted = 0;
-    for stamp in stamps_ms {
-        let at = (stamp + shift_ms) / STEP_MS;
-        if (0..curve.len() as i64).contains(&at) {
-            total += curve[at as usize];
-            counted += 1;
-        }
+/// How much finding a word is worth: the short words every song is full of
+/// say little of where in it we are.
+fn weight(word: &str) -> f32 {
+    match word.chars().count() {
+        0..=2 => 0.3,
+        3 => 0.6,
+        _ => 1.0,
     }
-    if counted == 0 { 0.0 } else { total / counted as f32 }
 }
 
-/// Where each line goes once the song is shifted: to the start of the voice
-/// near it when one stands clear, else where the shift puts it.
-fn line_by_line(curve: &[f32], stamps: &[Stamp], shift_ms: i64) -> Vec<i64> {
-    let strong = {
-        let mut sorted: Vec<f32> = curve.to_vec();
-        sorted.sort_by(f32::total_cmp);
-        sorted[((sorted.len() - 1) as f32 * STRONG_START_SHARE) as usize]
+/// Whether two words are the same word: spelled alike, or a letter or two
+/// apart for a long one, since the speech tool misspells what it hears.
+fn same_word(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let longest = a.chars().count().max(b.chars().count());
+    let allowed = match longest {
+        0..=3 => 0,
+        4..=6 => 1,
+        _ => 2,
     };
-    let reach = (MOST_MOVE_MS / STEP_MS) as usize;
-    let mut moves: Vec<i64> = stamps
-        .iter()
-        .map(|stamp| {
-            if !stamp.sung {
-                return shift_ms;
-            }
-            let centre = (stamp.at_ms + shift_ms) / STEP_MS;
-            if centre < 0 || centre as usize >= curve.len() {
-                return shift_ms;
-            }
-            let centre = centre as usize;
-            let from = centre.saturating_sub(reach);
-            let to = (centre + reach + 1).min(curve.len());
-            let Some(peak) = (from..to).max_by(|a, b| curve[*a].total_cmp(&curve[*b])) else {
-                return shift_ms;
-            };
-            let runner_up = (from..to)
-                .filter(|at| at.abs_diff(peak) > SPREAD * 2)
-                .map(|at| curve[at])
-                .fold(0.0, f32::max);
-            if curve[peak] >= strong && curve[peak] >= CLEAR_OF_NEIGHBOURS * runner_up {
-                (peak as i64 - stamp.at_ms / STEP_MS) * STEP_MS
-            } else {
-                shift_ms
-            }
-        })
-        .collect();
-    keep_in_order(stamps, &mut moves, shift_ms);
-    moves
+    allowed > 0 && a.chars().count().abs_diff(b.chars().count()) <= allowed && edits(a, b) <= allowed
 }
 
-/// A line moved past the one before it, or onto it, goes back to where the
-/// shift of the song puts it.
-fn keep_in_order(stamps: &[Stamp], moves: &mut [i64], shift_ms: i64) {
-    let mut last: Option<i64> = None;
-    for (stamp, moved) in stamps.iter().zip(moves.iter_mut()) {
-        let mut at = stamp.at_ms + *moved;
-        if last.is_some_and(|before| at < before + KEPT_APART_MS && stamp.at_ms >= before + KEPT_APART_MS) {
-            *moved = shift_ms;
-            at = stamp.at_ms + shift_ms;
+/// How many letters have to be changed, added or taken out to turn one word
+/// into the other.
+fn edits(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let mut before: Vec<usize> = (0..=b.len()).collect();
+    for (row, letter) in a.iter().enumerate() {
+        let mut current = vec![row + 1];
+        for (column, other) in b.iter().enumerate() {
+            let changed = before[column] + usize::from(letter != other);
+            current.push(changed.min(before[column + 1] + 1).min(current[column] + 1));
         }
-        last = Some(at.max(last.unwrap_or(i64::MIN)));
+        before = current;
     }
+    before[b.len()]
+}
+
+/// Where each line says it starts, according to the words heard of it, minus
+/// where it is stamped: how far it is from where it should be. Nothing for a
+/// line none of whose words was heard.
+fn what_each_line_says(lines: &[LyricLine], words: &[Vec<String>], heard: &[HeardWord]) -> Vec<Option<i64>> {
+    let flat: Vec<(usize, usize, &str)> = words
+        .iter()
+        .enumerate()
+        .flat_map(|(line, words)| words.iter().enumerate().map(move |(position, word)| (line, position, word.as_str())))
+        .collect();
+    let listened: Vec<(i64, String)> = heard
+        .iter()
+        .flat_map(|word| words_of(&word.text).into_iter().map(move |spelled| (word.at_ms, spelled)))
+        .collect();
+
+    let mut heard_of_line: Vec<Vec<(i64, i64)>> = vec![Vec::new(); lines.len()];
+    for (wanted, found) in matched(&flat, &listened) {
+        let (line, position, _) = flat[wanted];
+        heard_of_line[line].push((position as i64, listened[found].0));
+    }
+    heard_of_line
+        .into_iter()
+        .zip(lines)
+        .enumerate()
+        .map(|(at, (heard, line))| start_of(&heard, pace_of(lines, &words[at], at)).map(|start| start - line.at_ms))
+        .collect()
+}
+
+/// Where a line starts, from the words of it that were heard, as their
+/// position in the line and their moment: the first one heard less the time
+/// the words before it take, which the words heard say if there are two, and
+/// the length of the line says if there is one.
+fn start_of(heard: &[(i64, i64)], pace_of_the_line: i64) -> Option<i64> {
+    let (first_position, first_moment) = *heard.first()?;
+    let (last_position, last_moment) = *heard.last()?;
+    let pace = if last_position > first_position {
+        ((last_moment - first_moment) / (last_position - first_position)).clamp(SHORTEST_WORD_MS, LONGEST_WORD_MS)
+    } else {
+        pace_of_the_line
+    };
+    Some(first_moment - first_position * pace)
+}
+
+/// How long a word of this line takes to sing, by how long the line lasts.
+fn pace_of(lines: &[LyricLine], words: &[String], line: usize) -> i64 {
+    match lines.get(line + 1) {
+        Some(next) => {
+            let lasts = (next.at_ms - lines[line].at_ms).clamp(1, LONGEST_LINE_MS);
+            (lasts / words.len().max(1) as i64).clamp(SHORTEST_WORD_MS, LONGEST_WORD_MS)
+        }
+        None => LAST_LINE_WORD_MS,
+    }
+}
+
+/// Which heard word is which word of the lyrics, as pairs of positions in the
+/// order of both: the most words, the long ones counting for more, that can be
+/// found in the same order on both sides.
+fn matched(wanted: &[(usize, usize, &str)], heard: &[(i64, String)]) -> Vec<(usize, usize)> {
+    let width = heard.len() + 1;
+    let mut best = vec![0.0f32; (wanted.len() + 1) * width];
+    for i in 1..=wanted.len() {
+        for j in 1..=heard.len() {
+            let skipped = best[(i - 1) * width + j].max(best[i * width + j - 1]);
+            best[i * width + j] = if same_word(wanted[i - 1].2, &heard[j - 1].1) {
+                skipped.max(best[(i - 1) * width + j - 1] + weight(wanted[i - 1].2))
+            } else {
+                skipped
+            };
+        }
+    }
+    let (mut i, mut j) = (wanted.len(), heard.len());
+    let mut pairs = Vec::new();
+    while i > 0 && j > 0 {
+        let here = best[i * width + j];
+        if here == best[(i - 1) * width + j] {
+            i -= 1;
+        } else if here == best[i * width + j - 1] {
+            j -= 1;
+        } else {
+            pairs.push((i - 1, j - 1));
+            i -= 1;
+            j -= 1;
+        }
+    }
+    pairs.reverse();
+    pairs
+}
+
+/// The lines whose answer agrees with the answers of the lines heard around
+/// them, with their answers.
+fn believed_among(answers: &[Option<i64>]) -> Vec<(usize, i64)> {
+    let heard: Vec<(usize, i64)> = answers.iter().enumerate().filter_map(|(line, answer)| answer.map(|a| (line, a))).collect();
+    heard
+        .iter()
+        .enumerate()
+        .filter(|(at, (_, answer))| {
+            let around = heard[at.saturating_sub(SAY_BY)..(at + SAY_BY + 1).min(heard.len())]
+                .iter()
+                .map(|(_, answer)| *answer)
+                .collect();
+            (answer - median(around)).abs() <= BELIEVED_WITHIN_MS
+        })
+        .map(|(_, line)| *line)
+        .collect()
+}
+
+/// By how much a line is moved: what the nearest lines that were heard say,
+/// as a middle of them, and nothing when it comes to less than the speech
+/// tool could tell.
+fn move_of(line: usize, believed: &[(usize, i64)]) -> i64 {
+    let mut nearest: Vec<&(usize, i64)> = believed.iter().collect();
+    nearest.sort_by_key(|(at, _)| at.abs_diff(line));
+    let moved = median(nearest.iter().take(MOVE_FROM).map(|(_, answer)| *answer).collect());
+    if moved.abs() < LEAST_MOVE_MS { 0 } else { tenth_of_a_second(moved) }
+}
+
+/// A line moved before the one before it, or onto it, goes no further than
+/// leaves them apart, if they were apart; and none goes before the start.
+fn keep_in_order(lines: &[LyricLine], moves: &mut [i64]) {
+    let mut before: Option<(i64, i64)> = None;
+    for (line, moved) in lines.iter().zip(moves.iter_mut()) {
+        let mut at = line.at_ms + *moved;
+        if let Some((was, now)) = before
+            && line.at_ms >= was + KEPT_APART_MS
+            && at < now + KEPT_APART_MS
+        {
+            at = now + KEPT_APART_MS;
+        }
+        at = at.max(0);
+        *moved = at - line.at_ms;
+        before = Some((line.at_ms, at));
+    }
+}
+
+fn median(mut values: Vec<i64>) -> i64 {
+    values.sort_unstable();
+    values.get(values.len() / 2).copied().unwrap_or(0)
+}
+
+fn tenth_of_a_second(milliseconds: i64) -> i64 {
+    (milliseconds as f64 / 10.0).round() as i64 * 10
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::voice::{VOICE_SAMPLES_A_SECOND, tests::{a_song, a_song_with_guitar}, voice_onsets};
 
-    fn stamps_of(starts: &[f32], off_by_ms: i64) -> Vec<Stamp> {
-        starts.iter().map(|start| Stamp { at_ms: (start * 1000.0) as i64 + off_by_ms, sung: true }).collect()
+    const WORD_MS: i64 = 400;
+
+    /// A word of seven letters that no other word of the song is within two
+    /// letters of.
+    fn a_word(seed: u64) -> String {
+        let mut state = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (0..7)
+            .map(|_| {
+                state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+                char::from(b'a' + ((state >> 33) % 26) as u8)
+            })
+            .collect()
     }
 
-    const STARTS: [f32; 12] = [2.0, 4.6, 8.1, 9.7, 13.4, 17.9, 19.2, 24.3, 27.8, 29.1, 33.0, 36.2];
-
-    fn song() -> Vec<f32> {
-        voice_onsets(&a_song(40.0, &STARTS, 1.1))
+    /// A song of `count` lines of three words each, one every four seconds,
+    /// each word its own.
+    fn a_song(count: usize) -> Vec<LyricLine> {
+        (0..count)
+            .map(|n| LyricLine {
+                at_ms: 5_000 + n as i64 * 4_000,
+                text: (0..3).map(|k| a_word((n * 3 + k) as u64)).collect::<Vec<_>>().join(" "),
+            })
+            .collect()
     }
 
-    #[test]
-    fn a_song_stamped_late_is_taken_back_to_where_the_voice_starts() {
-        let onsets = song();
-        let stamped = stamps_of(&STARTS, 350);
-        let found = align(&onsets, &stamped);
-        assert_eq!(found.verdict, Verdict::Aligned, "{found:?}");
-        assert!((found.shift_ms + 350).abs() < 30, "shift {}", found.shift_ms);
-        for (moved, (stamp, start)) in found.moves_ms.iter().zip(stamped.iter().zip(STARTS)) {
-            let lands = stamp.at_ms + moved;
-            assert!((lands - (start * 1000.0) as i64).abs() < 30, "a line lands at {lands} for a start at {start}");
-        }
-        assert!(found.confidence > 0.3, "{}", found.confidence);
-    }
-
-    #[test]
-    fn stamps_off_by_a_little_each_are_each_moved_to_their_own_start() {
-        let onsets = song();
-        let jitter = [120, -150, 90, -60, 200, -110, 40, -180, 130, -90, 160, -70];
-        let stamped: Vec<Stamp> =
-            STARTS.iter().zip(jitter).map(|(start, off)| Stamp { at_ms: (start * 1000.0) as i64 + off, sung: true }).collect();
-        let found = align(&onsets, &stamped);
-        assert!(matches!(found.verdict, Verdict::Aligned | Verdict::AlreadyFits), "{found:?}");
-        let near = found
-            .moves_ms
+    /// The words of those lines as the speech tool hears them when they are
+    /// sung `late_by` later than they are stamped.
+    fn heard_late_by(lines: &[LyricLine], late_by: i64) -> Vec<HeardWord> {
+        lines
             .iter()
-            .zip(stamped.iter().zip(STARTS))
-            .filter(|(moved, (stamp, start))| (stamp.at_ms + **moved - (start * 1000.0) as i64).abs() < 30)
-            .count();
-        assert!(near >= 10, "{near} of 12 lines land on their start: {found:?}");
+            .flat_map(|line| {
+                words_of(&line.text).into_iter().enumerate().map(move |(position, word)| HeardWord {
+                    text: format!(" {word}"),
+                    at_ms: line.at_ms + late_by + position as i64 * WORD_MS,
+                })
+            })
+            .collect()
+    }
+
+    fn lined_up(alignment: &Alignment, lines: &[LyricLine], line: usize) -> i64 {
+        lines[line].at_ms + alignment.moves_ms[line]
     }
 
     #[test]
-    fn a_guitar_starting_notes_of_its_own_among_the_voice_does_not_hide_the_shift() {
-        let guitar = [1.1, 3.3, 6.2, 7.0, 10.9, 12.2, 15.6, 16.4, 21.7, 22.5, 25.1, 26.9, 30.4, 31.6, 34.2, 38.0];
-        let onsets = voice_onsets(&a_song_with_guitar(40.0, &STARTS, &guitar, 0.9));
-        let found = align(&onsets, &stamps_of(&STARTS, -280));
-        assert_eq!(found.verdict, Verdict::Aligned, "{found:?}");
-        assert!((found.shift_ms - 280).abs() < 40, "shift {}", found.shift_ms);
+    fn lines_stamped_early_are_moved_to_where_their_words_are_heard() {
+        let lines = a_song(20);
+        let alignment = align(&lines, &heard_late_by(&lines, 1_500));
+        assert_eq!(alignment.verdict, Verdict::Aligned);
+        assert_eq!(alignment.shift_ms, 1_500);
+        assert_eq!(alignment.lines_moved, 20);
+        assert_eq!(alignment.lines_heard, 20);
+        assert!(alignment.confidence > 0.99);
+        for line in 0..20 {
+            assert_eq!(lined_up(&alignment, &lines, line), lines[line].at_ms + 1_500, "line {line}");
+        }
     }
 
     #[test]
-    fn stamps_that_already_fit_are_left_where_they_are() {
-        let onsets = song();
-        let found = align(&onsets, &stamps_of(&STARTS, 20));
-        assert!(matches!(found.verdict, Verdict::AlreadyFits | Verdict::Aligned), "{found:?}");
-        assert!(found.shift_ms.abs() < 40, "{}", found.shift_ms);
-        assert!(found.moves_ms.iter().all(|moved| moved.abs() <= 120), "{:?}", found.moves_ms);
+    fn lines_stamped_late_are_moved_back() {
+        let lines = a_song(12);
+        let alignment = align(&lines, &heard_late_by(&lines, -2_000));
+        assert_eq!(alignment.verdict, Verdict::Aligned);
+        assert_eq!(alignment.shift_ms, -2_000);
+        assert_eq!(lined_up(&alignment, &lines, 3), lines[3].at_ms - 2_000);
     }
 
     #[test]
-    fn a_song_without_a_voice_cannot_be_lined_up_and_nothing_is_moved() {
-        let onsets = voice_onsets(&a_song(40.0, &[], 1.0));
-        let found = align(&onsets, &stamps_of(&STARTS, 350));
-        assert_eq!(found.verdict, Verdict::NotSure, "{found:?}");
-        assert_eq!(found.shift_ms, 0);
-        assert!(found.moves_ms.iter().all(|moved| *moved == 0));
+    fn the_wandering_of_the_speech_tool_is_not_a_reason_to_move_a_line() {
+        let lines = a_song(20);
+        let mut heard = heard_late_by(&lines, 0);
+        for (n, word) in heard.iter_mut().enumerate() {
+            word.at_ms += [120, -180, 90, -60, 200, -150][n % 6];
+        }
+        let alignment = align(&lines, &heard);
+        assert_eq!(alignment.verdict, Verdict::AlreadyFits);
+        assert_eq!(alignment.lines_moved, 0);
+        assert!(alignment.moves_ms.iter().all(|moved| *moved == 0));
     }
 
     #[test]
-    fn too_few_lines_say_nothing_and_a_line_with_nothing_sung_is_not_counted() {
-        let onsets = song();
-        assert_eq!(align(&onsets, &stamps_of(&STARTS[..3], 0)).verdict, Verdict::TooFewLines);
-        let mut empty: Vec<Stamp> = stamps_of(&STARTS[..4], 0);
-        empty.extend((0..4).map(|n| Stamp { at_ms: 40_000 + n * 1_000, sung: false }));
-        assert_eq!(align(&onsets, &empty).verdict, Verdict::TooFewLines);
+    fn a_line_heard_late_in_the_middle_of_its_words_still_starts_where_its_first_word_does() {
+        let lines = a_song(10);
+        // Only the last two words of each line were heard.
+        let heard: Vec<HeardWord> = heard_late_by(&lines, 1_000)
+            .into_iter()
+            .enumerate()
+            .filter(|(n, _)| n % 3 != 0)
+            .map(|(_, word)| word)
+            .collect();
+        let alignment = align(&lines, &heard);
+        assert_eq!(alignment.verdict, Verdict::Aligned);
+        assert_eq!(alignment.lines_heard, 10);
+        assert_eq!(alignment.moves_ms[4], 1_000);
     }
 
     #[test]
-    fn the_rate_the_voice_is_read_at_is_the_rate_it_is_made_for() {
-        assert_eq!(VOICE_SAMPLES_A_SECOND, 8_000);
-        assert_eq!(STEP_MS, 10);
+    fn lines_nobody_heard_are_moved_with_the_lines_around_them() {
+        let lines = a_song(14);
+        let heard: Vec<HeardWord> = heard_late_by(&lines, 1_200)
+            .into_iter()
+            .filter(|word| ![6, 7].iter().any(|n| (0..3).any(|k| word.text.trim() == a_word(n * 3 + k))))
+            .collect();
+        let alignment = align(&lines, &heard);
+        assert_eq!(alignment.verdict, Verdict::Aligned);
+        assert_eq!(alignment.lines_heard, 12);
+        assert_eq!(alignment.moves_ms[6], 1_200);
+        assert_eq!(alignment.moves_ms[7], 1_200);
+    }
+
+    #[test]
+    fn what_the_tool_makes_up_over_the_music_moves_nothing() {
+        let lines = a_song(16);
+        let invented = ["thank", "you", "for", "watching", "subscribe", "music", "applause", "another"];
+        let heard: Vec<HeardWord> = (0..80)
+            .map(|n| HeardWord { text: format!(" {}", invented[n % invented.len()]), at_ms: 4_000 + n as i64 * 700 })
+            .collect();
+        let alignment = align(&lines, &heard);
+        assert_eq!(alignment.verdict, Verdict::NotSure);
+        assert_eq!(alignment.lines_moved, 0);
+        assert!(alignment.moves_ms.iter().all(|moved| *moved == 0));
+    }
+
+    #[test]
+    fn a_song_nothing_was_heard_of_is_not_moved() {
+        let lines = a_song(16);
+        let alignment = align(&lines, &[]);
+        assert_eq!(alignment.verdict, Verdict::NotSure);
+        assert_eq!(alignment.lines_heard, 0);
+    }
+
+    #[test]
+    fn a_line_taken_for_another_one_is_not_believed() {
+        // A chorus heard twice, and one of its words taken for the other one:
+        // the line says it is half a minute from where it is stamped, where
+        // the lines around it say a second.
+        let mut answers: Vec<Option<i64>> = vec![Some(1_000); 11];
+        answers[5] = Some(31_000);
+        answers[3] = None;
+        let believed = believed_among(&answers);
+        assert_eq!(believed.len(), 9);
+        assert!(believed.iter().all(|(line, answer)| *line != 5 && *answer == 1_000));
+    }
+
+    #[test]
+    fn words_are_found_through_accents_capitals_punctuation_and_a_misheard_letter() {
+        assert_eq!(words_of("Où est l’été, Ça va?"), vec!["ou", "est", "lete", "ca", "va"]);
+        assert!(same_word("ete", "ete"));
+        assert!(same_word("tomorrow", "tomorow"));
+        assert!(!same_word("cat", "cut"), "a short word is not forgiven");
+        assert!(!same_word("tomorrow", "yesterday"));
+    }
+
+    #[test]
+    fn too_few_sung_lines_say_nothing() {
+        let lines = a_song(4);
+        let alignment = align(&lines, &heard_late_by(&lines, 2_000));
+        assert_eq!(alignment.verdict, Verdict::TooFewLines);
+        assert_eq!(alignment.lines_moved, 0);
+    }
+
+    #[test]
+    fn a_line_with_nothing_in_it_is_moved_with_the_others() {
+        let mut lines = a_song(12);
+        lines[5].text = String::new();
+        let alignment = align(&lines, &heard_late_by(&lines, 1_000));
+        assert_eq!(alignment.verdict, Verdict::Aligned);
+        assert_eq!(alignment.moves_ms[5], 1_000);
+        assert_eq!(alignment.lines_heard, 11);
+    }
+
+    #[test]
+    fn lines_stay_in_the_order_they_were_and_none_goes_before_the_start() {
+        let lines = vec![
+            LyricLine { at_ms: 300, text: "first line here".into() },
+            LyricLine { at_ms: 1_000, text: "second line here".into() },
+            LyricLine { at_ms: 2_000, text: "third line here".into() },
+        ];
+        let mut moves = vec![-1_000, -2_000, -500];
+        keep_in_order(&lines, &mut moves);
+        let at: Vec<i64> = lines.iter().zip(&moves).map(|(line, moved)| line.at_ms + moved).collect();
+        assert_eq!(at[0], 0);
+        assert!(at[1] >= at[0] + KEPT_APART_MS && at[2] >= at[1] + KEPT_APART_MS, "{at:?}");
+    }
+
+    #[test]
+    fn words_are_compared_by_the_edits_they_are_apart() {
+        assert_eq!(edits("kitten", "sitting"), 3);
+        assert_eq!(edits("same", "same"), 0);
+        assert_eq!(edits("", "abc"), 3);
     }
 }

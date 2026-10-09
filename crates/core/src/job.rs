@@ -73,6 +73,10 @@ pub enum JobKind {
     /// Downloads the model that translates. Kept as a job for the same reason
     /// as the ones that listen.
     DownloadTranslationModel,
+    /// Listens to a song to line the lines of its lyrics up with the words
+    /// sung. Asked for by an administrator for one song, and a task of its own
+    /// because listening to a song takes minutes.
+    LineUpLyrics,
 }
 
 impl JobKind {
@@ -82,7 +86,7 @@ impl JobKind {
     /// several things have to cover all of them: the interface needs a
     /// sentence for each, and a kind with none reaches the screen as its own
     /// name.
-    pub const ALL: [Self; 17] = [
+    pub const ALL: [Self; 18] = [
         Self::ScanLibrary,
         Self::IdentifyWork,
         Self::ReadCopyAgain,
@@ -100,6 +104,7 @@ impl JobKind {
         Self::DownloadSpeechModel,
         Self::TranslateSubtitles,
         Self::DownloadTranslationModel,
+        Self::LineUpLyrics,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -121,6 +126,7 @@ impl JobKind {
             Self::DownloadSpeechModel => "download_speech_model",
             Self::TranslateSubtitles => "translate_subtitles",
             Self::DownloadTranslationModel => "download_translation_model",
+            Self::LineUpLyrics => "line_up_lyrics",
         }
     }
 
@@ -143,6 +149,7 @@ impl JobKind {
             "download_speech_model" => Some(Self::DownloadSpeechModel),
             "translate_subtitles" => Some(Self::TranslateSubtitles),
             "download_translation_model" => Some(Self::DownloadTranslationModel),
+            "line_up_lyrics" => Some(Self::LineUpLyrics),
             _ => None,
         }
     }
@@ -202,11 +209,13 @@ pub enum JobStep {
     TranslatingSubtitles,
     /// Downloading the model that translates.
     DownloadingTranslationModel,
+    /// Listening to a song for the words sung in it.
+    ListeningToSong,
 }
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 20] = [
+    pub const ALL: [Self; 21] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -227,6 +236,7 @@ impl JobStep {
         Self::DownloadingSpeechModel,
         Self::TranslatingSubtitles,
         Self::DownloadingTranslationModel,
+        Self::ListeningToSong,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -251,6 +261,7 @@ impl JobStep {
             Self::DownloadingSpeechModel => "downloading_speech_model",
             Self::TranslatingSubtitles => "translating_subtitles",
             Self::DownloadingTranslationModel => "downloading_translation_model",
+            Self::ListeningToSong => "listening_to_song",
         }
     }
 
@@ -276,6 +287,7 @@ impl JobStep {
             "downloading_speech_model" => Some(Self::DownloadingSpeechModel),
             "translating_subtitles" => Some(Self::TranslatingSubtitles),
             "downloading_translation_model" => Some(Self::DownloadingTranslationModel),
+            "listening_to_song" => Some(Self::ListeningToSong),
             _ => None,
         }
     }

@@ -30,21 +30,21 @@ const SHOWN_AT_MOST_PER_CHARACTER_MS: u64 = 120;
 const SHORTEST_LOOP: usize = 6;
 
 #[derive(Deserialize)]
-struct Report {
+pub(crate) struct Report {
     #[serde(default)]
-    transcription: Vec<Block>,
+    pub(crate) transcription: Vec<Block>,
 }
 
 #[derive(Deserialize)]
-struct Block {
-    text: String,
-    offsets: Offsets,
+pub(crate) struct Block {
+    pub(crate) text: String,
+    pub(crate) offsets: Offsets,
 }
 
 #[derive(Deserialize)]
-struct Offsets {
-    from: u64,
-    to: u64,
+pub(crate) struct Offsets {
+    pub(crate) from: u64,
+    pub(crate) to: u64,
 }
 
 struct Line {
