@@ -91,6 +91,14 @@ pub struct FoundLyrics {
     pub instrumental: bool,
 }
 
+impl FoundLyrics {
+    /// Whether it says anything of the song: words, or that it has none. An
+    /// entry of LRCLIB with neither is a song it lists and knows nothing of.
+    pub fn says_something(&self) -> bool {
+        self.plain.is_some() || self.synced.is_some() || self.instrumental
+    }
+}
+
 pub struct LrcLibClient {
     client: reqwest::Client,
     base_url: String,
@@ -135,7 +143,14 @@ impl LrcLibClient {
         let mut trouble = None;
         let exact = self.ask("get", &query).await.and_then(|(status, body)| answer_of(status, &body));
         match exact {
-            Ok(Some(found)) => return Ok(Some(found)),
+            Ok(Some(found)) if found.says_something() => return Ok(Some(found)),
+            // Listed with nothing in it: another entry of the song may have
+            // its words.
+            Ok(Some(_)) => tracing::debug!(
+                artist = asked.artist,
+                title = asked.title,
+                "LRCLIB lists the song as asked but holds nothing in it, so it is searched for"
+            ),
             Ok(None) => {}
             Err(error @ ProviderError::TooManyRequests { .. }) => return Err(error),
             Err(error) => trouble = Some(error),
@@ -665,6 +680,22 @@ mod tests {
             }
         });
         format!("http://{address}")
+    }
+
+    #[tokio::test]
+    async fn an_entry_listed_with_nothing_in_it_does_not_end_the_search() {
+        let empty = r#"{"id":1,"trackName":"MAD","artistName":"Caravan Palace","duration":166.0,"plainLyrics":null,"syncedLyrics":null,"instrumental":false}"#;
+        let with_words = r#"[{"trackName":"MAD","artistName":"Caravan Palace","duration":167.0,"plainLyrics":"words","syncedLyrics":"[00:01.00] words","instrumental":false}]"#;
+        let url = serving_by_route(vec![("/get", "200 OK", empty), ("/search", "200 OK", with_words)]).await;
+        let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
+        let asked = Asked { artist: "Caravan Palace", title: "MAD", album: Some("MAD"), seconds: Some(166) };
+        let found = client.lyrics(&asked).await.expect("answered").expect("found by the search");
+        assert_eq!(found.plain.as_deref(), Some("words"));
+
+        // Nothing but the empty entry anywhere: the song is not known to have words.
+        let url = serving_by_route(vec![("/get", "200 OK", empty), ("/search", "200 OK", "[]")]).await;
+        let client = LrcLibClient { base_url: url, ..LrcLibClient::new().expect("client") };
+        assert_eq!(client.lyrics(&asked).await.expect("answered"), None);
     }
 
     /// A server answering its first question with a song, and its second with
