@@ -144,6 +144,23 @@ const time = {
   },
 };
 
+/** Where the sound is to the fraction of a second, for the words that follow
+    it: the clock above is whole seconds, which is enough to show and made a
+    line sung light up to a second late. A store of its own, so that what shows
+    whole seconds is not drawn again each time this moves. */
+const exact = {
+  seconds: 0,
+  listeners: new Set<() => void>(),
+  set(seconds: number) {
+    if (seconds !== this.seconds) {
+      this.seconds = seconds;
+      for (const listener of this.listeners) {
+        listener();
+      }
+    }
+  },
+};
+
 /** How far into the song the sound is in hand, from where the deck was
     started: the end of the stretch it is playing in. */
 function bufferedTo(audio: HTMLAudioElement): number {
@@ -178,10 +195,22 @@ export function useMusicNow<T>(pick: (song: Song | null, playing: boolean) => T)
   return useSyncExternalStore(now.subscribe, () => pick(now.song, now.playing));
 }
 
-/** Where the song is and whether it plays, read on the spot rather than by
-    what shows them: for whatever has to look while nothing is drawn. */
+/** Where the sound is, to the fraction of a second, and whether it plays,
+    read on the spot rather than by what shows them: for whatever has to look
+    while nothing is drawn. */
 export function currentMusicClock(): { position: number; playing: boolean } {
-  return { position: time.now.position, playing: now.playing };
+  return { position: exact.seconds, playing: now.playing };
+}
+
+/** Where the sound is, in seconds and to the fraction of one. */
+export function useExactMusicPosition(): number {
+  return useSyncExternalStore(
+    (listener) => {
+      exact.listeners.add(listener);
+      return () => exact.listeners.delete(listener);
+    },
+    () => exact.seconds,
+  );
 }
 
 export function useMusicTime(): Time {
@@ -285,6 +314,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       offset.current = 0;
       audio.src = soundOf(next, start);
       time.set({ position: Math.floor(start), length: next.seconds ?? 0 });
+      exact.set(start);
       if (andPlay) {
         void audio.play().catch(() => setPlaying(false));
       }
@@ -433,6 +463,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setQueue(after);
     setTurn((was) => was + 1);
     time.set({ position: 0, length: next.seconds ?? 0 });
+    exact.set(0);
     window.setTimeout(() => {
       from.pause();
       from.removeAttribute("src");
@@ -464,6 +495,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const onTime = () => {
       const audio = live();
       const now = queueNow.current.songs.length > 0 ? current(queueNow.current) : null;
+      exact.set(offset.current + audio.currentTime);
       time.set({
         position: Math.floor(offset.current + audio.currentTime),
         length: now?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
@@ -649,6 +681,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setWaiting(false);
       setQueue(EMPTY);
       time.set({ position: 0, length: 0 });
+      exact.set(0);
     }, BAR_LEAVES_MS);
   }, [live, letGoOfTheSound]);
 
@@ -679,6 +712,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           was.volume === beat.loudness.volume && was.muted === beat.loudness.muted ? was : beat.loudness,
         );
         time.set({ position: beat.position, length: beat.length, loaded: beat.position });
+        exact.set(beat.position);
       },
       letGo: letGoOfTheSound,
       obey: (name, args) => (commandsNow.current?.[name] as (...args: unknown[]) => void)(...args),
@@ -793,6 +827,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           load(now, to, !audio.paused || wantsToPlay.current);
         }
         time.set({ position: Math.floor(to), length: time.now.length, loaded: time.now.loaded });
+        exact.set(to);
       },
       setVolume: (volume: number) =>
         setLoudness((was) => ({ volume: Math.min(Math.max(volume, 0), 1), muted: volume > 0 ? false : was.muted })),

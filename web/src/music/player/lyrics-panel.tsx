@@ -14,7 +14,7 @@ import type { LyricLine, SongLyrics } from "../api";
 import { useMusicMarks } from "../marks";
 import { litLineAt } from "./lyrics";
 import { LOOK_EVERY_MS, LyricsReport, lookAt, sayLyricsRead } from "./lyrics-watch";
-import { currentMusicClock, useMusicControls, useMusicTime } from "./player";
+import { currentMusicClock, useExactMusicPosition, useMusicControls } from "./player";
 
 export function LyricsPanel({ song }: { song: string }) {
   const { t } = useSettings();
@@ -57,7 +57,7 @@ export function LyricsPanel({ song }: { song: string }) {
 }
 
 function Following({ song, lines }: { song: string; lines: LyricLine[] }) {
-  const { position } = useMusicTime();
+  const position = useExactMusicPosition();
   const { seek } = useMusicControls();
   const active = litLineAt(lines, position);
   return <Lines song={song} lines={lines} active={active} seek={seek} />;
