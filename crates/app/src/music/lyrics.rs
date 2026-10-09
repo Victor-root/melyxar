@@ -13,7 +13,8 @@ use melyxar_core::id::WorkId;
 use melyxar_core::music_lyrics::{Lyrics, read_lyrics};
 use melyxar_core::user::User;
 use melyxar_database::music_lyrics::LookedUpLyrics;
-use melyxar_metadata::lrclib::{Asked, LrcLibClient, Offer};
+use melyxar_metadata::lrclib::{Asked, LrcLibClient};
+pub use melyxar_metadata::lrclib::Offer;
 use melyxar_metadata::ProviderError;
 
 use crate::reach::may_read_the_work;
@@ -295,6 +296,32 @@ mod tests {
         let found = near(&song).await.expect("found");
         assert_eq!(found.source, Source::Beside);
         assert_eq!(found.lyrics.plain, "Low tide");
+    }
+
+    #[tokio::test]
+    async fn only_an_administrator_changes_the_lyrics_of_a_song() {
+        let (_directory, state) = crate::an_empty_server().await;
+        let viewer = crate::a_viewer(&state).await;
+        let song = WorkId::new();
+
+        let refused = |outcome: Result<()>| {
+            matches!(outcome, Err(AppError::Domain(error)) if error.to_string().contains("only an administrator"))
+        };
+        assert!(refused(offers(&state, &viewer, song, "Artist", "Title").await.map(|_| ())));
+        assert!(refused(choose(&state, &viewer, song, 7).await));
+        assert!(refused(forget(&state, &viewer, song).await));
+
+        let administrator = state
+            .database()
+            .create_user("Boss", None, &melyxar_core::user::Permissions::administrator())
+            .await
+            .expect("account created");
+        forget(&state, &administrator, song).await.expect("nothing kept, nothing to forget");
+        assert_eq!(
+            offers(&state, &administrator, song, "Artist", "  ").await.expect("nothing asked"),
+            Vec::new(),
+            "without a title nothing is searched for"
+        );
     }
 
     #[test]
