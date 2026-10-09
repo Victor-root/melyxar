@@ -71,6 +71,7 @@ pub fn tag_of(module: &str) -> &'static str {
         // Where the words of a song were looked for and what LRCLIB said:
         // together, since "why has this song no words" is answered by both.
         ("melyxar_app::music::lyrics", "lyrics"),
+        ("melyxar_server::lyrics_watch", "lyrics"),
         ("melyxar_metadata::lrclib", "lyrics"),
         // Everything else about the music library: covers, photos, tags,
         // the reading of the sound. Longer modules above win over this one.
@@ -354,6 +355,7 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::openings"), "openings");
         assert_eq!(tag_of("melyxar_app::music::lyrics"), "lyrics");
         assert_eq!(tag_of("melyxar_metadata::lrclib"), "lyrics");
+        assert_eq!(tag_of("melyxar_server::lyrics_watch"), "lyrics");
         assert_eq!(tag_of("melyxar_metadata::musicbrainz"), "metadata");
         assert_eq!(tag_of("melyxar_app::music::covers"), "music");
         assert_eq!(tag_of("melyxar_app::speech"), "speech");

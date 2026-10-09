@@ -7,13 +7,14 @@
  * changes as the song plays.
  */
 
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../../settings";
 import { music as server } from "../api";
 import type { LyricLine, SongLyrics } from "../api";
 import { useMusicMarks } from "../marks";
-import { lineAt } from "./lyrics";
-import { useMusicControls, useMusicTime } from "./player";
+import { litLineAt } from "./lyrics";
+import { LOOK_EVERY_MS, LyricsReport, lookAt, sayLyricsRead } from "./lyrics-watch";
+import { currentMusicClock, useMusicControls, useMusicTime } from "./player";
 
 export function LyricsPanel({ song }: { song: string }) {
   const { t } = useSettings();
@@ -25,7 +26,12 @@ export function LyricsPanel({ song }: { song: string }) {
     setLyrics(undefined);
     server
       .lyrics(song, stop.signal)
-      .then(setLyrics)
+      .then((found) => {
+        setLyrics(found);
+        if (found) {
+          sayLyricsRead(song, found);
+        }
+      })
       .catch(() => {
         if (!stop.signal.aborted) {
           setLyrics(null);
@@ -47,28 +53,63 @@ export function LyricsPanel({ song }: { song: string }) {
   if (lyrics.lines.length === 0) {
     return <div className="music-lyrics music-lyrics-plain">{lyrics.plain}</div>;
   }
-  return <Following lines={lyrics.lines} />;
+  return <Following song={song} lines={lyrics.lines} />;
 }
 
-function Following({ lines }: { lines: LyricLine[] }) {
+function Following({ song, lines }: { song: string; lines: LyricLine[] }) {
   const { position } = useMusicTime();
   const { seek } = useMusicControls();
-  /* A quarter of a second ahead: the time is read four times a second, and
-     a line lit a moment late reads as one lit wrong. */
-  const active = lineAt(lines, position * 1000 + 250);
-  return <Lines lines={lines} active={active} seek={seek} />;
+  const active = litLineAt(lines, position);
+  return <Lines song={song} lines={lines} active={active} seek={seek} />;
 }
 
 const Lines = memo(function Lines({
+  song,
   lines,
   active,
   seek,
 }: {
+  song: string;
   lines: LyricLine[];
   active: number;
   seek: (seconds: number) => void;
 }) {
   const box = useRef<HTMLOListElement>(null);
+  const report = useMemo(() => new LyricsReport(song, lines), [song, lines]);
+
+  /* What is lit, and where the song was then, for the journal: a line that
+     stops following the song is only ever seen from here. */
+  useEffect(() => {
+    if (active >= 0) {
+      report.lineLit(active, currentMusicClock().position);
+    }
+  }, [active, report]);
+
+  /* On a beat of its own, apart from what is drawn: the line lit against the
+     line the clock says, and whether the clock of a song that plays moves. */
+  useEffect(() => {
+    let before: { mismatches: number; stills: number; position: number | null } = {
+      mismatches: 0,
+      stills: 0,
+      position: null,
+    };
+    const look = window.setInterval(() => {
+      const clock = currentMusicClock();
+      const shown = Array.from(box.current?.children ?? []).findIndex((line) =>
+        line.classList.contains("music-lyrics-now"),
+      );
+      const expected = litLineAt(lines, clock.position);
+      const seen = lookAt({ expected, shown, position: clock.position, playing: clock.playing }, before);
+      before = seen;
+      if (seen.lineNotLit) {
+        report.lineNotLit(clock.position, expected, shown);
+      }
+      if (seen.clockStill) {
+        report.clockStoodStill(clock.position, LOOK_EVERY_MS * 2);
+      }
+    }, LOOK_EVERY_MS);
+    return () => window.clearInterval(look);
+  }, [lines, report]);
 
   /* Only the words move, never the page around them: on a phone the page
      scrolls too, and following a song must not drag the controls away. */

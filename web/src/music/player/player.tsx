@@ -178,6 +178,12 @@ export function useMusicNow<T>(pick: (song: Song | null, playing: boolean) => T)
   return useSyncExternalStore(now.subscribe, () => pick(now.song, now.playing));
 }
 
+/** Where the song is and whether it plays, read on the spot rather than by
+    what shows them: for whatever has to look while nothing is drawn. */
+export function currentMusicClock(): { position: number; playing: boolean } {
+  return { position: time.now.position, playing: now.playing };
+}
+
 export function useMusicTime(): Time {
   return useSyncExternalStore(
     (listener) => {
