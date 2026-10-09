@@ -150,6 +150,17 @@ export interface SongLyrics {
   /** Empty when the words carry no moments. */
   lines: LyricLine[];
   instrumental: boolean;
+  /** How the lines were moved to fall where the voice starts, when they were. */
+  synchronised: { shift_ms: number; lines_moved: number; confidence: number } | null;
+}
+
+/** What came of lining the lines up with the sound of the song. */
+export interface LyricsSyncOutcome {
+  conclusion: "aligned" | "already_fits" | "not_sure" | "too_few_lines" | "not_stamped" | "too_long";
+  shift_ms: number;
+  lines: number;
+  lines_moved: number;
+  confidence: number;
 }
 
 /** One entry of LRCLIB offered for a song, to be taken as its words. */
@@ -366,6 +377,8 @@ export const music = {
     get<LyricsOffer[]>(`/api/v1/music/songs/${song}/lyrics/offers${query({ artist, title })}`, signal),
   takeLyrics: (song: string, entry: number) => post<null>(`/api/v1/music/songs/${song}/lyrics/online`, { entry }),
   forgetLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/online`),
+  synchroniseLyrics: (song: string) => post<LyricsSyncOutcome>(`/api/v1/music/songs/${song}/lyrics/sync`, {}),
+  unsynchroniseLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/sync`),
   /** Nothing for a song whose sound was not read yet. */
   spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
     const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);
