@@ -12,6 +12,7 @@ pub mod browse;
 pub mod covers;
 pub mod listen;
 pub mod lyrics;
+pub mod lyrics_sync;
 pub mod marks;
 pub mod playlists;
 pub mod tag_editing;

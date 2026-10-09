@@ -52,6 +52,7 @@ impl Database {
             .bind(song.to_db_string())
             .execute(self.writer())
             .await?;
+        self.forget_lyrics_timing(song).await?;
         Ok(())
     }
 
@@ -104,6 +105,8 @@ impl Database {
         .bind(method)
         .execute(self.writer())
         .await?;
+        // Other words are other lines: how the old ones were moved says nothing of them.
+        self.forget_lyrics_timing(song).await?;
         Ok(())
     }
 

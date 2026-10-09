@@ -34,6 +34,7 @@ pub mod music_browse;
 pub mod music_covers;
 pub mod music_listen;
 pub mod music_lyrics;
+pub mod music_lyrics_timing;
 pub mod music_analysis;
 pub mod music_marks;
 pub mod music_playlists;
