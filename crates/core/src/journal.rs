@@ -72,6 +72,46 @@ pub fn tag_of(module: &str) -> &'static str {
         // together, since "why has this song no words" is answered by both.
         ("melyxar_app::music::lyrics", "lyrics"),
         ("melyxar_metadata::lrclib", "lyrics"),
+        // Everything else about the music library: covers, photos, tags,
+        // the reading of the sound. Longer modules above win over this one.
+        ("melyxar_app::music", "music"),
+        // Writing subtitles by listening and translating them go together:
+        // one reads what the other wrote, and a bad subtitle is chased through
+        // both. The tool that listens is in the same tag.
+        ("melyxar_app::speech", "speech"),
+        ("melyxar_app::translation", "speech"),
+        ("melyxar_ffmpeg::speech", "speech"),
+        ("melyxar_ffmpeg::spoken_lines", "speech"),
+        // The nightly pieces of upkeep: thumbnails are one of them.
+        ("melyxar_app::thumbnails", "upkeep"),
+        // Where somebody says the opening of a file really is.
+        ("melyxar_app::segments", "openings"),
+        // Who is on the server and what they did: accounts, how the server is
+        // reached, avatars, the activity journal, who is watching right now.
+        ("melyxar_app::accounts", "accounts"),
+        ("melyxar_app::access", "accounts"),
+        ("melyxar_app::avatars", "accounts"),
+        ("melyxar_app::activity", "accounts"),
+        ("melyxar_app::watching", "accounts"),
+        // What people ask for, and the news told to them about it.
+        ("melyxar_app::requests", "requests"),
+        ("melyxar_app::notifications", "requests"),
+        // What the libraries hold and how it gets there or goes: their own
+        // settings, the folders watched, files sent in, filed on their own
+        // or deleted, and the one invented to measure against.
+        ("melyxar_app::libraries", "library"),
+        ("melyxar_app::folder_watch", "library"),
+        ("melyxar_app::uploads", "library"),
+        ("melyxar_app::own", "library"),
+        ("melyxar_app::deletion", "library"),
+        ("melyxar_app::bench", "library"),
+        // The details of a work written by hand, and the page of a person.
+        ("melyxar_app::hand_edits", "metadata"),
+        ("melyxar_app::people", "metadata"),
+        ("melyxar_app::online_subtitles", "subtitles"),
+        ("melyxar_app::cards", "card"),
+        // Which jobs run when.
+        ("melyxar_app::schedule", "jobs"),
         // Measuring what a device decodes: the clips, and every result kept.
         ("melyxar_app::calibration", "calibration"),
         ("melyxar_app::playback", "playback"),
@@ -315,6 +355,17 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::music::lyrics"), "lyrics");
         assert_eq!(tag_of("melyxar_metadata::lrclib"), "lyrics");
         assert_eq!(tag_of("melyxar_metadata::musicbrainz"), "metadata");
+        assert_eq!(tag_of("melyxar_app::music::covers"), "music");
+        assert_eq!(tag_of("melyxar_app::speech"), "speech");
+        assert_eq!(tag_of("melyxar_app::translation"), "speech");
+        assert_eq!(tag_of("melyxar_ffmpeg::speech"), "speech");
+        assert_eq!(tag_of("melyxar_app::accounts"), "accounts");
+        assert_eq!(tag_of("melyxar_app::requests::rounds"), "requests");
+        assert_eq!(tag_of("melyxar_app::folder_watch"), "library");
+        assert_eq!(tag_of("melyxar_app::thumbnails"), "upkeep");
+        assert_eq!(tag_of("melyxar_app::schedule"), "jobs");
+        assert_eq!(tag_of("melyxar_app::online_subtitles"), "subtitles");
+        assert_eq!(tag_of("melyxar_app::measures"), "melyxar", "what has no home of its own stays in the general tag");
         assert_eq!(
             tag_of("melyxar_ffmpeg::sound"),
             "openings",
