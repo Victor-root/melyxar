@@ -22,13 +22,13 @@ import type { MenuLine } from "./song-menu";
 import { useMusicControls, useMusicNow } from "./player/player";
 
 /** Who plays a song, each a way to their page. */
-function Artists({ artists }: { artists: Credited[] }) {
+function Artists({ artists, plain }: { artists: Credited[]; plain?: boolean }) {
   return (
     <>
       {artists.map((artist, index) => (
         <span key={artist.id}>
           {index > 0 && ", "}
-          <QuietLink to={`/music/artist/${artist.id}`}>{artist.name}</QuietLink>
+          {plain ? artist.name : <QuietLink to={`/music/artist/${artist.id}`}>{artist.name}</QuietLink>}
         </span>
       ))}
     </>
@@ -261,10 +261,10 @@ export const SongLine = memo(function SongLine({
         compact
           ? (event) => {
               const target = event.target as HTMLElement;
-              /* Whatever a line holds that does something of its own, and
-                 what a menu opened from it draws elsewhere, is not a press
-                 on the line. */
-              if (!event.currentTarget.contains(target) || target.closest("a, button")) {
+              /* What a menu opened from the line draws elsewhere, and its
+                 buttons do something of their own: neither is a press on the
+                 line. */
+              if (!event.currentTarget.contains(target) || target.closest("button")) {
                 return;
               }
               if (current) {
@@ -299,13 +299,14 @@ export const SongLine = memo(function SongLine({
         <span className="music-song-title">{song.title}</span>
         {artists.length > 0 && (
           <span className="music-song-artists">
-            <Artists artists={artists} />
+            <Artists artists={artists} plain={compact} />
           </span>
         )}
       </span>
       {showAlbum && (
         <span className="music-song-album">
-          {song.album && <QuietLink to={`/music/album/${song.album.id}`}>{song.album.name}</QuietLink>}
+          {song.album &&
+            (compact ? song.album.name : <QuietLink to={`/music/album/${song.album.id}`}>{song.album.name}</QuietLink>)}
         </span>
       )}
       <Actions song={song} inline={inline} extra={extra} heartInMenu={!!compact} />
