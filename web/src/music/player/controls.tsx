@@ -100,8 +100,8 @@ export function PlayButton({ music, disc = false, holdToStop = false }: { music:
     >
       {music.playing ? <PauseIcon size={disc ? 26 : PLAY_ICON} /> : <PlayIcon size={disc ? 26 : PLAY_ICON} />}
       {holding && (
-        <svg className="player-hold-ring" viewBox="0 0 100 100" aria-hidden="true" style={{ animationDuration: `${HOLD_TO_STOP_MS}ms` }}>
-          <circle cx="50" cy="50" r="47" pathLength="100" />
+        <svg className="player-hold-ring" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="47" pathLength="100" style={{ animationDuration: `${HOLD_TO_STOP_MS}ms` }} />
         </svg>
       )}
     </button>
