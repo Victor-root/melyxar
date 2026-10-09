@@ -32,9 +32,10 @@ const NEWEST = 20;
  *  scrolling in its own box. */
 const SIDE_BY_SIDE = "(min-width: 1000px)";
 
-/** How many songs each of the two listened lists shows on a phone, where
- *  they are one list to switch from the one to the other. */
-const LISTED_ON_PHONE = 8;
+/** How much of the newest albums, under the lists on a phone, is left in view
+ *  below them: their heading and the top of their covers, so that the page is
+ *  seen to go on and has somewhere to be pulled from. */
+const NEWEST_PEEKING = 120;
 
 /** The least a list is let shrink to, on a screen too short to give it more. */
 const LEAST_LIST = 280;
@@ -111,7 +112,9 @@ export function ForYouTab({ library }: { library: string }) {
 /**
  * The two listened lists on a phone: one list the whole width of the screen,
  * the other beside it, a swipe or a press on its name away. The one in view
- * is the one whose name is lit.
+ * is the one whose name is lit. Each holds every song and scrolls in its own
+ * box, as tall as the screen allows less a peek of what follows, which the
+ * page itself scrolls to.
  */
 function ListenedSwitch({
   lists,
@@ -121,11 +124,22 @@ function ListenedSwitch({
   onPlay: (songs: Song[], index: number) => void;
 }) {
   const shown = lists.filter((list) => list.songs.length > 0);
+  return shown.length === 0 ? null : <ListenedPages shown={shown} onPlay={onPlay} />;
+}
+
+function ListenedPages({
+  shown,
+  onPlay,
+}: {
+  shown: { title: string; mark: React.ReactNode; songs: Song[] }[];
+  onPlay: (songs: Song[], index: number) => void;
+}) {
   /* Sideways only: bringing a list into view scrolled the whole page along. A
      list is a width of the row plus the gap between two, which is its padding. */
   const track = useRef<HTMLDivElement>(null);
   const pages = useRef<(HTMLDivElement | null)[]>([]);
   const [page, setPage] = useState(0);
+  useRoomBelow(track, LEAST_LIST, NEWEST_PEEKING);
 
   useEffect(() => {
     const element = track.current;
@@ -150,9 +164,6 @@ function ListenedSwitch({
     return () => watcher.disconnect();
   }, [shown.length]);
 
-  if (shown.length === 0) {
-    return null;
-  }
   return (
     <section className="section">
       <div className="section-head">
@@ -183,7 +194,7 @@ function ListenedSwitch({
             }}
           >
             <SongList
-              songs={list.songs.slice(0, LISTED_ON_PHONE)}
+              songs={list.songs}
               numbered="place"
               showAlbum={false}
               menuOnly

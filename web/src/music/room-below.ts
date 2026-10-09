@@ -13,7 +13,9 @@ export function roomBelow(viewport: number, top: number, reserve: number, least:
   return Math.max(least, viewport - top - reserve);
 }
 
-export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: number) {
+/** `peek` is left under the box on top of the foot of the page, for the
+ *  first of what comes after it to show, so the page is seen to go on. */
+export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: number, peek = 0) {
   useLayoutEffect(() => {
     const element = box.current;
     const scroller = element && scrollerOf(element);
@@ -24,7 +26,7 @@ export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: nu
     const measure = () => {
       const foot = parseFloat(getComputedStyle(page).paddingBottom) || 0;
       const top = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-      element.style.height = `${roomBelow(scroller.clientHeight, top, foot, least)}px`;
+      element.style.height = `${roomBelow(scroller.clientHeight, top, foot + peek, least)}px`;
     };
     measure();
     const watcher = new ResizeObserver(measure);
@@ -33,5 +35,5 @@ export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: nu
       watcher.observe(element.parentElement);
     }
     return () => watcher.disconnect();
-  }, [box, least]);
+  }, [box, least, peek]);
 }
