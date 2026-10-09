@@ -13,10 +13,11 @@ use melyxar_core::id::WorkId;
 use melyxar_core::music_lyrics::{Lyrics, read_lyrics};
 use melyxar_core::user::User;
 use melyxar_database::music_lyrics::LookedUpLyrics;
-use melyxar_metadata::lrclib::{Asked, LrcLibClient};
+use melyxar_metadata::lrclib::{Asked, LrcLibClient, Offer};
+use melyxar_metadata::ProviderError;
 
 use crate::reach::may_read_the_work;
-use crate::{AppState, Result};
+use crate::{AppError, AppState, Result};
 
 /// Where the words of a song were found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,6 +149,74 @@ pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Opt
         .keep_looked_up_lyrics(song, &kept, melyxar_core::time::now())
         .await?;
     Ok(online(&kept))
+}
+
+/// What an administrator may do about the lyrics of a song, beyond what is
+/// looked up on its own: search LRCLIB by hand, take one of its entries as
+/// the words of the song, or forget what was taken so the song is looked up
+/// again.
+fn may_manage(who: &User) -> Result<()> {
+    match who.permissions.is_administrator {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::forbidden(
+            "only an administrator looks for lyrics",
+        ))),
+    }
+}
+
+/// What went wrong with LRCLIB, in the words a screen can say.
+fn said(error: ProviderError) -> AppError {
+    tracing::warn!(%error, "LRCLIB would not answer");
+    let code = match error {
+        ProviderError::TooManyRequests { .. } => melyxar_core::error::ErrorCode::TooManyAttempts,
+        _ => melyxar_core::error::ErrorCode::ExternalServiceUnavailable,
+    };
+    AppError::Domain(melyxar_core::Error::new(code, error.to_string()))
+}
+
+/// What LRCLIB holds under an artist and a title, searched by hand. Looked up
+/// whatever the library says about looking up lyrics online: that setting is
+/// for what is asked without anybody asking.
+pub async fn offers(state: &AppState, who: &User, song: WorkId, artist: &str, title: &str) -> Result<Vec<Offer>> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    if title.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    tracing::debug!(%song, artist, title, "lyrics: searched for by hand");
+    let client = LrcLibClient::new().map_err(said)?;
+    client.offers(artist.trim(), title.trim()).await.map_err(said)
+}
+
+/// Takes one entry of LRCLIB as the words of a song, kept like any answer of
+/// LRCLIB so the song is not looked up again over it.
+pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    tracing::debug!(%song, entry, "lyrics: an entry of LRCLIB is taken by hand");
+    let client = LrcLibClient::new().map_err(said)?;
+    let Some(found) = client.entry(entry).await.map_err(said)? else {
+        return Err(AppError::Domain(melyxar_core::Error::not_found("that entry of LRCLIB is gone")));
+    };
+    state
+        .database()
+        .keep_looked_up_lyrics(
+            song,
+            &LookedUpLyrics { plain: found.plain, synced: found.synced, instrumental: found.instrumental },
+            melyxar_core::time::now(),
+        )
+        .await?;
+    Ok(())
+}
+
+/// Forgets what was kept for a song, taken by hand or found on its own, so
+/// that the next listen looks it up again.
+pub async fn forget(state: &AppState, who: &User, song: WorkId) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    tracing::debug!(%song, "lyrics: what was kept online is forgotten");
+    state.database().forget_looked_up_lyrics(song).await?;
+    Ok(())
 }
 
 /// The words written inside the song, or in a file of the same name beside
