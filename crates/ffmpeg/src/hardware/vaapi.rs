@@ -5,9 +5,9 @@
 //! cannot reach Nvidia's.
 //!
 //! Wide gamut colour is converted by the card's own filter where the driver
-//! has one, which Intel's has and AMD's has not. Otherwise Vulkan opened on the
-//! same card converts it, and the picture goes back to the card for its
-//! encoder.
+//! has one, which Intel's has and AMD's has not. Otherwise the processor reads
+//! the film, Vulkan opened on the same card converts it, and the picture goes
+//! back to the card for its encoder.
 
 use std::path::{Path, PathBuf};
 
@@ -64,19 +64,15 @@ impl Driver for Vaapi {
     }
 
     // The card's own filter first: nothing leaves the card. Then Vulkan,
-    // handed the pictures the card read without a copy, and last Vulkan
-    // handed what the processor read, which asks nothing of the card's reader.
+    // handed what the processor read. Handing Vulkan what the card read
+    // without a copy is not offered: tried on an RX 6600, it reset the card,
+    // and a trial run at every start must never do that.
     fn recipes(&self) -> &'static [ToneMapping] {
-        &[
-            ToneMapping::OwnFilter,
-            ToneMapping::VulkanBesideTheCard { card_reads: true },
-            ToneMapping::VulkanBesideTheCard { card_reads: false },
-        ]
+        &[ToneMapping::OwnFilter, ToneMapping::VulkanBesideTheCard]
     }
 
     // Converting through Vulkan opens it on the same card, and the filters
     // work on Vulkan: the conversion only takes pictures from its own device.
-    // The card still reads the film.
     fn opening(
         &self,
         card: &Card,
@@ -84,7 +80,7 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::VulkanBesideTheCard { .. }) => opening_with(
+            Some(ToneMapping::VulkanBesideTheCard) => opening_with(
                 card,
                 &vulkan_on_the_card(),
                 VULKAN_DEVICE_NAME,
@@ -102,8 +98,8 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
-        if let Some(ToneMapping::VulkanBesideTheCard { .. }) = recipe {
-            return through_vulkan(scale_to_height, reads_the_film);
+        if recipe == Some(ToneMapping::VulkanBesideTheCard) {
+            return through_vulkan(scale_to_height);
         }
         let tone_map = recipe == Some(ToneMapping::OwnFilter);
         let mut filters =
@@ -114,13 +110,10 @@ impl Driver for Vaapi {
         filters
     }
 
-    // The card's own filter is fed by the card's own reader, and so is Vulkan
-    // when its trial proved the card hands it what it read.
+    // The card's own filter is fed by the card's own reader, and Vulkan by
+    // the processor.
     fn reads_for(&self, card: &Card, codec: &str, recipe: Option<ToneMapping>) -> bool {
-        match recipe {
-            Some(ToneMapping::VulkanBesideTheCard { card_reads }) => card_reads && card.reads(codec),
-            _ => card.reads(codec),
-        }
+        recipe != Some(ToneMapping::VulkanBesideTheCard) && card.reads(codec)
     }
 
     fn encoder_arguments(&self, _card: &Card) -> Vec<String> {
@@ -169,23 +162,17 @@ impl Driver for Vaapi {
 
 /// The chain that converts colour through Vulkan.
 ///
-/// A picture the card read is handed to Vulkan without a copy; one the
-/// processor read is taken by the conversion as it is. Vulkan makes it smaller
-/// as it converts, and it comes down at its final size to be handed back up
-/// to the card, since Vulkan cannot hand it back without a copy in the tool as
-/// it is published.
-fn through_vulkan(scale_to_height: Option<i32>, reads_the_film: bool) -> Vec<String> {
-    let mut filters = Vec::new();
-    if reads_the_film {
-        filters.extend(["hwmap=mode=read".to_string(), "format=vulkan".to_string()]);
-    }
-    filters.extend([
+/// The conversion takes the picture the processor read as it is, makes it
+/// smaller as it converts, and it comes down at its final size to be handed
+/// back up to the card, since Vulkan cannot hand it back without a copy in the
+/// tool as it is published.
+fn through_vulkan(scale_to_height: Option<i32>) -> Vec<String> {
+    vec![
         converted_by_vulkan(scale_to_height),
         "hwdownload".to_string(),
         "format=nv12".to_string(),
         "hwupload=derive_device=vaapi".to_string(),
-    ]);
-    filters
+    ]
 }
 
 /// The cards driven by the open interface: every working device under
@@ -413,9 +400,9 @@ mod tests {
         );
     }
 
-    fn through_vulkan(card_reads: bool) -> Card {
+    fn through_vulkan() -> Card {
         Card {
-            tone_mapping: Some(ToneMapping::VulkanBesideTheCard { card_reads }),
+            tone_mapping: Some(ToneMapping::VulkanBesideTheCard),
             ..card(true, false)
         }
     }
@@ -424,18 +411,19 @@ mod tests {
     fn a_card_without_its_own_conversion_tries_vulkan_after_it() {
         assert_eq!(
             Vaapi.recipes(),
-            &[
-                ToneMapping::OwnFilter,
-                ToneMapping::VulkanBesideTheCard { card_reads: true },
-                ToneMapping::VulkanBesideTheCard { card_reads: false },
-            ]
+            &[ToneMapping::OwnFilter, ToneMapping::VulkanBesideTheCard]
         );
     }
 
     #[test]
-    fn through_vulkan_the_card_reads_and_the_filters_work_on_vulkan() {
+    fn through_vulkan_the_processor_reads_and_the_filters_work_on_vulkan() {
+        // Asked to read a film it was proved to read, the card is still not
+        // handed one whose colours Vulkan converts.
+        let converting = through_vulkan();
+        let reads = converting.reads_for("hevc", true);
+        assert!(!reads);
         assert_eq!(
-            through_vulkan(true).opening_arguments(true, true),
+            converting.opening_arguments(reads, true),
             vec![
                 "-init_hw_device".to_string(),
                 "vaapi=card:/dev/dri/renderD128".to_string(),
@@ -443,17 +431,12 @@ mod tests {
                 "vulkan=vk@card".to_string(),
                 "-filter_hw_device".to_string(),
                 "vk".to_string(),
-                "-hwaccel".to_string(),
-                "vaapi".to_string(),
-                "-hwaccel_output_format".to_string(),
-                "vaapi".to_string(),
-                "-hwaccel_device".to_string(),
-                "card".to_string(),
             ]
         );
-        // A film whose colours are left alone opens the card as before.
+        // A film whose colours are left alone is read by the card as before.
+        assert!(converting.reads_for("hevc", false));
         assert_eq!(
-            through_vulkan(true).opening_arguments(true, false),
+            converting.opening_arguments(true, false),
             card(true, false).opening_arguments(true, false)
         );
     }
@@ -461,34 +444,14 @@ mod tests {
     #[test]
     fn through_vulkan_the_picture_goes_back_to_the_card_at_its_final_size() {
         assert_eq!(
-            through_vulkan(true).filters_for(Some(1080), true, true),
+            through_vulkan().filters_for(Some(1080), true, false),
             vec![
-                "hwmap=mode=read".to_string(),
-                "format=vulkan".to_string(),
                 converted_by_vulkan(Some(1080)),
                 "hwdownload".to_string(),
                 "format=nv12".to_string(),
                 "hwupload=derive_device=vaapi".to_string(),
             ]
         );
-        // Read by the processor, the conversion takes the picture as it is.
-        assert_eq!(
-            through_vulkan(false).filters_for(None, true, false),
-            vec![
-                converted_by_vulkan(None),
-                "hwdownload".to_string(),
-                "format=nv12".to_string(),
-                "hwupload=derive_device=vaapi".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn through_vulkan_the_card_reads_only_when_its_trial_proved_it_hands_vulkan_what_it_read() {
-        assert!(through_vulkan(true).reads_for("hevc", true));
-        assert!(!through_vulkan(true).reads_for("vc1", true), "never proved to read it");
-        assert!(!through_vulkan(false).reads_for("hevc", true));
-        assert!(through_vulkan(false).reads_for("hevc", false), "its own reader still reads");
     }
 
     #[test]
