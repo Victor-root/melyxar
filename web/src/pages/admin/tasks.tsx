@@ -223,6 +223,11 @@ export function JobCard({ job, onCancel }: { job: Job; onCancel?: () => void }) 
           </span>
         </div>
       )}
+      {job.ratio === null && job.state === "running" && (
+        <span className="meter">
+          <span className="meter-fill meter-fill-working" />
+        </span>
+      )}
       {job.ratio === null && job.done > 0 && (
         <span className="job-card-count">{job.done}</span>
       )}
