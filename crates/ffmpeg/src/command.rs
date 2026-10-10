@@ -458,11 +458,12 @@ impl Command {
             Some(index) => format!("[0:{index}]"),
             None => "[0:v:0]".to_string(),
         };
+        let place = painting::Place::of(encode);
         Some(painting::graph(
             &picture,
-            picture_filter_chain(encode).as_deref(),
+            picture_filter_chain(encode, place.after_the_card(encode)).as_deref(),
             subtitle,
-            &painting::Place::of(encode),
+            &place,
         ))
     }
 
@@ -669,7 +670,7 @@ impl Command {
                 // being painted with subtitles: saying it twice would apply
                 // it twice.
                 if painted.is_none()
-                    && let Some(filters) = picture_filter_chain(encode)
+                    && let Some(filters) = picture_filter_chain(encode, false)
                 {
                     push!("-vf");
                     push!(&filters);
@@ -891,9 +892,19 @@ pub(crate) const TONE_MAP_FILTER: &str = concat!(
 /// Two shapes, because the two paths have nothing in common beyond the order:
 /// on a card the picture is handed up and worked on there, in software it is
 /// worked on where it already is.
-fn picture_filter_chain(encode: &VideoEncode) -> Option<String> {
+///
+/// `until_it_comes_down` stops a card's chain where the picture comes down to
+/// the processor, for a subtitle laid there before it goes back up.
+fn picture_filter_chain(encode: &VideoEncode, until_it_comes_down: bool) -> Option<String> {
     if let Some((card, reads_the_film)) = encode.card() {
-        let filters = card.filters_for(encode.scale_to_height, encode.tone_map, reads_the_film);
+        let filters = match until_it_comes_down {
+            true => card.filters_until_it_comes_down(
+                encode.scale_to_height,
+                encode.tone_map,
+                reads_the_film,
+            ),
+            false => card.filters_for(encode.scale_to_height, encode.tone_map, reads_the_film),
+        };
         return (!filters.is_empty()).then(|| filters.join(","));
     }
 
@@ -1457,6 +1468,44 @@ mod tests {
                 "[picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
             ),
             "{graph}"
+        );
+    }
+
+    #[test]
+    fn a_wide_gamut_film_on_a_card_without_its_own_conversion_is_painted_while_the_picture_is_down() {
+        // What AMD's cards do: Vulkan reads and converts, the picture comes
+        // down at its final size, the processor lays the subtitle there, and
+        // the picture goes back up to the card for its encoder.
+        let card = Card {
+            tone_mapping: Some(crate::hardware::ToneMapping::VulkanBesideTheCard {
+                vulkan_reads: true,
+            }),
+            picture_subtitle_layout: None,
+            ..a_card()
+        };
+        let mut encode = VideoEncode::on_a_card(&card, "h264", true).expect("proved");
+        encode.tone_map = true;
+        encode.scale_to_height = Some(720);
+        encode.burn_in_subtitle = Some(4);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+
+        let args = arguments(&command);
+        assert_eq!(args[position(&args, "-hwaccel").expect("read on the card") + 1], "vulkan");
+        assert_eq!(args[position(&args, "-filter_hw_device").expect("filters") + 1], "vk");
+        assert!(args.contains(&"h264_vaapi".to_string()), "{args:?}");
+
+        assert_eq!(
+            command.picture_painted_with_subtitles().expect("painted"),
+            "[0:4]scale=1280:720[words];[0:v:0]libplacebo=w=-2:h=720:format=nv12\
+             :colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv\
+             :tonemapping=auto,hwdownload[picture];\
+             [picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'\
+             ,format=nv12,hwupload=derive_device=vaapi[painted]"
         );
     }
 

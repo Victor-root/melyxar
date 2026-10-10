@@ -92,6 +92,12 @@ impl Driver for Cuda {
         }
     }
 
+    // Nvidia's encoders take a picture that came down to the processor as it
+    // is.
+    fn back_up(&self, _recipe: Option<ToneMapping>) -> Option<&'static str> {
+        None
+    }
+
     // Through Vulkan it is Vulkan that reads, and it was proved to on the
     // wide gamut sample alone.
     fn reads_for(&self, card: &Card, codec: &str, recipe: Option<ToneMapping>) -> bool {
