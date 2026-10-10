@@ -247,8 +247,10 @@ export const Card = memo(function Card({
   const [reached, setReached] = useState(false);
   const reach = () => setReached(true);
   const shown = reached || menu.open;
-  /* A video of one's own runs through what it holds under a resting pointer. */
-  const preview = useHoverPreview(card.kind === "video" && card.source !== null);
+  /* A video of one's own runs through what it holds under a resting pointer,
+     and its play button stands at the corner rather than over it. */
+  const ownVideo = card.kind === "video";
+  const preview = useHoverPreview(ownVideo && card.source !== null);
 
   const unknown = card.identification === "unidentified" || card.identification === "pending";
   /* A series plays the episode it carries on with: its page works out which
@@ -350,12 +352,12 @@ export const Card = memo(function Card({
             {playable && (
               <button
                 type="button"
-                className="card-play"
+                className={`card-play${ownVideo ? " card-play-corner" : ""}`}
                 aria-label={t("work.play")}
                 title={t("work.play")}
                 onClick={stop(() => navigate(`/work/${card.id}?play`))}
               >
-                <PlayIcon size={32} />
+                <PlayIcon size={ownVideo ? 15 : 32} />
               </button>
             )}
 

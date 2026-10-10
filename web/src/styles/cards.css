@@ -523,6 +523,24 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: var(--accent-bright);
 }
 
+/* On the card of a video of one's own the picture runs through what it
+   holds under the pointer, and a disc in the middle of it hid the very thing
+   being shown. The same disc stands at the corner the marks leave free, the
+   size of one of them. */
+.card-play-corner {
+  left: 8px;
+  top: auto;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  transform: scale(0.86);
+}
+
+.card:hover .card-play-corner,
+.card:has(:focus-visible, [aria-expanded="true"]) .card-play-corner {
+  transform: scale(1);
+}
+
 /* The marks: watched at the top right, liked and the rest at the bottom. */
 .card-mark {
   display: grid;
