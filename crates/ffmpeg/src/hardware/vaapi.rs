@@ -5,12 +5,13 @@
 //! cannot reach Nvidia's.
 //!
 //! Wide gamut colour is converted by the card's own filter where the driver
-//! has one, which Intel's has and AMD's has not. Otherwise the processor reads
-//! the film, Vulkan opened on the same card converts it, and the picture goes
-//! back to the card for its encoder.
+//! has one, which Intel's has and AMD's has not. Otherwise Vulkan opened on the
+//! same card reads the film and converts it, or converts what the processor
+//! read, and the picture goes back to the card for its encoder.
 
 use std::path::{Path, PathBuf};
 
+use super::trials::WIDE_GAMUT_CODEC;
 use super::{
     converted_by_vulkan, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
     CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
@@ -63,16 +64,22 @@ impl Driver for Vaapi {
         "vaapi"
     }
 
-    // The card's own filter first: nothing leaves the card. Then Vulkan,
-    // handed what the processor read. Handing Vulkan what the card read
-    // without a copy is not offered: tried on an RX 6600, it reset the card,
-    // and a trial run at every start must never do that.
+    // The card's own filter first: nothing leaves the card. Then Vulkan
+    // reading the film itself, and last Vulkan handed what the processor read.
+    // Handing Vulkan what the card's own reader read without a copy is not
+    // offered: tried on an RX 6600, it reset the card, and a trial run at
+    // every start must never do that.
     fn recipes(&self) -> &'static [ToneMapping] {
-        &[ToneMapping::OwnFilter, ToneMapping::VulkanBesideTheCard]
+        &[
+            ToneMapping::OwnFilter,
+            ToneMapping::VulkanBesideTheCard { vulkan_reads: true },
+            ToneMapping::VulkanBesideTheCard { vulkan_reads: false },
+        ]
     }
 
     // Converting through Vulkan opens it on the same card, and the filters
-    // work on Vulkan: the conversion only takes pictures from its own device.
+    // work on Vulkan: the conversion only takes pictures from its own device,
+    // which is why Vulkan is also what reads the film.
     fn opening(
         &self,
         card: &Card,
@@ -80,11 +87,11 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::VulkanBesideTheCard) => opening_with(
+            Some(ToneMapping::VulkanBesideTheCard { .. }) => opening_with(
                 card,
                 &vulkan_on_the_card(),
                 VULKAN_DEVICE_NAME,
-                ("vaapi", DEVICE_NAME),
+                ("vulkan", VULKAN_DEVICE_NAME),
                 reads_the_film,
             ),
             _ => opening_with(card, &[], DEVICE_NAME, ("vaapi", DEVICE_NAME), reads_the_film),
@@ -98,7 +105,7 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
-        if recipe == Some(ToneMapping::VulkanBesideTheCard) {
+        if let Some(ToneMapping::VulkanBesideTheCard { .. }) = recipe {
             return through_vulkan(scale_to_height);
         }
         let tone_map = recipe == Some(ToneMapping::OwnFilter);
@@ -110,10 +117,16 @@ impl Driver for Vaapi {
         filters
     }
 
-    // The card's own filter is fed by the card's own reader, and Vulkan by
-    // the processor.
+    // The card's own filter is fed by the card's own reader. Through Vulkan
+    // it is Vulkan that reads, and it was proved to on the wide gamut sample
+    // alone.
     fn reads_for(&self, card: &Card, codec: &str, recipe: Option<ToneMapping>) -> bool {
-        recipe != Some(ToneMapping::VulkanBesideTheCard) && card.reads(codec)
+        match recipe {
+            Some(ToneMapping::VulkanBesideTheCard { vulkan_reads }) => {
+                vulkan_reads && codec == WIDE_GAMUT_CODEC
+            }
+            _ => card.reads(codec),
+        }
     }
 
     fn encoder_arguments(&self, _card: &Card) -> Vec<String> {
@@ -162,7 +175,7 @@ impl Driver for Vaapi {
 
 /// The chain that converts colour through Vulkan.
 ///
-/// The conversion takes the picture the processor read as it is, makes it
+/// The conversion takes the picture from wherever it was read, makes it
 /// smaller as it converts, and it comes down at its final size to be handed
 /// back up to the card, since Vulkan cannot hand it back without a copy in the
 /// tool as it is published.
@@ -400,30 +413,29 @@ mod tests {
         );
     }
 
-    fn through_vulkan() -> Card {
+    fn through_vulkan(vulkan_reads: bool) -> Card {
         Card {
-            tone_mapping: Some(ToneMapping::VulkanBesideTheCard),
+            tone_mapping: Some(ToneMapping::VulkanBesideTheCard { vulkan_reads }),
             ..card(true, false)
         }
     }
 
     #[test]
-    fn a_card_without_its_own_conversion_tries_vulkan_after_it() {
+    fn a_card_without_its_own_conversion_tries_vulkan_reading_first() {
         assert_eq!(
             Vaapi.recipes(),
-            &[ToneMapping::OwnFilter, ToneMapping::VulkanBesideTheCard]
+            &[
+                ToneMapping::OwnFilter,
+                ToneMapping::VulkanBesideTheCard { vulkan_reads: true },
+                ToneMapping::VulkanBesideTheCard { vulkan_reads: false },
+            ]
         );
     }
 
     #[test]
-    fn through_vulkan_the_processor_reads_and_the_filters_work_on_vulkan() {
-        // Asked to read a film it was proved to read, the card is still not
-        // handed one whose colours Vulkan converts.
-        let converting = through_vulkan();
-        let reads = converting.reads_for("hevc", true);
-        assert!(!reads);
+    fn through_vulkan_the_film_is_read_by_vulkan_and_the_filters_work_on_it() {
         assert_eq!(
-            converting.opening_arguments(reads, true),
+            through_vulkan(true).opening_arguments(true, true),
             vec![
                 "-init_hw_device".to_string(),
                 "vaapi=card:/dev/dri/renderD128".to_string(),
@@ -431,27 +443,45 @@ mod tests {
                 "vulkan=vk@card".to_string(),
                 "-filter_hw_device".to_string(),
                 "vk".to_string(),
+                "-hwaccel".to_string(),
+                "vulkan".to_string(),
+                "-hwaccel_output_format".to_string(),
+                "vulkan".to_string(),
+                "-hwaccel_device".to_string(),
+                "vk".to_string(),
             ]
         );
         // A film whose colours are left alone is read by the card as before.
-        assert!(converting.reads_for("hevc", false));
         assert_eq!(
-            converting.opening_arguments(true, false),
+            through_vulkan(true).opening_arguments(true, false),
             card(true, false).opening_arguments(true, false)
         );
     }
 
     #[test]
+    fn what_vulkan_reads_is_told_apart_from_what_the_card_reads() {
+        let reading = through_vulkan(true);
+        assert!(reading.reads_for("hevc", true), "proved on the wide gamut sample");
+        assert!(!reading.reads_for("av1", true), "never proved through Vulkan");
+        assert!(reading.reads_for("hevc", false), "the card's own reader was");
+        assert!(!through_vulkan(false).reads_for("hevc", true));
+    }
+
+    #[test]
     fn through_vulkan_the_picture_goes_back_to_the_card_at_its_final_size() {
-        assert_eq!(
-            through_vulkan().filters_for(Some(1080), true, false),
-            vec![
-                converted_by_vulkan(Some(1080)),
-                "hwdownload".to_string(),
-                "format=nv12".to_string(),
-                "hwupload=derive_device=vaapi".to_string(),
-            ]
-        );
+        // Read by Vulkan or by the processor, the same chain: the conversion
+        // takes the picture from wherever it was read.
+        for reads_the_film in [true, false] {
+            assert_eq!(
+                through_vulkan(true).filters_for(Some(1080), true, reads_the_film),
+                vec![
+                    converted_by_vulkan(Some(1080)),
+                    "hwdownload".to_string(),
+                    "format=nv12".to_string(),
+                    "hwupload=derive_device=vaapi".to_string(),
+                ]
+            );
+        }
     }
 
     #[test]

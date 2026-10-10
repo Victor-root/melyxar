@@ -1389,6 +1389,11 @@ RestartSec=5
 # than whichever card the driver would put first.
 Environment=CUDA_DEVICE_ORDER=PCI_BUS_ID
 
+# AMD's Vulkan driver reads video only when asked to on some generations of
+# card. It is what reads a wide gamut film on an AMD card, and the setting
+# changes nothing for the other drivers.
+Environment=RADV_PERFTEST=video_decode
+
 # Playback sessions own external processes. Stopping has to be given time to
 # close them, otherwise they are left behind, which is the failure this whole
 # project set out to avoid.

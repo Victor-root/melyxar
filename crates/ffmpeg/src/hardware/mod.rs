@@ -187,9 +187,10 @@ pub enum ToneMapping {
     /// itself when it was proved to read a wide gamut one, and the processor
     /// reads it otherwise.
     ThroughVulkan { reads: bool },
-    /// The processor reads the film, Vulkan on the same card converts, and
-    /// the picture goes back up to the card for its encoder.
-    VulkanBesideTheCard,
+    /// Vulkan on the same card converts, and the picture goes back up to the
+    /// card for its encoder. Vulkan reads the film itself when it was proved
+    /// to read a wide gamut one, and the processor reads it otherwise.
+    VulkanBesideTheCard { vulkan_reads: bool },
 }
 
 impl ToneMapping {
@@ -199,15 +200,21 @@ impl ToneMapping {
             Self::OwnFilter => "convert_wide_gamut",
             Self::ThroughVulkan { reads: true } => "convert_wide_gamut_vulkan_reading",
             Self::ThroughVulkan { reads: false } => "convert_wide_gamut_vulkan",
-            Self::VulkanBesideTheCard => "convert_wide_gamut_vulkan_uploaded",
+            Self::VulkanBesideTheCard { vulkan_reads: true } => {
+                "convert_wide_gamut_vulkan_reading_beside_the_card"
+            }
+            Self::VulkanBesideTheCard { vulkan_reads: false } => {
+                "convert_wide_gamut_vulkan_beside_the_card"
+            }
         }
     }
 
     /// Whether the card reads the sample in the trial of this recipe.
     fn read_in_its_trial(self) -> bool {
         match self {
-            Self::OwnFilter | Self::VulkanBesideTheCard => false,
+            Self::OwnFilter => false,
             Self::ThroughVulkan { reads } => reads,
+            Self::VulkanBesideTheCard { vulkan_reads } => vulkan_reads,
         }
     }
 
