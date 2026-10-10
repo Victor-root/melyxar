@@ -124,6 +124,11 @@ pub(crate) trait Driver: Sync {
         reads_the_film: bool,
     ) -> Vec<String>;
 
+    /// What hands the picture back up to the card once it came down to the
+    /// processor, for a recipe after which the encoder wants it on the card.
+    /// It goes last, after a subtitle the processor lays on the way.
+    fn back_up(&self, recipe: Option<ToneMapping>) -> Option<&'static str>;
+
     /// Whether the card reads a film in one codec for itself, colours
     /// converted by `recipe` when they are.
     fn reads_for(&self, card: &Card, codec: &str, recipe: Option<ToneMapping>) -> bool;
@@ -226,7 +231,10 @@ impl ToneMapping {
 
     /// Whether the picture leaves the card once converted.
     pub fn brings_the_picture_down(self) -> bool {
-        matches!(self, Self::ThroughVulkan { .. })
+        matches!(
+            self,
+            Self::ThroughVulkan { .. } | Self::VulkanBesideTheCard { .. }
+        )
     }
 }
 
@@ -314,6 +322,23 @@ impl Card {
         self.tone_mapping.is_some()
     }
 
+    /// Whether the picture comes down to the processor once its colours are
+    /// converted, which is where a subtitle is then laid on it.
+    pub fn brings_the_picture_down(&self, tone_map: bool) -> bool {
+        tone_map
+            && self
+                .tone_mapping
+                .is_some_and(ToneMapping::brings_the_picture_down)
+    }
+
+    /// Whether a film with a subtitle made of pictures can be rebuilt here:
+    /// the card lays it when it was proved to, and the processor does when
+    /// the picture comes down to it anyway, at its final size, which costs
+    /// next to nothing.
+    pub fn takes_a_picture_subtitle(&self, tone_map: bool) -> bool {
+        self.picture_subtitle_layout.is_some() || self.brings_the_picture_down(tone_map)
+    }
+
     /// The encoder that produces one codec here, when this card produces it.
     pub fn encoder_for(&self, codec: &str) -> Option<&str> {
         self.encoders.get(codec).map(String::as_str)
@@ -389,16 +414,42 @@ impl Card {
         )
     }
 
-    /// The same chain, for one given recipe.
+    /// The same filters, stopped where the picture comes down to the
+    /// processor: what a subtitle the processor lays is laid after.
+    pub fn filters_until_it_comes_down(
+        &self,
+        scale_to_height: Option<i32>,
+        tone_map: bool,
+        reads_the_film: bool,
+    ) -> Vec<String> {
+        self.way.driver().chain(
+            self,
+            scale_to_height,
+            self.tone_mapping.filter(|_| tone_map),
+            reads_the_film,
+        )
+    }
+
+    /// What hands the picture back up to the card after it came down, when
+    /// the encoder wants it there.
+    pub fn back_up(&self, tone_map: bool) -> Option<&'static str> {
+        self.way
+            .driver()
+            .back_up(self.tone_mapping.filter(|_| tone_map))
+    }
+
+    /// The same chain, for one given recipe, handed back up to the card at
+    /// the end when the recipe brought it down.
     fn chain(
         &self,
         scale_to_height: Option<i32>,
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
-        self.way
-            .driver()
-            .chain(self, scale_to_height, recipe, reads_the_film)
+        let driver = self.way.driver();
+        let mut filters = driver.chain(self, scale_to_height, recipe, reads_the_film);
+        filters.extend(driver.back_up(recipe).map(str::to_string));
+        filters
     }
 }
 

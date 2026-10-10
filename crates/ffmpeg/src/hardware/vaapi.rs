@@ -117,6 +117,13 @@ impl Driver for Vaapi {
         filters
     }
 
+    // The encoder only takes a picture on the card, and through Vulkan the
+    // picture came down to the processor.
+    fn back_up(&self, recipe: Option<ToneMapping>) -> Option<&'static str> {
+        matches!(recipe, Some(ToneMapping::VulkanBesideTheCard { .. }))
+            .then_some("format=nv12,hwupload=derive_device=vaapi")
+    }
+
     // The card's own filter is fed by the card's own reader. Through Vulkan
     // it is Vulkan that reads, and it was proved to on the wide gamut sample
     // alone.
@@ -178,14 +185,9 @@ impl Driver for Vaapi {
 /// The conversion takes the picture from wherever it was read, makes it
 /// smaller as it converts, and it comes down at its final size to be handed
 /// back up to the card, since Vulkan cannot hand it back without a copy in the
-/// tool as it is published.
+/// tool as it is published. Handing it back up is `back_up`'s.
 fn through_vulkan(scale_to_height: Option<i32>) -> Vec<String> {
-    vec![
-        converted_by_vulkan(scale_to_height),
-        "hwdownload".to_string(),
-        "format=nv12".to_string(),
-        "hwupload=derive_device=vaapi".to_string(),
-    ]
+    vec![converted_by_vulkan(scale_to_height), "hwdownload".to_string()]
 }
 
 /// The cards driven by the open interface: every working device under
@@ -477,11 +479,28 @@ mod tests {
                 vec![
                     converted_by_vulkan(Some(1080)),
                     "hwdownload".to_string(),
-                    "format=nv12".to_string(),
-                    "hwupload=derive_device=vaapi".to_string(),
+                    "format=nv12,hwupload=derive_device=vaapi".to_string(),
                 ]
             );
         }
+    }
+
+    #[test]
+    fn through_vulkan_a_picture_subtitle_is_laid_while_the_picture_is_down() {
+        // The card does not lay it, and the picture is on the processor at
+        // its final size before it goes back up: the processor lays it there.
+        let converting = through_vulkan(true);
+        assert!(converting.takes_a_picture_subtitle(true));
+        assert!(!converting.takes_a_picture_subtitle(false), "the picture stays up");
+        assert_eq!(
+            converting.filters_until_it_comes_down(Some(720), true, true),
+            vec![converted_by_vulkan(Some(720)), "hwdownload".to_string()]
+        );
+        assert_eq!(
+            converting.back_up(true),
+            Some("format=nv12,hwupload=derive_device=vaapi")
+        );
+        assert_eq!(converting.back_up(false), None);
     }
 
     #[test]

@@ -816,9 +816,10 @@ pub(crate) fn rate_for(height: Option<i32>, codec: &str) -> i64 {
 /// Whether a card can take a film at all.
 fn card_takes(card: &melyxar_ffmpeg::Card, painting_subtitles: bool, tone_map: bool) -> bool {
     // A subtitle made of pictures is laid on the picture where the picture
-    // is, which is only the card once it has proved it can. Until then it is
-    // the processor, which has nothing to prove.
-    (!painting_subtitles || card.picture_subtitle_layout().is_some())
+    // is: on the card once it has proved it can, or on the processor while
+    // the picture is down from the card anyway. Otherwise the whole film goes
+    // to the processor, which has nothing to prove.
+    (!painting_subtitles || card.takes_a_picture_subtitle(tone_map))
         // A card that cannot convert wide gamut colour would hand back a film
         // that is grey, which is worse than one that is merely smaller.
         && (!tone_map || card.can_tone_map())
