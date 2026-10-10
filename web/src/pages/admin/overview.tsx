@@ -366,12 +366,14 @@ function WorkUnderWay({ job }: { job: Job }) {
         )}
       </span>
       <span className="meter">
-        <span
-          className="meter-fill"
-          style={{
-            width: `${job.ratio === null ? 0 : outOfAHundred(job.ratio)}%`,
-          }}
-        />
+        {job.ratio === null ? (
+          <span className="meter-fill meter-fill-working" />
+        ) : (
+          <span
+            className="meter-fill"
+            style={{ width: `${outOfAHundred(job.ratio)}%` }}
+          />
+        )}
       </span>
     </div>
   );

@@ -379,8 +379,12 @@ pub async fn scan_library(
 
     // Counted by root rather than by file: how many files there are is exactly
     // what this pass is finding out, and a disk is what it stops between.
+    // With one root there is nothing to count against: the walk would read
+    // nought for as long as it lasts and everything once it was over.
     handle.at_step(JobStep::WalkingFolders).await;
-    handle.set_total(library.roots.len() as i64).await;
+    if library.roots.len() > 1 {
+        handle.set_total(library.roots.len() as i64).await;
+    }
     let mut pictures_found = crate::music::pictures::PicturesFound::new();
 
     for root in &library.roots {

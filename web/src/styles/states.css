@@ -138,6 +138,28 @@
   transition: width var(--calm) var(--ease);
 }
 
+/* Work whose size is not known: a bar that claims no share, going back and
+   forth, rather than one sitting at nothing that reads as work gone wrong. */
+.meter-fill-working {
+  width: 35%;
+  transition: none;
+  animation: meter-working 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes meter-working {
+  to {
+    transform: translateX(185%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill-working {
+    width: 100%;
+    opacity: 0.35;
+    animation: none;
+  }
+}
+
 /* A list of lines inside a panel, each on its own row with a hairline. */
 .lines {
   display: flex;
