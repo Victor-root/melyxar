@@ -2616,6 +2616,7 @@ mod tests {
             can_scale: true,
             tone_mapping: can_tone_map.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
             picture_subtitle_layout: Some("bgra".to_string()),
+            paints_through_vulkan: false,
         }
     }
 
