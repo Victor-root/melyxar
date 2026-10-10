@@ -1177,7 +1177,7 @@ mod tests {
         assert_eq!(
             args[graph + 1],
             "[0:v:0]scale_vaapi=w=-2:h=1080:format=nv12[picture];\
-             [0:3]format=bgra,hwupload[words];\
+             [0:3]format=bgra,hwupload=derive_device=vaapi[words];\
              [picture][words]overlay_vaapi=w='min(main_w,main_h*overlay_iw/overlay_ih)'\
              :h='min(main_h,main_w*overlay_ih/overlay_iw)'\
              :x='(main_w-w)/2':y='main_h-h'[painted]"

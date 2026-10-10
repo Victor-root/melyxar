@@ -12,7 +12,10 @@
 use std::path::Path;
 
 use super::trials::WIDE_GAMUT_CODEC;
-use super::{handed_up_and_made_smaller, opening_with, Card, CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME};
+use super::{
+    converted_by_vulkan, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
+    CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
+};
 use crate::painting::{AT_THE_FOOT, PAINTED};
 
 /// Where Nvidia's driver lists its cards, one folder each, named after where
@@ -24,15 +27,6 @@ const KEY_PREFIX: &str = "cuda:";
 
 /// Where Nvidia's device files are, numbered after the cards.
 const NVIDIA_DEVICES: &str = "/dev";
-
-/// The name given to the Vulkan device opened on the same card.
-const VULKAN_DEVICE_NAME: &str = "vk";
-
-/// What Vulkan is asked to make of a wide gamut picture: standard range, in
-/// the layout the encoder takes, converted the way the filter judges best for
-/// that film.
-const VULKAN_CONVERSION: &str = "format=nv12:colorspace=bt709:color_primaries=bt709\
-    :color_trc=bt709:range=tv:tonemapping=auto";
 
 /// The layout Nvidia's filter needs the picture in to lay a transparent
 /// subtitle on it, which is not the one its encoders are usually handed.
@@ -70,14 +64,12 @@ impl Driver for Cuda {
         match recipe {
             Some(ToneMapping::ThroughVulkan { .. }) => opening_with(
                 card,
-                &[
-                    "-init_hw_device".to_string(),
-                    format!("vulkan={VULKAN_DEVICE_NAME}@{DEVICE_NAME}"),
-                ],
+                &vulkan_on_the_card(),
+                VULKAN_DEVICE_NAME,
                 ("vulkan", VULKAN_DEVICE_NAME),
                 reads_the_film,
             ),
-            _ => opening_with(card, &[], ("cuda", DEVICE_NAME), reads_the_film),
+            _ => opening_with(card, &[], DEVICE_NAME, ("cuda", DEVICE_NAME), reads_the_film),
         }
     }
 
@@ -91,16 +83,11 @@ impl Driver for Cuda {
         reads_the_film: bool,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::ThroughVulkan { .. }) => {
-                let size = scale_to_height
-                    .map(|height| format!("w=-2:h={height}:"))
-                    .unwrap_or_default();
-                vec![
-                    format!("libplacebo={size}{VULKAN_CONVERSION}"),
-                    "hwdownload".to_string(),
-                    "format=nv12".to_string(),
-                ]
-            }
+            Some(ToneMapping::ThroughVulkan { .. }) => vec![
+                converted_by_vulkan(scale_to_height),
+                "hwdownload".to_string(),
+                "format=nv12".to_string(),
+            ],
             _ => handed_up_and_made_smaller(card, scale_to_height, false, reads_the_film),
         }
     }
@@ -329,7 +316,7 @@ mod tests {
         assert_eq!(
             through_vulkan(true).filters_for(Some(1080), true, true),
             vec![
-                format!("libplacebo=w=-2:h=1080:{VULKAN_CONVERSION}"),
+                converted_by_vulkan(Some(1080)),
                 "hwdownload".to_string(),
                 "format=nv12".to_string(),
             ]
@@ -339,7 +326,7 @@ mod tests {
         assert_eq!(
             through_vulkan(false).filters_for(None, true, false),
             vec![
-                format!("libplacebo={VULKAN_CONVERSION}"),
+                converted_by_vulkan(None),
                 "hwdownload".to_string(),
                 "format=nv12".to_string(),
             ]

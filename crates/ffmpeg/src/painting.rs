@@ -413,7 +413,7 @@ mod tests {
 
         assert!(
             graph.starts_with(
-                "[0:0]scale_vaapi=format=nv12[picture];[0:3]format=bgra,hwupload[words];"
+                "[0:0]scale_vaapi=format=nv12[picture];[0:3]format=bgra,hwupload=derive_device=vaapi[words];"
             ),
             "{graph}"
         );
