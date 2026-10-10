@@ -241,6 +241,31 @@ pub struct KnownFile {
     pub modified_at: Timestamp,
 }
 
+/// Every folder under a root that a walk goes into, the root itself left
+/// out. What has to be watched to hear of what a walk would find: not what it
+/// leaves alone, and no link to a folder, which it does not follow either.
+/// A folder nobody may open is listed all the same, and left to whoever tries
+/// to open it.
+pub fn subfolders_walked(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(folder) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.filter_map(Result::ok) {
+            if naming::is_left_alone(&entry.file_name().to_string_lossy()) {
+                continue;
+            }
+            if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                found.push(entry.path());
+                pending.push(entry.path());
+            }
+        }
+    }
+    found
+}
+
 /// Compares a walk against what is already stored.
 ///
 /// Incremental on purpose. Emptying the table and reinserting everything is
@@ -329,6 +354,21 @@ mod tests {
             std::fs::create_dir_all(parent).expect("folder created");
         }
         std::fs::write(path, contents).expect("file written");
+    }
+
+    #[test]
+    fn the_subfolders_walked_leave_out_what_a_walk_leaves_alone() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let root = directory.path();
+        write(root, "Films/2019/Quiet Harbour.mkv", b"x");
+        write(root, "lost+found/lost.mkv", b"x");
+        write(root, ".hidden/Amber Field.mkv", b"x");
+        write(root, "Films/@eaDir/thumb.mkv", b"x");
+        std::os::unix::fs::symlink(root.join("Films"), root.join("Linked")).expect("link made");
+
+        let mut found = subfolders_walked(root);
+        found.sort();
+        assert_eq!(found, vec![root.join("Films"), root.join("Films/2019")]);
     }
 
     #[test]
