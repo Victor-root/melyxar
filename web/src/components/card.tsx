@@ -247,8 +247,8 @@ export const Card = memo(function Card({
   const [reached, setReached] = useState(false);
   const reach = () => setReached(true);
   const shown = reached || menu.open;
-  /* A video of one's own runs through what it holds under a resting pointer,
-     and its play button stands at the corner rather than over it. */
+  /* A video of one's own runs through what it holds under a resting pointer:
+     nothing is laid over it, and its play button stands at the corner. */
   const ownVideo = card.kind === "video";
   const preview = useHoverPreview(ownVideo && card.source !== null);
 
@@ -274,7 +274,7 @@ export const Card = memo(function Card({
 
   return (
     <article
-      className={`card card-${shape}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
+      className={`card card-${shape}${ownVideo ? " card-own" : ""}${here ? " card-here" : ""}${choosing.selecting ? " selecting" : ""}${choosing.chosen ? " card-chosen" : ""}`}
       data-card={card.id}
       style={{ ["--card-color" as string]: card.color ?? "var(--surface-raised)" }}
       onPointerEnter={(event) => {
@@ -352,7 +352,7 @@ export const Card = memo(function Card({
             {playable && (
               <button
                 type="button"
-                className={`card-play${ownVideo ? " card-play-corner" : ""}`}
+                className="card-play"
                 aria-label={t("work.play")}
                 title={t("work.play")}
                 onClick={stop(() => navigate(`/work/${card.id}?play`))}

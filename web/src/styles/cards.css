@@ -524,10 +524,15 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 /* On the card of a video of one's own the picture runs through what it
-   holds under the pointer, and a disc in the middle of it hid the very thing
-   being shown. The same disc stands at the corner the marks leave free, the
-   size of one of them. */
-.card-play-corner {
+   holds under the pointer, and a shade over it and a disc in the middle of it
+   hid the very thing being shown. Nothing is laid over the picture, the marks
+   standing on their own discs, and the play disc stands at the corner the
+   marks leave free, the size of one of them. */
+.card-own .card-hover {
+  background: none;
+}
+
+.card-own .card-play {
   left: 8px;
   top: auto;
   bottom: 8px;
@@ -536,8 +541,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   transform: scale(0.86);
 }
 
-.card:hover .card-play-corner,
-.card:has(:focus-visible, [aria-expanded="true"]) .card-play-corner {
+.card-own:hover .card-play,
+.card-own:has(:focus-visible, [aria-expanded="true"]) .card-play {
   transform: scale(1);
 }
 
