@@ -70,6 +70,23 @@ impl CardSearch {
             .any(|trial| trial.what == OPENING && trial.worked)
     }
 
+    /// The devices that opened and yet gave no card: on a machine with several
+    /// cards, the one whose driver is missing is told apart from the ones that
+    /// work, which `a_device_opened` cannot do.
+    pub fn opened_without_a_card(&self) -> Vec<&str> {
+        self.trials
+            .iter()
+            .filter(|trial| trial.what == OPENING && trial.worked)
+            .map(|trial| trial.device.as_str())
+            .filter(|device| {
+                !self
+                    .cards
+                    .iter()
+                    .any(|card| card.device.to_str() == Some(*device))
+            })
+            .collect()
+    }
+
     /// The card that rebuilds pictures: the one chosen, when it passed here,
     /// otherwise the one that keeps the most away from the processor, the
     /// first found among equals.
@@ -542,6 +559,23 @@ mod tests {
         };
         assert!(!forbidden.a_device_opened());
         assert!(!CardSearch::default().a_device_opened());
+    }
+
+    #[test]
+    fn a_device_that_opened_and_gave_no_card_is_told_apart_from_the_ones_that_work() {
+        let opened = |device: &str| Trial {
+            what: OPENING.to_string(),
+            device: device.to_string(),
+            worked: true,
+            said: String::new(),
+        };
+        let search = CardSearch {
+            trials: vec![opened("/dev/dri/renderD128"), opened("/dev/dri/renderD129")],
+            cards: vec![card(true, true)],
+            ..CardSearch::default()
+        };
+        assert_eq!(search.opened_without_a_card(), vec!["/dev/dri/renderD129"]);
+        assert!(CardSearch::default().opened_without_a_card().is_empty());
     }
 
     #[tokio::test]
