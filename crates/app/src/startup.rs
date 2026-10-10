@@ -317,7 +317,6 @@ fn report_the_card(capabilities: &Capabilities) {
             can_scale = card.can_scale,
             converts_wide_gamut_by = ?card.tone_mapping,
             paints_picture_subtitles_in = card.picture_subtitle_layout(),
-            paints_picture_subtitles_through_vulkan = card.paints_through_vulkan,
             "a card passed its trials"
         );
     }

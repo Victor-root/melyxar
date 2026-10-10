@@ -267,11 +267,6 @@ impl CardSearch {
 
         card.picture_subtitle_layout = self.which_layout_it_paints_in(ffmpeg, &card, &floor).await;
 
-        card.paints_through_vulkan = card
-            .tone_mapping
-            .is_some_and(ToneMapping::may_paint_through_vulkan)
-            && self.whether_vulkan_paints(ffmpeg, &card, &floor).await;
-
         card.decoders = self
             .which_codecs_it_reads(ffmpeg, &card, &floor, wide_gamut, &named, built_with)
             .await;
@@ -349,23 +344,6 @@ impl CardSearch {
             }
         }
         None
-    }
-
-    /// Establishes whether Vulkan, converting a wide gamut picture on the card,
-    /// lays a subtitle made of pictures on it, through the graph a film runs.
-    async fn whether_vulkan_paints(&mut self, ffmpeg: &Path, card: &Card, floor: &str) -> bool {
-        let (worked, said) =
-            match run_briefly(ffmpeg, painting::trial_through_vulkan_arguments(card, floor)).await {
-                Ok(outcome) => outcome,
-                Err(said) => (false, said),
-            };
-        self.trials.push(Trial {
-            what: "paint_a_picture_subtitle_through_vulkan".to_string(),
-            device: card.device.display().to_string(),
-            worked,
-            said,
-        });
-        worked
     }
 
     /// Establishes which codecs the card reads for itself.

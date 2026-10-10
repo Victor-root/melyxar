@@ -50,29 +50,11 @@ const DEVICE_NAME: &str = "card";
 /// The name given to the Vulkan device opened on the same card.
 const VULKAN_DEVICE_NAME: &str = "vk";
 
-/// The colours of standard range, which is what Vulkan turns a wide gamut
-/// picture into.
-macro_rules! standard_colours {
-    () => {
-        "colorspace=bt709:color_primaries=bt709:color_trc=bt709"
-    };
-}
-
 /// What Vulkan is asked to make of a wide gamut picture: standard range, in
 /// the layout the encoder takes, converted the way the filter judges best for
 /// that film.
-const VULKAN_CONVERSION: &str =
-    concat!("format=nv12:", standard_colours!(), ":range=tv:tonemapping=auto");
-
-/// The same conversion for a picture a subtitle is then laid on by Vulkan,
-/// whose filter only sees through a subtitle laid on a picture in red, green
-/// and blue, which are always full range.
-const VULKAN_CONVERSION_FOR_PAINTING: &str =
-    concat!("format=bgra:", standard_colours!(), ":range=pc:tonemapping=auto");
-
-/// The painted picture put back in the layout the encoder takes.
-const VULKAN_BACK_TO_THE_ENCODERS_LAYOUT: &str =
-    concat!("libplacebo=format=nv12:", standard_colours!(), ":range=tv");
+const VULKAN_CONVERSION: &str = "format=nv12:colorspace=bt709:color_primaries=bt709\
+    :color_trc=bt709:range=tv:tonemapping=auto";
 
 /// The path a card is driven by, which decides everything the tool is told
 /// about it.
@@ -247,13 +229,6 @@ impl ToneMapping {
         matches!(self, Self::OwnFilter)
     }
 
-    /// Whether a subtitle made of pictures is tried on Vulkan with this
-    /// recipe, rather than laid on the processor while the picture is down.
-    /// The Nvidia recipe is left as it was measured.
-    fn may_paint_through_vulkan(self) -> bool {
-        matches!(self, Self::VulkanBesideTheCard { .. })
-    }
-
     /// Whether the picture leaves the card once converted.
     pub fn brings_the_picture_down(self) -> bool {
         matches!(
@@ -311,9 +286,6 @@ pub struct Card {
     /// on it and up again was measured to hold gigabytes and to run at a
     /// fraction of real time.
     pub picture_subtitle_layout: Option<String>,
-    /// Whether Vulkan, converting a wide gamut picture on this card, was
-    /// proved to lay a subtitle made of pictures on it before it comes down.
-    pub paints_through_vulkan: bool,
 }
 
 impl Card {
@@ -336,7 +308,6 @@ impl Card {
             can_scale: true,
             tone_mapping: None,
             picture_subtitle_layout: None,
-            paints_through_vulkan: false,
         }
     }
 
@@ -358,18 +329,6 @@ impl Card {
             && self
                 .tone_mapping
                 .is_some_and(ToneMapping::brings_the_picture_down)
-    }
-
-    /// Whether Vulkan lays the subtitle made of pictures of a film whose
-    /// colours it converts.
-    pub fn paints_through_vulkan(&self, tone_map: bool) -> bool {
-        tone_map && self.paints_through_vulkan
-    }
-
-    /// Vulkan converting the colours for a subtitle it lays next, made
-    /// smaller as it converts.
-    pub fn converted_for_painting_through_vulkan(&self, scale_to_height: Option<i32>) -> String {
-        vulkan_filter(scale_to_height, VULKAN_CONVERSION_FOR_PAINTING)
     }
 
     /// Whether a film with a subtitle made of pictures can be rebuilt here:
@@ -546,21 +505,10 @@ fn vulkan_on_the_card() -> Vec<String> {
 
 /// Vulkan making the picture smaller and converting its colours in one pass.
 fn converted_by_vulkan(scale_to_height: Option<i32>) -> String {
-    vulkan_filter(scale_to_height, VULKAN_CONVERSION)
-}
-
-/// The Vulkan conversion, making the picture smaller as it goes.
-fn vulkan_filter(scale_to_height: Option<i32>, conversion: &str) -> String {
     let size = scale_to_height
         .map(|height| format!("w=-2:h={height}:"))
         .unwrap_or_default();
-    format!("libplacebo={size}{conversion}")
-}
-
-/// What follows Vulkan laying a subtitle: the picture put back in the layout
-/// the encoder takes, and brought down.
-pub(crate) fn after_painting_through_vulkan() -> String {
-    format!("{VULKAN_BACK_TO_THE_ENCODERS_LAYOUT},hwdownload")
+    format!("libplacebo={size}{VULKAN_CONVERSION}")
 }
 
 /// The part of a chain every path shares: the picture handed up when the
