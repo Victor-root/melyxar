@@ -1165,6 +1165,8 @@ mark_installed() {
 
 # Set by the build for whoever runs it next: what it put in place.
 BUILT_ENGINE=0
+# Set when the service file written is not the one that was there.
+UNIT_CHANGED=0
 
 build_and_install() {
   section "$(tr_msg section_build)"
@@ -1400,16 +1402,20 @@ KillMode=mixed
 LimitNOFILE=65536
 
 # The server needs nothing beyond its own folders and the media it is given.
+# The homes are visible to the service, read only: a library can live in one,
+# and with them hidden its folder was refused as unreadable. What the account
+# may read there is still decided by the rights of each folder.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=read-only
 ReadWritePaths=${DATA_DIR} ${CACHE_DIR}
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
+  cmp -s "$tmp" "$UNIT_FILE" || UNIT_CHANGED=1
   step "$(tr_msg step_unit)" bash -c "
     install -m 0644 '$tmp' '$UNIT_FILE'
     rm -f '$tmp'
@@ -1536,13 +1542,16 @@ action_update() {
   # Written again so that what the service is started with reaches a machine
   # installed before it changed. Taken up at the next restart.
   install_service
-  # Only a new server needs a restart. A new interface alone is already being
-  # served, and a film playing through the update is not cut.
+  # Only a new server or a new service file needs a restart. A new interface
+  # alone is already being served, and a film playing through the update is
+  # not cut.
   if [[ -f "$WRITES_FILE" ]]; then
     write_media_writes
   fi
-  if [[ "$BUILT_ENGINE" -eq 1 ]]; then
+  if [[ "$BUILT_ENGINE" -eq 1 || "$UNIT_CHANGED" -eq 1 ]]; then
     restart_service
+  fi
+  if [[ "$BUILT_ENGINE" -eq 1 ]]; then
     mark_installed engine
   fi
   show_done
