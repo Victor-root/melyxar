@@ -231,7 +231,6 @@ mod tests {
             can_scale: true,
             tone_mapping: converts_colour.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
             picture_subtitle_layout: None,
-            paints_through_vulkan: false,
         }
     }
 
