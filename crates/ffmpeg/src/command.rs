@@ -459,12 +459,13 @@ impl Command {
             None => "[0:v:0]".to_string(),
         };
         let place = painting::Place::of(encode);
-        Some(painting::graph(
-            &picture,
-            picture_filter_chain(encode, place.after_the_card(encode)).as_deref(),
-            subtitle,
-            &place,
-        ))
+        let before = match (&place, encode.card()) {
+            (painting::Place::Vulkan { .. }, Some((card, _))) => {
+                Some(card.converted_for_painting_through_vulkan(encode.scale_to_height))
+            }
+            _ => picture_filter_chain(encode, place.after_the_card(encode)),
+        };
+        Some(painting::graph(&picture, before.as_deref(), subtitle, &place))
     }
 
     /// Turns the command into the argument list to hand to the tool.
@@ -1507,6 +1508,54 @@ mod tests {
              [picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'\
              ,format=nv12,hwupload=derive_device=vaapi[painted]"
         );
+    }
+
+    #[test]
+    fn a_wide_gamut_film_whose_subtitle_vulkan_was_proved_to_lay_is_painted_on_the_card() {
+        // The picture leaves Vulkan in red, green and blue for the subtitle to
+        // be seen through, is put back in the encoder's layout, and goes up to
+        // the card. A film cut to 3840 by 1600 and made 720 tall is 1728
+        // across: the subtitle is 1280 by 720, 224 from the left.
+        let card = Card {
+            tone_mapping: Some(crate::hardware::ToneMapping::VulkanBesideTheCard {
+                vulkan_reads: true,
+            }),
+            picture_subtitle_layout: None,
+            paints_through_vulkan: true,
+            ..a_card()
+        };
+        let mut encode = VideoEncode::on_a_card(&card, "h264", true).expect("proved");
+        encode.tone_map = true;
+        encode.scale_to_height = Some(720);
+        encode.burn_in_subtitle = Some(4);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode.clone()));
+
+        assert_eq!(
+            command.picture_painted_with_subtitles().expect("painted"),
+            "[0:4]scale=1280:720,format=bgra,hwupload[words];\
+             [0:v:0]libplacebo=w=-2:h=720:format=bgra:colorspace=bt709:color_primaries=bt709\
+             :color_trc=bt709:range=pc:tonemapping=auto[picture];\
+             [picture][words]overlay_vulkan=x=224:y=0,\
+             libplacebo=format=nv12:colorspace=bt709:color_primaries=bt709:color_trc=bt709\
+             :range=tv,hwdownload,format=nv12,hwupload=derive_device=vaapi[painted]"
+        );
+
+        // A film whose size is not known cannot be placed in numbers, and is
+        // painted on the processor while the picture is down.
+        encode.picture_size = None;
+        let unplaced = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode));
+        let graph = unplaced.picture_painted_with_subtitles().expect("painted");
+        assert!(graph.contains("overlay=shortest=0"), "{graph}");
+        assert!(!graph.contains("overlay_vulkan"), "{graph}");
     }
 
     #[test]
