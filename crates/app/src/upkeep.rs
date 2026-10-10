@@ -520,10 +520,14 @@ pub(crate) async fn pull_the_subtitles_out_of(
                     // written down: a reading that could not happen is not an
                     // answer about the file. A reading stopped on purpose is
                     // the same thing, and says so more quietly.
-                    let pulled =
-                        crate::subtitles::pull_them_all_out(&state, source_id, asked_to_stop)
-                            .await
-                            .ok();
+                    let pulled = crate::subtitles::pull_them_all_out_telling(
+                        &state,
+                        source_id,
+                        asked_to_stop,
+                        &|fraction| handle.element_at(fraction),
+                    )
+                    .await
+                    .ok();
                     handle.advance(1).await;
                     pulled
                 }

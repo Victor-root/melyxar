@@ -164,7 +164,9 @@ pub(crate) async fn translate_the_subtitles_of(
     }
 
     handle.at_step(JobStep::TranslatingSubtitles).await;
-    handle.set_total(waiting).await;
+    // Counted as itself in per cent when it is the only one, which is a few
+    // minutes of listening to a model with nothing to show.
+    handle.size_up(0, waiting).await;
     let threads = crate::speech::effort(state)
         .await?
         .threads(std::thread::available_parallelism().map_or(2, usize::from));
@@ -187,7 +189,7 @@ pub(crate) async fn translate_the_subtitles_of(
                 let name = source.path.file_name().map(|name| name.to_string_lossy().into_owned());
                 handle.now_working_on(name.as_deref()).await;
             }
-            match translate_one(state, &model, source_id, &file, threads).await {
+            match translate_one(state, &model, source_id, &file, threads, handle).await {
                 Ok(lines) => {
                     translated += 1;
                     tracing::debug!(library = library.name, lines, "a subtitle was translated");
@@ -228,6 +230,7 @@ async fn translate_one(
     source_id: MediaSourceId,
     file: &str,
     threads: usize,
+    handle: &JobHandle,
 ) -> Result<usize> {
     let database = state.database();
     let folder = state.config().directories.downloaded_subtitles();
@@ -240,9 +243,10 @@ async fn translate_one(
     // The model is opened for the video and let go of with it: it takes less
     // than a second to load, and nothing holds its memory between two videos.
     let model = model.to_path_buf();
+    let telling = handle.clone();
     let translated = tokio::task::spawn_blocking(move || -> std::result::Result<_, melyxar_translate::Error> {
         let engine = Engine::open(&model, threads)?;
-        translate_cues(&cues, |lines| engine.translate(lines))
+        translate_cues(&cues, |lines| engine.translate(lines), |share| telling.element_at(share))
     })
     .await
     .map_err(|error| AppError::Domain(melyxar_core::Error::new(melyxar_core::error::ErrorCode::Internal, error.to_string())))?

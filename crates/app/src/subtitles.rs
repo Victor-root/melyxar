@@ -283,6 +283,17 @@ pub async fn pull_them_all_out(
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
 ) -> Result<usize> {
+    pull_them_all_out_telling(state, source_id, asked_to_stop, &|_| {}).await
+}
+
+/// The same, told how far into the film the reading has got, from nought to
+/// one, for whoever shows how far along it is.
+pub async fn pull_them_all_out_telling(
+    state: &AppState,
+    source_id: MediaSourceId,
+    asked_to_stop: AskedToStop,
+    on_progress: &(dyn Fn(f64) + Sync),
+) -> Result<usize> {
     // Held for the whole reading, and taken before anything is looked at: what
     // is missing is decided under it, or two readings both decide that the
     // same seven are missing.
@@ -344,11 +355,18 @@ pub async fn pull_them_all_out(
         .zip(&being_written)
         .map(|((index, _), aside)| (*index, aside.as_path()))
         .collect();
+    let length = source.duration.map_or(0, melyxar_core::time::Millis::get);
+    let how_far = |position: melyxar_core::time::Millis| {
+        if length > 0 {
+            on_progress(position.get() as f64 / length as f64);
+        }
+    };
     if let Err(error) = melyxar_ffmpeg::subtitles::all_to_web_vtt(
         tools,
         &source.path,
         &asked,
         asked_to_stop,
+        &how_far,
     )
     .await
     {

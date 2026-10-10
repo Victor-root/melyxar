@@ -42,9 +42,13 @@ const IN_ONE_BATCH: usize = 32;
 /// A sung cue is kept as it was heard, notes and words: the model does not
 /// know a note, drops it or leaves nothing at all, and what it makes of lyrics
 /// is worse than the words that were sung.
+///
+/// `on_progress` is told after each batch how far along it is, from nought to
+/// one.
 pub fn translate_cues<E>(
     cues: &[Cue],
     mut translate: impl FnMut(&[String]) -> Result<Vec<String>, E>,
+    mut on_progress: impl FnMut(f64),
 ) -> Result<Vec<Cue>, E> {
     let cut: Vec<Vec<String>> = cues
         .iter()
@@ -55,6 +59,7 @@ pub fn translate_cues<E>(
     let mut answered = Vec::with_capacity(every.len());
     for batch in every.chunks(IN_ONE_BATCH) {
         answered.extend(translate(batch)?);
+        on_progress(answered.len() as f64 / every.len() as f64);
     }
 
     let mut answers = answered.into_iter();
@@ -101,7 +106,7 @@ mod tests {
             cue("00:00:04,000 --> 00:00:06,000", "Nobody did."),
         ];
         let mut batches = Vec::new();
-        let done = translate_cues(&cues, shouting(&mut batches)).expect("translated");
+        let done = translate_cues(&cues, shouting(&mut batches), |_| {}).expect("translated");
         assert_eq!(done.len(), 2);
         assert_eq!(done[0].timing, "00:00:00,000 --> 00:00:04,000");
         assert_eq!(done[0].text, "WAIT, HOLD ON A SECOND. WHO LEFT THE DOOR OPEN?");
@@ -115,7 +120,7 @@ mod tests {
             .map(|number| cue(&format!("00:00:{number:02},000 --> 00:00:{number:02},500"), &format!("Line {number}.")))
             .collect();
         let mut batches = Vec::new();
-        let done = translate_cues(&cues, shouting(&mut batches)).expect("translated");
+        let done = translate_cues(&cues, shouting(&mut batches), |_| {}).expect("translated");
         assert_eq!(batches, [32, 32, 32, 4]);
         assert_eq!(done.len(), 100);
         assert_eq!(done[57].text, "LINE 57.");
@@ -126,7 +131,7 @@ mod tests {
         let cues = [cue("t1", "Hmm."), cue("t2", "Fine.")];
         let done = translate_cues(&cues, |lines: &[String]| -> Result<_, ()> {
             Ok(lines.iter().map(|line| if line == "Hmm." { String::new() } else { line.clone() }).collect())
-        })
+        }, |_| {})
         .expect("translated");
         assert_eq!(done, [cue("t2", "Fine.")]);
     }
@@ -140,7 +145,7 @@ mod tests {
             cue("t4", "♫ la la la"),
         ];
         let mut batches = Vec::new();
-        let done = translate_cues(&cues, shouting(&mut batches)).expect("translated");
+        let done = translate_cues(&cues, shouting(&mut batches), |_| {}).expect("translated");
         assert_eq!(batches, [1], "only the spoken sentence went in");
         assert_eq!(
             done,
@@ -156,6 +161,17 @@ mod tests {
     #[test]
     fn a_failure_of_the_model_is_the_failure_of_the_whole_subtitle() {
         let cues = [cue("t", "Hello.")];
-        assert_eq!(translate_cues(&cues, |_: &[String]| Err::<Vec<String>, _>("broken")), Err("broken"));
+        assert_eq!(translate_cues(&cues, |_: &[String]| Err::<Vec<String>, _>("broken"), |_| {}), Err("broken"));
+    }
+
+    #[test]
+    fn how_far_along_it_is_told_after_each_batch() {
+        let cues: Vec<Cue> = (0..100)
+            .map(|number| cue(&format!("00:00:{number:02},000 --> 00:00:{number:02},500"), &format!("Line {number}.")))
+            .collect();
+        let mut batches = Vec::new();
+        let mut told = Vec::new();
+        translate_cues(&cues, shouting(&mut batches), |share| told.push(share)).expect("translated");
+        assert_eq!(told, [0.32, 0.64, 0.96, 1.0]);
     }
 }

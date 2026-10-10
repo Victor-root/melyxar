@@ -177,11 +177,22 @@ pub async fn make(
     let mut args = arguments(source, into, layout, tone_map, standing_pictures_only);
     crate::formats::guard_the_one_input(&mut args, tools.allowed_formats());
     builder.args(args);
+    // One byte comes out per thumbnail, as it is made: a far closer count of
+    // how far the reading has got than what the tool says of itself, which
+    // stays silent while a sheet fills and is heard from a handful of times in
+    // a whole film.
+    let made_so_far = std::sync::atomic::AtomicI64::new(0);
+    let on_position = watch.on_position;
+    let every = layout.every.get();
     let output = crate::process::output_streaming(
         builder,
         watch.asked_to_stop,
-        &|_| {},
-        watch.on_position,
+        &|made: &[u8]| {
+            let counted = made_so_far.fetch_add(made.len() as i64, std::sync::atomic::Ordering::Relaxed)
+                + made.len() as i64;
+            on_position(Millis::new(counted * every));
+        },
+        on_position,
     )
     .await?;
 
@@ -404,7 +415,7 @@ mod tests {
 
         let into = directory.path().join("thumbnails");
         std::fs::create_dir_all(&into).expect("a folder to write in");
-        let told = std::sync::atomic::AtomicI64::new(0);
+        let told = std::sync::Mutex::new(Vec::new());
         let made = make(
             &tools,
             &film,
@@ -419,17 +430,24 @@ mod tests {
             false,
             Watch {
                 asked_to_stop: AskedToStop::never(),
-                on_position: &|position| told.store(position.get(), std::sync::atomic::Ordering::Relaxed),
+                on_position: &|position| told.lock().expect("free").push(position.get()),
             },
         )
         .await
         .expect("the tool accepted the command");
 
         assert_eq!(made.counted, 3, "nought, ten and twenty seconds");
+        let told = told.into_inner().expect("free");
         assert!(
-            told.load(std::sync::atomic::Ordering::Relaxed) > 0,
+            told.iter().any(|position| *position > 0),
             "the reading said how far into the film it had got"
         );
+        for each_one in [10_000, 20_000, 30_000] {
+            assert!(
+                told.contains(&each_one),
+                "each thumbnail was told of as it was made, not only the sheet at the end"
+            );
+        }
         assert_eq!(made.sheets, 1);
         assert_eq!(made.height, 90);
         assert_eq!(made.width, 160, "the shape of the film is kept");

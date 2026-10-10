@@ -159,6 +159,8 @@ async fn line_up(
     };
 
     handle.at_step(JobStep::ListeningToSong).await;
+    // One song is the whole of this job, counted as itself in per cent.
+    handle.size_up(0, 1).await;
     let name = file.path.file_name().map(|name| name.to_string_lossy().into_owned());
     handle.now_working_on(name.as_deref()).await;
     let directories = &state.config().directories;
