@@ -1,9 +1,11 @@
 //! Watching the folders of a library, and scanning it again as soon as
 //! something in them changes.
 //!
-//! Only for a library that asked for it: the switch is off by default. What is
-//! watched is left to the kernel, which says when a file is created, written,
-//! moved or removed. Nothing here decides what that change means: once the
+//! Only for a library that asked for it: the switch is off by default. The
+//! kernel says when a file is created, written, moved or removed, in every
+//! folder a walk of the library goes into and in no other: the folders a walk
+//! leaves alone, or may not open, are not watched. Nothing here decides what
+//! that change means: once the
 //! folders have been quiet for a moment, the library's ordinary scan runs, and
 //! it already knows a new file from a moved one or from one that went away. A
 //! second path doing half of that would be a second truth to keep straight.
@@ -21,6 +23,8 @@ use std::time::Duration;
 use melyxar_core::id::LibraryId;
 use melyxar_core::job::JobPriority;
 use melyxar_core::refresh::RefreshMode;
+use melyxar_library::scan::subfolders_walked;
+use notify::event::{CreateKind, ModifyKind};
 use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::Instant;
@@ -98,7 +102,7 @@ type Seen = (LibraryId, notify::Result<notify::Event>);
 struct Watched {
     roots: Vec<PathBuf>,
     state: WatchState,
-    _watcher: Option<RecommendedWatcher>,
+    watcher: Option<RecommendedWatcher>,
 }
 
 /// The watching of every library that asked for it.
@@ -204,9 +208,44 @@ impl FolderWatch {
                 Watched {
                     roots,
                     state,
-                    _watcher: watcher,
+                    watcher,
                 },
             );
+        }
+    }
+
+    /// Watches the folders a change brought into a library, and what is under
+    /// them: the kernel is told of each folder one at a time, so a folder made
+    /// later is not heard of until this is done. What it holds already is for
+    /// the scan the change itself sets going to find.
+    async fn watch_new_folders(&self, library: LibraryId, brought: Vec<PathBuf>) {
+        let Some(roots) = self.roots_of(library).await else {
+            return;
+        };
+        let folders = tokio::task::spawn_blocking(move || {
+            brought
+                .into_iter()
+                .filter(|path| !is_hidden(path, &roots) && is_a_folder(path))
+                .flat_map(|path| {
+                    let under = subfolders_walked(&path);
+                    std::iter::once(path).chain(under)
+                })
+                .collect::<Vec<PathBuf>>()
+        })
+        .await
+        .unwrap_or_default();
+        let mut watched = self.watched.lock().await;
+        let Some(kept) = watched.get_mut(&library) else {
+            return;
+        };
+        let Some(watcher) = kept.watcher.as_mut() else {
+            return;
+        };
+        for folder in folders {
+            if let Some(why) = watch_under(watcher, &folder) {
+                kept.state = WatchState::Refused(why);
+                break;
+            }
         }
     }
 
@@ -229,7 +268,10 @@ impl FolderWatch {
 }
 
 /// Sets up the watch of a library's folders. Blocking: the kernel is handed
-/// every folder under them one at a time.
+/// every folder under them one at a time, which are the ones a walk goes into.
+/// Left to itself the kernel goes down a root on its own, and stops everything
+/// at the first folder it may not open, such as the one a disk keeps for what
+/// a check of it recovers.
 fn watch_the_folders(
     library: LibraryId,
     roots: &[PathBuf],
@@ -247,12 +289,52 @@ fn watch_the_folders(
         }
     };
     for root in roots {
-        if let Err(error) = watcher.watch(root, RecursiveMode::Recursive) {
+        if let Err(error) = watcher.watch(root, RecursiveMode::NonRecursive) {
             tracing::warn!(%error, paths = ?error.paths, folder = %root.display(), "the system refused to watch a folder");
             return (Some(watcher), WatchState::Refused(WhyNot::of(&error)));
         }
+        for folder in subfolders_walked(root) {
+            if let Some(why) = watch_under(&mut watcher, &folder) {
+                return (Some(watcher), WatchState::Refused(why));
+            }
+        }
     }
     (Some(watcher), WatchState::Watching)
+}
+
+/// Watches one folder under a root, and nothing under it. A folder that cannot
+/// be watched is left out, as a walk leaves out what it cannot open, and does
+/// not stop the rest: only running out of folders the system will watch does.
+fn watch_under(watcher: &mut RecommendedWatcher, folder: &Path) -> Option<WhyNot> {
+    match watcher.watch(folder, RecursiveMode::NonRecursive) {
+        Ok(()) => None,
+        Err(error) => {
+            let why = WhyNot::of(&error);
+            if why == WhyNot::TooManyFolders {
+                tracing::warn!(%error, "the system will not watch any more folders");
+                return Some(why);
+            }
+            tracing::warn!(%error, folder = %folder.display(), "a folder could not be watched and is left out");
+            None
+        }
+    }
+}
+
+/// Whether a path is a folder itself and not a link to one, which a walk does
+/// not go into.
+fn is_a_folder(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+}
+
+/// The paths a change brought a folder to: made there, or moved in from
+/// elsewhere.
+fn folders_brought_in(event: &notify::Event) -> Vec<PathBuf> {
+    match event.kind {
+        EventKind::Create(CreateKind::Folder) | EventKind::Modify(ModifyKind::Name(_)) => {
+            event.paths.clone()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// The files a change is about that are worth a scan, or nothing when the
@@ -392,6 +474,10 @@ pub fn keep_watching(state: &AppState) -> tokio::task::JoinHandle<()> {
                     let Some((library, seen)) = seen else { return };
                     match seen {
                         Ok(event) => {
+                            let brought = folders_brought_in(&event);
+                            if !brought.is_empty() {
+                                state.folder_watch().watch_new_folders(library, brought).await;
+                            }
                             let roots = state.folder_watch().roots_of(library).await.unwrap_or_default();
                             if let Some(paths) = worth_a_scan(&event, &roots) {
                                 let now = Instant::now();
@@ -639,6 +725,66 @@ mod tests {
         .await
         .expect("the change was heard of");
         assert_eq!(heard, vec![folder.path().join("Quiet Harbour (2019).mkv")]);
+    }
+
+    /// Everything heard of for a moment: the paths the changes were about.
+    async fn heard_for_a_moment(
+        receiver: &mut mpsc::UnboundedReceiver<Seen>,
+        moment: Duration,
+    ) -> Vec<PathBuf> {
+        let mut heard = Vec::new();
+        let _ = tokio::time::timeout(moment, async {
+            while let Some((_, seen)) = receiver.recv().await {
+                heard.extend(seen.expect("an event").paths);
+            }
+        })
+        .await;
+        heard
+    }
+
+    #[tokio::test]
+    async fn a_folder_a_walk_leaves_alone_is_not_watched() {
+        let folder = tempfile::tempdir().expect("a folder");
+        std::fs::create_dir(folder.path().join("lost+found")).expect("made");
+        std::fs::create_dir(folder.path().join("Films")).expect("made");
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let roots = vec![folder.path().to_path_buf()];
+        let (watcher, state) = watch_the_folders(LibraryId::new(), &roots, sender);
+        assert_eq!(state, WatchState::Watching);
+        let _kept = watcher;
+
+        std::fs::write(folder.path().join("lost+found/Quiet Harbour (2019).mkv"), b"x").expect("written");
+        std::fs::write(folder.path().join("Films/Amber Field (2021).mkv"), b"x").expect("written");
+        let heard = heard_for_a_moment(&mut receiver, Duration::from_secs(1)).await;
+        assert!(heard.contains(&folder.path().join("Films/Amber Field (2021).mkv")));
+        assert!(heard.iter().all(|path| !path.starts_with(folder.path().join("lost+found"))));
+    }
+
+    #[tokio::test]
+    async fn a_folder_made_later_is_watched() {
+        let folder = tempfile::tempdir().expect("a folder");
+        let watch = FolderWatch::default();
+        let library = LibraryId::new();
+        let roots = vec![folder.path().to_path_buf()];
+        let (watcher, state) = watch_the_folders(library, &roots, watch.sender.clone());
+        assert_eq!(state, WatchState::Watching);
+        watch.watched.lock().await.insert(
+            library,
+            Watched {
+                roots,
+                state,
+                watcher,
+            },
+        );
+        let mut receiver = watch.receiver.lock().expect("held").take().expect("not taken yet");
+
+        let made = folder.path().join("Season 2");
+        std::fs::create_dir(&made).expect("made");
+        watch.watch_new_folders(library, vec![made.clone()]).await;
+        std::fs::write(made.join("Quiet Harbour (2019).mkv"), b"x").expect("written");
+
+        let heard = heard_for_a_moment(&mut receiver, Duration::from_secs(1)).await;
+        assert!(heard.contains(&made.join("Quiet Harbour (2019).mkv")));
     }
 
     #[test]
