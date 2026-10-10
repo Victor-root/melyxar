@@ -52,6 +52,9 @@ pub enum WhyNot {
     TooManyFolders,
     /// One of its folders is not there.
     FolderMissing,
+    /// One of its folders, or a folder under them, may not be read by the
+    /// server: the kernel only watches what the account could open.
+    FolderUnreadable,
     /// The system would not watch it, for a reason it did not name.
     Unavailable,
 }
@@ -62,14 +65,18 @@ impl WhyNot {
         match self {
             Self::TooManyFolders => "too_many_folders",
             Self::FolderMissing => "folder_missing",
+            Self::FolderUnreadable => "folder_unreadable",
             Self::Unavailable => "unavailable",
         }
     }
 
     fn of(error: &notify::Error) -> Self {
-        match error.kind {
+        match &error.kind {
             notify::ErrorKind::MaxFilesWatch => Self::TooManyFolders,
             notify::ErrorKind::PathNotFound => Self::FolderMissing,
+            notify::ErrorKind::Io(io) if io.kind() == std::io::ErrorKind::PermissionDenied => {
+                Self::FolderUnreadable
+            }
             _ => Self::Unavailable,
         }
     }
@@ -234,10 +241,14 @@ fn watch_the_folders(
     });
     let mut watcher = match made {
         Ok(watcher) => watcher,
-        Err(error) => return (None, WatchState::Refused(WhyNot::of(&error))),
+        Err(error) => {
+            tracing::warn!(%error, "the system would not start watching folders");
+            return (None, WatchState::Refused(WhyNot::of(&error)));
+        }
     };
     for root in roots {
         if let Err(error) = watcher.watch(root, RecursiveMode::Recursive) {
+            tracing::warn!(%error, paths = ?error.paths, folder = %root.display(), "the system refused to watch a folder");
             return (Some(watcher), WatchState::Refused(WhyNot::of(&error)));
         }
     }
@@ -628,6 +639,14 @@ mod tests {
         .await
         .expect("the change was heard of");
         assert_eq!(heard, vec![folder.path().join("Quiet Harbour (2019).mkv")]);
+    }
+
+    #[test]
+    fn a_folder_the_server_may_not_read_says_so() {
+        let denied = notify::Error::io(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+        assert_eq!(WhyNot::of(&denied), WhyNot::FolderUnreadable);
+        let other = notify::Error::io(std::io::Error::from(std::io::ErrorKind::Other));
+        assert_eq!(WhyNot::of(&other), WhyNot::Unavailable);
     }
 
     #[test]
