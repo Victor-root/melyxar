@@ -360,7 +360,7 @@ export interface Library {
   /** Where that watching stands, for a library that asked for it. */
   watch_state: "watching" | "starting" | "refused" | null;
   /** Why it was refused, as a word turned into a sentence here. */
-  watch_refusal: "too_many_folders" | "folder_missing" | "unavailable" | null;
+  watch_refusal: "too_many_folders" | "folder_missing" | "folder_unreadable" | "unavailable" | null;
   /** The language this library's films are described in, as a two letter code.
       Changing it asks the provider about every film again. */
   metadata_language: string;
