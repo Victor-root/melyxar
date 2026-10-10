@@ -18,6 +18,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::process::Stdio;
 
+use melyxar_core::time::Millis;
 use tokio::process::Command as TokioCommand;
 
 use crate::process::AskedToStop;
@@ -104,18 +105,25 @@ pub fn all_to_web_vtt_arguments(
 }
 
 /// Writes several subtitle tracks of one film out as WebVTT, in one reading.
+///
+/// `on_position` is told how far into the film the tool says it has got, as
+/// often as it says so: the reading goes through the whole file, and on a film
+/// of two hours that is minutes of nothing to show otherwise.
 pub async fn all_to_web_vtt(
     tools: &crate::ToolPaths,
     source: &Path,
     wanted: &[(i32, &Path)],
     asked_to_stop: AskedToStop,
+    on_position: &(dyn Fn(Millis) + Sync),
 ) -> Result<()> {
     if wanted.is_empty() {
         return Ok(());
     }
     let mut builder = TokioCommand::new(&tools.ffmpeg);
+    builder.args(["-progress", "pipe:2", "-nostats"]);
     builder.args(all_to_web_vtt_arguments(source, wanted, tools.allowed_formats()));
-    let output = crate::process::output_of(builder, asked_to_stop).await?;
+    let output =
+        crate::process::output_streaming(builder, asked_to_stop, &|_| {}, on_position).await?;
 
     if !output.status.success() {
         return Err(FfmpegError::from_output("ffmpeg", &output));
@@ -321,9 +329,16 @@ mod tests {
             .map(|(which, path)| (which as i32 + 1, path.as_path()))
             .collect();
 
-        all_to_web_vtt(&tools, &film, &asked, AskedToStop::never())
-            .await
-            .expect("every track comes out");
+        let told = std::sync::Mutex::new(Vec::new());
+        all_to_web_vtt(&tools, &film, &asked, AskedToStop::never(), &|position| {
+            told.lock().expect("free").push(position.get());
+        })
+        .await
+        .expect("every track comes out");
+        assert!(
+            told.into_inner().expect("free").iter().any(|position| *position > 0),
+            "the reading said how far into the film it had got"
+        );
 
         for (which, words) in said.iter().enumerate() {
             let written = std::fs::read_to_string(&out[which]).expect("read back");
