@@ -321,6 +321,19 @@ fn report_the_card(capabilities: &Capabilities) {
         );
     }
 
+    // A driver is a package of its own, separate from the media tools, and a
+    // machine can carry the card and the tools and still have no driver
+    // between them. Said for each such device, because another card of the
+    // same machine may work and hide the one that does not.
+    for device in search.opened_without_a_card() {
+        tracing::warn!(
+            device,
+            "this graphics device opens but gave no card, so nothing is rebuilt on it; the usual \
+             cause is the video acceleration driver, a package of its own (mesa-va-drivers for \
+             AMD, intel-media-va-driver for Intel), and the trials above say what the tool answered"
+        );
+    }
+
     if !search.cards.is_empty() {
         return;
     }
@@ -329,18 +342,7 @@ fn report_the_card(capabilities: &Capabilities) {
             "no graphics device is visible here, so every picture is rebuilt on the processor; \
              an unprivileged container has to be given /dev/dri explicitly"
         );
-    } else if search.a_device_opened() {
-        // The device opened and then answered nothing. That is a driver, not
-        // a permission and not the card: the video acceleration driver is a
-        // package of its own, separate from the media tools, and a machine can
-        // carry the card and the tools and still have no driver between them.
-        tracing::warn!(
-            devices = ?search.devices,
-            "the graphics device opens but no video acceleration driver answers for it, so the \
-             processor rebuilds every picture; that driver is a package of its own, apart from \
-             the media tools"
-        );
-    } else {
+    } else if !search.a_device_opened() {
         tracing::warn!(
             devices = ?search.devices,
             "the graphics device is there and this server is not allowed to open it, so the \

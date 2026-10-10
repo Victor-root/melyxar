@@ -886,7 +886,8 @@ pub fn render_text(report: &Diagnostics) -> String {
                      container has to be given /dev/dri explicitly"
                 } else if report.media_tools.card_device_opened {
                     "the device opens, and no video acceleration driver answers for it: that \
-                     driver is a package of its own, apart from the media tools"
+                     driver is a package of its own, apart from the media tools \
+                     (mesa-va-drivers for AMD, intel-media-va-driver for Intel)"
                 } else {
                     "the device is there and this server is not allowed to open it: the \
                      account it runs as has to belong to the group owning the device inside \
