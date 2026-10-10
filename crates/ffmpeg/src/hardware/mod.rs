@@ -47,6 +47,15 @@ use serde::Serialize;
 /// The name the tool gives the card inside one invocation.
 const DEVICE_NAME: &str = "card";
 
+/// The name given to the Vulkan device opened on the same card.
+const VULKAN_DEVICE_NAME: &str = "vk";
+
+/// What Vulkan is asked to make of a wide gamut picture: standard range, in
+/// the layout the encoder takes, converted the way the filter judges best for
+/// that film.
+const VULKAN_CONVERSION: &str = "format=nv12:colorspace=bt709:color_primaries=bt709\
+    :color_trc=bt709:range=tv:tonemapping=auto";
+
 /// The path a card is driven by, which decides everything the tool is told
 /// about it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -178,6 +187,11 @@ pub enum ToneMapping {
     /// itself when it was proved to read a wide gamut one, and the processor
     /// reads it otherwise.
     ThroughVulkan { reads: bool },
+    /// Vulkan on the same card converts, and the picture goes back to the
+    /// card for its encoder. The card reads the film and hands each picture
+    /// to Vulkan without a copy when `card_reads`, which is what its trial
+    /// proves; the processor reads it otherwise.
+    VulkanBesideTheCard { card_reads: bool },
 }
 
 impl ToneMapping {
@@ -187,6 +201,8 @@ impl ToneMapping {
             Self::OwnFilter => "convert_wide_gamut",
             Self::ThroughVulkan { reads: true } => "convert_wide_gamut_vulkan_reading",
             Self::ThroughVulkan { reads: false } => "convert_wide_gamut_vulkan",
+            Self::VulkanBesideTheCard { card_reads: true } => "convert_wide_gamut_vulkan_mapped",
+            Self::VulkanBesideTheCard { card_reads: false } => "convert_wide_gamut_vulkan_uploaded",
         }
     }
 
@@ -195,6 +211,7 @@ impl ToneMapping {
         match self {
             Self::OwnFilter => false,
             Self::ThroughVulkan { reads } => reads,
+            Self::VulkanBesideTheCard { card_reads } => card_reads,
         }
     }
 
@@ -390,22 +407,23 @@ fn encoder_name(codec: &str, way: CardPath) -> String {
 /// The card opened under its name and, when it reads the film, the reader
 /// the film is read with: the part of an opening every path shares.
 ///
-/// `also` is what a path opens beside the card, and `works_on` the reader and
-/// the device the filters work on, which are the card's own unless the path
-/// says otherwise.
+/// `also` is what a path opens beside the card, `filters_on` the device the
+/// filters work on, and `reads_with` the reader and the device it reads on,
+/// which are the card's own unless the path says otherwise.
 fn opening_with(
     card: &Card,
     also: &[String],
-    works_on: (&str, &str),
+    filters_on: &str,
+    reads_with: (&str, &str),
     reads_the_film: bool,
 ) -> Vec<String> {
-    let (reader, device) = works_on;
+    let (reader, device) = reads_with;
     let mut arguments = vec![
         "-init_hw_device".to_string(),
         format!("{}={DEVICE_NAME}:{}", card.way.as_str(), card.address),
     ];
     arguments.extend_from_slice(also);
-    arguments.extend(["-filter_hw_device".to_string(), device.to_string()]);
+    arguments.extend(["-filter_hw_device".to_string(), filters_on.to_string()]);
     if reads_the_film {
         arguments.extend([
             "-hwaccel".to_string(),
@@ -420,6 +438,23 @@ fn opening_with(
         ]);
     }
     arguments
+}
+
+/// Vulkan opened on the card already opened, chosen by the tool as the same
+/// card rather than whichever the machine lists first.
+fn vulkan_on_the_card() -> Vec<String> {
+    vec![
+        "-init_hw_device".to_string(),
+        format!("vulkan={VULKAN_DEVICE_NAME}@{DEVICE_NAME}"),
+    ]
+}
+
+/// Vulkan making the picture smaller and converting its colours in one pass.
+fn converted_by_vulkan(scale_to_height: Option<i32>) -> String {
+    let size = scale_to_height
+        .map(|height| format!("w=-2:h={height}:"))
+        .unwrap_or_default();
+    format!("libplacebo={size}{VULKAN_CONVERSION}")
 }
 
 /// The part of a chain every path shares: the picture handed up when the

@@ -833,7 +833,7 @@ install_packages() {
   step "$(tr_msg step_apt_update)" apt-get update -qq
 
   step "$(tr_msg step_apt_install)" apt-get install -y --no-install-recommends \
-    build-essential cmake pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3 mesa-va-drivers vainfo
+    build-essential cmake pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3 mesa-va-drivers mesa-vulkan-drivers vainfo
 
   # Node comes from its own source rather than from the distribution, for the
   # reason written above install_node. It gives up only when this machine ends
