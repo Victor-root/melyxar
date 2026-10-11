@@ -25,6 +25,10 @@
   padding-top: var(--safe-top);
   pointer-events: none;
   transition: transform var(--calm) var(--ease);
+  /* Kept on a layer of its own while it is away, so that coming back only
+     moves it: let go of in between, its glass and glow were all drawn again
+     on the first step of the way back, which shows as a jolt. */
+  will-change: transform;
 }
 
 /* Stepped aside while a page is read down: slid up past the top of the
