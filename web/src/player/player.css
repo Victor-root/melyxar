@@ -824,8 +824,7 @@
     transform var(--quick) var(--ease);
 }
 
-.player-loudness:hover .player-loudness-said,
-.player-loudness input:focus-visible ~ .player-loudness-said {
+.player-loudness:hover .player-loudness-said {
   opacity: 1;
   transform: translateX(-50%) scale(1);
 }
