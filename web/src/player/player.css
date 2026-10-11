@@ -1826,6 +1826,7 @@
   transition:
     grid-template-rows var(--calm) var(--ease),
     opacity var(--calm) var(--ease),
+    translate var(--calm) var(--ease),
     visibility 0s linear var(--calm);
 }
 
@@ -1836,6 +1837,7 @@
   transition:
     grid-template-rows var(--calm) var(--ease),
     opacity var(--calm) var(--ease),
+    translate var(--calm) var(--ease),
     visibility 0s;
 }
 
@@ -2599,4 +2601,21 @@
 /* Clear of the navigation bar a phone held sideways has at its side. */
 .player-drawer-fold > .scrollbar-inside {
   right: var(--safe-right);
+}
+
+/* The handle a finger pulls the drawer down by, as the sheets of a phone have
+   one: a bar in a band of its own at the top, the part that is held. */
+.player-drawer-grip {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 2px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.player-drawer-grip > span {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-faint);
 }

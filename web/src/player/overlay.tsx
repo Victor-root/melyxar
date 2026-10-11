@@ -430,6 +430,7 @@ export function Overlay(props: Props) {
               language={props.language}
               t={props.t}
               onSelectEpisode={props.onSelectEpisode}
+              onClose={() => props.onPanel(null)}
             />
           )}
           <Seek
