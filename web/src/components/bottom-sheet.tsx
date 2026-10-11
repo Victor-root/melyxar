@@ -34,12 +34,16 @@ export function BottomSheet({
   title,
   onClose,
   className,
+  into,
   children,
 }: {
   title: string;
   onClose: () => void;
   /** What kind of sheet it is, for one shaped differently from the rest. */
   className?: string;
+  /** Where it is drawn, when not at the end of the page: a sheet opened while
+   *  something else fills the screen has to be drawn inside that. */
+  into?: Element;
   /** What is in it, or a function of the way to shut it, for a line that
    *  shuts the sheet and then does what it was pressed for. */
   children: ReactNode | ((shut: (then?: () => void) => void) => ReactNode);
@@ -156,6 +160,6 @@ export function BottomSheet({
         </div>
       </div>
     </div>,
-    document.body,
+    into ?? document.body,
   );
 }

@@ -44,6 +44,7 @@ import {
   CornerIcon,
   FullscreenIcon,
   HeartIcon,
+  KebabIcon,
   NextChapterIcon,
   NextEpisodeIcon,
   PauseIcon,
@@ -57,6 +58,9 @@ import {
   VolumeIcon,
 } from "./icons";
 import { GearIcon } from "../icons";
+import { ActionMenu } from "../components/action-menu";
+import type { MenuEntry } from "../components/action-menu";
+import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { Mark } from "./logo";
 import { captionOf, writtenMoment } from "../readable";
 import { Panels } from "./panels";
@@ -495,15 +499,85 @@ export interface Surroundings extends Props {
   openFrom: (panel: Panel | null, from?: HTMLElement | null) => void;
 }
 
+/** The buttons a phone held upright puts away in a menu, since the row they
+ *  stood in has no room for them all. */
+const IN_THE_MENU: Control[] = ["info", "chapters", "cast", "favourite"];
+
 /** One of the places a control can sit, drawn from the arrangement. */
 function Place({ zone, surroundings }: { zone: Zone; surroundings: Surroundings }) {
+  const upright = useMediaQuery(PHONE_UPRIGHT);
   const named = surroundings.arrangement[zone] ?? [];
+  const putAway = upright && zone === "bottom_right" ? named.filter((one) => IN_THE_MENU.includes(one)) : [];
   return (
     <div className={`player-zone player-zone-${zone.replace("_", "-")}`}>
-      {named.map((control) => (
-        <One key={control} control={control} surroundings={surroundings} />
-      ))}
+      {named.map((control) => {
+        if (!putAway.includes(control)) {
+          return <One key={control} control={control} surroundings={surroundings} />;
+        }
+        // The menu takes the place of the first of them.
+        return control === putAway[0] ? (
+          <MoreMenu key="more" surroundings={surroundings} />
+        ) : null;
+      })}
     </div>
+  );
+}
+
+/** The buttons put away, as the lines of a sheet from the foot of the screen. */
+function MoreMenu({ surroundings }: { surroundings: Surroundings }) {
+  const { t, onPanel, work, stage } = surroundings;
+  const marks = useMarks();
+  const [from, setFrom] = useState<DOMRect | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setFrom(null), []);
+  const card = work.card;
+  const favourite = card ? marks.favouriteOf(card) : false;
+  const sheet = (name: "info" | "chapters" | "cast", mark: React.ReactNode): MenuEntry => ({
+    key: name,
+    mark,
+    said: t(`player.sheet.${name}`),
+    act: () => onPanel(name),
+  });
+  const groups: MenuEntry[][] = [
+    [
+      sheet("info", <AboutIcon size={17} />),
+      sheet("chapters", <ChaptersIcon size={17} />),
+      sheet("cast", <CastIcon size={17} />),
+    ],
+    card
+      ? [
+          {
+            key: "favourite",
+            mark: <HeartIcon filled={favourite} size={17} />,
+            said: t(favourite ? "player.unfavourite" : "player.favourite"),
+            act: () => marks.setFavourite(card, !favourite),
+          },
+        ]
+      : [],
+  ];
+  return (
+    <>
+      <button
+        ref={button}
+        className="player-button"
+        aria-label={t("card.more")}
+        aria-haspopup="dialog"
+        aria-expanded={from !== null}
+        onClick={() => setFrom(from ? null : (button.current?.getBoundingClientRect() ?? null))}
+      >
+        <KebabIcon size={ICON} />
+      </button>
+      {from && (
+        <ActionMenu
+          title={t("card.more")}
+          groups={groups}
+          from={from}
+          openedBy={button.current}
+          onClose={close}
+          into={stage.current ?? undefined}
+        />
+      )}
+    </>
   );
 }
 
