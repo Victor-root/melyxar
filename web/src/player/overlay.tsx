@@ -177,6 +177,10 @@ export function Overlay(props: Props) {
       markTheOpening(playback.video.current, away ? "controls_away" : "controls_back");
     }
   }, [away, playback.video]);
+  const awayNow = useRef(away);
+  awayNow.current = away;
+  const panelNow = useRef(props.panel);
+  panelNow.current = props.panel;
   const stir = useRef<() => void>(() => {});
   /* The sound said down the side of the picture for a moment, when the keys
      change it: the one change a viewer makes without looking at anything,
@@ -229,12 +233,34 @@ export function Overlay(props: Props) {
     };
     stir.current = wake;
     wake();
+    /* A touch on the picture while the controls are out only brings them
+       back; a touch while they are up sends them away, there being no hand
+       left hovering to do it by waiting. Told apart by whether they were out
+       when the finger came down. */
+    let broughtBack = false;
+    const press = (event: PointerEvent) => {
+      broughtBack = event.pointerType === "touch" && awayNow.current;
+      wake();
+    };
+    const tap = (event: MouseEvent) => {
+      const onThePicture = (event.target as HTMLElement).classList.contains("player-video");
+      if ((event as PointerEvent).pointerType !== "touch" || !onThePicture) {
+        return;
+      }
+      if (broughtBack || panelNow.current !== null) {
+        return;
+      }
+      window.clearTimeout(timer);
+      setAway(true);
+    };
     surface.addEventListener("pointermove", wake);
-    surface.addEventListener("pointerdown", wake);
+    surface.addEventListener("pointerdown", press);
+    surface.addEventListener("click", tap);
     return () => {
       window.clearTimeout(timer);
       surface.removeEventListener("pointermove", wake);
-      surface.removeEventListener("pointerdown", wake);
+      surface.removeEventListener("pointerdown", press);
+      surface.removeEventListener("click", tap);
     };
   }, [stage, held, playback.pictureKey]);
 

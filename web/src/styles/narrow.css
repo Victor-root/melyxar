@@ -106,29 +106,6 @@
     padding-top: calc(var(--safe-top) - var(--header-lift));
   }
 
-  /* A thin line over the page that shows while it moves and goes a moment
-     after, in the accent: a thumb has no use for a bar it cannot catch, and
-     a bar that stays is a strip of colour down the picture. */
-  .scrollbar {
-    width: 3px;
-    pointer-events: none;
-  }
-
-  .scrollbar-long {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 500ms var(--ease);
-  }
-
-  .scrollbar-long[data-active] {
-    opacity: 1;
-    transition-duration: 80ms;
-  }
-
-  .scrollbar-mark {
-    border-width: 0;
-  }
-
   /* A finger turns the banner over, so the arrows go and only where it is
      in the five is left, small and faint at the far right, under the words.
      The words keep that room clear. */
@@ -1059,5 +1036,34 @@
   .browse-piece.music-tabs,
   .browse-piece.music-tabs[data-unrolled="yes"] {
     transition: transform var(--calm) var(--ease);
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * The line that says where in a page somebody is, on a phone either way up
+ * ----------------------------------------------------------------------- */
+
+@media (max-width: 600px), (max-height: 500px) and (orientation: landscape) {
+  /* A thin line over the page that shows while it moves and goes a moment
+     after, in the accent: a thumb has no use for a bar it cannot catch, and
+     a bar that stays is a strip of colour down the picture. */
+  .scrollbar {
+    width: 3px;
+    pointer-events: none;
+  }
+
+  .scrollbar-long {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 500ms var(--ease);
+  }
+
+  .scrollbar-long[data-active] {
+    opacity: 1;
+    transition-duration: 80ms;
+  }
+
+  .scrollbar-mark {
+    border-width: 0;
   }
 }

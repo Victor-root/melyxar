@@ -276,13 +276,23 @@ function Film({
              are. Twice puts it fullscreen, which is the other thing every
              player does and the reason a single click is held for a moment
              before it acts. */
-          onClick={() =>
+          onClick={(event) => {
             /* A click on the picture with a panel open shuts the panel and
                does nothing else. It is what a hand reaching away from a
                menu means, and it is what stands in for the cross the panels
                used to carry in their corner. */
-            panel ? setPanel(null) : playback.pictureClicked(false)
-          }
+            if (panel) {
+              setPanel(null);
+              return;
+            }
+            /* A finger on the picture brings the controls and sends them
+               away again, which the controls see to: a touch that also
+               started and stopped the film did it by accident as often as
+               not. */
+            if ((event.nativeEvent as PointerEvent).pointerType !== "touch") {
+              playback.pictureClicked(false);
+            }
+          }}
           onDoubleClick={() => {
             playback.pictureClicked(true);
             fullscreen.toggle();
