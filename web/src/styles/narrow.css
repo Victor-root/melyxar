@@ -89,10 +89,21 @@
     /* What is kept round a sliding piece of glass for its glow. */
     --glass-glow-room: 30px;
     --header-edge: 12px;
+    --header-lift: 0px;
     --header-height: calc(var(--header-piece) + 2 * var(--header-edge) + var(--safe-top));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
     --hero-height: clamp(360px, 56dvh, 480px);
+  }
+
+  /* Drawn edge to edge, the bar stands a little higher, just under the status
+     bar. The tabs of a library move up by the same amount. */
+  :root[data-edge-room] {
+    --header-lift: 6px;
+  }
+
+  :root[data-edge-room] .header {
+    padding-top: calc(var(--safe-top) - var(--header-lift));
   }
 
   /* A thin line over the page that shows while it moves and goes a moment
@@ -797,7 +808,7 @@
   .browse-piece.music-tabs:hover,
   .browse-piece.music-tabs:focus-within {
     position: fixed;
-    top: calc(var(--header-edge) + var(--safe-top));
+    top: calc(var(--header-edge) + var(--safe-top) - var(--header-lift));
     left: var(--header-edge);
     right: var(--header-edge);
     /* Under the bar at the top, whose lists unfold over it. */
@@ -819,9 +830,10 @@
     pointer-events: auto;
   }
 
-  /* Stepped aside with the bar at the top while a page is read down. */
+  /* Stepped aside with the bar at the top while a page is read down. The room
+     of the status bar stands above it too. */
   :root[data-bar-away] .browse-piece.music-tabs[data-unrolled="no"] {
-    transform: translateY(calc(-100% - 24px));
+    transform: translateY(calc(-100% - var(--safe-top) - 24px));
   }
 
   /* The bubble is the whole band at all times, and its glass one slice from
@@ -994,7 +1006,9 @@
   .letters,
   :root[data-music-bar] .letters {
     --letters-skip: 64px;
-    --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--letters-skip));
+    --letters-room: calc(
+      100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--letters-skip) - var(--safe-bottom)
+    );
     touch-action: none;
   }
 
