@@ -2085,6 +2085,13 @@
     flex: 1;
   }
 
+  /* The words stop a scroll at their own end, but only up and down: held
+     back sideways too, a swipe on them never reached the pages and the
+     words could not be left. */
+  .music-now-page-words .music-lyrics {
+    overscroll-behavior-x: auto;
+  }
+
   .music-now-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
