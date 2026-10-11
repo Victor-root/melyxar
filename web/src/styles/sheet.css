@@ -70,11 +70,30 @@
   letter-spacing: -0.01em;
 }
 
+/* The body and the line that says where in it somebody is, which is the one
+   the pages of a phone draw: laid over the body's own edge rather than
+   against the window's. */
+.sheet-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-scroll > .scrollbar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+}
+
 .sheet-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
   padding: var(--gap) var(--gap-wide) calc(var(--gap-wide) + var(--safe-bottom));
 }
 
@@ -84,6 +103,10 @@
   padding: 14px 12px;
   font-size: 16px;
   white-space: normal;
+}
+
+.sheet-body::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes sheet-arrive {
