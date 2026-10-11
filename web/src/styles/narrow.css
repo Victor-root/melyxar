@@ -1071,3 +1071,17 @@
     border-width: 0;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * A phone held sideways
+ * ----------------------------------------------------------------------- */
+
+/* Short rather than narrow, so the bar at the top keeps no more room than its
+   pieces and a little air round them: the band a wide screen gives it is a
+   quarter of this screen's height. Every page starts below it, so every page
+   follows. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --header-height: calc(var(--header-piece) + 2 * var(--gap) + var(--safe-top));
+  }
+}
