@@ -4,14 +4,13 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./app";
 import { GoToProvider } from "./navigating";
 import { setUpMeasuring } from "./measure";
-import { clearTheEdgesWhenSideways, markTheEdgeRoom } from "./edge-room";
+import { markTheEdgeRoom } from "./edge-room";
 import { SettingsProvider } from "./settings";
 import "./styles/index.css";
 
 // First, so that an armed recorder sees the page from its very start.
 setUpMeasuring();
 markTheEdgeRoom();
-clearTheEdgesWhenSideways();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
