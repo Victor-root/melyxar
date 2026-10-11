@@ -738,14 +738,17 @@ button.seen-mark:not(.seen-mark-on):hover {
    how far in it is, drawn as that rim running thicker along the foot, in
    its colour. The dark track under it goes, since the rim itself already
    says where the whole length ends; left in, it stood between the rim and
-   the picture as a strip of its own. */
+   the picture as a strip of its own. The card ringed as the one being
+   watched at rest wears it the same way. */
 .card:hover .card-progress,
-.card:has(:focus-visible, [aria-expanded="true"]) .card-progress {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress,
+.card-here .card-progress {
   background: transparent;
 }
 
 .card:hover .card-progress-done,
-.card:has(:focus-visible, [aria-expanded="true"]) .card-progress-done {
+.card:has(:focus-visible, [aria-expanded="true"]) .card-progress-done,
+.card-here .card-progress-done {
   background: var(--accent-bright);
 }
 
