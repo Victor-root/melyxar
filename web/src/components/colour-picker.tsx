@@ -7,13 +7,16 @@
  * follows the accent it is choosing as it moves.
  *
  * It is a button that opens a panel drawn at the end of the page and placed
- * against the window by hand, as the bar's lists are.
+ * against the window by hand, as the bar's lists are, or on a phone a sheet
+ * from the foot of the screen, where a thumb reaches.
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fromHsv, hsvOf, parseHex } from "../colour";
+import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
+import { BottomSheet } from "./bottom-sheet";
 
 const PANEL_WIDTH = 248;
 const PANEL_HEIGHT = 300;
@@ -34,12 +37,14 @@ export function ColourPicker({
 }) {
   const { t } = useSettings();
   const [open, setOpen] = useState(false);
+  const asASheet = useMediaQuery(PHONE);
+  const floating = open && !asASheet;
   const [under, setUnder] = useState<React.CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
-    if (!open) {
+    if (!floating) {
       return;
     }
     const place = () => {
@@ -63,10 +68,10 @@ export function ColourPicker({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", shut, true);
     };
-  }, [open]);
+  }, [floating]);
 
   useEffect(() => {
-    if (!open) {
+    if (!floating) {
       return;
     }
     const elsewhere = (event: MouseEvent) => {
@@ -88,7 +93,7 @@ export function ColourPicker({
       document.removeEventListener("mousedown", elsewhere);
       document.removeEventListener("keydown", away);
     };
-  }, [open]);
+  }, [floating]);
 
   return (
     <>
@@ -103,7 +108,14 @@ export function ColourPicker({
         onClick={() => setOpen((was) => !was)}
         style={{ ["--swatch" as string]: colour }}
       />
-      {open &&
+      {open && asASheet && (
+        <BottomSheet title={t("me.accent_own")} onClose={() => setOpen(false)}>
+          <div className="colour-sheet">
+            <Shades colour={colour} onPick={onPick} />
+          </div>
+        </BottomSheet>
+      )}
+      {floating &&
         createPortal(
           <div
             ref={panel}
