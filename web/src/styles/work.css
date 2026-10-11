@@ -561,9 +561,12 @@
   }
 
   /* Each button is as wide as its words and no wider, and the words stay on
-     one line; they only give way when the row itself is too narrow. */
+     one line. The inner room is kept narrow enough for the first two to share
+     a row on a small phone, where the resume and start-again pair would
+     otherwise each take a row of its own. */
   .work-actions > .button {
     flex: 0 1 auto;
+    padding-inline: 18px;
     white-space: nowrap;
   }
 
