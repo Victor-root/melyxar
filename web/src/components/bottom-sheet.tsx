@@ -6,7 +6,7 @@
  * pulling its head down: it follows the finger and goes if it was pulled far
  * enough or fast enough, and goes back up otherwise. Its body scrolls on its
  * own, so the head stays where it was put however long what is in it turns
- * out to be.
+ * out to be, under the thin line the pages of a phone show while they move.
  *
  * Drawn over the page rather than inside it, as the other panels are, so
  * nothing above it clips it. It moves by transform alone: the pull is written
@@ -18,6 +18,7 @@ import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useHoldsTheScreen } from "./hold-the-screen";
+import { ScrollBar } from "./scrollbar";
 
 /** How long the sheet takes to leave, in either direction of its being shut. */
 const LEAVES_IN_MS = 220;
@@ -44,6 +45,7 @@ export function BottomSheet({
 }) {
   const over = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const pull = useRef<{ from: number; at: number } | null>(null);
   const leaving = useRef(0);
   const closeRef = useRef(onClose);
@@ -133,7 +135,12 @@ export function BottomSheet({
           <span className="sheet-handle" aria-hidden="true" />
           <h2 className="sheet-title">{title}</h2>
         </div>
-        <div className="sheet-body">{typeof children === "function" ? children(shut) : children}</div>
+        <div className="sheet-scroll">
+          <div className="sheet-body" ref={body}>
+            {typeof children === "function" ? children(shut) : children}
+          </div>
+          <ScrollBar holder={body} />
+        </div>
       </div>
     </div>,
     document.body,
