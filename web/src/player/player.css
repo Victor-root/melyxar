@@ -2517,8 +2517,8 @@
     --player-title: 15px;
     /* The cards of the drawer small enough that a card, its name and its time
        all stand in the room the controls leave. */
-    --player-drawer-card: 168px;
-    --player-drawer-face: 100px;
+    --player-drawer-card: 150px;
+    --player-drawer-face: 96px;
   }
 
   .player-top {
@@ -2554,7 +2554,9 @@
   /* No more height than leaves the controls and the top where they are: what
      is longer scrolls, under the thin line the pages of a phone draw. */
   .player-drawer {
-    max-height: calc(100dvh - 190px);
+    /* What is left of the screen once the top and the controls under the
+       drawer have theirs. */
+    max-height: calc(100dvh - 150px);
     padding-block: 8px;
     overflow-y: auto;
     scrollbar-width: none;
