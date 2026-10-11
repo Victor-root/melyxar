@@ -58,7 +58,7 @@ export function ActionMenu({
       <BottomSheet title={title} onClose={onClose}>
         {(shut) => (
           <div className="sheet-menu" role="menu">
-            <MenuLines groups={lines} onClose={shut} />
+            <MenuLines groups={lines} onPick={shut} />
           </div>
         )}
       </BottomSheet>
@@ -151,13 +151,26 @@ function FloatingMenu({
         visibility: at ? "visible" : "hidden",
       }}
     >
-      <MenuLines groups={groups} onClose={onClose} />
+      <MenuLines
+        groups={groups}
+        onPick={(act) => {
+          act?.();
+          onClose();
+        }}
+      />
     </div>,
     document.body,
   );
 }
 
-function MenuLines({ groups, onClose }: { groups: MenuEntry[][]; onClose: () => void }) {
+/** `onPick` is given what a line does, and shuts the menu around it. */
+function MenuLines({
+  groups,
+  onPick,
+}: {
+  groups: MenuEntry[][];
+  onPick: (act: (() => void) | undefined) => void;
+}) {
   const { t } = useSettings();
   return (
     <>
@@ -181,8 +194,7 @@ function MenuLines({ groups, onClose }: { groups: MenuEntry[][]; onClose: () => 
                 if (entry.later) {
                   return;
                 }
-                entry.act?.();
-                onClose();
+                onPick(entry.act);
               }}
             >
               {entry.mark}

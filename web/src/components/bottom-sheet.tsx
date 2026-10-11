@@ -17,6 +17,7 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useBackClosesIt } from "./back-closes";
 import { useHoldsTheScreen } from "./hold-the-screen";
 import { ScrollBar } from "./scrollbar";
 
@@ -40,8 +41,8 @@ export function BottomSheet({
   /** What kind of sheet it is, for one shaped differently from the rest. */
   className?: string;
   /** What is in it, or a function of the way to shut it, for a line that
-   *  shuts the sheet once it has done what it was pressed for. */
-  children: ReactNode | ((shut: () => void) => ReactNode);
+   *  shuts the sheet and then does what it was pressed for. */
+  children: ReactNode | ((shut: (then?: () => void) => void) => ReactNode);
 }) {
   const over = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -53,7 +54,7 @@ export function BottomSheet({
 
   /* Slid down, then told. Reached by every way of shutting it, so that all of
      them look the same. */
-  const shut = () => {
+  const slideAway = () => {
     const element = sheet.current;
     if (!element || leaving.current) {
       return;
@@ -65,6 +66,18 @@ export function BottomSheet({
     element.style.transform = "translateY(100%)";
     over.current?.setAttribute("data-leaving", "");
     leaving.current = window.setTimeout(() => closeRef.current(), ms);
+  };
+
+  /* The back key of a phone shuts it, and any other way of shutting it takes
+     its entry out of the history first, then does what a line pressed was
+     for, if there was one. */
+  const leaveHistory = useBackClosesIt(slideAway);
+  const shut = (then?: () => void) => {
+    if (leaving.current) {
+      return;
+    }
+    slideAway();
+    leaveHistory(() => then?.());
   };
 
   useEffect(() => () => window.clearTimeout(leaving.current), []);
