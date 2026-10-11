@@ -10,6 +10,12 @@
  * taken out before whatever the press was for is done, since a page opened
  * from here would otherwise be opened above an entry that is no longer
  * needed, and the way back from it would stop there once for nothing.
+ *
+ * Every step into and out of the history is taken in turn, each waiting for
+ * the one before to be over. One thing shutting while another opens, a panel
+ * giving way to a window, would otherwise have the second entry put in before
+ * the first was taken out, and the step back that was meant for the first
+ * would land on the second.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -19,65 +25,108 @@ const MARK = "melyxarOverlay";
 const GIVES_UP_MS = 300;
 
 let counter = 0;
+let queue: Promise<void> = Promise.resolve();
+
+/** Runs a step once those before it are done. */
+function inTurn(step: () => void | Promise<void>): void {
+  queue = queue.then(step).catch(() => {});
+}
+
+interface Entry {
+  id: number;
+  /** Whether its entry is in the history, put there and not yet taken out. */
+  live: boolean;
+  /** Whether it is the one taking its entry out, which is no press of the back
+   *  key. */
+  popping: boolean;
+}
+
+function isTheLatest(entry: Entry): boolean {
+  return window.history.state?.[MARK] === entry.id;
+}
+
+function putIn(entry: Entry): void {
+  window.history.pushState({ ...window.history.state, [MARK]: entry.id }, "");
+  entry.live = true;
+}
+
+/** Takes the entry out of the history, if it is still the last one in it. */
+async function takeOut(entry: Entry): Promise<void> {
+  if (!entry.live || !isTheLatest(entry)) {
+    entry.live = false;
+    return;
+  }
+  entry.live = false;
+  entry.popping = true;
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("popstate", done);
+      entry.popping = false;
+      resolve();
+    };
+    const timer = window.setTimeout(done, GIVES_UP_MS);
+    window.addEventListener("popstate", done);
+    window.history.back();
+  });
+}
 
 /**
- * `onBack` is told when the back key was pressed. Returns what leaves the
- * history for any other way of shutting: it takes the entry out and then does
- * what it is given, at once when there is no entry to take out.
+ * `onBack` is told when the back key was pressed, and answers true when what
+ * it stands for is still there and the key should be waited for again: a
+ * panel that went back to the one it came from. Nothing is done while
+ * `enabled` is false.
+ *
+ * Returns what leaves the history for any other way of shutting: it takes the
+ * entry out and then does what it is given, at once when there is none.
  */
-export function useBackClosesIt(onBack: () => void): (then: () => void) => void {
-  const id = useRef(0);
-  const live = useRef(false);
-  const waiting = useRef<(() => void) | null>(null);
+export function useBackClosesIt(
+  onBack: () => boolean | void,
+  enabled = true,
+): (then: () => void) => void {
+  const mine = useRef<Entry | null>(null);
   const backRef = useRef(onBack);
   backRef.current = onBack;
 
   useEffect(() => {
-    id.current = ++counter;
-    live.current = true;
-    window.history.pushState({ ...window.history.state, [MARK]: id.current }, "");
+    if (!enabled) {
+      return;
+    }
+    const entry: Entry = { id: ++counter, live: false, popping: false };
+    mine.current = entry;
+    let wanted = true;
+    const arm = () => {
+      if (wanted) {
+        putIn(entry);
+      }
+    };
+    inTurn(arm);
     const moved = () => {
-      if (window.history.state?.[MARK] === id.current) {
+      if (!entry.live || entry.popping || isTheLatest(entry)) {
         return;
       }
-      const done = waiting.current;
-      waiting.current = null;
-      if (!live.current) {
-        return;
-      }
-      live.current = false;
-      if (done) {
-        done();
-      } else {
-        backRef.current();
+      entry.live = false;
+      if (backRef.current() === true) {
+        inTurn(arm);
       }
     };
     window.addEventListener("popstate", moved);
     return () => {
+      wanted = false;
       window.removeEventListener("popstate", moved);
-      if (live.current && window.history.state?.[MARK] === id.current) {
-        live.current = false;
-        window.history.back();
-      }
+      inTurn(() => takeOut(entry));
     };
-  }, []);
+  }, [enabled]);
 
   return useCallback((then: () => void) => {
-    if (!live.current || window.history.state?.[MARK] !== id.current) {
-      live.current = false;
+    const entry = mine.current;
+    if (!entry) {
       then();
       return;
     }
-    const timer = window.setTimeout(() => {
-      const done = waiting.current;
-      waiting.current = null;
-      live.current = false;
-      done?.();
-    }, GIVES_UP_MS);
-    waiting.current = () => {
-      window.clearTimeout(timer);
+    inTurn(async () => {
+      await takeOut(entry);
       then();
-    };
-    window.history.back();
+    });
   }, []);
 }
