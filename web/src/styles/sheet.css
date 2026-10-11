@@ -29,7 +29,7 @@
   max-height: 88dvh;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-bottom: 0;
-  border-radius: 20px 20px 0 0;
+  border-radius: 32px 32px 0 0;
   --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
   background:
     linear-gradient(var(--header-glow), var(--header-glow)),
