@@ -16,7 +16,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
 import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
+import { ScrollBar } from "../components/scrollbar";
 import { SeenMark } from "../components/seen";
+import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import { chapterAt } from "./chapters";
 import { asClock } from "../clock";
 import type { Playback } from "./engine";
@@ -163,7 +165,9 @@ export function Drawer({
   onSelectEpisode,
 }: Props) {
   const self = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const sizes = useSizes(self);
+  const upright = useMediaQuery(PHONE_UPRIGHT);
   return (
     <div className="player-drawer-hold" data-open={open ? "yes" : "no"} ref={self}>
       {/* Bare on purpose: this is what folds, and a box that folds to nothing
@@ -175,6 +179,7 @@ export function Drawer({
           role="tabpanel"
           id="player-sheet"
           aria-labelledby={`player-sheet-tab-${showing}`}
+          ref={panel}
         >
           {showing === "info" && (
             <About work={work} plan={plan} playback={playback} language={language} t={t} />
@@ -192,6 +197,7 @@ export function Drawer({
             />
           )}
         </div>
+        {upright && <ScrollBar holder={panel} inside />}
       </div>
     </div>
   );

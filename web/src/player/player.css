@@ -2431,3 +2431,73 @@
   border-color: var(--accent);
   color: var(--accent-contrast);
 }
+
+/* ---------------------------------------------------------------------------
+ * The drawer on a phone held upright
+ * ------------------------------------------------------------------------ */
+
+/* Last, since each rule here undoes one written for the wide drawer above. */
+@media (max-width: 720px) and (orientation: portrait) {
+  /* The sheet above the controls takes the width of the screen, the strip's
+     own air being what is left of it, and no more height than leaves the
+     controls and the top where they are: what is longer scrolls, under the
+     thin line the pages of a phone draw. */
+  .player-drawer-hold {
+    margin: 0 calc(-16px - var(--safe-right)) 8px calc(-16px - var(--safe-left));
+  }
+
+  .player-drawer-fold {
+    position: relative;
+  }
+
+  .player-drawer {
+    --player-drawer-title: 20px;
+    max-height: 50dvh;
+    padding-inline: calc(16px + var(--safe-left)) calc(16px + var(--safe-right));
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .player-drawer::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* What the film is, on a phone: the poster beside the title and the facts,
+     and the words and the button across the whole width under them, rather
+     than every part squeezed into a column of its own. */
+  .player-drawer-about {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px var(--gap);
+  }
+
+  .player-drawer-said {
+    display: contents;
+  }
+
+  .player-drawer-poster {
+    width: 92px;
+    grid-row: 1 / span 3;
+  }
+
+  .player-drawer-title,
+  .player-drawer-facts,
+  .player-drawer-playing {
+    grid-column: 2;
+  }
+
+  .player-drawer-facts {
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  .player-drawer-overview,
+  .player-drawer-again {
+    grid-column: 1 / -1;
+  }
+
+  .player-drawer-again {
+    justify-content: center;
+    margin-top: 6px;
+  }
+}
