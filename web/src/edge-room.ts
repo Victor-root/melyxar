@@ -8,6 +8,8 @@
  * on screen is.
  */
 
+import { PHONE_SIDEWAYS } from "./media-query";
+
 const SIDES = ["top", "bottom", "left", "right"];
 
 /** Whether any of the four rooms, as the browser reads them, is more than none. */
@@ -34,4 +36,29 @@ export function markTheEdgeRoom(): void {
   };
   tell();
   window.addEventListener("resize", tell);
+}
+
+/** What the viewport says of the edges: reaching under the system bars and
+ *  the camera cut-out, or staying clear of them. */
+export function viewportFor(sideways: boolean): string {
+  return `width=device-width, initial-scale=1, viewport-fit=${sideways ? "auto" : "cover"}`;
+}
+
+/**
+ * Keeps the page clear of the system bars on a phone held sideways, where
+ * drawing under them gains nothing: the bar of the screen's edge stands where
+ * a hand holds it, and what is drawn behind it is lost to it.
+ *
+ * It is the viewport that says whether the page may reach under them, so that
+ * is what is changed, each time the phone is turned.
+ */
+export function clearTheEdgesWhenSideways(): void {
+  const viewport = document.querySelector('meta[name="viewport"]');
+  if (!viewport) {
+    return;
+  }
+  const sideways = window.matchMedia(PHONE_SIDEWAYS);
+  const follow = () => viewport.setAttribute("content", viewportFor(sideways.matches));
+  follow();
+  sideways.addEventListener("change", follow);
 }
