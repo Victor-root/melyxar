@@ -581,6 +581,12 @@
     text-align: left;
   }
 
+  /* The words sit in the middle now, not down the left, so the picture behind
+     them is not darkened from the left: only the foot of it fades into the page. */
+  .work-backdrop::after {
+    background: linear-gradient(to top, var(--surface-deep), transparent 60%);
+  }
+
   /* The file's facts first, its action under them, lined up with the words. */
   .media-file {
     flex-direction: column;
