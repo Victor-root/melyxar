@@ -353,9 +353,12 @@ input[type="radio"]:disabled {
 }
 
 .picker-list {
-  /* Above a window it is opened from, not only above the page. */
+  /* Above a window it is opened from, not only above the page. A line that is
+     longer than the screen shortens inside the list rather than pushing the
+     list off the edge of it. */
   z-index: 70;
   overflow-y: auto;
+  max-width: calc(100% - 2 * var(--gutter));
 }
 
 .picker-list .header-menu-line {

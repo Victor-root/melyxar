@@ -533,8 +533,11 @@
     margin-top: 0;
   }
 
+  /* Each button is as wide as its words and no wider, and the words stay on
+     one line; they only give way when the row itself is too narrow. */
   .work-actions > .button {
-    flex: 1 1 150px;
+    flex: 0 1 auto;
+    white-space: nowrap;
   }
 
   .work-actions > .work-marks {
