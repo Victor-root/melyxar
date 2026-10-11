@@ -897,6 +897,9 @@ img.door-mark {
  * ------------------------------------------------------------------------ */
 
 .door-foot {
+  /* Always the bottom row, even while the card is not drawn yet, so the footer
+     does not sit at the top for a moment on arrival. */
+  grid-row: 2;
   position: relative;
   z-index: 1;
   display: flex;
