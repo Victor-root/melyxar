@@ -310,10 +310,19 @@
   display: none;
 }
 
-.music-listened-page {
+/* One list of the row, which holds the box the list scrolls in and the line
+   that says where in it somebody is, and is what the row comes to rest on. */
+.music-listened-slot {
+  position: relative;
   flex: 0 0 100%;
   min-width: 0;
   min-height: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.music-listened-page {
+  height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   /* Scrolled by the graphics card, for the reason given on the box the page
@@ -324,10 +333,12 @@
      the list, by the peek left below it. Up and down only: a swipe sideways
      is the row's, which brings the other list. */
   overscroll-behavior-y: contain;
-  /* Not the bar of the page: thinner than it. */
-  --scrollbar-width: 7px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  /* Its place is shown by the thin line the pages of a phone draw. */
+  scrollbar-width: none;
+}
+
+.music-listened-page::-webkit-scrollbar {
+  display: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -1000,7 +1011,7 @@
 
 /* The bar down the side of the page ends where the player begins, or the
    player would stand over the part of it a hand reaches for. */
-:root[data-music-bar] .scrollbar {
+:root[data-music-bar] .scrollbar:not(.scrollbar-inside) {
   bottom: var(--music-bar-height);
 }
 

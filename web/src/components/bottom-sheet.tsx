@@ -152,7 +152,7 @@ export function BottomSheet({
           <div className="sheet-body" ref={body}>
             {typeof children === "function" ? children(shut) : children}
           </div>
-          <ScrollBar holder={body} />
+          <ScrollBar holder={body} inside />
         </div>
       </div>
     </div>,

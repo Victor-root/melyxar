@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
+import { ScrollBar } from "../components/scrollbar";
 import { FlameIcon, HistoryIcon } from "../icons";
 import { useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
@@ -186,24 +187,38 @@ function ListenedPages({
       </div>
       <div className="music-listened-pages" ref={track}>
         {shown.map((list, at) => (
-          <div
+          <ListenedPage
             key={list.title}
-            className="music-listened-page"
-            ref={(element) => {
+            songs={list.songs}
+            onPlay={(index) => onPlay(list.songs, index)}
+            hold={(element) => {
               pages.current[at] = element;
             }}
-          >
-            <SongList
-              songs={list.songs}
-              numbered="place"
-              showAlbum={false}
-              menuOnly
-              onPlay={(index) => onPlay(list.songs, index)}
-            />
-          </div>
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+/** One list of the row, scrolling in its own box. */
+function ListenedPage({
+  songs,
+  onPlay,
+  hold,
+}: {
+  songs: Song[];
+  onPlay: (index: number) => void;
+  hold: (element: HTMLDivElement | null) => void;
+}) {
+  const page = useRef<HTMLDivElement>(null);
+  return (
+    <div className="music-listened-slot" ref={hold}>
+      <div className="music-listened-page" ref={page}>
+        <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={onPlay} />
+      </div>
+      <ScrollBar holder={page} inside />
+    </div>
   );
 }
 

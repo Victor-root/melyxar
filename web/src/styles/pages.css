@@ -77,6 +77,15 @@
   transition: opacity var(--quick) var(--ease);
 }
 
+/* Over the edge of the box it belongs to, which holds it and is where it
+   stands. */
+.scrollbar.scrollbar-inside {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+
 /* Only where there is more page than screen. */
 .scrollbar-long {
   opacity: 1;

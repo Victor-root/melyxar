@@ -32,7 +32,15 @@ const STAYS_MS = 350;
  *  otherwise leave a few points of colour nobody can catch with a pointer. */
 const SHORTEST = 38;
 
-export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | null> }) {
+export function ScrollBar({
+  holder,
+  inside = false,
+}: {
+  holder: React.RefObject<HTMLElement | null>;
+  /** Drawn over the edge of the box it belongs to rather than of the window,
+   *  for a list that scrolls in a place of its own. */
+  inside?: boolean;
+}) {
   const track = useRef<HTMLDivElement>(null);
   const mark = useRef<HTMLDivElement>(null);
   /* The length last written. How long the mark is changes when the page
@@ -191,7 +199,7 @@ export function ScrollBar({ holder }: { holder: React.RefObject<HTMLElement | nu
 
   return (
     <div
-      className={`scrollbar${longer ? " scrollbar-long" : ""}`}
+      className={`scrollbar${inside ? " scrollbar-inside" : ""}${longer ? " scrollbar-long" : ""}`}
       ref={track}
       onPointerDown={step}
       aria-hidden="true"
