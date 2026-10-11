@@ -29,7 +29,7 @@
   justify-items: center;
   align-items: start;
   gap: var(--gap-wide);
-  padding: clamp(18px, 3vw, 40px) clamp(18px, 4vw, 64px);
+  padding: calc(clamp(18px, 3vw, 40px) + var(--safe-top)) calc(clamp(18px, 4vw, 64px) + var(--safe-right)) calc(clamp(18px, 3vw, 40px) + var(--safe-bottom)) calc(clamp(18px, 4vw, 64px) + var(--safe-left));
   /* Its own background rather than the page's: this screen is the only one
      with nothing else on it, so the surface it sits on is part of it. */
   background: var(--surface-deep);
@@ -967,7 +967,7 @@ img.door-mark {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: var(--gap);
-    padding: 8px clamp(14px, 4vw, 28px);
+    padding: calc(8px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
   }
 
   /* A phone is shorter than the screen it was drawn on, and the whole sign in
@@ -1006,5 +1006,46 @@ img.door-mark {
 
   .door-footer {
     flex-basis: 100%;
+  }
+}
+
+/* An installed app drawn edge to edge gives up the bars of the system at its
+   top and bottom, so the sign in is a little tighter on a phone there: the
+   footer's two controls share a row, and the spaces between its parts are
+   narrower. Only in an installed app, so a browser tab keeps its layout. */
+@media (display-mode: standalone) and (max-width: 760px) {
+  :root[data-edge-room] .door {
+    gap: 8px;
+  }
+
+  :root[data-edge-room] .door-card {
+    padding: 16px 24px 12px;
+  }
+
+  :root[data-edge-room] .door-forwhom {
+    margin: 4px 0 10px;
+  }
+
+  :root[data-edge-room] .door-forwhom-face {
+    width: 80px;
+    height: 80px;
+  }
+
+  :root[data-edge-room] .door-box {
+    margin-bottom: 8px;
+  }
+
+  :root[data-edge-room] .door-or {
+    margin: 6px 0;
+  }
+
+  :root[data-edge-room] .door-slogan {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  :root[data-edge-room] .door-foot .picker {
+    min-width: 0;
+    max-width: 180px;
   }
 }

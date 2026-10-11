@@ -595,7 +595,7 @@
     flex-direction: column;
     width: auto;
     max-height: 82dvh;
-    padding: 0;
+    padding: var(--safe-top) 0 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     border: 0;
@@ -797,7 +797,7 @@
   .browse-piece.music-tabs:hover,
   .browse-piece.music-tabs:focus-within {
     position: fixed;
-    top: var(--header-edge);
+    top: calc(var(--header-edge) + var(--safe-top));
     left: var(--header-edge);
     right: var(--header-edge);
     /* Under the bar at the top, whose lists unfold over it. */

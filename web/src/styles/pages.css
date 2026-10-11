@@ -35,6 +35,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: none;
+  /* The page runs on behind the navigation bar of an installed app drawn edge
+     to edge, and its last line stops above that bar. */
+  padding-bottom: var(--safe-bottom);
   /* Scrolled by the graphics card rather than redrawn for every frame. A box
      with see-through ground on a screen of middling density (a laptop at
      125 %) is otherwise kept off it, for sharper text, and its scrolling
@@ -64,9 +67,9 @@
  */
 .scrollbar {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: var(--safe-top);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
   z-index: 15;
   width: var(--scrollbar-width);
   opacity: 0;

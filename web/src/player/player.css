@@ -286,7 +286,7 @@
 .player-top,
 .player-bottom {
   display: flex;
-  padding: 22px var(--player-inset);
+  padding: 22px calc(var(--player-inset) + var(--safe-right)) 22px calc(var(--player-inset) + var(--safe-left));
 }
 
 .player-top {
@@ -294,11 +294,12 @@
   align-items: flex-start;
   gap: var(--gap);
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0));
+  padding-top: calc(22px + var(--safe-top));
   padding-bottom: 72px;
   /* Closer to the edge than the player's own inset, which read as too far
      from the corner on the one row that opens with a lone button: near the
      edge, but never touching it. */
-  padding-left: 14px;
+  padding-left: calc(14px + var(--safe-left));
 }
 
 .player-bottom {
@@ -306,6 +307,7 @@
   gap: 2px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
   padding-top: 92px;
+  padding-bottom: calc(22px + var(--safe-bottom));
 }
 
 /* While a sheet is open the whole strip becomes the panel: the sheet, the bar
@@ -1031,7 +1033,7 @@
 
 .player-menu {
   position: absolute;
-  bottom: 124px;
+  bottom: calc(124px + var(--safe-bottom));
   z-index: 2;
   width: min(320px, calc(100% - var(--player-inset) * 2));
   /* Standing over the button that opened it, and never past either edge of
@@ -1674,15 +1676,18 @@
  * ------------------------------------------------------------------------ */
 
 @media (max-width: 720px) {
-  .player-top,
+  .player-top {
+    padding: calc(14px + var(--safe-top)) calc(16px + var(--safe-right)) 14px calc(16px + var(--safe-left));
+  }
+
   .player-bottom {
-    padding: 14px 16px;
+    padding: 14px calc(16px + var(--safe-right)) calc(14px + var(--safe-bottom)) calc(16px + var(--safe-left));
   }
 
   .player-menu,
   .player-window {
-    right: 14px;
-    bottom: 96px;
+    right: calc(14px + var(--safe-right));
+    bottom: calc(96px + var(--safe-bottom));
   }
 
   /* No room beside the track list for a second column here, so the one panel
