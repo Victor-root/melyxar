@@ -32,14 +32,12 @@ import {
   TickIcon,
 } from "../../icons";
 import { useRequests } from "../../requests/store";
-import { PHONE, useMediaQuery } from "../../media-query";
 import { OFFERED_ACCENTS, useSettings } from "../../settings";
 import { reorderedAmong } from "../../sorting";
 import type { ThemeChoice } from "../../settings";
 
 export function MyAppearance() {
   const { t, theme, setTheme, accent, setAccent } = useSettings();
-  const onAPhone = useMediaQuery(PHONE);
   const ownClass = `swatch swatch-own${OFFERED_ACCENTS.includes(accent) ? "" : " swatch-on"}`;
 
   return (
@@ -83,18 +81,7 @@ export function MyAppearance() {
                 </button>
               );
             })}
-            {onAPhone ? (
-              <label className={ownClass} title={t("me.accent_own")} style={{ ["--swatch" as string]: accent }}>
-                <input
-                  type="color"
-                  value={accent}
-                  aria-label={t("me.accent_own")}
-                  onChange={(event) => setAccent(event.target.value)}
-                />
-              </label>
-            ) : (
-              <ColourPicker colour={accent} onPick={setAccent} className={ownClass} />
-            )}
+            <ColourPicker colour={accent} onPick={setAccent} className={ownClass} />
           </div>
         </Setting>
         <BackdropChoice />

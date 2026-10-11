@@ -15,11 +15,12 @@
  * not really a window".
  */
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BackIcon, CloseIcon } from "../icons";
 import { useSettings } from "../settings";
+import { useHoldsTheScreen } from "./hold-the-screen";
 
 export function Modal({
   title,
@@ -49,31 +50,7 @@ export function Modal({
 }) {
   const { t } = useSettings();
   const panel = useRef<HTMLDivElement>(null);
-  /* Read at the moment of use: a parent that draws again, at every letter
-     typed in a field, hands a new function each time, and an effect that
-     depended on it would take the focus back to the panel at every one. */
-  const shutRef = useRef(onClose);
-  shutRef.current = onClose;
-
-  useEffect(() => {
-    const shut = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        shutRef.current();
-      }
-    };
-    document.addEventListener("keydown", shut);
-    /* The page underneath holds still. Put back as it was rather than set to
-       a value: another panel may have set it first, and two panels closing
-       one after the other would otherwise leave the page unable to scroll. */
-    const before = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    panel.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", shut);
-      document.body.style.overflow = before;
-    };
-  }, []);
+  useHoldsTheScreen(panel, onClose);
 
   return createPortal(
     <div

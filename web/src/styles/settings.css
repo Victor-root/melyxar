@@ -59,9 +59,7 @@
     0 0 0 4px var(--swatch);
 }
 
-/* Any other colour: a disc of every colour, which opens the picker. On a
-   phone that is the machine's own, whose field is laid over the disc and made
-   clear, so the press lands on the field and the disc is what is seen. */
+/* Any other colour: a disc of every colour, which opens the picker. */
 .swatch-own {
   background: conic-gradient(
     from 0deg,
@@ -75,25 +73,24 @@
   );
 }
 
-.swatch-own input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-
 /* The panel that picks any other colour, dressed as the lists are (see
    menus.css). The colours drawn in it are the choice itself, as the discs
    above are, and are not tokens. */
+.colour-picker,
+.colour-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.colour-sheet .colour-area {
+  height: 220px;
+}
+
 .colour-picker {
   position: fixed;
   z-index: 30;
   width: 248px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   padding: 12px;
   border-radius: var(--radius-card);
 }

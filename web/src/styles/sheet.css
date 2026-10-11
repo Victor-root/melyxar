@@ -1,0 +1,99 @@
+/*
+ * The sheet that comes up from the foot of the screen on a phone.
+ */
+
+/* What is behind it is dimmed as it is behind a panel, and fades in with the
+   sheet. */
+.sheet-over {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+  animation: sheet-dim var(--calm) var(--ease);
+  transition: opacity var(--calm) var(--ease);
+}
+
+.sheet-over[data-leaving] {
+  opacity: 0;
+}
+
+/* Dressed as the lists are, rim and glow of the accent, and solid: it is read
+   rather than glanced at. Its foot clears the navigation bar of a phone drawn
+   edge to edge. */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 88dvh;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-bottom: 0;
+  border-radius: 20px 20px 0 0;
+  --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
+  background:
+    linear-gradient(var(--header-glow), var(--header-glow)),
+    var(--surface-raised);
+  color: var(--text);
+  box-shadow:
+    var(--shadow-raised),
+    0 0 14px 2px var(--accent-glow);
+  outline: none;
+  animation: sheet-arrive var(--calm) var(--ease);
+  will-change: transform;
+}
+
+/* What is held to pull the sheet down: the handle and the title, which a
+   finger on the sheet's own body never mistakes for a pull. */
+.sheet-grip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 10px var(--gap-wide) 6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-faint);
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--gap) var(--gap-wide) calc(var(--gap-wide) + var(--safe-bottom));
+}
+
+@keyframes sheet-arrive {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-dim {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-over {
+    animation: none;
+    transition: none;
+  }
+}
