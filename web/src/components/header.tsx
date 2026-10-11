@@ -151,15 +151,26 @@ function areaOf(scope: string): Area | null {
 }
 
 /** The scope a page opens the search on: its own settings on the pages of
- *  settings and of the administration, the whole library anywhere else. */
-function scopeOfPage(pathname: string): string {
+ *  settings and of the administration, the library it is a page of on the
+ *  page of a library, the whole server anywhere else.
+ *
+ *  A library is named by itself only where its kind holds several, which is
+ *  where the list of scopes offers it by name; a kind with one library is that
+ *  library, and is named as the kind, as the list names it. */
+export function scopeOfPage(pathname: string, libraries: Library[]): string {
   if (/^\/admin(\/|$)/.test(pathname)) {
     return "area:admin";
   }
   if (/^\/settings(\/|$)/.test(pathname)) {
     return "area:settings";
   }
-  return "";
+  const id = /^\/library\/([^/]+)/.exec(pathname)?.[1];
+  const library = libraries.find((one) => one.id === id);
+  if (!library) {
+    return "";
+  }
+  const ofItsKind = libraries.filter((one) => one.kind === library.kind).length;
+  return ofItsKind > 1 ? `library:${library.id}` : `kind:${library.kind}`;
 }
 
 /** The categories this server really has, in the order they are offered. */
@@ -186,16 +197,20 @@ export function Header({
   const [query, setQuery] = useState(parameters.get("search") ?? "");
   const words = query.trim();
   const [scope, setScope] = useState(
-    () => parameters.get("in") ?? scopeOfPage(location.pathname),
+    () => parameters.get("in") ?? scopeOfPage(location.pathname, libraries),
   );
   const area = areaOf(scope);
   /* Stepping into the settings or the administration searches them, and
-     stepping out of them the library again: a search on a page of settings
-     that answers with films is answering a question nobody asked there. A
-     scope chosen by hand elsewhere stays as it was. */
-  const pageScope = scopeOfPage(location.pathname);
+     stepping into a library searches it: a search on a page of settings that
+     answers with films, or on a library that answers with every other, is
+     answering a question nobody asked there. Stepping out of them goes back to
+     the whole server. A scope chosen by hand elsewhere stays as it was. */
+  const pageScope = scopeOfPage(location.pathname, libraries);
+  const leftBehind = useRef(pageScope);
   useEffect(() => {
-    setScope((before) => (pageScope || areaOf(before) ? pageScope : before));
+    const before = leftBehind.current;
+    leftBehind.current = pageScope;
+    setScope((chosen) => (chosen === before || areaOf(chosen) ? pageScope : chosen));
   }, [pageScope]);
   /* Whether the field is out of its magnifier. Open already when the address
      carries a search: landing on a page of results with the words hidden
