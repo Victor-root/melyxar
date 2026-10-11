@@ -985,13 +985,47 @@ img.door-mark {
    column from the start. */
 @media (max-width: 760px) {
   .door {
+    grid-template-columns: minmax(0, 1fr);
     justify-items: center;
-    padding: clamp(14px, 4vw, 28px);
+    gap: var(--gap);
+    padding: 8px clamp(14px, 4vw, 28px);
+  }
+
+  /* A phone is shorter than the screen it was drawn on, and the whole sign in
+     has to fit it without a scrollbar: the card keeps its shape and gives up
+     only the spaces between its parts. The account tiles shrink with it, since
+     the card is as wide as the phone and never as wide as its accounts. */
+  .door-card {
+    --door-tile: 88px;
+    --door-tile-gap: 14px;
+    padding: 22px 24px 16px;
+  }
+
+  .door-forwhom {
+    margin: 8px 0 14px;
+  }
+
+  .door-box {
+    margin-bottom: 10px;
+  }
+
+  .door-or {
+    margin: 8px 0;
+  }
+
+  .door-slogan {
+    margin-top: 10px;
+    padding-top: 10px;
   }
 
   .door-foot {
-    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: var(--gap-tight);
     text-align: center;
+  }
+
+  .door-footer {
+    flex-basis: 100%;
   }
 }

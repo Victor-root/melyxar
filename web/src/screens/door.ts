@@ -41,6 +41,10 @@ export interface DoorScreen {
    *  Remembering says whether the browser is to hold on to the session once
    *  it is closed, which is the one thing about it somebody chooses. */
   knock: (name: string, password: string, remember: boolean) => Promise<void>;
+  /** Whether the names have been asked for and answered, so the card is only
+   *  drawn once it can show the view it opens on. True at once on a new server,
+   *  which asks for nothing. */
+  asked: boolean;
   /** Whether the server is being asked right now. */
   asking: boolean;
   /** Why it said no, or nothing. */
@@ -57,6 +61,7 @@ export function useDoorScreen(
   const [asking, setAsking] = useState(false);
   const [refused, setRefused] = useState<Refusal | null>(null);
   const [names, setNames] = useState<NameAtTheDoor[]>([]);
+  const [answered, setAnswered] = useState(false);
   const brandNew = !branding.setup_complete;
 
   // Asked for once, and never on a server that has no accounts yet: the only
@@ -74,6 +79,11 @@ export function useDoorScreen(
         // A server that will not say is a server that offers nothing, which
         // is the same screen as a server with nothing to offer. The field is
         // there either way.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setAnswered(true);
+        }
       });
     return () => controller.abort();
   }, [brandNew]);
@@ -98,6 +108,7 @@ export function useDoorScreen(
   return {
     brandNew,
     names,
+    asked: brandNew || answered,
     serverName: branding.server_name,
     knock,
     asking,
