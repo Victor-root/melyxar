@@ -525,7 +525,10 @@ function Choices({
   return (
     <div className="work-choices">
       <span className="work-choice">
-        <span className="work-choice-label">{t("work.video")}</span>
+        <span className="work-choice-label">
+          <FilmIcon className="work-choice-icon" size={18} />
+          <span className="work-choice-word">{t("work.video")}</span>
+        </span>
         {versions.length > 1 ? (
           <Picker
             label={t("work.video")}
@@ -543,7 +546,10 @@ function Choices({
 
       {audio.length > 0 && (
         <span className="work-choice">
-          <span className="work-choice-label">{t("work.audio")}</span>
+          <span className="work-choice-label">
+            <SoundIcon className="work-choice-icon" size={18} />
+            <span className="work-choice-word">{t("work.audio")}</span>
+          </span>
           {audio.length > 1 ? (
             <Picker
               label={t("work.audio")}
@@ -559,7 +565,10 @@ function Choices({
 
       {subtitles.length > 0 && (
         <span className="work-choice">
-          <span className="work-choice-label">{t("work.subtitles")}</span>
+          <span className="work-choice-label">
+            <SubtitlesIcon className="work-choice-icon" size={18} />
+            <span className="work-choice-word">{t("work.subtitles")}</span>
+          </span>
           <Picker
             label={t("work.subtitles")}
             value={tracks.subtitle ?? ""}
