@@ -340,7 +340,7 @@
 @media (max-width: 900px) {
   .hero-words {
     max-width: 100%;
-    padding-left: var(--gap-wide);
+    padding-left: calc(var(--gap-wide) + var(--safe-left));
   }
 
   .hero::after {

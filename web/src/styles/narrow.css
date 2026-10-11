@@ -19,8 +19,12 @@
      beside the account, and on a really narrow screen the name of the server
      too, both of which are said again by the mark next to them. */
   .header-inner {
-    padding: 0 var(--gap);
+    padding: 0 calc(var(--gap) + var(--safe-right)) 0 calc(var(--gap) + var(--safe-left));
     gap: var(--gap-tight);
+  }
+
+  .header-start-back {
+    margin-left: 0;
   }
 
   .header-who {
@@ -242,7 +246,7 @@
   }
 
   .header-inner {
-    padding: 0 var(--header-edge);
+    padding: 0 calc(var(--header-edge) + var(--safe-right)) 0 calc(var(--header-edge) + var(--safe-left));
   }
 
   /* No rule beside the account: the arrow stands there instead, and folds
@@ -299,7 +303,7 @@
   .header-start {
     position: absolute;
     top: var(--header-edge);
-    left: var(--header-edge);
+    left: calc(var(--header-edge) + var(--safe-left));
     transition:
       opacity 200ms var(--ease),
       transform 340ms var(--ease);
@@ -786,8 +790,8 @@
   .browse-piece.music-tabs:focus-within {
     position: fixed;
     top: calc(var(--header-edge) + var(--safe-top) - var(--header-lift));
-    left: var(--header-edge);
-    right: var(--header-edge);
+    left: calc(var(--header-edge) + var(--safe-left));
+    right: calc(var(--header-edge) + var(--safe-right));
     /* Under the bar at the top, whose lists unfold over it. */
     z-index: 19;
     height: var(--header-piece);
