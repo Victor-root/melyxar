@@ -31,6 +31,15 @@
   box-shadow: var(--shadow-card);
 }
 
+/* The bar having stepped aside, the list rises into the room it leaves rather
+   than hanging under a gap. */
+@media (min-width: 901px) {
+  :root[data-bar-away] .side {
+    top: var(--gap);
+    max-height: calc(100dvh - var(--gap) * 2);
+  }
+}
+
 .side-list {
   display: flex;
   flex-direction: column;
