@@ -58,7 +58,7 @@
 .sheet-back {
   position: absolute;
   bottom: 0;
-  left: var(--gap);
+  left: calc(var(--gap) + var(--safe-left));
   display: grid;
   place-items: center;
   width: 36px;
@@ -75,7 +75,7 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  padding: 10px var(--gap-wide) 6px;
+  padding: 10px calc(var(--gap-wide) + var(--safe-right)) 6px calc(var(--gap-wide) + var(--safe-left));
   cursor: grab;
   touch-action: none;
 }
@@ -104,13 +104,20 @@
   flex-direction: column;
 }
 
+/* Clear of the navigation bar a phone held sideways has at its side. */
+.sheet-scroll > .scrollbar-inside {
+  right: var(--safe-right);
+}
+
 .sheet-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  padding: var(--gap) var(--gap-wide) calc(var(--gap-wide) + var(--safe-bottom));
+  padding:
+    var(--gap) calc(var(--gap-wide) + var(--safe-right)) calc(var(--gap-wide) + var(--safe-bottom))
+    calc(var(--gap-wide) + var(--safe-left));
 }
 
 /* The lines of a menu, as tall as a thumb needs and wrapping rather than

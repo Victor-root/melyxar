@@ -2593,3 +2593,8 @@
     display: none;
   }
 }
+
+/* Clear of the navigation bar a phone held sideways has at its side. */
+.player-drawer-fold > .scrollbar-inside {
+  right: var(--safe-right);
+}
