@@ -34,6 +34,32 @@ export function fromHsl(hue: number, saturation: number, lightness: number): str
   return `#${channel(0)}${channel(8)}${channel(4)}`;
 }
 
+/** A colour's hue in degrees, and its saturation and value from 0 to 1, which
+ *  is how a square of shades is laid out. */
+export function hsvOf(colour: string): { hue: number; saturation: number; value: number } {
+  const [red, green, blue] = channelsOf(colour);
+  const value = Math.max(red, green, blue);
+  const spread = value - Math.min(red, green, blue);
+  return { hue: hslOf(colour).hue, saturation: value === 0 ? 0 : spread / value, value };
+}
+
+export function fromHsv(hue: number, saturation: number, value: number): string {
+  const lightness = value * (1 - saturation / 2);
+  const shade = lightness === 0 || lightness === 1 ? 0 : (value - lightness) / Math.min(lightness, 1 - lightness);
+  return fromHsl(hue, shade, lightness);
+}
+
+/** What somebody typed as a colour, as six lowercase digits after a hash, or
+ *  nothing when it is not one. The hash and the short form are both allowed. */
+export function parseHex(typed: string): string | null {
+  const digits = typed.trim().replace(/^#/, "");
+  if (!/^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(digits)) {
+    return null;
+  }
+  const full = digits.length === 3 ? [...digits].map((one) => one + one).join("") : digits;
+  return `#${full.toLowerCase()}`;
+}
+
 /**
  * The most colourful of several colours, or nothing among none: the one
  * whose strongest channel stands furthest from its weakest. Counted that way

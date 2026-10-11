@@ -59,9 +59,9 @@
     0 0 0 4px var(--swatch);
 }
 
-/* Any other colour: a disc of every colour, which opens the machine's own
-   picker. Its field is laid over the disc and made clear, so the press lands
-   on the field and the disc is what is seen. */
+/* Any other colour: a disc of every colour, which opens the picker. On a
+   phone that is the machine's own, whose field is laid over the disc and made
+   clear, so the press lands on the field and the disc is what is seen. */
 .swatch-own {
   background: conic-gradient(
     from 0deg,
@@ -82,6 +82,122 @@
   height: 100%;
   opacity: 0;
   cursor: pointer;
+}
+
+/* The panel that picks any other colour, dressed as the lists are (see
+   menus.css). The colours drawn in it are the choice itself, as the discs
+   above are, and are not tokens. */
+.colour-picker {
+  position: fixed;
+  z-index: 30;
+  width: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-card);
+}
+
+.colour-area {
+  --hue: 0;
+  position: relative;
+  height: 160px;
+  border-radius: var(--radius-control);
+  background:
+    linear-gradient(to top, rgb(0 0 0), rgb(0 0 0 / 0)),
+    linear-gradient(to right, rgb(255 255 255), hsl(var(--hue) 100% 50%));
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.colour-thumb {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255);
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45), 0 1px 4px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+
+.colour-area:focus-visible,
+.colour-hue:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.colour-hue {
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  border-radius: 6px;
+  background: linear-gradient(
+    to right,
+    hsl(0 100% 50%),
+    hsl(60 100% 50%),
+    hsl(120 100% 50%),
+    hsl(180 100% 50%),
+    hsl(240 100% 50%),
+    hsl(300 100% 50%),
+    hsl(360 100% 50%)
+  );
+  cursor: pointer;
+}
+
+.colour-hue::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255);
+  background: transparent;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45), 0 1px 4px rgb(0 0 0 / 0.5);
+}
+
+.colour-hue::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255);
+  background: transparent;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.45), 0 1px 4px rgb(0 0 0 / 0.5);
+}
+
+.colour-code {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.colour-preview {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.colour-code input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-deep);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-transform: lowercase;
+}
+
+.colour-code input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
 }
 
 /* The paintings of light, each shown whole in a tile the shape of a screen,

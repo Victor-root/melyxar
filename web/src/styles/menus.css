@@ -11,6 +11,7 @@
    opens. */
 .header-menu-list,
 .quick-search,
+.colour-picker,
 .player-menu,
 .player-window {
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
@@ -25,7 +26,8 @@
 }
 
 .header-menu-list,
-.quick-search {
+.quick-search,
+.colour-picker {
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
