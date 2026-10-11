@@ -37,6 +37,7 @@ export function ActionMenu({
   from,
   openedBy,
   onClose,
+  into,
 }: {
   /** What the menu is about, which a sheet says at its head. */
   title: string;
@@ -50,12 +51,14 @@ export function ActionMenu({
       it never seemed to close at all. */
   openedBy: HTMLElement | null;
   onClose: () => void;
+  /** Where a sheet is drawn, when not at the end of the page. */
+  into?: Element;
 }) {
   const onAPhone = useMediaQuery(PHONE);
   const lines = groups.filter((group) => group.length > 0);
   if (onAPhone) {
     return (
-      <BottomSheet title={title} onClose={onClose}>
+      <BottomSheet title={title} onClose={onClose} into={into}>
         {(shut) => (
           <div className="sheet-menu" role="menu">
             <MenuLines groups={lines} onPick={shut} />

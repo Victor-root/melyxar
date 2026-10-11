@@ -8,6 +8,10 @@ import { useEffect, useState } from "react";
 /** A phone, which is where the style sheet for narrow screens takes over. */
 export const PHONE = "(max-width: 600px)";
 
+/** A phone held upright, which is where the player gathers its less used
+ *  buttons into a menu. */
+export const PHONE_UPRIGHT = "(max-width: 720px) and (orientation: portrait)";
+
 /** Where the title page stacks its poster, facts and actions in one column. */
 export const STACKED = "(max-width: 800px)";
 

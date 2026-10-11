@@ -146,6 +146,12 @@
   container-type: size;
 }
 
+/* What a sheet drawn inside the player dims is the film, so the dimming is
+   black and not the interface's own, which is light on a light theme. */
+.player .sheet-over {
+  background: rgba(0, 0, 0, 0.6);
+}
+
 .player-video {
   width: 100%;
   height: 100%;

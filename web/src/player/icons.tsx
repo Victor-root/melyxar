@@ -29,6 +29,18 @@ function Icon(props: IconProps & { strokeWidth?: number; children: React.ReactNo
   return <Drawn className="player-icon" {...props} />;
 }
 
+/** Three dots one above the other, for the buttons that were put away in a
+ *  menu. Filled rather than stroked: dots drawn as rings read as holes. */
+export function KebabIcon(props: IconProps) {
+  return (
+    <Icon {...props} strokeWidth={0}>
+      {[5, 12, 19].map((y) => (
+        <circle key={y} cx="12" cy={y} r="1.9" fill="currentColor" />
+      ))}
+    </Icon>
+  );
+}
+
 export function PauseIcon(props: IconProps) {
   return (
     <Icon {...props}>
