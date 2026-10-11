@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 /** A phone, which is where the style sheet for narrow screens takes over. */
 export const PHONE = "(max-width: 600px)";
 
+/** Where the title page stacks its poster, facts and actions in one column. */
+export const STACKED = "(max-width: 800px)";
+
 export function useMediaQuery(query: string): boolean {
   const [holds, setHolds] = useState(() => window.matchMedia(query).matches);
   useEffect(() => {

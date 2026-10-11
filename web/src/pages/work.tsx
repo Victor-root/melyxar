@@ -27,6 +27,7 @@ import { TrailerDialog } from "../components/trailer";
 import { Row, RowHead } from "../components/row";
 import { useDecodedAhead } from "../decoded-ahead";
 import { useFittedText } from "../fitting";
+import { STACKED, useMediaQuery } from "../media-query";
 import {
   CollectionIcon,
   FilmIcon,
@@ -324,12 +325,11 @@ function TopOfTheWork({
 
   /* Measured again whenever what stands above the synopsis changes: the
      tracks arriving, the bar of how far in. */
-  const fitted = useFittedText([
-    work.id,
-    work.overview,
-    screen.plan !== null,
-    screen.resumeFrom !== null,
-  ]);
+  const stacked = useMediaQuery(STACKED);
+  const fitted = useFittedText(
+    [work.id, work.overview, screen.plan !== null, screen.resumeFrom !== null],
+    !stacked,
+  );
 
   const facts = [
     whenItCameOut(work, language, t),

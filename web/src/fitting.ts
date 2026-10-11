@@ -69,9 +69,10 @@ export interface Fitted {
 /**
  * Fits a text into the top of a page, measured again from the start whenever
  * the window or anything in `shape` changes: whatever stands above the text
- * and takes its room.
+ * and takes its room. Off, the text is shown whole and nothing is offered to
+ * cut it.
  */
-export function useFittedText(shape: unknown[]): Fitted {
+export function useFittedText(shape: unknown[], enabled = true): Fitted {
   const ruler = useRef<HTMLDivElement>(null);
   const column = useRef<HTMLDivElement>(null);
   const text = useRef<HTMLParagraphElement>(null);
@@ -82,13 +83,13 @@ export function useFittedText(shape: unknown[]): Fitted {
   useLayoutEffect(() => {
     setFit(AS_IT_IS);
     setOpen(false);
-  }, [measured, ...shape]);
+  }, [measured, enabled, ...shape]);
 
   useLayoutEffect(() => {
     const room = ruler.current;
     const all = column.current;
     const words = text.current;
-    if (open || !room || !all || !words) {
+    if (!enabled || open || !room || !all || !words) {
       return;
     }
     const rest = all.offsetHeight - words.offsetHeight;
