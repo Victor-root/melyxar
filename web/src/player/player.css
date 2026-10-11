@@ -1718,6 +1718,75 @@
 }
 
 /* ---------------------------------------------------------------------------
+ * A phone held upright
+ * ------------------------------------------------------------------------ */
+
+/* Everything drawn smaller, since what stood in one row on a wide screen has
+   to stand in two: the top says what is on in a line or two beside its mark,
+   and the controls are the transport on one row and everything else under it,
+   each spread across the whole width. The volume is the phone's own. */
+@media (max-width: 720px) and (orientation: portrait) {
+  :root {
+    --player-button: 38px;
+    --player-button-ring: 5px;
+    --player-play-button: 52px;
+    --player-title: 14px;
+  }
+
+  .player-top {
+    gap: 8px;
+    padding-bottom: 56px;
+    padding-left: calc(8px + var(--safe-left));
+  }
+
+  .player-zone-top-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .player-mark {
+    max-height: 30px;
+    max-width: 38vw;
+  }
+
+  .player-mark-the-server {
+    max-height: 24px;
+  }
+
+  .player-title {
+    min-width: 0;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .player-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  .player-zone-bottom-left {
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .player-zone-bottom-right {
+    margin-left: 0;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .player-sound,
+  .player-separator {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * The drawer: what is being watched, without leaving it
  * ------------------------------------------------------------------------ */
 
