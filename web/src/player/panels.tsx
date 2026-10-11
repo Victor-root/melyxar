@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useState } from "react";
+import { BottomSheet } from "../components/bottom-sheet";
+import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { WideGamutChoice } from "../api";
 import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from "./appearance";
 import { AUTOMATIC, CODECS, codecName } from "./codec";
@@ -227,6 +229,7 @@ interface Sheet {
  */
 export function Panels({ surroundings }: { surroundings: Surroundings }) {
   const { playback, onPanel } = surroundings;
+  const upright = useMediaQuery(PHONE_UPRIGHT);
   const plan = playback.plan;
   if (!plan) {
     return null;
@@ -236,6 +239,22 @@ export function Panels({ surroundings }: { surroundings: Surroundings }) {
   const sheet = sheetFor(surroundings, plan, shut);
   if (!sheet) {
     return null;
+  }
+
+  /* A phone held upright has no room beside a button for a list: it comes up
+     from the foot of the screen, drawn inside the player so that it shows
+     when the player fills the screen. */
+  if (upright) {
+    return (
+      <BottomSheet
+        title={sheet.title}
+        onClose={shut}
+        into={surroundings.stage.current ?? undefined}
+        onBack={sheet.from && (() => onPanel(sheet.from ?? null))}
+      >
+        {sheet.lines}
+      </BottomSheet>
+    );
   }
 
   return (

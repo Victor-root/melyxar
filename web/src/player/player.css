@@ -2052,6 +2052,13 @@
   right: 0;
 }
 
+/* A finger runs the row along itself: the arrows are for a pointer. */
+@media (pointer: coarse) {
+  .player-drawer-along {
+    display: none;
+  }
+}
+
 /* Where the film changes scene ------------------------------------------- */
 
 .player-drawer-chapter,

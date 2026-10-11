@@ -17,6 +17,8 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { BackIcon } from "../icons";
+import { useSettings } from "../settings";
 import { useBackClosesIt } from "./back-closes";
 import { useHoldsTheScreen } from "./hold-the-screen";
 import { ScrollBar } from "./scrollbar";
@@ -35,6 +37,7 @@ export function BottomSheet({
   onClose,
   className,
   into,
+  onBack,
   children,
 }: {
   title: string;
@@ -44,10 +47,14 @@ export function BottomSheet({
   /** Where it is drawn, when not at the end of the page: a sheet opened while
    *  something else fills the screen has to be drawn inside that. */
   into?: Element;
+  /** Draws a way back at the left of the head, for a sheet that was reached
+   *  from another and goes back to it. */
+  onBack?: () => void;
   /** What is in it, or a function of the way to shut it, for a line that
    *  shuts the sheet and then does what it was pressed for. */
   children: ReactNode | ((shut: (then?: () => void) => void) => ReactNode);
 }) {
+  const { t } = useSettings();
   const over = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -110,47 +117,54 @@ export function BottomSheet({
         aria-label={title}
         tabIndex={-1}
       >
-        <div
-          className="sheet-grip"
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            const element = sheet.current;
-            if (element) {
-              element.style.animation = "none";
-              element.style.transition = "none";
-            }
-            pull.current = { from: event.clientY, at: event.timeStamp };
-          }}
-          onPointerMove={(event) => {
-            const started = pull.current;
-            if (started && sheet.current) {
-              sheet.current.style.transform = `translateY(${Math.max(0, event.clientY - started.from)}px)`;
-            }
-          }}
-          onPointerUp={(event) => {
-            const started = pull.current;
-            const element = sheet.current;
-            pull.current = null;
-            if (!started || !element) {
-              return;
-            }
-            const down = Math.max(0, event.clientY - started.from);
-            const speed = down / Math.max(1, event.timeStamp - started.at);
-            if (down > Math.min(PULL_TO_CLOSE, element.offsetHeight * PULL_SHARE) || speed > FLICK_SPEED) {
-              shut();
-            } else {
-              settle(element, "translateY(0)");
-            }
-          }}
-          onPointerCancel={() => {
-            pull.current = null;
-            if (sheet.current) {
-              settle(sheet.current, "translateY(0)");
-            }
-          }}
-        >
-          <span className="sheet-handle" aria-hidden="true" />
-          <h2 className="sheet-title">{title}</h2>
+        <div className="sheet-head">
+          <div
+            className="sheet-grip"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              const element = sheet.current;
+              if (element) {
+                element.style.animation = "none";
+                element.style.transition = "none";
+              }
+              pull.current = { from: event.clientY, at: event.timeStamp };
+            }}
+            onPointerMove={(event) => {
+              const started = pull.current;
+              if (started && sheet.current) {
+                sheet.current.style.transform = `translateY(${Math.max(0, event.clientY - started.from)}px)`;
+              }
+            }}
+            onPointerUp={(event) => {
+              const started = pull.current;
+              const element = sheet.current;
+              pull.current = null;
+              if (!started || !element) {
+                return;
+              }
+              const down = Math.max(0, event.clientY - started.from);
+              const speed = down / Math.max(1, event.timeStamp - started.at);
+              if (down > Math.min(PULL_TO_CLOSE, element.offsetHeight * PULL_SHARE) || speed > FLICK_SPEED) {
+                shut();
+              } else {
+                settle(element, "translateY(0)");
+              }
+            }}
+            onPointerCancel={() => {
+              pull.current = null;
+              if (sheet.current) {
+                settle(sheet.current, "translateY(0)");
+              }
+            }}
+          >
+            <span className="sheet-handle" aria-hidden="true" />
+            <h2 className="sheet-title">{title}</h2>
+          </div>
+          {onBack && (
+            <button type="button" className="sheet-back" onClick={onBack} aria-label={t("modal.back")}>
+              <BackIcon size={22} />
+            </button>
+          )}
         </div>
         <div className="sheet-scroll">
           <div className="sheet-body" ref={body}>
