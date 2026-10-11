@@ -844,12 +844,16 @@ install_packages() {
     step "$(tr_msg step_node_distribution)" apt-get install -y --no-install-recommends nodejs npm
   fi
 
+  # Where rustup puts cargo, which no shell has in its path unless it was set
+  # up to: asked of the path alone, a Rust installed on an earlier run looked
+  # absent from any other shell, and was downloaded and installed again each
+  # time.
+  export PATH="/root/.cargo/bin:${PATH}"
   if command -v cargo >/dev/null 2>&1; then
     success "$(tr_fmt rust_present "$(cargo --version)")"
   else
     info "$(tr_msg rust_long)"
     step "$(tr_msg step_rust)" install_rust
-    export PATH="/root/.cargo/bin:${PATH}"
   fi
 }
 
