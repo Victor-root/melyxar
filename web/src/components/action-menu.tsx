@@ -38,6 +38,7 @@ export function ActionMenu({
   openedBy,
   onClose,
   into,
+  asASheet,
 }: {
   /** What the menu is about, which a sheet says at its head. */
   title: string;
@@ -53,8 +54,12 @@ export function ActionMenu({
   onClose: () => void;
   /** Where a sheet is drawn, when not at the end of the page. */
   into?: Element;
+  /** A sheet whatever the width, for a place that is a phone's without being
+   *  narrow, such as the player held sideways. */
+  asASheet?: boolean;
 }) {
-  const onAPhone = useMediaQuery(PHONE);
+  const narrow = useMediaQuery(PHONE);
+  const onAPhone = narrow || asASheet === true;
   const lines = groups.filter((group) => group.length > 0);
   if (onAPhone) {
     return (

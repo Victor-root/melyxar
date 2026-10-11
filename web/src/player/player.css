@@ -2515,6 +2515,10 @@
     --player-button-ring: 5px;
     --player-play-button: 48px;
     --player-title: 15px;
+    /* The cards of the drawer small enough that a card, its name and its time
+       all stand in the room the controls leave. */
+    --player-drawer-card: 168px;
+    --player-drawer-face: 100px;
   }
 
   .player-top {
@@ -2562,5 +2566,30 @@
 
   .player-drawer-fold {
     position: relative;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Touched rather than pointed at
+ * ------------------------------------------------------------------------ */
+
+/* A finger leaves no hand hovering to say which button is next, and a frame
+   left round the one that was pressed says nothing a lit icon does not: the
+   open one is lit in the accent, as it is everywhere, without a box round it
+   or a label stuck over it. */
+@media (pointer: coarse), (max-width: 720px) and (orientation: portrait), (max-height: 500px) and (orientation: landscape) {
+  .player-button:focus-visible {
+    outline: none;
+  }
+
+  .player-button-open::after,
+  .player-button:hover:not(:disabled)::after,
+  .player-button:focus-visible:not(:disabled)::after {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .player-button[aria-label]::before {
+    display: none;
   }
 }
