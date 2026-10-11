@@ -1217,7 +1217,7 @@
 /* Room at the foot of every page while the bar is there, so its end is
    never under the bar; and the words said in the corner rise above it. */
 :root {
-  --music-bar-height: 100px;
+  --music-bar-height: calc(100px + var(--safe-bottom));
 }
 
 /* The page ends where the bar begins, so the bar is a part of the page: it
@@ -1272,7 +1272,9 @@
      swells under a hand, has the room of its own line and nothing over it. */
   justify-content: flex-start;
   height: var(--music-bar-height);
-  padding: 0 var(--player-inset) 6px;
+  /* Its own room at the foot of the screen goes over the navigation bar of an
+     installed app drawn edge to edge, so the bar's content stays above it. */
+  padding: 0 var(--player-inset) calc(6px + var(--safe-bottom));
   color: var(--text);
   animation: music-bar-rise 180ms var(--ease) backwards;
 }
@@ -1854,7 +1856,7 @@
 
 @media (max-width: 760px) {
   :root {
-    --music-bar-height: 84px;
+    --music-bar-height: calc(84px + var(--safe-bottom));
   }
 
   .music-bar-dock {

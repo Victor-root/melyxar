@@ -135,7 +135,12 @@
      around the pieces below is the air that tells them from the picture they
      float on, and there has to be enough of it that they read as standing off
      the top edge rather than stuck to it. */
-  --header-height: 96px;
+  --header-height: calc(96px + var(--safe-top));
+  /* The room the system draws over the top and the bottom of an installed app
+     that is drawn edge to edge: the status bar and the navigation bar. Zero
+     everywhere else, so nothing outside that mode moves. */
+  --safe-top: 0px;
+  --safe-bottom: 0px;
 
   /* The bar is not a bar: it is a handful of glass pieces floating at the top
      of the screen, and this is how tall each of them stands inside the band
@@ -439,6 +444,13 @@ button {
 img {
   display: block;
   max-width: 100%;
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }
 
 /*

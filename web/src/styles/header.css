@@ -21,6 +21,8 @@
   left: 0;
   right: 0;
   z-index: 20;
+  /* Below the status bar of an installed app drawn edge to edge; nothing otherwise. */
+  padding-top: var(--safe-top);
   pointer-events: none;
   transition: transform var(--calm) var(--ease);
 }
@@ -45,7 +47,9 @@
    there is no middle any more, because what used to stand in it is now a
    magnifier at the far end that grows a field when it is asked for. */
 .header-inner {
-  min-height: var(--header-height);
+  /* The whole band is the header height, and the room the status bar takes is
+     already the top of it. */
+  min-height: calc(var(--header-height) - var(--safe-top));
   padding: 0 var(--gutter);
   display: flex;
   align-items: center;
