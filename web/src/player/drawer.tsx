@@ -18,7 +18,7 @@ import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
 import { ScrollBar } from "../components/scrollbar";
 import { SeenMark } from "../components/seen";
-import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
+import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import { chapterAt } from "./chapters";
 import { asClock } from "../clock";
 import type { Playback } from "./engine";
@@ -168,6 +168,8 @@ export function Drawer({
   const panel = useRef<HTMLDivElement>(null);
   const sizes = useSizes(self);
   const upright = useMediaQuery(PHONE_UPRIGHT);
+  const sideways = useMediaQuery(PHONE_SIDEWAYS);
+  const onAPhone = upright || sideways;
   return (
     <div className="player-drawer-hold" data-open={open ? "yes" : "no"} ref={self}>
       {/* Bare on purpose: this is what folds, and a box that folds to nothing
@@ -197,7 +199,7 @@ export function Drawer({
             />
           )}
         </div>
-        {upright && <ScrollBar holder={panel} inside />}
+        {onAPhone && <ScrollBar holder={panel} inside />}
       </div>
     </div>
   );

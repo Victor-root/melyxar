@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { BottomSheet } from "../components/bottom-sheet";
-import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
+import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { WideGamutChoice } from "../api";
 import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from "./appearance";
 import { AUTOMATIC, CODECS, codecName } from "./codec";
@@ -230,6 +230,8 @@ interface Sheet {
 export function Panels({ surroundings }: { surroundings: Surroundings }) {
   const { playback, onPanel } = surroundings;
   const upright = useMediaQuery(PHONE_UPRIGHT);
+  const sideways = useMediaQuery(PHONE_SIDEWAYS);
+  const onAPhone = upright || sideways;
   const plan = playback.plan;
   if (!plan) {
     return null;
@@ -241,10 +243,10 @@ export function Panels({ surroundings }: { surroundings: Surroundings }) {
     return null;
   }
 
-  /* A phone held upright has no room beside a button for a list: it comes up
-     from the foot of the screen, drawn inside the player so that it shows
-     when the player fills the screen. */
-  if (upright) {
+  /* A phone has no room beside a button for a list: it comes up from the
+     foot of the screen, drawn inside the player so that it shows when the
+     player fills the screen. */
+  if (onAPhone) {
     return (
       <BottomSheet
         title={sheet.title}
