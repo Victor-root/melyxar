@@ -12,7 +12,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PHONE, useMediaQuery } from "../media-query";
+import { PHONE, PHONE_SIDEWAYS, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { BottomSheet } from "./bottom-sheet";
 
@@ -59,7 +59,8 @@ export function ActionMenu({
   asASheet?: boolean;
 }) {
   const narrow = useMediaQuery(PHONE);
-  const onAPhone = narrow || asASheet === true;
+  const sideways = useMediaQuery(PHONE_SIDEWAYS);
+  const onAPhone = narrow || sideways || asASheet === true;
   const lines = groups.filter((group) => group.length > 0);
   if (onAPhone) {
     return (

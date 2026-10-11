@@ -146,7 +146,7 @@
    room from the edge of the screen rather than from the page beside it: the
    gutter is air, and the page is what is being read. */
 .header-start-back {
-  margin-left: min(0px, var(--gap) - var(--gutter));
+  margin-left: min(0px, var(--gap) + var(--safe-left) - var(--gutter));
 }
 
 /* The name of the server, and the way back to its front page: there is no
