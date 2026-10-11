@@ -38,7 +38,9 @@ export function BottomSheet({
   onClose: () => void;
   /** What kind of sheet it is, for one shaped differently from the rest. */
   className?: string;
-  children: ReactNode;
+  /** What is in it, or a function of the way to shut it, for a line that
+   *  shuts the sheet once it has done what it was pressed for. */
+  children: ReactNode | ((shut: () => void) => ReactNode);
 }) {
   const over = useRef<HTMLDivElement>(null);
   const sheet = useRef<HTMLDivElement>(null);
@@ -131,7 +133,7 @@ export function BottomSheet({
           <span className="sheet-handle" aria-hidden="true" />
           <h2 className="sheet-title">{title}</h2>
         </div>
-        <div className="sheet-body">{children}</div>
+        <div className="sheet-body">{typeof children === "function" ? children(shut) : children}</div>
       </div>
     </div>,
     document.body,

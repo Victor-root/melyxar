@@ -8,9 +8,10 @@
  * buttons, not a thousand menus.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { ActionMenu } from "../components/action-menu";
+import type { MenuEntry } from "../components/action-menu";
 import { MusicIcon, PlayAllIcon, PlaylistIcon, ProfileIcon } from "../icons";
 import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
@@ -22,15 +23,7 @@ import { QueueIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
 
 /** A line a screen adds to the menu. */
-export interface MenuLine {
-  key: string;
-  said: string;
-  mark: ReactNode;
-  act: () => void;
-}
-
-/** How far from the edge of the window a menu is allowed to sit. */
-const OFF_THE_EDGE = 8;
+export type MenuLine = MenuEntry & { act: () => void };
 
 /** What can be done with songs beyond pressing them, in the order a menu and
  *  a line of a list both offer them, and the windows that adding to a
@@ -113,94 +106,16 @@ export function SongMenuButton({
       >
         <span aria-hidden="true">⋯</span>
       </button>
-      {from && <SongMenu lines={lines} from={from} openedBy={button.current} onClose={close} />}
+      {from && (
+        <ActionMenu
+          title={songs.length === 1 ? songs[0].title : label}
+          groups={[lines]}
+          from={from}
+          openedBy={button.current}
+          onClose={close}
+        />
+      )}
       {dialog}
     </>
-  );
-}
-
-function SongMenu({
-  lines,
-  from,
-  openedBy,
-  onClose,
-}: {
-  lines: MenuLine[];
-  from: DOMRect;
-  openedBy: HTMLElement | null;
-  onClose: () => void;
-}) {
-  const holder = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const menu = holder.current;
-    if (!menu) {
-      return;
-    }
-    const { width, height } = menu.getBoundingClientRect();
-    const under = from.bottom + 6;
-    const top =
-      under + height > window.innerHeight - OFF_THE_EDGE ? Math.max(OFF_THE_EDGE, from.top - height - 6) : under;
-    const left = Math.min(Math.max(OFF_THE_EDGE, from.right - width), window.innerWidth - width - OFF_THE_EDGE);
-    setAt({ top, left });
-  }, [from]);
-
-  useEffect(() => {
-    const elsewhere = (event: MouseEvent) => {
-      const where = event.target as Node;
-      if (!holder.current?.contains(where) && !openedBy?.contains(where)) {
-        onClose();
-      }
-    };
-    const away = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    const moved = (event: Event) => {
-      if (!holder.current?.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", elsewhere);
-    document.addEventListener("keydown", away);
-    window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("mousedown", elsewhere);
-      document.removeEventListener("keydown", away);
-      window.removeEventListener("scroll", moved, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose, openedBy]);
-
-  return createPortal(
-    <div
-      className="header-menu-list card-menu"
-      ref={holder}
-      role="menu"
-      style={{ top: at?.top ?? from.bottom + 6, left: at?.left ?? from.left, visibility: at ? "visible" : "hidden" }}
-    >
-      {lines.map((line) => (
-        <button
-          key={line.key}
-          type="button"
-          role="menuitem"
-          className="header-menu-line"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            line.act();
-            onClose();
-          }}
-        >
-          {line.mark}
-          {line.said}
-        </button>
-      ))}
-    </div>,
-    document.body,
   );
 }
