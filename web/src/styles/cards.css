@@ -893,7 +893,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 }
 
 .letters {
-  --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide));
+  --letters-room: calc(100dvh - var(--header-height) - 2 * var(--gap-wide) - var(--safe-bottom));
   --letter: clamp(15px, calc((var(--letters-room) - 12px) / var(--letters)), 26px);
   flex: 0 0 auto;
   display: flex;
