@@ -671,7 +671,7 @@ button.seen-mark:not(.seen-mark-on):hover {
 .selection-bar {
   position: fixed;
   left: 50%;
-  bottom: var(--gap-wide);
+  bottom: calc(var(--gap-wide) + var(--safe-bottom));
   z-index: 30;
   transform: translateX(-50%);
   display: flex;

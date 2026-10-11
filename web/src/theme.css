@@ -129,7 +129,7 @@
      grows instead is the gutter: a little air at the edges on a laptop, more
      of it on a twenty eight inch panel, and the rows fill everything
      between. */
-  --gutter: clamp(14px, 2.2vw, 56px);
+  --gutter: calc(clamp(14px, 2.2vw, 56px) + max(var(--safe-left), var(--safe-right)));
   /* The room the bar takes at the top of the screen: not the height of
      anything drawn in it, but of the band it is drawn in. What is left over
      around the pieces below is the air that tells them from the picture they
@@ -141,6 +141,8 @@
      everywhere else, so nothing outside that mode moves. */
   --safe-top: 0px;
   --safe-bottom: 0px;
+  --safe-left: 0px;
+  --safe-right: 0px;
 
   /* The bar is not a bar: it is a handful of glass pieces floating at the top
      of the screen, and this is how tall each of them stands inside the band
@@ -450,6 +452,8 @@ img {
   :root {
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
   }
 }
 

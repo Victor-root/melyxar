@@ -14,8 +14,8 @@
    same. */
 .debug-layer {
   position: fixed;
-  right: 0;
-  bottom: 0;
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
   z-index: 1000;
   pointer-events: none;
 }

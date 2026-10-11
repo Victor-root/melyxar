@@ -1243,6 +1243,11 @@
   -webkit-mask-image: var(--music-bar-fade);
 }
 
+/* The bar takes the room at the foot, and the page fades into it. */
+:root[data-music-bar] .shell-scroll {
+  padding-bottom: 0;
+}
+
 /* The lists listened to run down to the bar and fade into it like the rest of
    the page, instead of ending sharply above the fade. */
 :root[data-music-bar] .page:has(.music-listened) {
@@ -1274,7 +1279,7 @@
   height: var(--music-bar-height);
   /* Its own room at the foot of the screen goes over the navigation bar of an
      installed app drawn edge to edge, so the bar's content stays above it. */
-  padding: 0 var(--player-inset) calc(6px + var(--safe-bottom));
+  padding: 0 calc(var(--player-inset) + var(--safe-right)) calc(6px + var(--safe-bottom)) calc(var(--player-inset) + var(--safe-left));
   color: var(--text);
   animation: music-bar-rise 180ms var(--ease) backwards;
 }
@@ -1353,8 +1358,8 @@
   opacity: 0.6;
   filter: blur(10px);
   pointer-events: none;
-  mask-image: linear-gradient(to top, #000 50%, rgb(0 0 0 / 0.3));
-  -webkit-mask-image: linear-gradient(to top, #000 50%, rgb(0 0 0 / 0.3));
+  mask-image: linear-gradient(to top, #000 45%, transparent);
+  -webkit-mask-image: linear-gradient(to top, #000 45%, transparent);
 }
 
 .music-bar-now .music-now-cover {
@@ -1459,6 +1464,9 @@
   z-index: 50;
   display: flex;
   flex-direction: column;
+  /* Its own header sits under the status bar of an installed app drawn edge to
+     edge; the page behind it runs on up behind the bar. */
+  padding-top: var(--safe-top);
   background: var(--surface-deep);
   color: var(--text);
 }
@@ -1922,9 +1930,11 @@
   }
 
   /* What is playing is centred between the line and the foot of the bar, and
-     as far from the left edge as from either. */
+     as far from the left edge as from either. The foot stops at the navigation
+     bar of an installed app drawn edge to edge: the room under it is left
+     empty, so the line and what is playing stay together. */
   .music-bar-dock {
-    padding-bottom: 0;
+    padding-bottom: var(--safe-bottom);
   }
 
   .music-bar-dock .music-bar-row {
@@ -2003,7 +2013,7 @@
     bottom: 0;
     left: 0;
     z-index: 2;
-    padding: 8px 0 14px;
+    padding: 8px 0 calc(14px + var(--safe-bottom));
     background: none;
     isolation: isolate;
   }
