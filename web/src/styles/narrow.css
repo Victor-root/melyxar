@@ -89,7 +89,7 @@
     /* What is kept round a sliding piece of glass for its glow. */
     --glass-glow-room: 30px;
     --header-edge: 12px;
-    --header-height: calc(var(--header-piece) + 2 * var(--header-edge));
+    --header-height: calc(var(--header-piece) + 2 * var(--header-edge) + var(--safe-top));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
     --hero-height: clamp(360px, 56dvh, 480px);
