@@ -48,6 +48,25 @@
   will-change: transform;
 }
 
+.sheet-head {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+/* The way back to the sheet this one was reached from, beside the title and
+   not in the part held to pull the sheet down. */
+.sheet-back {
+  position: absolute;
+  bottom: 0;
+  left: var(--gap);
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+}
+
 /* What is held to pull the sheet down: the handle and the title, which a
    finger on the sheet's own body never mistakes for a pull. */
 .sheet-grip {
@@ -96,7 +115,8 @@
 
 /* The lines of a menu, as tall as a thumb needs and wrapping rather than
    cutting what they say. */
-.sheet-menu .header-menu-line {
+.sheet-menu .header-menu-line,
+.sheet .player-menu-line {
   padding: 14px 12px;
   font-size: 16px;
   white-space: normal;
