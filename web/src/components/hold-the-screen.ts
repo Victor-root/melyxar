@@ -5,6 +5,13 @@
 
 import { useEffect, useRef } from "react";
 
+/** How many panels hold the page still right now, and what its scrolling was
+ *  before the first of them. Counted rather than put back as each one found
+ *  it: a sheet that is still sliding away when the panel it opened arrives
+ *  would otherwise unlock the page under that panel. */
+let holding = 0;
+let scrollingBefore = "";
+
 export function useHoldsTheScreen(panel: React.RefObject<HTMLElement | null>, onClose: () => void) {
   /* Read at the moment of use: a parent that draws again, at every letter
      typed in a field, hands a new function each time, and an effect that
@@ -20,15 +27,19 @@ export function useHoldsTheScreen(panel: React.RefObject<HTMLElement | null>, on
       }
     };
     document.addEventListener("keydown", shut);
-    /* The page underneath holds still. Put back as it was rather than set to
-       a value: another panel may have set it first, and two panels closing
-       one after the other would otherwise leave the page unable to scroll. */
-    const before = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    /* The page underneath holds still until the last panel is gone. */
+    if (holding === 0) {
+      scrollingBefore = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
+    holding += 1;
     panel.current?.focus();
     return () => {
       document.removeEventListener("keydown", shut);
-      document.body.style.overflow = before;
+      holding -= 1;
+      if (holding === 0) {
+        document.body.style.overflow = scrollingBefore;
+      }
     };
   }, [panel]);
 }

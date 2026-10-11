@@ -18,9 +18,8 @@
  * page, which is also what keeps it above the cards after it.
  */
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
-import { createPortal } from "react-dom";
 import { api } from "../api";
 import type { Card } from "../api";
 import { useAccount } from "../account";
@@ -29,6 +28,8 @@ import { useMarks } from "../marks";
 import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { isCatalogued, playsOnItsOwn } from "../works";
+import { ActionMenu } from "./action-menu";
+import type { MenuEntry } from "./action-menu";
 import { DeleteDialog } from "./deletion";
 import { IdentifyDialog } from "./identify";
 import { DetailsDialog } from "./details";
@@ -64,22 +65,11 @@ import {
 /** How big the shape at the left of a line is. */
 const SHAPE = 17;
 
-/** One line of the menu. */
-interface Entry {
-  key: string;
-  /** Its shape, which is what the eye finds before the words are read. */
-  mark: React.ReactNode;
+/** One line of the menu, whose words are the card's own, said by key. */
+type Entry = Omit<MenuEntry, "said"> & {
   /** Left out entirely when false: a right nobody has is not a grey line. */
   allowed?: boolean;
-  /** Greyed, and saying when under the pointer, where there is no engine
-      behind it yet. Written beside every such line it became a second column
-      of the same three words repeated down the menu. */
-  later?: boolean;
-  act?: () => void;
-}
-
-/** How far from the edge of the window a menu is allowed to sit. */
-const OFF_THE_EDGE = 8;
+};
 
 /** What a work's menu is opened from, and what it draws. */
 export interface WorkMenu {
@@ -322,67 +312,6 @@ export function CardMenu({
   const { account } = useAccount();
   const marks = useMarks();
   const selection = useSelection();
-  const holder = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
-
-  // Placed once it has been drawn, since where it fits depends on how tall it
-  // came out: above the button when there is no room under it, and pulled
-  // back from the edge rather than hanging off it.
-  useLayoutEffect(() => {
-    const menu = holder.current;
-    if (!menu) {
-      return;
-    }
-    const { width, height } = menu.getBoundingClientRect();
-    const under = from.bottom + 6;
-    const top =
-      under + height > window.innerHeight - OFF_THE_EDGE
-        ? Math.max(OFF_THE_EDGE, from.top - height - 6)
-        : under;
-    const left = Math.min(
-      Math.max(OFF_THE_EDGE, from.right - width),
-      window.innerWidth - width - OFF_THE_EDGE,
-    );
-    setAt({ top, left });
-  }, [from]);
-
-  useEffect(() => {
-    const elsewhere = (event: MouseEvent) => {
-      const where = event.target as Node;
-      if (!holder.current?.contains(where) && !openedBy?.contains(where)) {
-        onClose();
-      }
-    };
-    const away = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        // Shut the menu and nothing else: the page under it answers to the
-        // same key by going back.
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    /* Drawn at a place rather than next to the button, so a page that moves
-       under it leaves it behind: it closes instead of floating. Its own
-       scrolling is not the page moving, though, and watching every scroll in
-       the document made a menu too tall for the window close the moment
-       anybody reached for what was below the fold. */
-    const moved = (event: Event) => {
-      if (!holder.current?.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", elsewhere);
-    document.addEventListener("keydown", away);
-    window.addEventListener("scroll", moved, true);
-    window.addEventListener("resize", onClose);
-    return () => {
-      document.removeEventListener("mousedown", elsewhere);
-      document.removeEventListener("keydown", away);
-      window.removeEventListener("scroll", moved, true);
-      window.removeEventListener("resize", onClose);
-    };
-  }, [onClose, openedBy]);
-
   const seen = marks.seenOf(card);
   const favourite = marks.favouriteOf(card);
   const later = marks.watchLaterOf(card);
@@ -530,52 +459,17 @@ export function CardMenu({
     ],
   ];
 
-  return createPortal(
-    <div
-      className="header-menu-list card-menu"
-      ref={holder}
-      role="menu"
-      style={{
-        top: at?.top ?? from.bottom + 6,
-        left: at?.left ?? from.left,
-        // Drawn once it knows where it goes, so nobody sees it land.
-        visibility: at ? "visible" : "hidden",
-      }}
-    >
-      {groups
-        .map((group) => group.filter((entry) => entry.allowed !== false))
-        .filter((group) => group.length > 0)
-        .map((group, at) => (
-          <Fragment key={group[0].key}>
-            {at > 0 && <div className="header-menu-divider" aria-hidden="true" />}
-            {group.map((entry) => (
-              <button
-                key={entry.key}
-                type="button"
-                role="menuitem"
-                className={`header-menu-line${entry.later ? " header-menu-later" : ""}`}
-                /* Said rather than disabled outright: a disabled button takes no
-                   pointer, so the very tooltip that explains why it is grey
-                   never appears. */
-                aria-disabled={entry.later}
-                title={entry.later ? t("nav.later") : undefined}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (entry.later) {
-                    return;
-                  }
-                  entry.act?.();
-                  onClose();
-                }}
-              >
-                {entry.mark}
-                {t(`card.menu.${entry.key}`)}
-              </button>
-            ))}
-          </Fragment>
-        ))}
-    </div>,
-    document.body,
+  return (
+    <ActionMenu
+      title={card.title}
+      groups={groups.map((group) =>
+        group
+          .filter((entry) => entry.allowed !== false)
+          .map((entry) => ({ ...entry, said: t(`card.menu.${entry.key}`) })),
+      )}
+      from={from}
+      openedBy={openedBy}
+      onClose={onClose}
+    />
   );
 }
