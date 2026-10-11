@@ -253,6 +253,7 @@ export function Panels({ surroundings }: { surroundings: Surroundings }) {
         onClose={shut}
         into={surroundings.stage.current ?? undefined}
         onBack={sheet.from && (() => onPanel(sheet.from ?? null))}
+        ownsHistory={false}
       >
         {sheet.lines}
       </BottomSheet>

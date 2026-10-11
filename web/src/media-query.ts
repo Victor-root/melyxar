@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 /** A phone, which is where the style sheet for narrow screens takes over. */
 export const PHONE = "(max-width: 600px)";
 
+/** A screen touched with a finger, of any size. */
+export const COARSE = "(pointer: coarse)";
+
 /** A phone held upright, which is where the player gathers its less used
  *  buttons into a menu. */
 export const PHONE_UPRIGHT = "(max-width: 720px) and (orientation: portrait)";

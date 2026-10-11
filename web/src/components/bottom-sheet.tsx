@@ -38,6 +38,7 @@ export function BottomSheet({
   className,
   into,
   onBack,
+  ownsHistory = true,
   children,
 }: {
   title: string;
@@ -50,6 +51,10 @@ export function BottomSheet({
   /** Draws a way back at the left of the head, for a sheet that was reached
    *  from another and goes back to it. */
   onBack?: () => void;
+  /** Whether the sheet puts an entry of its own into the history for the back
+   *  key to land on. Left to whatever holds the sheet when that already has
+   *  one for it. */
+  ownsHistory?: boolean;
   /** What is in it, or a function of the way to shut it, for a line that
    *  shuts the sheet and then does what it was pressed for. */
   children: ReactNode | ((shut: (then?: () => void) => void) => ReactNode);
@@ -82,7 +87,7 @@ export function BottomSheet({
   /* The back key of a phone shuts it, and any other way of shutting it takes
      its entry out of the history first, then does what a line pressed was
      for, if there was one. */
-  const leaveHistory = useBackClosesIt(slideAway);
+  const leaveHistory = useBackClosesIt(slideAway, ownsHistory);
   const shut = (then?: () => void) => {
     if (leaving.current) {
       return;

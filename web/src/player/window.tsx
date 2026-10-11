@@ -10,6 +10,8 @@
 import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { useBackClosesIt } from "../components/back-closes";
+import { COARSE, useMediaQuery } from "../media-query";
 import { framed } from "./frame";
 import type { Frame, Hold } from "./frame";
 
@@ -104,6 +106,8 @@ export function PlayerWindow({
   children: ReactNode;
 }) {
   const framing = useFramedByHand();
+  /* The back key of a phone shuts it. */
+  useBackClosesIt(onClose, useMediaQuery(COARSE));
   return (
     <aside
       className={className ? `player-window ${className}` : "player-window"}

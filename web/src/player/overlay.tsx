@@ -60,7 +60,8 @@ import {
 import { GearIcon } from "../icons";
 import { ActionMenu } from "../components/action-menu";
 import type { MenuEntry } from "../components/action-menu";
-import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
+import { useBackClosesIt } from "../components/back-closes";
+import { COARSE, PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { Mark } from "./logo";
 import { captionOf, writtenMoment } from "../readable";
 import { Panels } from "./panels";
@@ -182,6 +183,16 @@ export function Overlay(props: Props) {
   const panelNow = useRef(props.panel);
   panelNow.current = props.panel;
   const stir = useRef<() => void>(() => {});
+  /* The back key of a phone, with a panel open, goes back to the panel it was
+     reached from, and from the first of them shuts it: the film is left only
+     once nothing is open over it. */
+  const touched = useMediaQuery(COARSE);
+  useBackClosesIt(() => {
+    const open = panelNow.current;
+    const above = open?.includes(".") ? (open.split(".")[0] as Panel) : null;
+    props.onPanel(above);
+    return above !== null;
+  }, touched && props.panel !== null);
   /* The sound said down the side of the picture for a moment, when the keys
      change it: the one change a viewer makes without looking at anything,
      and the one they want to see the end of. */
