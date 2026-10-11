@@ -106,6 +106,14 @@
     padding-top: calc(var(--safe-top) - var(--header-lift));
   }
 
+  /* Kept on a layer of its own while it is away, so that coming back only
+     moves it: let go of in between, its glass, rims and glow were all drawn
+     again on the first step of the way back, which a phone shows as a jolt.
+     The tabs of a library, which step aside with it, are kept the same way. */
+  .header {
+    will-change: transform;
+  }
+
   /* A thin line over the page that shows while it moves and goes a moment
      after, in the accent: a thumb has no use for a bar it cannot catch, and
      a bar that stays is a strip of colour down the picture. */
@@ -822,6 +830,7 @@
     box-shadow: none;
     pointer-events: none;
     transition: transform var(--calm) var(--ease);
+    will-change: transform;
   }
 
   /* Rolled out, it is over the whole band, pieces included. */
