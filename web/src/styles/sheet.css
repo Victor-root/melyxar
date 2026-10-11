@@ -25,12 +25,15 @@
 .sheet {
   display: flex;
   flex-direction: column;
-  width: 100%;
+  /* Two points wider than the screen, so that the rim's sides fall off the
+     edges and its line runs unbroken round each corner down to the edge: the
+     rim is what shows exactly the room the sheet takes. */
+  flex: none;
+  width: calc(100% + 2px);
+  margin: 0 -1px;
   max-height: 88dvh;
-  /* The rim is on the top and round the corners only, thinning to nothing
-     down the sides: the sheet runs the whole width of the screen. */
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  border-width: 1px 0 0;
+  border-bottom: 0;
   border-radius: 32px 32px 0 0;
   --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
   background:
