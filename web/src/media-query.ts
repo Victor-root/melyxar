@@ -12,6 +12,9 @@ export const PHONE = "(max-width: 600px)";
  *  buttons into a menu. */
 export const PHONE_UPRIGHT = "(max-width: 720px) and (orientation: portrait)";
 
+/** A phone held sideways, which is short rather than narrow. */
+export const PHONE_SIDEWAYS = "(max-height: 500px) and (orientation: landscape)";
+
 /** Where the title page stacks its poster, facts and actions in one column. */
 export const STACKED = "(max-width: 800px)";
 

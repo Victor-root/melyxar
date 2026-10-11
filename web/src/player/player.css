@@ -2501,3 +2501,66 @@
     margin-top: 6px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * A phone held sideways
+ * ------------------------------------------------------------------------ */
+
+/* Short rather than narrow, so everything is drawn smaller and the controls
+   stand in one row under the bar: the transport at the left, everything else
+   at the right. The volume is the phone's own. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --player-button: 38px;
+    --player-button-ring: 5px;
+    --player-play-button: 48px;
+    --player-title: 15px;
+  }
+
+  .player-top {
+    gap: 8px;
+    padding-top: calc(8px + var(--safe-top));
+    padding-bottom: 40px;
+  }
+
+  .player-bottom {
+    padding-top: 48px;
+    padding-bottom: calc(8px + var(--safe-bottom));
+  }
+
+  .player-mark {
+    max-height: 30px;
+    max-width: 24vw;
+  }
+
+  .player-mark-the-server {
+    max-height: 24px;
+  }
+
+  .player-title {
+    line-height: 1.2;
+  }
+
+  .player-sound,
+  .player-separator,
+  .player-ends {
+    display: none;
+  }
+
+  /* No more height than leaves the controls and the top where they are: what
+     is longer scrolls, under the thin line the pages of a phone draw. */
+  .player-drawer {
+    max-height: calc(100dvh - 190px);
+    padding-block: 8px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .player-drawer::-webkit-scrollbar {
+    display: none;
+  }
+
+  .player-drawer-fold {
+    position: relative;
+  }
+}
