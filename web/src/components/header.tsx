@@ -49,7 +49,6 @@ import { offeredButtons } from "../buttons";
 import { addressOf, find } from "../findable";
 import type { Area, Found } from "../findable";
 import { useSettings } from "../settings";
-import { isSectioned } from "./sectioned";
 import { Face } from "./face";
 import { headroomAt } from "../headroom";
 import { PHONE, useMediaQuery } from "../media-query";
@@ -202,11 +201,7 @@ export function Header({
      carries a search: landing on a page of results with the words hidden
      inside an icon is a page answering a question nobody can see. */
   const [looking, setLooking] = useState(() => (parameters.get("search") ?? "") !== "");
-  /* Held in place on the pages laid out beside a list of sections: the list
-     is pinned under the bar, and a bar that slid away would leave a hole of
-     its own height over it. */
-  const sectioned = isSectioned(location.pathname);
-  const out = useHeadroom(scrolling, (onAPhone ? headerHidesOnPhone : headerHides) && !sectioned);
+  const out = useHeadroom(scrolling, onAPhone ? headerHidesOnPhone : headerHides);
   const field = useRef<HTMLInputElement>(null);
   /* Set by whatever opens the field, so the cursor goes into it once it is
      there: moved into the menu, the field is not drawn at all until then. */

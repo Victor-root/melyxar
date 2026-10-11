@@ -36,11 +36,6 @@ export interface SectionGroup {
   sections: Section[];
 }
 
-/** Whether an address is one of the pages laid out beside a list of sections. */
-export function isSectioned(pathname: string): boolean {
-  return /^\/(admin|settings)(\/|$)/.test(pathname);
-}
-
 const SectionContext = createContext<Section | null>(null);
 
 /** The section a page is drawn in. */
