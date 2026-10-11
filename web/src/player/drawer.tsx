@@ -114,7 +114,16 @@ interface Props {
    *  Absent for anything that is not an episode, which is when that sheet is
    *  never shown at all. */
   onSelectEpisode?: (episode: { id: string; source_id: string | null }) => void;
+  /** Shuts the drawer, for the handle a finger pulls it down by. */
+  onClose: () => void;
 }
+
+/** How far down the handle has to be pulled to shut the drawer, at most, and
+ *  as a share of the drawer's own height when that is less. */
+const PULL_TO_CLOSE = 120;
+const PULL_SHARE = 0.3;
+/** How fast a short pull has to be, in pixels a millisecond, to shut it anyway. */
+const FLICK_SPEED = 0.6;
 
 /** How long a film runs, the way a poster says it rather than in minutes. */
 function asRuntime(minutes: number, t: Props["t"]): string {
@@ -163,19 +172,77 @@ export function Drawer({
   language,
   t,
   onSelectEpisode,
+  onClose,
 }: Props) {
   const self = useRef<HTMLDivElement>(null);
+  const pull = useRef<{ from: number; at: number } | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const sizes = useSizes(self);
   const upright = useMediaQuery(PHONE_UPRIGHT);
   const sideways = useMediaQuery(PHONE_SIDEWAYS);
   const onAPhone = upright || sideways;
+
+  /* Back where it belongs whenever it opens, having been pulled away. */
+  useEffect(() => {
+    if (open && self.current) {
+      self.current.style.translate = "";
+    }
+  }, [open]);
+
+  /* Pulled by its handle: it follows the finger, and goes if it was pulled far
+     enough or fast enough. Written on the element as the finger moves, not
+     through the component, so nothing is drawn again for it. */
+  const grip = {
+    onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      if (self.current) {
+        self.current.style.transition = "none";
+      }
+      pull.current = { from: event.clientY, at: event.timeStamp };
+    },
+    onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
+      const started = pull.current;
+      if (started && self.current) {
+        self.current.style.translate = `0 ${Math.max(0, event.clientY - started.from)}px`;
+      }
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => {
+      const started = pull.current;
+      const element = self.current;
+      pull.current = null;
+      if (!started || !element) {
+        return;
+      }
+      const down = Math.max(0, event.clientY - started.from);
+      const speed = down / Math.max(1, event.timeStamp - started.at);
+      element.style.transition = "";
+      if (down > Math.min(PULL_TO_CLOSE, element.offsetHeight * PULL_SHARE) || speed > FLICK_SPEED) {
+        element.style.translate = "0 100%";
+        onClose();
+      } else {
+        element.style.translate = "0 0";
+      }
+    },
+    onPointerCancel: () => {
+      pull.current = null;
+      if (self.current) {
+        self.current.style.transition = "";
+        self.current.style.translate = "0 0";
+      }
+    },
+  };
+
   return (
     <div className="player-drawer-hold" data-open={open ? "yes" : "no"} ref={self}>
       {/* Bare on purpose: this is what folds, and a box that folds to nothing
           must have nothing of its own, not even a margin. Everything the sheet
           is made of is on the panel inside it. */}
       <div className="player-drawer-fold">
+        {onAPhone && (
+          <div className="player-drawer-grip" aria-hidden="true" {...grip}>
+            <span />
+          </div>
+        )}
         <div
           className="player-drawer"
           role="tabpanel"
