@@ -581,10 +581,12 @@
     text-align: left;
   }
 
-  /* The words sit in the middle now, not down the left, so the picture behind
-     them is not darkened from the left: only the foot of it fades into the page. */
+  /* The words sit in the middle now, so the picture is veiled evenly rather
+     than darkened down the left, and its foot still fades into the page. */
   .work-backdrop::after {
-    background: linear-gradient(to top, var(--surface-deep), transparent 60%);
+    background:
+      linear-gradient(to top, var(--surface-deep), transparent 60%),
+      color-mix(in srgb, var(--surface-deep) 60%, transparent);
   }
 
   /* The file's facts first, its action under them, lined up with the words. */
