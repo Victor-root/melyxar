@@ -60,7 +60,7 @@ import {
 import { GearIcon } from "../icons";
 import { ActionMenu } from "../components/action-menu";
 import type { MenuEntry } from "../components/action-menu";
-import { PHONE_UPRIGHT, useMediaQuery } from "../media-query";
+import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { Mark } from "./logo";
 import { captionOf, writtenMoment } from "../readable";
 import { Panels } from "./panels";
@@ -499,15 +499,16 @@ export interface Surroundings extends Props {
   openFrom: (panel: Panel | null, from?: HTMLElement | null) => void;
 }
 
-/** The buttons a phone held upright puts away in a menu, since the row they
+/** The buttons a phone puts away in a menu, since the row they
  *  stood in has no room for them all. */
 const IN_THE_MENU: Control[] = ["info", "chapters", "cast", "favourite"];
 
 /** One of the places a control can sit, drawn from the arrangement. */
 function Place({ zone, surroundings }: { zone: Zone; surroundings: Surroundings }) {
   const upright = useMediaQuery(PHONE_UPRIGHT);
+  const sideways = useMediaQuery(PHONE_SIDEWAYS);
   const named = surroundings.arrangement[zone] ?? [];
-  const putAway = upright && zone === "bottom_right" ? named.filter((one) => IN_THE_MENU.includes(one)) : [];
+  const putAway = (upright || sideways) && zone === "bottom_right" ? named.filter((one) => IN_THE_MENU.includes(one)) : [];
   return (
     <div className={`player-zone player-zone-${zone.replace("_", "-")}`}>
       {named.map((control) => {
@@ -575,6 +576,7 @@ function MoreMenu({ surroundings }: { surroundings: Surroundings }) {
           openedBy={button.current}
           onClose={close}
           into={stage.current ?? undefined}
+          asASheet
         />
       )}
     </>
