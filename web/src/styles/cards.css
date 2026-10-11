@@ -227,12 +227,12 @@
   }
 }
 
-/* The card of the work the page is about, among the ones around it: ringed
-   in the accent at rest, so it is found without looking for it. */
-.card-here {
-  --card-base-shadow:
-    var(--shadow-card),
-    0 0 0 2px var(--accent);
+/* The card of the work the page is about, among the ones around it: rimmed
+   in the accent at rest, the same rim it wears under the pointer, so it is
+   found without looking for it, and its progress line meets the rim as it
+   does under the pointer. */
+.card-here .card-picture::after {
+  opacity: 1;
 }
 
 .card-picture img {
@@ -738,8 +738,8 @@ button.seen-mark:not(.seen-mark-on):hover {
    how far in it is, drawn as that rim running thicker along the foot, in
    its colour. The dark track under it goes, since the rim itself already
    says where the whole length ends; left in, it stood between the rim and
-   the picture as a strip of its own. The card ringed as the one being
-   watched at rest wears it the same way. */
+   the picture as a strip of its own. The card of the work the page is about
+   wears it the same way at rest. */
 .card:hover .card-progress,
 .card:has(:focus-visible, [aria-expanded="true"]) .card-progress,
 .card-here .card-progress {
