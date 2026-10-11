@@ -8,7 +8,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { scopeToBrowse, searchAddress } from "./header";
+import type { Library } from "../api";
+import { scopeOfPage, scopeToBrowse, searchAddress } from "./header";
 
 describe("searchAddress", () => {
   it("carries the words alone when nothing narrows them", () => {
@@ -39,5 +40,26 @@ describe("scopeToBrowse", () => {
 
   it("narrows by library for a single one, kind left out", () => {
     expect(scopeToBrowse("library:abc123")).toEqual({ library: "abc123" });
+  });
+});
+
+describe("scopeOfPage", () => {
+  const library = (id: string, kind: Library["kind"]) => ({ id, kind }) as Library;
+  const libraries = [library("a", "movies"), library("b", "series"), library("c", "series")];
+
+  it("opens on the settings and the administration on their own pages", () => {
+    expect(scopeOfPage("/settings/profile", libraries)).toBe("area:settings");
+    expect(scopeOfPage("/admin", libraries)).toBe("area:admin");
+  });
+
+  it("opens on the library it is a page of, named as the list names it", () => {
+    expect(scopeOfPage("/library/a", libraries)).toBe("kind:movies");
+    expect(scopeOfPage("/library/c", libraries)).toBe("library:c");
+  });
+
+  it("opens on the whole server anywhere else, or while the libraries are unknown", () => {
+    expect(scopeOfPage("/", libraries)).toBe("");
+    expect(scopeOfPage("/work/a", libraries)).toBe("");
+    expect(scopeOfPage("/library/a", [])).toBe("");
   });
 });
