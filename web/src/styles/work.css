@@ -464,6 +464,15 @@
     flex-direction: column;
   }
 
+  /* Stacked, the column takes the width of the screen and its rows take the
+     width of the column. Left to their own width they grew to fit the longest
+     track name, and ran off the right of the screen; a choice that is too long
+     then shortens itself. */
+  .work-body {
+    width: 100%;
+    align-items: stretch;
+  }
+
   .work-poster {
     width: min(220px, 50vw);
   }
