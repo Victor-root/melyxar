@@ -260,6 +260,11 @@ input[type="radio"]:disabled {
     align-items: stretch;
     gap: var(--gap);
   }
+
+  /* Stacked, the width the words ask for would be read as a height. */
+  .setting-words {
+    flex: none;
+  }
 }
 
 /* A switch: a track, and a knob that crosses it. */
