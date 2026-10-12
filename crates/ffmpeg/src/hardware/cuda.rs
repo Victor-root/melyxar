@@ -132,6 +132,11 @@ impl Driver for Cuda {
         }
     }
 
+    // The desktop driver does not put the card into that sleep.
+    fn left_to_sleep(&self, _card: &Card) -> bool {
+        false
+    }
+
     // The filter takes transparency in one layout only.
     fn subtitle_layouts(&self) -> &'static [&'static str] {
         &["yuva420p"]

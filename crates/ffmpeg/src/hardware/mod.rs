@@ -149,6 +149,11 @@ pub(crate) trait Driver: Sync {
     /// Where the server reads how busy the card is.
     fn work_tally(&self, card: &Card) -> WorkTally;
 
+    /// Whether the machine lets the card fall asleep when idle while its maker
+    /// is known to come back from that sleep too slowly to rebuild a film.
+    /// Read from the machine each time, since it is set outside this server.
+    fn left_to_sleep(&self, card: &Card) -> bool;
+
     /// The layouts a subtitle made of pictures is offered to the card in, in
     /// the order they are tried.
     fn subtitle_layouts(&self) -> &'static [&'static str];
@@ -367,6 +372,13 @@ impl Card {
     /// Where the server reads how busy the card is.
     pub fn work_tally(&self) -> WorkTally {
         self.way.driver().work_tally(self)
+    }
+
+    /// Whether the machine lets it fall asleep when its maker's cards come
+    /// back from that sleep too slowly. Reads the machine, so not for a
+    /// thread that must not wait.
+    pub fn left_to_sleep(&self) -> bool {
+        self.way.driver().left_to_sleep(self)
     }
 
     /// What the encoder is told about the card it runs on.

@@ -66,6 +66,7 @@ pub enum Worry {
     MediaToolsMissing,
     /// The card proven at start up no longer opens.
     CardUnreachable,
+    CardLeftToSleep,
     /// A folder of a library is not where it was.
     FolderMissing { label: String },
     /// A disk the server uses is nearly full.
@@ -102,15 +103,16 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
         .tools()
         .map(|tools| vec![tools.ffmpeg.clone(), tools.ffprobe.clone()])
         .unwrap_or_default();
-    let device = card.as_ref().map(|card| card.device.clone());
-    let (tools_found, card_reachable) = tokio::task::spawn_blocking(move || {
+    let checked = card.clone();
+    let (tools_found, card_reachable, card_left_to_sleep) = tokio::task::spawn_blocking(move || {
         (
             !tools.is_empty() && tools.iter().all(|tool| may_run(tool)),
-            device.as_deref().is_some_and(card_opens),
+            checked.as_ref().is_some_and(|card| card_opens(&card.device)),
+            checked.as_ref().is_some_and(melyxar_ffmpeg::Card::left_to_sleep),
         )
     })
     .await
-    .unwrap_or((false, false));
+    .unwrap_or((false, false, false));
 
     let measuring = state.measuring();
     let wal = journal_mode.eq_ignore_ascii_case("wal");
@@ -128,6 +130,9 @@ pub async fn collect(state: &AppState) -> Result<Overview> {
     }
     if card.is_some() && !card_reachable {
         worries.push(Worry::CardUnreachable);
+    }
+    if card_left_to_sleep {
+        worries.push(Worry::CardLeftToSleep);
     }
     worries.extend(
         measuring

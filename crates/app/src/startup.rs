@@ -319,6 +319,13 @@ fn report_the_card(capabilities: &Capabilities) {
             paints_picture_subtitles_in = card.picture_subtitle_layout(),
             "a card passed its trials"
         );
+        if card.left_to_sleep() {
+            tracing::warn!(
+                name = card.name,
+                "this card is left to fall asleep when idle and comes back too slowly to rebuild \
+                 a film; keep it awake on the host, as the documentation says for AMD cards"
+            );
+        }
     }
 
     // A driver is a package of its own, separate from the media tools, and a

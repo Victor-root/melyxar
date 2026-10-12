@@ -38,6 +38,13 @@ const DEVICE_DESCRIPTIONS: &str = "/sys/class/drm";
 /// the report.
 const NVIDIA: &str = "0x10de";
 
+/// The maker number of AMD's cards.
+const AMD: &str = "0x1002";
+
+/// What the machine says of a card it lets fall asleep when idle, in the
+/// device's `power/control`. Kept awake, it says `on`.
+const SLEEPS_WHEN_IDLE: &str = "auto";
+
 /// Where the machine keeps the names of the hardware it may carry, when it
 /// keeps them at all. The first one found is read.
 const HARDWARE_NAMES: &[&str] = &["/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids"];
@@ -155,6 +162,22 @@ impl Driver for Vaapi {
         WorkTally::PerHandle
     }
 
+    // Measured on an RX 6600: woken from that sleep, Vulkan reading a wide
+    // gamut film for the card's encoder ran at a fifteenth of real time and no
+    // longer once the card was kept awake. Only AMD's were measured to.
+    fn left_to_sleep(&self, card: &Card) -> bool {
+        let Some(file) = card.device.file_name() else {
+            return false;
+        };
+        let described = Path::new(DEVICE_DESCRIPTIONS).join(file).join("device");
+        let read = |field: &str| {
+            std::fs::read_to_string(described.join(field))
+                .map(|value| value.trim().to_lowercase())
+                .ok()
+        };
+        sleeps_and_wakes_slowly(read("vendor").as_deref(), read("power/control").as_deref())
+    }
+
     // The first is the one the tool itself draws a subtitle in, so it costs
     // no conversion, and the second is there for a driver that does not take
     // it: which one a card accepts is a thing to establish, not to presume.
@@ -258,11 +281,17 @@ fn open_interface_cards() -> Vec<Card> {
         .collect()
 }
 
+/// Whether a card of this maker, told this about its sleep, is left to fall
+/// asleep and come back too slowly.
+fn sleeps_and_wakes_slowly(vendor: Option<&str>, power_control: Option<&str>) -> bool {
+    vendor == Some(AMD) && power_control == Some(SLEEPS_WHEN_IDLE)
+}
+
 /// Who made a card, from its maker number.
 fn maker_of(vendor: &str) -> String {
     match vendor {
         "0x8086" => "Intel".to_string(),
-        "0x1002" => "AMD".to_string(),
+        AMD => "AMD".to_string(),
         NVIDIA => "NVIDIA".to_string(),
         other => other.to_string(),
     }
@@ -427,6 +456,15 @@ mod tests {
             tone_mapping: Some(ToneMapping::VulkanBesideTheCard { vulkan_reads }),
             ..card(true, false)
         }
+    }
+
+    #[test]
+    fn only_an_amd_card_left_to_fall_asleep_is_worth_a_word() {
+        assert!(sleeps_and_wakes_slowly(Some(AMD), Some("auto")));
+        assert!(!sleeps_and_wakes_slowly(Some(AMD), Some("on")), "kept awake");
+        assert!(!sleeps_and_wakes_slowly(Some("0x8086"), Some("auto")), "Intel's");
+        assert!(!sleeps_and_wakes_slowly(Some(AMD), None), "nothing said");
+        assert!(!sleeps_and_wakes_slowly(None, Some("auto")));
     }
 
     #[test]
