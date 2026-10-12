@@ -60,9 +60,13 @@ export const FINDABLE: FindableSection[] = [
       ["settings.header", "settings.header_buttons_why"],
       ["settings.header_hides", "settings.header_hides_why"],
       ["settings.header_hides_phone", "settings.header_hides_phone_why"],
+      ["settings.phone", "settings.phone_why"],
+      ["settings.theme_phone", "settings.theme_phone_why"],
+      ["settings.start_library_phone", "settings.start_library_phone_why"],
     ],
     choices: {
       "nav.theme": ["theme.system", "theme.dark", "theme.light"],
+      "settings.theme_phone": ["theme.same", "theme.system", "theme.dark", "theme.light"],
       "settings.backdrop": [
         "backdrop.light",
         "backdrop.library",

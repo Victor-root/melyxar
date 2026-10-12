@@ -1795,6 +1795,12 @@ export interface ViewerPreferences {
   header_hides_on_scroll: boolean;
   /** The same on a phone, chosen apart. */
   header_hides_on_scroll_phone: boolean;
+  /** The theme on a phone, or nothing for the same as elsewhere. Sent empty
+   *  to go back to that. */
+  theme_mode_phone: string | null;
+  /** The library a phone opens on, or nothing for the home page. Sent empty
+   *  to go back to that. */
+  start_library_phone: string | null;
   /** Every button of the bar and of the account's menu, in the order both
    *  show them, and those shown on the bar. */
   header_buttons: HeaderButton[];

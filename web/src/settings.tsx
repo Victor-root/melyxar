@@ -32,6 +32,7 @@ import type { Language, LanguageChoice } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { LIGHTS } from "./lights";
 import { markTheTab, vividOf } from "./mark";
+import { ON_A_PHONE, useMediaQuery } from "./media-query";
 import { useBranding } from "./player/logo";
 import { THE_USUAL_STEP_BACK, THE_USUAL_STEP_ON } from "./player/steps";
 
@@ -41,8 +42,13 @@ export type ThemeChoice = "dark" | "light" | "system";
  *  follows the server's. */
 type HeldTheme = ThemeChoice | "server";
 
+/** What a phone shows: a theme of its own, or the one of the larger screens. */
+export type PhoneTheme = ThemeChoice | "same";
+
 const STORED_THEME = "melyxar.theme";
 const STORED_SERVER_THEME = "melyxar.theme.server";
+const STORED_THEME_PHONE = "melyxar.theme.phone";
+const STORED_START_LIBRARY_PHONE = "melyxar.start.phone";
 const STORED_ACCENT = "melyxar.accent";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
@@ -88,6 +94,12 @@ interface Settings {
   setLanguage: (choice: LanguageChoice) => void;
   theme: ThemeChoice;
   setTheme: (theme: ThemeChoice) => void;
+  /** The theme on a phone, chosen apart from the larger screens. */
+  phoneTheme: PhoneTheme;
+  setPhoneTheme: (theme: PhoneTheme) => void;
+  /** The library a phone opens on in place of the home page, or nothing. */
+  startLibraryOnPhone: string | null;
+  setStartLibraryOnPhone: (library: string | null) => void;
   /** The account's accent, a hash and six hexadecimal digits. */
   accent: string;
   setAccent: (accent: string) => void;
@@ -138,6 +150,8 @@ interface Settings {
   setStepOn: (seconds: number) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
+  /** Whether the server has said, since the page was opened. */
+  adopted: boolean;
   /** The wording of one key, in the language in force. */
   t: (key: string, values?: Record<string, string | number>) => string;
 }
@@ -147,6 +161,12 @@ const SettingsContext = createContext<Settings | null>(null);
 function initialTheme(): HeldTheme {
   const stored = safeRead(STORED_THEME);
   return stored === "dark" || stored === "light" || stored === "system" ? stored : "server";
+}
+
+/** A theme a phone can have as its own, the larger screens' for anything
+ *  else. */
+function phoneThemeOf(word: string | null | undefined): PhoneTheme {
+  return word === "dark" || word === "light" || word === "system" ? word : "same";
 }
 
 /** A theme the server can have as its own, the device's for anything else. */
@@ -188,6 +208,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const branding = useBranding();
   const serverTheme = serverThemeOf(branding?.default_theme ?? safeRead(STORED_SERVER_THEME));
   const theme: ThemeChoice = held === "server" ? serverTheme : held;
+  const [phoneTheme, setPhoneThemeState] = useState<PhoneTheme>(() =>
+    phoneThemeOf(safeRead(STORED_THEME_PHONE)),
+  );
+  const [startLibraryOnPhone, setStartLibraryOnPhoneState] = useState<string | null>(
+    () => safeRead(STORED_START_LIBRARY_PHONE) || null,
+  );
+  const [adopted, setAdopted] = useState(false);
+  const onAPhone = useMediaQuery(ON_A_PHONE);
+  const shown: ThemeChoice = onAPhone && phoneTheme !== "same" ? phoneTheme : theme;
   useEffect(() => {
     if (branding) {
       safeWrite(STORED_SERVER_THEME, serverThemeOf(branding.default_theme));
@@ -238,18 +267,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const system = window.matchMedia("(prefers-color-scheme: light)").matches
         ? "light"
         : "dark";
-      root.dataset.theme = theme === "system" ? system : theme;
+      root.dataset.theme = shown === "system" ? system : shown;
       colourTheWindow();
     };
     apply();
 
-    if (theme !== "system") {
+    if (shown !== "system") {
       return;
     }
     const watcher = window.matchMedia("(prefers-color-scheme: light)");
     watcher.addEventListener("change", apply);
     return () => watcher.removeEventListener("change", apply);
-  }, [theme]);
+  }, [shown]);
 
   // The same for the accent, and only when it is not the one the theme was
   // drawn around: the four shades of that one were measured, and working them
@@ -312,6 +341,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     safeWrite(STORED_THEME, next);
     setHeldState(next);
     tellTheServer({ theme_mode: next });
+  }, []);
+
+  const setPhoneTheme = useCallback((next: PhoneTheme) => {
+    safeWrite(STORED_THEME_PHONE, next);
+    setPhoneThemeState(next);
+    tellTheServer({ theme_mode_phone: next === "same" ? "" : next });
+  }, []);
+
+  const setStartLibraryOnPhone = useCallback((library: string | null) => {
+    safeWrite(STORED_START_LIBRARY_PHONE, library ?? "");
+    setStartLibraryOnPhoneState(library);
+    tellTheServer({ start_library_phone: library ?? "" });
   }, []);
 
   const setAccent = useCallback((chosen: string) => {
@@ -416,6 +457,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       mode === "dark" || mode === "light" || mode === "system" ? mode : "server";
     safeWrite(STORED_THEME, held);
     setHeldState(held);
+    const phone = phoneThemeOf(chosen.theme_mode_phone);
+    safeWrite(STORED_THEME_PHONE, phone);
+    setPhoneThemeState(phone);
+    safeWrite(STORED_START_LIBRARY_PHONE, chosen.start_library_phone ?? "");
+    setStartLibraryOnPhoneState(chosen.start_library_phone);
 
     safeWrite(STORED_ACCENT, chosen.accent_color);
     setAccentState(chosen.accent_color);
@@ -448,6 +494,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setStepBackState(chosen.step_back_seconds);
     safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
     setStepOnState(chosen.step_on_seconds);
+    setAdopted(true);
   }, []);
 
   const value = useMemo<Settings>(
@@ -457,6 +504,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       theme,
       setTheme,
+      phoneTheme,
+      setPhoneTheme,
+      startLibraryOnPhone,
+      setStartLibraryOnPhone,
       accent,
       setAccent,
       bannerHeight,
@@ -486,6 +537,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       stepOn,
       setStepOn,
       adopt,
+      adopted,
       t: (key, values) => translate(language, key, values),
     }),
     [
@@ -494,6 +546,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setLanguage,
       theme,
       setTheme,
+      phoneTheme,
+      setPhoneTheme,
+      startLibraryOnPhone,
+      setStartLibraryOnPhone,
       accent,
       setAccent,
       bannerHeight,
@@ -523,6 +579,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       stepOn,
       setStepOn,
       adopt,
+      adopted,
     ],
   );
 

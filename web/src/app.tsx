@@ -30,7 +30,6 @@ import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
 import { DebugJournal } from "./components/debug-journal";
 import { Tooltips } from "./components/tooltips";
-import { HomePage } from "./pages/home";
 import { LibraryPage } from "./pages/library";
 import { MusicAlbumPage } from "./music/album";
 import { MusicPlaylistPage } from "./music/playlist";
@@ -75,6 +74,7 @@ import { LibrariesContext, useLibraries, useWatchedLibraries } from "./libraries
 import { RunningContext, useRunning, useWatchedWork } from "./running";
 import { useAccount, useWhoIsThere, WhoProvider } from "./account";
 import { MarksProvider } from "./marks";
+import { Opening, useOpeningPassesOnLeaving } from "./opening";
 import { useSettings } from "./settings";
 
 export function App() {
@@ -144,6 +144,7 @@ function WatchingLibraries({ children }: { children: React.ReactNode }) {
 
 function BehindTheDoor() {
   const { t, adopt } = useSettings();
+  useOpeningPassesOnLeaving();
   // What this account chose, once there is an account to ask about. The
   // browser's own copy drew the door a moment ago; this is what carries a
   // choice from one machine to the next.
@@ -215,7 +216,7 @@ function BehindTheDoor() {
           <div className="shell-view">
             <div className="shell-scroll" ref={scrolling}>
               <Routes>
-                <Route path="/" element={<HomePage libraries={libraries.all} />} />
+                <Route path="/" element={<Opening libraries={libraries.all} />} />
                 <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
                 <Route path="/music/album/:id" element={<MusicAlbumPage />} />
                 <Route path="/music/album/:id/tags" element={<TagEditorPage />} />

@@ -18,6 +18,10 @@ export const PHONE_UPRIGHT = "(max-width: 720px) and (orientation: portrait)";
 /** A phone held sideways, which is short rather than narrow. */
 export const PHONE_SIDEWAYS = "(max-height: 500px) and (orientation: landscape)";
 
+/** A phone either way it is held, which is what a choice made for the phone
+ *  follows: turning it over changes nothing. */
+export const ON_A_PHONE = `${PHONE}, ${PHONE_SIDEWAYS}`;
+
 /** Where the title page stacks its poster, facts and actions in one column. */
 export const STACKED = "(max-width: 800px)";
 

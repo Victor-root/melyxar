@@ -168,6 +168,7 @@ const en: Dictionary = {
 
   "theme.dark": "Dark",
   "theme.light": "Light",
+  "theme.same": "Same as on a computer",
   "theme.system": "Use system setting",
 
   /* Authentication and account setup. */
@@ -806,6 +807,13 @@ const en: Dictionary = {
   "settings.header_hides_why": "The bar reappears when you scroll up. Disable this to keep it visible.",
   "settings.header_hides_phone": "Hide top bar while scrolling down, on a phone",
   "settings.header_hides_phone_why": "Chosen apart for narrow screens, where the bar takes a larger share of the window. The option above then applies to wider screens only.",
+  "settings.phone": "On a phone",
+  "settings.phone_why": "Choices that apply on a phone only, upright or sideways, so it can differ from a computer.",
+  "settings.theme_phone": "Theme on a phone",
+  "settings.theme_phone_why": "The theme above then applies to larger screens only.",
+  "settings.start_library_phone": "Open on",
+  "settings.start_library_phone_why": "Where Melyxar opens on a phone, in place of the home page. The Home button still leads home.",
+  "settings.start_home": "Home",
   "settings.header": "Top bar",
   "settings.header_buttons_why": "Drag the buttons into the order you want. A button hidden from the bar moves into your account menu.",
   "settings.header_buttons_reset": "Restore defaults",
@@ -2204,6 +2212,7 @@ const fr: Dictionary = {
 
   "theme.dark": "Sombre",
   "theme.light": "Clair",
+  "theme.same": "Comme sur ordinateur",
   "theme.system": "Utiliser le thème du système",
 
   /* Authentification et création du premier compte. */
@@ -2835,6 +2844,13 @@ const fr: Dictionary = {
   "settings.header_hides_why": "La barre réapparaît lorsque vous remontez dans la page. Désactivez cette option pour la garder visible.",
   "settings.header_hides_phone": "Masquer la barre supérieure en faisant défiler vers le bas, sur téléphone",
   "settings.header_hides_phone_why": "Choisi à part pour les écrans étroits, où la barre prend une plus grande part de la fenêtre. L'option ci-dessus ne s'applique alors qu'aux écrans plus larges.",
+  "settings.phone": "Sur téléphone",
+  "settings.phone_why": "Des choix qui ne valent que sur téléphone, tenu droit ou couché, pour qu'il puisse différer de l'ordinateur.",
+  "settings.theme_phone": "Thème sur téléphone",
+  "settings.theme_phone_why": "Le thème ci-dessus ne vaut alors que pour les écrans plus grands.",
+  "settings.start_library_phone": "Ouvrir sur",
+  "settings.start_library_phone_why": "Là où Melyxar s'ouvre sur téléphone, à la place de l'accueil. Le bouton Accueil y ramène toujours.",
+  "settings.start_home": "Accueil",
   "settings.header": "Barre supérieure",
   "settings.header_buttons_why": "Faites glisser les boutons dans l'ordre souhaité. Un bouton masqué de la barre passe dans le menu de votre compte.",
   "settings.header_buttons_reset": "Rétablir par défaut",
