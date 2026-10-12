@@ -3,3 +3,6 @@
 -- the home page, forgotten with the library.
 ALTER TABLE user_preferences ADD COLUMN theme_mode_phone TEXT;
 ALTER TABLE user_preferences ADD COLUMN start_library_phone TEXT REFERENCES libraries (id) ON DELETE SET NULL;
+
+-- Found again when the library goes, rather than by walking every account.
+CREATE INDEX user_preferences_by_start_library_phone ON user_preferences (start_library_phone);
