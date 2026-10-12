@@ -131,10 +131,13 @@ export function useMasonry(page: RefObject<HTMLElement | null>): void {
       return;
     }
     const rows = new Map<Element, number>();
-    /** Whether a card takes the whole width: anything standing on the page
-     *  itself, and a panel of a group that asks for it. */
+    /** Whether a card takes the whole width: a panel that asks for it, and
+     *  anything standing on the page itself that is not a panel, its head
+     *  for one. A panel is an ordinary card wherever it stands, so the words
+     *  of a setting stay near its control on a wide screen. */
     const isWide = (card: HTMLElement) =>
-      card.parentElement === holder || card.classList.contains("panel-wide");
+      card.classList.contains("panel-wide") ||
+      (card.parentElement === holder && !card.classList.contains("panel"));
     /** The cards in the order last laid, and over how many columns, once
      *  somebody has used the page; nothing until then. */
     let held: { cards: Element[]; columns: number } | null = null;

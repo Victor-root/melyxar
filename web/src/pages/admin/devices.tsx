@@ -26,6 +26,7 @@ export function AdminDevices() {
         icon={DeviceIcon}
         title={t("admin.devices_signed_in")}
         lead={t("admin.devices_signed_in_lead")}
+        wide
       >
         {devices.failure && (
           <p className="panel-notice panel-notice-trouble">

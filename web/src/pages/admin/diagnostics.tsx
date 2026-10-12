@@ -60,6 +60,7 @@ export function AdminDiagnostics() {
         icon={DiagnosticsIcon}
         title={t("admin.report")}
         lead={t("admin.report_lead")}
+        wide
       >
         {report.failure && (
           <p className="panel-notice panel-notice-trouble">
