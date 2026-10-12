@@ -1365,6 +1365,7 @@ export type Worry =
   | { kind: "database_refuses_writes" }
   | { kind: "media_tools_missing" }
   | { kind: "card_unreachable" }
+  | { kind: "card_left_to_sleep" }
   | { kind: "folder_missing"; label: string }
   | { kind: "disk_nearly_full"; mount: string; used: number };
 

@@ -71,7 +71,9 @@ impl Point {
 
     fn state(&self) -> State {
         match self {
-            Self::Worry(Worry::CardUnreachable | Worry::DiskNearlyFull { .. })
+            Self::Worry(
+                Worry::CardUnreachable | Worry::CardLeftToSleep | Worry::DiskNearlyFull { .. },
+            )
             | Self::RefusedSignIns { .. }
             | Self::FallingBehind { .. }
             | Self::Unidentified { .. } => State::Attention,

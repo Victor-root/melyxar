@@ -214,6 +214,7 @@ const WORRY_LEADS_TO: Record<string, string> = {
   folder_missing: "/admin/libraries",
   disk_nearly_full: "/admin",
   card_unreachable: "/admin/transcoding",
+  card_left_to_sleep: "/admin/transcoding",
   media_tools_missing: "/admin/diagnostics",
   database_mode: "/admin/diagnostics",
   database_refuses_writes: "/admin/diagnostics",
