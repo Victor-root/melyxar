@@ -1358,16 +1358,24 @@
 }
 
 /* Behind everything the bar holds: the accent, lightly blurred, and fading
-   towards the top so it never competes with the buttons. */
+   towards the top so it never competes with the buttons.
+
+   Drawn past the sides and the foot by the reach of the blur, then cut back
+   to the bar: blurred at its own edges, the wave would fade into what is
+   beyond them, and the bar would show a pale rim on each side. */
 .music-bar-spectrum {
+  --spectrum-spill: 30px;
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: calc(-1 * var(--spectrum-spill));
   z-index: -1;
-  width: 100%;
-  height: 100%;
+  /* A canvas is not stretched by its offsets alone: it keeps its own size. */
+  width: calc(100% + 2 * var(--spectrum-spill));
+  height: calc(100% + var(--spectrum-spill));
   color: var(--accent);
   opacity: 0.6;
   filter: blur(10px);
+  clip-path: inset(0 var(--spectrum-spill) var(--spectrum-spill));
   pointer-events: none;
   mask-image: linear-gradient(to top, #000 45%, transparent);
   -webkit-mask-image: linear-gradient(to top, #000 45%, transparent);
