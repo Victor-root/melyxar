@@ -33,8 +33,20 @@ pub async fn save(
     preferences: Preferences,
 ) -> Result<Preferences> {
     let database = state.database();
-    if database.user(user_id).await?.is_none() {
+    let Some(user) = database.user(user_id).await? else {
         return Err(AppError::Domain(melyxar_core::Error::not_found("account")));
+    };
+    if let Some(library) = preferences.start_library_phone {
+        let exists = database
+            .list_libraries()
+            .await?
+            .iter()
+            .any(|known| known.id == library);
+        if !exists || !user.permissions.may_access_library(library) {
+            return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+                "no library of this account goes by that id",
+            )));
+        }
     }
     database.save_preferences(user_id, &preferences).await?;
     of(state, user_id).await
@@ -109,6 +121,42 @@ mod tests {
             .expect("kept all the same");
         assert_eq!(kept.downmix_gain, MAX_DOWNMIX_GAIN);
         assert_eq!(kept.volume, 1.0);
+    }
+
+    #[tokio::test]
+    async fn a_phone_starts_only_in_a_library_this_account_may_open() {
+        let (_directory, state, user_id) = state_with_an_account().await;
+        let music = state
+            .database()
+            .create_library("Music", melyxar_core::library::LibraryKind::Music, "en", &[])
+            .await
+            .expect("library created");
+
+        let mut chosen = of(&state, user_id).await.expect("the defaults");
+        chosen.start_library_phone = Some(music.id);
+        let kept = save(&state, user_id, chosen.clone()).await.expect("kept");
+        assert_eq!(kept.start_library_phone, Some(music.id));
+
+        chosen.start_library_phone = Some(melyxar_core::id::LibraryId::new());
+        assert!(save(&state, user_id, chosen.clone()).await.is_err(), "no such library");
+
+        let narrowed = state
+            .database()
+            .create_user(
+                "guest",
+                None,
+                &Permissions {
+                    sees_every_library: false,
+                    ..Permissions::viewer()
+                },
+            )
+            .await
+            .expect("account created");
+        chosen.start_library_phone = Some(music.id);
+        assert!(
+            save(&state, narrowed.id, chosen).await.is_err(),
+            "a library this account was not given"
+        );
     }
 
     #[tokio::test]

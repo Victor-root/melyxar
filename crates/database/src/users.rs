@@ -57,7 +57,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.downmix_method, p.downmix_gain,
      p.banner_height, p.banner_cut, p.banner_shown, p.banner_at_random,
      p.banner_fills_the_screen, p.header_hides_on_scroll,
-     p.header_hides_on_scroll_phone, p.header_buttons,
+     p.header_hides_on_scroll_phone, p.theme_mode_phone, p.start_library_phone,
+     p.header_buttons,
      p.buttons_in_the_bar, p.backdrop, p.backdrop_light,
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
@@ -401,7 +402,8 @@ impl Database {
                 custom_css = ?, volume = ?, downmix_method = ?, downmix_gain = ?,
                 banner_height = ?, banner_cut = ?, banner_shown = ?, banner_at_random = ?,
                 banner_fills_the_screen = ?, header_hides_on_scroll = ?,
-                header_hides_on_scroll_phone = ?, header_buttons = ?,
+                header_hides_on_scroll_phone = ?, theme_mode_phone = ?,
+                start_library_phone = ?, header_buttons = ?,
                 buttons_in_the_bar = ?, backdrop = ?, backdrop_light = ?,
                 hidden_at_the_door = ?, home_order = ?, home_sections = ?,
                 hidden_home_sections = ?, step_back_seconds = ?,
@@ -427,6 +429,8 @@ impl Database {
         .bind(preferences.banner_fills_the_screen)
         .bind(preferences.header_hides_on_scroll)
         .bind(preferences.header_hides_on_scroll_phone)
+        .bind(preferences.theme_mode_phone.map(ThemeMode::as_str))
+        .bind(preferences.start_library_phone.map(|library| library.to_db_string()))
         .bind(written_buttons(&preferences.header_buttons))
         .bind(written_buttons(&preferences.buttons_in_the_bar))
         .bind(preferences.backdrop.as_str())
@@ -712,6 +716,15 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             banner_fills_the_screen: row.try_get("banner_fills_the_screen")?,
             header_hides_on_scroll: row.try_get("header_hides_on_scroll")?,
             header_hides_on_scroll_phone: row.try_get("header_hides_on_scroll_phone")?,
+            theme_mode_phone: row
+                .try_get::<Option<String>, _>("theme_mode_phone")?
+                .as_deref()
+                .and_then(ThemeMode::parse),
+            start_library_phone: row
+                .try_get::<Option<String>, _>("start_library_phone")?
+                .as_deref()
+                .map(parse_id)
+                .transpose()?,
             header_buttons: read_buttons(&row.try_get::<String, _>("header_buttons")?),
             buttons_in_the_bar: read_buttons(&row.try_get::<String, _>("buttons_in_the_bar")?),
             backdrop: Backdrop::parse(&row.try_get::<String, _>("backdrop")?).unwrap_or_default(),
@@ -1256,6 +1269,51 @@ mod tests {
             .expect("exists");
         assert!(loaded.permissions.sees_the_whole_server());
         assert!(loaded.permissions.allowed_libraries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_phone_keeps_its_own_theme_and_start_library_until_the_library_goes() {
+        let database = database().await;
+        let created = database
+            .create_user("reader", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        let music = database
+            .create_library("Music", LibraryKind::Music, "en", &[])
+            .await
+            .expect("library created");
+
+        let chosen = Preferences {
+            theme_mode: ThemeMode::Dark,
+            theme_mode_phone: Some(ThemeMode::Light),
+            start_library_phone: Some(music.id),
+            ..Preferences::default()
+        };
+        database
+            .save_preferences(created.id, &chosen)
+            .await
+            .expect("saved");
+        let loaded = database.user(created.id).await.expect("read").expect("there");
+        assert_eq!(loaded.preferences.theme_mode, ThemeMode::Dark);
+        assert_eq!(loaded.preferences.theme_mode_phone, Some(ThemeMode::Light));
+        assert_eq!(loaded.preferences.start_library_phone, Some(music.id));
+
+        database.delete_library(music.id).await.expect("library deleted");
+        let loaded = database.user(created.id).await.expect("read").expect("there");
+        assert_eq!(loaded.preferences.start_library_phone, None, "the home page again");
+        assert_eq!(loaded.preferences.theme_mode_phone, Some(ThemeMode::Light));
+    }
+
+    #[tokio::test]
+    async fn a_new_account_shows_a_phone_what_it_shows_elsewhere() {
+        let database = database().await;
+        let created = database
+            .create_user("reader", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        let loaded = database.user(created.id).await.expect("read").expect("there");
+        assert_eq!(loaded.preferences.theme_mode_phone, None);
+        assert_eq!(loaded.preferences.start_library_phone, None);
     }
 
     #[tokio::test]
