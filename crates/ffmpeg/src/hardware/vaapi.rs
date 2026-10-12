@@ -144,6 +144,13 @@ impl Driver for Vaapi {
         &[]
     }
 
+    // AMD's encoder works in blocks of 64 across and 16 down, and the tool
+    // before 8.0 sized the picture for blocks of 8: a 1080 line picture came
+    // out 1088 lines tall in every key frame, the last 8 shown green.
+    fn pads_hevc_without_saying(&self) -> bool {
+        true
+    }
+
     fn work_tally(&self, _card: &Card) -> WorkTally {
         WorkTally::PerHandle
     }

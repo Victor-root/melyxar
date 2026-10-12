@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 use melyxar_core::time::Millis;
 
-use crate::command::{Command, VideoEncode};
+use crate::command::{rebuilt_size, Command, VideoEncode};
 use crate::hardware::{Card, CardPath, A_GENERATED_PICTURE_SIZE, TRIAL_HEIGHT};
 
 /// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
@@ -83,9 +83,9 @@ impl<'a> Place<'a> {
             // Every chain that ends on the processor makes the picture the
             // height asked for, whatever the card could do on its own.
             None => Self::Processor {
-                sized: encode.picture_size.map(|picture| {
-                    fitted(CANVAS, rebuilt_size(picture, encode.scale_to_height))
-                }),
+                sized: encode
+                    .rebuilt_size()
+                    .map(|picture| fitted(CANVAS, picture)),
                 back_up: encode
                     .card()
                     .and_then(|(card, _)| card.back_up(encode.tone_map)),
@@ -114,19 +114,6 @@ fn sized_for(
             rebuilt_size(picture, scale_to_height.filter(|_| card.can_scale)),
         )
     })
-}
-
-/// The size of a picture once it is made `height` tall, keeping its shape, as
-/// the card's resize makes it: as wide as that shape gives, to an even number.
-fn rebuilt_size(picture: (i32, i32), height: Option<i32>) -> (i32, i32) {
-    let (width, tall) = picture;
-    match height {
-        Some(height) if tall > 0 => (
-            even(i64::from(width) * i64::from(height) / i64::from(tall)),
-            height,
-        ),
-        _ => picture,
-    }
 }
 
 /// How large a subtitle drawn on `canvas` is laid on `picture`: as wide as the
@@ -456,15 +443,6 @@ mod tests {
         };
         let graph = graph("[0:0]", None, 3, &place);
         assert!(graph.starts_with("[0:0]null[picture];"), "{graph}");
-    }
-
-    #[test]
-    fn a_picture_made_smaller_keeps_its_shape_to_an_even_width() {
-        assert_eq!(rebuilt_size((3840, 1600), Some(1080)), (2592, 1080));
-        assert_eq!(rebuilt_size((1920, 1080), Some(720)), (1280, 720));
-        // An odd width comes down to the even number below it.
-        assert_eq!(rebuilt_size((1998, 1080), Some(721)), (1332, 721));
-        assert_eq!(rebuilt_size((1920, 1080), None), (1920, 1080));
     }
 
     #[test]
