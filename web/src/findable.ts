@@ -16,7 +16,7 @@ export type Named = [name: string, why?: string];
 /** One section of an area, and what it holds. */
 export interface FindableSection {
   area: Area;
-  /** Under the area's address, empty for the first. */
+  /** Under the area's address. */
   path: string;
   /** The key of the section's name. */
   name: string;
@@ -34,7 +34,7 @@ export interface FindableSection {
 export const FINDABLE: FindableSection[] = [
   {
     area: "settings",
-    path: "",
+    path: "profile",
     name: "me.profile",
     files: ["pages/settings/profile.tsx"],
     named: [
@@ -239,7 +239,7 @@ export const FINDABLE: FindableSection[] = [
   },
   {
     area: "admin",
-    path: "",
+    path: "overview",
     name: "admin.overview",
     files: ["pages/admin/overview.tsx", "pages/admin/machine.tsx"],
     named: [
@@ -538,6 +538,6 @@ export function find(
  *  bring into view. */
 export function addressOf(found: Found): string {
   const base = found.area === "admin" ? "/admin" : "/settings";
-  const page = found.path ? `${base}/${found.path}` : base;
+  const page = `${base}/${found.path}`;
   return found.key ? `${page}?find=${encodeURIComponent(found.key)}` : page;
 }

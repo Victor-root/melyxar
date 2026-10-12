@@ -43,7 +43,7 @@ import { lookWhileSeen } from "../../polling";
 const LOOKED_AT_EVERY_MS = 15_000;
 
 const SECTIONS: SectionGroup[] = [
-  { sections: [{ path: "", icon: SummaryIcon, label: "admin.overview" }] },
+  { sections: [{ path: "overview", icon: SummaryIcon, label: "admin.overview" }] },
   {
     label: "admin.group.content",
     sections: [

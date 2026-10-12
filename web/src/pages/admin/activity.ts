@@ -212,7 +212,7 @@ export interface PointSaid {
 /** Where each light of the summary is put right. */
 const WORRY_LEADS_TO: Record<string, string> = {
   folder_missing: "/admin/libraries",
-  disk_nearly_full: "/admin",
+  disk_nearly_full: "/admin/overview",
   card_unreachable: "/admin/transcoding",
   card_left_to_sleep: "/admin/transcoding",
   media_tools_missing: "/admin/diagnostics",

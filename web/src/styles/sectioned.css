@@ -235,6 +235,123 @@
 }
 
 /* --------------------------------------------------------------------------
+ * On a phone: the sections as a list of their own, and the way back to it
+ * ----------------------------------------------------------------------- */
+
+.section-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+}
+
+.section-list-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.section-list-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-list-group-name {
+  padding: 0 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-list-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--border);
+  background: var(--panel-flat);
+  box-shadow: var(--shadow-card);
+}
+
+.section-list-line {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 58px;
+  padding: 0 12px 0 14px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15.5px;
+  font-weight: 550;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.section-list-line:first-child {
+  border-top: 0;
+}
+
+.section-list-line:active {
+  background: var(--surface-hover);
+}
+
+.section-list-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-control);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
+.section-list-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-list-line > svg:last-child {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.section-list-foot {
+  padding: 0 6px;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.sectioned-back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 2px;
+  min-height: 40px;
+  margin: calc(-1 * var(--gap-tight)) 0 4px -6px;
+  padding: 0 10px 0 2px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 550;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sectioned-back:active {
+  background: var(--surface-hover);
+}
+
+/* --------------------------------------------------------------------------
  * The head of a page
  * ----------------------------------------------------------------------- */
 
