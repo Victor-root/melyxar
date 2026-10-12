@@ -2024,15 +2024,24 @@
     bottom: 0;
     left: 0;
     z-index: 2;
-    padding: 8px 0 calc(14px + var(--safe-bottom));
+    padding: 8px 0 calc(20px + var(--safe-bottom));
     background: none;
     isolation: isolate;
   }
 
   .music-now .player-bottom .player-row {
     padding-inline: 16px;
-    row-gap: 0;
-    margin-top: -6px;
+    row-gap: 14px;
+    margin-top: 6px;
+  }
+
+  /* Room between the buttons of each line, which stood against one another. */
+  .music-now .player-zone-bottom-left {
+    gap: 10px;
+  }
+
+  .music-now .player-zone-bottom-right {
+    gap: 18px;
   }
 
   /* The glass itself, on a layer of its own so that it does not take the
