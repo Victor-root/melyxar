@@ -173,13 +173,6 @@
   grid-column: 1 / -1;
 }
 
-/* A panel is an ordinary card wherever it stands, unless it asks for the
-   whole width: full width, the words of a setting ended a screen away from
-   its control. */
-.sectioned-page > .panel:not(.panel-wide) {
-  grid-column: auto;
-}
-
 /* The title of a page keeps no gap of the board under it: the first cards
    start where the list of sections beside them does. */
 .sectioned-page > .page-head {

@@ -169,7 +169,6 @@ export function TechnicalJournal({ bare = false }: { bare?: boolean }) {
       title={t("admin.journal_lines")}
       className="journal-panel"
       action={actions}
-      wide
     >
       {lines}
     </Panel>
@@ -205,7 +204,6 @@ function ActivityPanel() {
       icon={HistoryIcon}
       title={t("activity.title")}
       lead={t("activity.lead")}
-      wide
     >
       <div className="chips">
         <button
