@@ -164,6 +164,10 @@
   column-gap: calc(var(--gap) * 1.5);
   align-items: start;
   min-width: 0;
+  /* No wider than a page is read at, as Emby does, with the room left over
+     on a wide screen left empty: stretched across it, the words of a setting
+     ended a screen away from its control. */
+  max-width: 900px;
   /* What the panels inside measure themselves against: the room the page
      really has, once the side list has taken its share. */
   container-type: inline-size;
