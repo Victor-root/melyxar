@@ -240,6 +240,7 @@ function BehindTheDoor() {
                 <Route path="/requests/title/:catalogue/:id" element={<RequestTitlePage />} />
                 <Route path="/admin" element={<AdminLayout />}>
                   <Route index element={<AdminOverview />} />
+                  <Route path="overview" element={<AdminOverview />} />
                   <Route path="libraries" element={<AdminLibraries />} />
                   <Route path="metadata" element={<AdminMetadata />} />
                   <Route path="playback" element={<AdminPlayback />} />
@@ -256,6 +257,7 @@ function BehindTheDoor() {
                 </Route>
                 <Route path="/settings" element={<MySettingsLayout />}>
                   <Route index element={<MyProfile />} />
+                  <Route path="profile" element={<MyProfile />} />
                   <Route path="appearance" element={<MyAppearance />} />
                   <Route path="home" element={<MyHomePage />} />
                   <Route path="playback" element={<MyPlayback />} />

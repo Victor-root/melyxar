@@ -20,7 +20,7 @@ import {
 const SECTIONS: SectionGroup[] = [
   {
     sections: [
-      { path: "", icon: ProfileIcon, label: "me.profile" },
+      { path: "profile", icon: ProfileIcon, label: "me.profile" },
       { path: "appearance", icon: PaletteIcon, label: "me.appearance" },
       { path: "home", icon: HomeIcon, label: "me.home" },
       { path: "playback", icon: PlaybackIcon, label: "me.playback" },

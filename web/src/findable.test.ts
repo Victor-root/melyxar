@@ -104,8 +104,8 @@ describe("addressOf", () => {
     expect(
       addressOf({ area: "admin", path: "transcoding", said: "", section: "", key: "admin.codecs" }),
     ).toBe("/admin/transcoding?find=admin.codecs");
-    expect(addressOf({ area: "settings", path: "", said: "", section: "", key: null })).toBe(
-      "/settings",
+    expect(addressOf({ area: "settings", path: "profile", said: "", section: "", key: null })).toBe(
+      "/settings/profile",
     );
   });
 });
