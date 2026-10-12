@@ -140,6 +140,12 @@ pub(crate) trait Driver: Sync {
     /// player can read on its own.
     fn key_frame_arguments(&self) -> &'static [&'static str];
 
+    /// Whether the card's HEVC encoder may write a picture larger than it was
+    /// given, to the blocks it works in, without saying how much of it to show.
+    /// The size is then written into the stream after it, and the browser
+    /// shows the padding otherwise.
+    fn pads_hevc_without_saying(&self) -> bool;
+
     /// Where the server reads how busy the card is.
     fn work_tally(&self, card: &Card) -> WorkTally;
 
@@ -372,6 +378,11 @@ impl Card {
     /// player can read on its own.
     pub fn key_frame_arguments(&self) -> &'static [&'static str] {
         self.way.driver().key_frame_arguments()
+    }
+
+    /// Whether its HEVC encoder may pad the picture without saying so.
+    pub fn pads_hevc_without_saying(&self) -> bool {
+        self.way.driver().pads_hevc_without_saying()
     }
 
     /// How much this card keeps away from the processor, compared between
