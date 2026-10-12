@@ -674,6 +674,12 @@ pub struct Preferences {
     /// The same, on a phone, where the bar costs the page far more of its
     /// window: chosen apart from the larger screens.
     pub header_hides_on_scroll_phone: bool,
+    /// The colour scheme on a phone, chosen apart from the larger screens.
+    /// Nothing: the same as on them.
+    pub theme_mode_phone: Option<ThemeMode>,
+    /// The library a phone opens on, in place of the home page. Nothing: the
+    /// home page.
+    pub start_library_phone: Option<LibraryId>,
     /// The buttons of the bar and of the account's menu, in the order both
     /// show them. Always every button, once each.
     pub header_buttons: Vec<HeaderButton>,
@@ -741,6 +747,8 @@ impl Default for Preferences {
             banner_fills_the_screen: false,
             header_hides_on_scroll: true,
             header_hides_on_scroll_phone: true,
+            theme_mode_phone: None,
+            start_library_phone: None,
             header_buttons: HeaderButton::every().to_vec(),
             buttons_in_the_bar: HeaderButton::in_the_bar_at_first().to_vec(),
             backdrop: Backdrop::default(),

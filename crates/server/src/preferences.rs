@@ -68,6 +68,10 @@ struct PreferencesView {
     header_hides_on_scroll: bool,
     /// The same on a phone, chosen apart.
     header_hides_on_scroll_phone: bool,
+    /// The colour scheme on a phone, or nothing for the same as elsewhere.
+    theme_mode_phone: Option<&'static str>,
+    /// The library a phone opens on, or nothing for the home page.
+    start_library_phone: Option<String>,
     /// Every button of the bar and of the account's menu, in the order both
     /// show them, and those shown on the bar.
     header_buttons: Vec<&'static str>,
@@ -147,6 +151,12 @@ struct PreferencesBody {
     header_hides_on_scroll: Option<bool>,
     #[serde(default)]
     header_hides_on_scroll_phone: Option<bool>,
+    /// Empty for the same as elsewhere.
+    #[serde(default)]
+    theme_mode_phone: Option<String>,
+    /// Empty for the home page.
+    #[serde(default)]
+    start_library_phone: Option<String>,
     #[serde(default)]
     header_buttons: Option<Vec<String>>,
     #[serde(default)]
@@ -206,6 +216,25 @@ async fn write(
     if let Some(mode) = body.theme_mode {
         chosen.theme_mode = ThemeMode::parse(&mode)
             .ok_or_else(|| ServerError::invalid_input("no theme goes by that name"))?;
+    }
+    if let Some(mode) = body.theme_mode_phone {
+        chosen.theme_mode_phone = match mode.trim() {
+            "" => None,
+            mode => Some(
+                ThemeMode::parse(mode)
+                    .ok_or_else(|| ServerError::invalid_input("no theme goes by that name"))?,
+            ),
+        };
+    }
+    if let Some(library) = body.start_library_phone {
+        chosen.start_library_phone = match library.trim() {
+            "" => None,
+            library => Some(
+                library
+                    .parse()
+                    .map_err(|_| ServerError::invalid_input("no library goes by that id"))?,
+            ),
+        };
     }
     if let Some(colour) = body.accent_color {
         // Refused rather than quietly put right: this one ends up inside a
@@ -423,6 +452,8 @@ async fn view(
         banner_fills_the_screen: chosen.banner_fills_the_screen,
         header_hides_on_scroll: chosen.header_hides_on_scroll,
         header_hides_on_scroll_phone: chosen.header_hides_on_scroll_phone,
+        theme_mode_phone: chosen.theme_mode_phone.map(ThemeMode::as_str),
+        start_library_phone: chosen.start_library_phone.map(|library| library.to_string()),
         header_buttons: chosen
             .header_buttons
             .iter()
