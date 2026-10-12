@@ -239,6 +239,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         ? "light"
         : "dark";
       root.dataset.theme = theme === "system" ? system : theme;
+      colourTheWindow();
     };
     apply();
 

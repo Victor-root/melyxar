@@ -85,19 +85,26 @@ export function markTheApp(): void {
 }
 
 /**
- * Colours the browser's own bar, above the page on a telephone and the title
- * bar of the installed application on a computer, with the accent. Called
- * whenever the accent changes: it is the same in both themes.
+ * Colours the browser's own bar, the title bar of the installed application
+ * on a computer, with the accent; and on a screen touched with a finger with
+ * the ground of the page instead.
+ *
+ * On a telephone the bar at the top is drawn over the page, and which way its
+ * icons are coloured is chosen from this colour: the accent is dark enough to
+ * have them drawn white, and white on the light page is nothing at all. Called
+ * whenever the accent or the theme changes.
  */
 export function colourTheWindow(): void {
   const accent = tokenOf("--accent");
   if (!accent) {
     return;
   }
+  const touched = window.matchMedia("(pointer: coarse)").matches;
+  const colour = (touched ? tokenOf("--surface-deep") : null) ?? accent;
   const meta = headElement('meta[name="theme-color"]', () => {
     const made = document.createElement("meta");
     made.name = "theme-color";
     return made;
   });
-  meta.content = `#${accent}`;
+  meta.content = `#${colour}`;
 }

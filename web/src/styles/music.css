@@ -2096,6 +2096,18 @@
     flex: 1;
   }
 
+  /* The words run down to the line of the song and fade into it, rather than
+     stopping a hand's width above it: the page gives up only what the bar
+     takes under its line, and the last lines are brought clear of the fade. */
+  .music-now-page-words {
+    padding-bottom: max(0px, calc(var(--now-bottom, 0px) - 20px));
+  }
+
+  .music-now-page-words .music-lyrics {
+    padding-bottom: 64px;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
+  }
+
   /* The words stop a scroll at their own end, but only up and down: held
      back sideways too, a swipe on them never reached the pages and the
      words could not be left. */
