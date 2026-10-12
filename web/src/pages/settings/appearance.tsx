@@ -13,6 +13,7 @@ import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
 import { offeredButtons } from "../../buttons";
+import { useLibraries } from "../../libraries";
 import { LIGHTS } from "../../lights";
 import {
   BellIcon,
@@ -23,6 +24,7 @@ import {
   GearIcon,
   HeartIcon,
   PaletteIcon,
+  PhoneIcon,
   RefreshIcon,
   RequestIcon,
   ResetIcon,
@@ -34,7 +36,7 @@ import {
 import { useRequests } from "../../requests/store";
 import { OFFERED_ACCENTS, useSettings } from "../../settings";
 import { reorderedAmong } from "../../sorting";
-import type { ThemeChoice } from "../../settings";
+import type { PhoneTheme, ThemeChoice } from "../../settings";
 
 export function MyAppearance() {
   const { t, theme, setTheme, accent, setAccent } = useSettings();
@@ -87,8 +89,57 @@ export function MyAppearance() {
         <BackdropChoice />
       </Panel>
 
+      <OnAPhone />
+
       <TopBar />
     </>
+  );
+}
+
+/**
+ * What a phone shows apart from the larger screens: its theme, and the
+ * library it opens on in place of the home page.
+ */
+function OnAPhone() {
+  const { t, phoneTheme, setPhoneTheme, startLibraryOnPhone, setStartLibraryOnPhone } =
+    useSettings();
+  const { all } = useLibraries();
+  // A library gone or taken away reads as the home page, which is where the
+  // phone would open.
+  const startsIn = all.some((library) => library.id === startLibraryOnPhone)
+    ? (startLibraryOnPhone ?? "")
+    : "";
+
+  return (
+    <Panel icon={PhoneIcon} title={t("settings.phone")} lead={t("settings.phone_why")}>
+      <Setting label={t("settings.theme_phone")} why={t("settings.theme_phone_why")}>
+        <Picker<PhoneTheme>
+          label={t("settings.theme_phone")}
+          value={phoneTheme}
+          onPick={setPhoneTheme}
+          options={[
+            ["same", t("theme.same")],
+            ["system", t("theme.system")],
+            ["dark", t("theme.dark")],
+            ["light", t("theme.light")],
+          ]}
+        />
+      </Setting>
+      <Setting
+        label={t("settings.start_library_phone")}
+        why={t("settings.start_library_phone_why")}
+      >
+        <Picker<string>
+          label={t("settings.start_library_phone")}
+          value={startsIn}
+          onPick={(library) => setStartLibraryOnPhone(library || null)}
+          options={[
+            ["", t("settings.start_home")],
+            ...all.map((library) => [library.id, library.name] as const),
+          ]}
+        />
+      </Setting>
+    </Panel>
   );
 }
 

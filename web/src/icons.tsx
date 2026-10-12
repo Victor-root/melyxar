@@ -816,6 +816,16 @@ export function DeviceIcon(props: IconProps) {
   );
 }
 
+/** A phone held upright, for what is chosen for a phone alone. */
+export function PhoneIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="6.6" y="2.8" width="10.8" height="18.4" rx="2.2" />
+      <path d="M10.6 18h2.8" />
+    </Icon>
+  );
+}
+
 /** Ticked lines, for the work the server does on its own. */
 export function TasksIcon(props: IconProps) {
   return (
