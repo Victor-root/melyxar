@@ -565,8 +565,8 @@ button.seen-mark:not(.seen-mark-on):hover {
   padding: 0;
   line-height: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-deep) 86%, transparent);
-  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  background: color-mix(in srgb, var(--surface-deep) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 38%, transparent);
   color: var(--text);
   transition:
     background var(--quick) var(--ease),
@@ -575,8 +575,11 @@ button.seen-mark:not(.seen-mark-on):hover {
     box-shadow var(--quick) var(--ease);
 }
 
+/* A heavier line than the icons are drawn with elsewhere: at this size, on a
+   picture, the usual one read as a hair and the mark was lost against it. */
 .card-mark svg {
   display: block;
+  stroke-width: 2.4;
 }
 
 /* Rimmed and lit in the accent under the pointer, the way the card itself
