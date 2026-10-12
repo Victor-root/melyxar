@@ -546,6 +546,13 @@ button.seen-mark:not(.seen-mark-on):hover {
   transform: scale(1);
 }
 
+/* Swelling under the very pointer that is over it: a stretch and nothing else,
+   so it is the compositor's to do and no layout or paint comes of it, and
+   only the one disc under the pointer ever moves. */
+.card-own .card-play:hover {
+  transform: scale(1.25);
+}
+
 /* The marks: watched at the top right, liked and the rest at the bottom. */
 .card-mark {
   display: grid;
