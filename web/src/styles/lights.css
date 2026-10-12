@@ -427,6 +427,24 @@
   --far-force: 0.26;
   --far-reach: 54% 24%;
   --far-at: 56% 50%;
+  /* The three soft glows under the points, apart from them so that a phone
+     held upright can draw them round without every point again. */
+  --constellation-glows:
+    radial-gradient(
+      44% 50% at 84% 16%,
+      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      46% 44% at 14% 90%,
+      color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+      transparent 74%
+    ),
+    radial-gradient(
+      50% 46% at 46% 50%,
+      color-mix(in srgb, var(--accent-bright) calc(8% * var(--drift-force)), transparent),
+      transparent 76%
+    );
 
   background:
     radial-gradient(
@@ -634,21 +652,7 @@
       color-mix(in srgb, var(--drift-dust) calc(65% * var(--drift-dust-force)), transparent) 55%,
       transparent
     ),
-    radial-gradient(
-      44% 50% at 84% 16%,
-      color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
-      transparent 74%
-    ),
-    radial-gradient(
-      46% 44% at 14% 90%,
-      color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
-      transparent 74%
-    ),
-    radial-gradient(
-      50% 46% at 46% 50%,
-      color-mix(in srgb, var(--accent-bright) calc(8% * var(--drift-force)), transparent),
-      transparent 76%
-    );
+    var(--constellation-glows);
 }
 
 /* Light on white reads at a fraction of what it reads at on black, so each
@@ -660,4 +664,334 @@
   --drift-force: 0.45;
   --drift-dust: var(--text);
   --drift-dust-force: 0.56;
+}
+
+/*
+ * On a phone held upright.
+ *
+ * The paintings above are written in fractions of the box, which is a window
+ * wider than it is tall: an ellipse of half the width and three quarters of
+ * the height is a circle there, and on a screen twice as tall as it is wide
+ * it becomes a long thin oval, a ring a stretched hoop, a pool a column. So
+ * each is drawn again here with its shapes round, their size taken from the
+ * width, and their places spread down the height that there is. Only the
+ * window's own painting is: the little tiles somebody chooses from keep the
+ * proportions of a screen laid on its side.
+ */
+@media (max-width: 600px) and (orientation: portrait) {
+  .home-backdrop.drift[data-light="1"],
+  .door-drift.drift {
+    --near-reach: 60vw;
+    --near-at: 30% 52%;
+    --far-reach: 60vw;
+    --far-at: 74% 34%;
+
+    background:
+      radial-gradient(
+        circle 78vw at 10% 34%,
+        transparent 95%,
+        color-mix(in srgb, var(--accent) calc(17% * var(--drift-force)), transparent) 100%,
+        transparent 106%
+      ),
+      radial-gradient(
+        circle 48vw at 53% 106%,
+        color-mix(in srgb, var(--accent-dim) calc(17% * var(--drift-force)), transparent),
+        transparent 76%
+      ),
+      radial-gradient(
+        circle 46vw at 88% 91%,
+        color-mix(in srgb, var(--accent-bright) calc(20% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 52vw at 11% 38%,
+        color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="2"] {
+    --near-reach: 70vw 24vw;
+    --near-at: 50% 62%;
+    --far-reach: 50vw;
+    --far-at: 78% 24%;
+
+    background:
+      radial-gradient(
+        circle 144vw at 50% 130%,
+        transparent 94%,
+        color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent) 98.5%,
+        color-mix(in srgb, var(--accent) calc(10% * var(--drift-force)), transparent) 101%,
+        transparent 108%
+      ),
+      radial-gradient(
+        circle 62vw at 50% 78%,
+        color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 144vw at 50% 130%,
+        color-mix(in srgb, var(--accent-dim) calc(14% * var(--drift-force)), transparent) 60%,
+        transparent 95%
+      ),
+      radial-gradient(
+        circle 50vw at 88% 6%,
+        color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="3"] {
+    --near-reach: 46vw;
+    --near-at: 70% 36%;
+    --far-reach: 55vw;
+    --far-at: 18% 74%;
+
+    background:
+      radial-gradient(
+        circle 30vw at 70% 36%,
+        transparent 88%,
+        color-mix(in srgb, var(--accent-bright) calc(40% * var(--drift-force)), transparent) 100%,
+        color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 108%,
+        transparent 150%
+      ),
+      radial-gradient(
+        circle 70vw at 70% 36%,
+        color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        circle 62vw at 10% 90%,
+        color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="4"] {
+    --near-reach: 52vw;
+    --near-at: 30% 26%;
+    --far-reach: 44vw;
+    --far-at: 76% 70%;
+
+    background:
+      radial-gradient(
+        circle 56vw at 0% 0%,
+        color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 56vw at 84% 92%,
+        color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 200vw at 0% 0%,
+        transparent 40%,
+        var(--surface-deep) 104%
+      ),
+      conic-gradient(
+        from 80deg at 0% 0%,
+        transparent 0deg 12deg,
+        color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent) 17deg,
+        transparent 23deg 30deg,
+        color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent) 36deg,
+        transparent 41deg 47deg,
+        color-mix(in srgb, var(--accent) calc(20% * var(--drift-force)), transparent) 50deg,
+        transparent 54deg 60deg,
+        color-mix(in srgb, var(--accent-dim) calc(28% * var(--drift-force)), transparent) 67deg,
+        transparent 75deg
+      );
+  }
+
+  .home-backdrop.drift[data-light="5"] {
+    --near-reach: 46vw;
+    --near-at: 56% 62%;
+    --far-reach: 50vw;
+    --far-at: 22% 22%;
+
+    background:
+      radial-gradient(
+        circle 60vw at 96% 104%,
+        transparent 94%,
+        color-mix(in srgb, var(--accent-bright) calc(26% * var(--drift-force)), transparent) 100%,
+        transparent 106%
+      ),
+      radial-gradient(
+        circle 92vw at 96% 104%,
+        transparent 95%,
+        color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent) 100%,
+        transparent 105%
+      ),
+      radial-gradient(
+        circle 125vw at 96% 104%,
+        transparent 96%,
+        color-mix(in srgb, var(--accent) calc(11% * var(--drift-force)), transparent) 100%,
+        transparent 104%
+      ),
+      radial-gradient(
+        circle 50vw at 96% 104%,
+        color-mix(in srgb, var(--accent) calc(26% * var(--drift-force)), transparent),
+        transparent 76%
+      ),
+      radial-gradient(
+        circle 46vw at 6% 8%,
+        color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="6"] {
+    --near-reach: 55vw;
+    --near-at: 44% 42%;
+    --far-reach: 70vw;
+    --far-at: 60% 54%;
+
+    background:
+      radial-gradient(
+        circle 42vw at 48% 22%,
+        color-mix(in srgb, var(--accent-bright) calc(18% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 46vw at 64% 52%,
+        color-mix(in srgb, var(--accent-bright) calc(16% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 58vw at 30% 38%,
+        color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 52vw at 80% 86%,
+        color-mix(in srgb, var(--accent-dim) calc(18% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 40vw at 10% 72%,
+        color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="7"] {
+    --near-reach: 40vw;
+    --near-at: 52% 50%;
+    --far-reach: 48vw;
+    --far-at: 14% 22%;
+
+    background:
+      radial-gradient(
+        circle 36vw at 52% 50%,
+        color-mix(in srgb, var(--accent-bright) calc(22% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 110vw at 0% 118%,
+        transparent 95%,
+        color-mix(in srgb, var(--accent) calc(20% * var(--drift-force)), transparent) 100%,
+        transparent 105%
+      ),
+      radial-gradient(
+        circle 110vw at 100% -18%,
+        transparent 95%,
+        color-mix(in srgb, var(--accent-bright) calc(18% * var(--drift-force)), transparent) 100%,
+        transparent 105%
+      ),
+      radial-gradient(
+        circle 46vw at 92% 88%,
+        color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 40vw at 6% 10%,
+        color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent),
+        transparent 72%
+      );
+  }
+
+  .home-backdrop.drift[data-light="8"] {
+    --near-reach: 22vw 40vh;
+    --near-at: 50% 42%;
+    --far-reach: 40vw;
+    --far-at: 50% 30%;
+
+    background:
+      radial-gradient(
+        circle 50vw at 50% 98%,
+        color-mix(in srgb, var(--accent) calc(28% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 32vw at 50% 0%,
+        color-mix(in srgb, var(--accent-bright) calc(30% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 200vw at 50% -12%,
+        transparent 50%,
+        var(--surface-deep) 108%
+      ),
+      conic-gradient(
+        from 166deg at 50% -12%,
+        transparent 0deg,
+        color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent) 8deg,
+        color-mix(in srgb, var(--accent-bright) calc(32% * var(--drift-force)), transparent) 14deg,
+        color-mix(in srgb, var(--accent) calc(24% * var(--drift-force)), transparent) 20deg,
+        transparent 28deg
+      );
+  }
+
+  .home-backdrop.drift[data-light="9"] {
+    --near-reach: 46vw;
+    --near-at: 52% 50%;
+    --far-reach: 44vw;
+    --far-at: 22% 20%;
+
+    background:
+      radial-gradient(
+        circle 30vw at 72% 28%,
+        color-mix(in srgb, var(--accent-bright) calc(34% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 50vw at 12% 92%,
+        color-mix(in srgb, var(--accent-dim) calc(16% * var(--drift-force)), transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        circle 130vw at 72% 28%,
+        transparent 18%,
+        var(--surface-deep) 100%
+      ),
+      linear-gradient(
+        114deg,
+        transparent 36%,
+        color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 45%,
+        color-mix(in srgb, var(--accent-bright) calc(28% * var(--drift-force)), transparent) 49%,
+        color-mix(in srgb, var(--accent) calc(16% * var(--drift-force)), transparent) 53%,
+        transparent 62%
+      );
+  }
+
+  .home-backdrop.drift[data-light="10"] {
+    --near-reach: 70vw 22vw;
+    --far-reach: 60vw;
+    --constellation-glows:
+      radial-gradient(
+        circle 56vw at 84% 16%,
+        color-mix(in srgb, var(--accent) calc(18% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 60vw at 14% 90%,
+        color-mix(in srgb, var(--accent-dim) calc(20% * var(--drift-force)), transparent),
+        transparent 74%
+      ),
+      radial-gradient(
+        circle 70vw at 46% 50%,
+        color-mix(in srgb, var(--accent-bright) calc(8% * var(--drift-force)), transparent),
+        transparent 76%
+      );
+  }
 }
