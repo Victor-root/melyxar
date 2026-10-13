@@ -19,6 +19,10 @@ import type { MusicTab } from "./tabs";
  *  and pushes them along by as much. */
 const ARROW_ROOM = 32;
 
+/** The room kept at either end of the tabs of a phone, as the stylesheet
+ *  draws it. */
+const TRACK_PADDING = 5;
+
 export function TabsBar({
   tabs,
   open,
@@ -47,9 +51,12 @@ export function TabsBar({
     setCanGoOn(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
   }, []);
 
+  /* The arrows are for a wide screen only: a phone pulls its tabs by hand,
+     and reading where they stand at every step of that was work for
+     nothing. */
   useEffect(() => {
     const element = track.current;
-    if (!element) {
+    if (!element || phone) {
       return;
     }
     // Its first reading comes once the page is laid out, not by laying it out.
@@ -59,12 +66,15 @@ export function TabsBar({
       watcher.observe(child);
     }
     return () => watcher.disconnect();
-  }, [measure, tabs]);
+  }, [measure, tabs, phone]);
 
   /* Rolled up, the tabs of a phone have a bubble's width to be seen in, and
      bringing the open one into it would leave them pulled along when they
      roll out. They start from their beginning then, the open one brought in
-     only if the width they end with does not show it. */
+     only if the width they end with does not show it. Where it stands is read
+     as the bubble starts to roll, the page already laid out for it, and only
+     the slide is left for its end: asked then, where to bring it had the
+     page laid out again on the frame the bubble finished on. */
   useEffect(() => {
     const element = track.current;
     if (!element || (phone && !unrolled)) {
@@ -76,10 +86,14 @@ export function TabsBar({
       return;
     }
     element.scrollLeft = 0;
-    const later = window.setTimeout(
-      () => current?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" }),
-      UNROLL_MS,
-    );
+    if (!current) {
+      return;
+    }
+    const beyond = current.offsetLeft + current.offsetWidth + TRACK_PADDING - element.clientWidth;
+    if (beyond <= 0) {
+      return;
+    }
+    const later = window.setTimeout(() => element.scrollTo({ left: beyond, behavior: "smooth" }), UNROLL_MS);
     return () => window.clearTimeout(later);
   }, [open, phone, unrolled]);
 
@@ -124,7 +138,9 @@ export function TabsBar({
         className="music-tabs-track"
         ref={track}
         onScroll={() => {
-          measure();
+          if (!phone) {
+            measure();
+          }
           if (unrolled) {
             stay();
           }
