@@ -969,6 +969,9 @@
 .playing-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Room for the journal beside, which is as tall as what is playing and no
+     taller: it scrolls in its own box. */
+  min-height: 360px;
 }
 
 .playing-now {
@@ -980,9 +983,26 @@
 }
 
 .playing-beside {
+  position: relative;
   min-width: 0;
   padding-left: calc(var(--gap) * 1.5);
   border-left: 1px solid var(--border);
+}
+
+/* Laid over the whole of the column, so that however many lines it holds
+   the row is no taller than what is playing. */
+.recent-activity {
+  position: absolute;
+  inset: 0 0 0 calc(var(--gap) * 1.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-activity-lines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @container (max-width: 1000px) {
@@ -999,6 +1019,15 @@
     padding: var(--gap) 0 0;
     border-left: none;
     border-top: 1px solid var(--border);
+  }
+
+  .playing-split {
+    min-height: 0;
+  }
+
+  .recent-activity {
+    position: static;
+    max-height: 420px;
   }
 }
 
