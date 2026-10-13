@@ -1703,57 +1703,6 @@
   overscroll-behavior: contain;
 }
 
-/* Every line moved sooner or later by hand, under the lines, for an
-   administrator: quiet until it is wanted. */
-.music-lyrics-offset {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  margin-top: var(--gap-tight);
-  color: var(--text-faint);
-  font-size: 12.5px;
-}
-
-.music-lyrics-offset-name {
-  margin-right: 6px;
-}
-
-.music-lyrics-offset-step {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--text-soft);
-  font-size: 16px;
-  font-weight: 650;
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
-}
-
-.music-lyrics-offset-step:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-
-.music-lyrics-offset-step:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.music-lyrics-offset-amount {
-  min-width: 52px;
-  color: var(--text-soft);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-.music-lyrics-offset-moved {
-  color: var(--accent-bright);
-}
-
 .music-lyrics-line button {
   display: block;
   width: 100%;
@@ -2516,6 +2465,20 @@
   margin-left: auto;
 }
 
+/* Asked before the window shuts with changes not written. */
+.tag-leave {
+  width: min(460px, 100%);
+}
+
+.tag-leave .modal-body p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.tag-leave .modal-foot {
+  justify-content: flex-end;
+}
+
 .tag-preview-list {
   display: flex;
   flex-direction: column;
@@ -3235,4 +3198,19 @@
     align-items: baseline;
     gap: 10px;
   }
+}
+
+/* The button that moves the lyrics, and its panel standing over it, the
+   panel of the player of films for its subtitles. */
+.music-lyrics-shift {
+  position: relative;
+  display: inline-flex;
+}
+
+.music-lyrics-shift-menu .player-menu {
+  right: -8px;
+  bottom: calc(100% + 14px);
+  left: auto;
+  width: 320px;
+  max-height: none;
 }

@@ -7,7 +7,6 @@
  * stands, how it shuts and how it goes back one thing rather than eight.
  */
 
-import { useEffect, useState } from "react";
 import { BottomSheet } from "../components/bottom-sheet";
 import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import type { WideGamutChoice } from "../api";
@@ -16,7 +15,7 @@ import { AUTOMATIC, CODECS, codecName } from "./codec";
 import type { SheetName } from "./drawer";
 import { SPEEDS } from "./engine";
 import type { Playback } from "./engine";
-import { BackIcon, ChosenIcon, IntoIcon } from "./icons";
+import { Line, Menu, OffsetSlider, offsetSaid } from "./menu";
 import type { Surroundings } from "./overlay";
 import { AS_IT_IS, QUALITIES, qualityName } from "./quality";
 import type { Wording } from "../readable";
@@ -70,12 +69,6 @@ const WIDE_GAMUT_HERE: [WideGamutChoice | null, string][] = [
   ["always_convert", "player.wide_gamut.convert"],
 ];
 
-/** How far the words are shifted, as a viewer reads it: signed, to a tenth of
- *  a second. */
-export function offsetSaid(seconds: number): string {
-  return `${seconds > 0 ? "+" : ""}${seconds.toFixed(1)} s`;
-}
-
 /** The shift after one press of a nudge button, never past either end. */
 export function nudged(offset: number, by: number): number {
   return Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, offset + by));
@@ -84,129 +77,6 @@ export function nudged(offset: number, by: number): number {
 /** A turn as a viewer reads it: nothing at all, or how far. */
 function turnName(turn: Turn, t: Wording): string {
   return turn === 0 ? t("player.turn.none") : t("player.turn.degrees", { degrees: turn });
-}
-
-/** One line of a menu: what it is called, what it is on, and a tick or an arrow. */
-function Line({
-  label,
-  value,
-  changed,
-  chosen,
-  switched,
-  into,
-  onPick,
-}: {
-  label: string;
-  value?: string;
-  /** Whether the value shown is something other than what a viewer who never
-   *  touched this gets: coloured, so a glance at the row it opens from says
-   *  whether there is anything on it worth going back to the default for. */
-  changed?: boolean;
-  /** One of a list, of which exactly one is picked: a tick down the left. */
-  chosen?: boolean;
-  /** A setting that is on or off on its own: a switch on the right. The two
-   *  are not the same question and must not look the same. */
-  switched?: boolean;
-  into?: boolean;
-  /** Left out for a line that only ever says what a value is, with the
-   *  control that actually changes it drawn beside it rather than reached
-   *  by opening anything: a row rather than a button, with nothing to press. */
-  onPick?: () => void;
-}) {
-  const aSwitch = switched !== undefined;
-  const words = (
-    <>
-      {/* The column is there whether or not this line has a tick in it, so
-          every line in a panel starts its wording in the same place. */}
-      <span className="player-menu-tick">{chosen && <ChosenIcon size={18} />}</span>
-      <span className="player-menu-label">{label}</span>
-      {value !== undefined && (
-        <span className={`player-menu-value${changed ? " player-menu-value-changed" : ""}`}>
-          {value}
-        </span>
-      )}
-      {aSwitch && <Switch on={switched} />}
-      {into && <IntoIcon size={16} />}
-    </>
-  );
-  if (!onPick) {
-    return <div className="player-menu-line player-menu-line-static">{words}</div>;
-  }
-  return (
-    <button
-      className="player-menu-line"
-      onClick={onPick}
-      role={aSwitch ? "menuitemcheckbox" : "menuitem"}
-      aria-checked={aSwitch ? switched : undefined}
-    >
-      {words}
-    </button>
-  );
-}
-
-/**
- * On or off, as a switch rather than a tick.
- *
- * A tick down the left of a list means "this is the one picked out of these";
- * a setting that stands alone is not one of a list, and drawn the same way it
- * reads as though the others were unpicked. Built to the shape Material's own
- * switch uses, without the tick inside the handle: the handle growing as it
- * moves already says which side it is on.
- */
-function Switch({ on }: { on: boolean }) {
-  return (
-    <span className="player-switch" data-on={on ? "yes" : "no"} aria-hidden="true">
-      <span className="player-switch-handle" />
-    </span>
-  );
-}
-
-/**
- * The bar for shifting the words against the picture.
- *
- * Held in a draft of its own while a hand is on it, and only carried over to
- * the film's own words on release: applying it walks every cue on the
- * track, which a drag would otherwise ask for many times a second for no
- * reason, since only the place a hand lets go of the bar was ever going to
- * be watched from.
- */
-function SubtitleOffsetSlider({
-  playback,
-  t,
-}: {
-  playback: Playback;
-  t: (key: string, values?: Record<string, string | number>) => string;
-}) {
-  const [draft, setDraft] = useState(playback.wordsOffset);
-  useEffect(() => setDraft(playback.wordsOffset), [playback.wordsOffset]);
-  const commit = () => playback.setWordsOffset(draft);
-  return (
-    <>
-      <Line
-        label={t("player.words_offset")}
-        value={offsetSaid(draft)}
-        changed={draft !== 0}
-      />
-      <div
-        className="player-menu-slider"
-        role="presentation"
-        style={{ ["--share" as string]: `${((draft + OFFSET_FURTHEST) / (2 * OFFSET_FURTHEST)) * 100}` }}
-      >
-        <input
-          type="range"
-          min={-OFFSET_FURTHEST}
-          max={OFFSET_FURTHEST}
-          step={OFFSET_STEP}
-          value={draft}
-          aria-label={t("player.words_offset")}
-          onChange={(event) => setDraft(Number(event.target.value))}
-          onPointerUp={commit}
-          onKeyUp={commit}
-          onBlur={commit}
-        />
-      </div>
-    </>
-  );
 }
 
 /** What one open panel is: a heading, what it leads back to, and its lines. */
@@ -459,7 +329,13 @@ function sheetFor(
         from: "subtitles",
         lines: (
           <>
-            <SubtitleOffsetSlider playback={playback} t={t} />
+            <OffsetSlider
+              label={t("player.words_offset")}
+              seconds={playback.wordsOffset}
+              furthest={OFFSET_FURTHEST}
+              step={OFFSET_STEP}
+              onCommit={playback.setWordsOffset}
+            />
             <p className="player-menu-why">{t("player.words_offset.why")}</p>
             <Line
               label={t("player.words_offset.reset")}
@@ -731,51 +607,4 @@ function sheetFor(
     default:
       return null;
   }
-}
-
-/**
- * A panel standing over the picture, above the button that opened it.
- *
- * Nothing shuts it but the three things that already did: the button that
- * opened it, the escape key, and the picture behind it. A cross in the corner
- * of a panel this small is a fourth way of doing what pressing the same button
- * again does, and it costs a corner of every panel.
- */
-function Menu({
-  title,
-  onBack,
-  anchor,
-  wide,
-  children,
-}: {
-  title: string;
-  onBack?: () => void;
-  /** Where the button that opened it stands, when one did. */
-  anchor?: number | null;
-  /** Wider than the usual list, for the one panel that carries a second
-   *  column beside its lines. */
-  wide?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={`player-menu${anchor == null ? " player-menu-at-the-end" : ""}${wide ? " player-menu-wide" : ""}`}
-      role="menu"
-      aria-label={title}
-      /* Standing over the button that opened it. Held inside the picture at
-         both edges by the stylesheet, which knows how wide the panel is and
-         how far in things are allowed to come. */
-      style={anchor == null ? undefined : { ["--anchor" as string]: `${anchor}px` }}
-    >
-      <div className="player-menu-head">
-        {onBack && (
-          <button className="player-button player-button-small" onClick={onBack}>
-            <BackIcon size={18} />
-          </button>
-        )}
-        <span className="player-menu-title">{title}</span>
-      </div>
-      <div className="player-menu-body">{children}</div>
-    </div>
-  );
 }

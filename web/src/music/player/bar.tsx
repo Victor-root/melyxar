@@ -19,6 +19,7 @@ import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
+import { LyricsShiftButton } from "./lyrics-offset";
 import { HeartButton, PlayButton, QueueButton, Rail, Transport, Ways, Volume } from "./controls";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
@@ -99,6 +100,7 @@ export function MusicBar() {
         </div>
 
         <div className="player-zone player-zone-bottom-right music-bar-tools">
+          <LyricsShiftButton song={song.id} />
           <HeartButton id={song.id} />
           <Volume music={music} />
           <Ways music={music} />

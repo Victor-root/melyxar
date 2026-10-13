@@ -6,23 +6,16 @@
  * as they are. The lines are drawn once per song; only which one is lit
  * changes as the song plays.
  *
- * An administrator moves every line of a song sooner or later by hand, as
- * the subtitles of a film are: shown moved at once, kept by the server for
- * every account once the presses rest.
+ * The lines are shown moved as soon as an administrator moves them by hand,
+ * before the server has kept it.
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount } from "../../account";
-import { refusalOf } from "../../asking";
-import { refusalKey } from "../../i18n";
-import { ResetIcon } from "../../icons";
-import { useToast } from "../../notifications/toasts";
-import { shiftInSeconds } from "../../readable";
 import { useSettings } from "../../settings";
 import { music as server } from "../api";
 import type { LyricLine, SongLyrics } from "../api";
 import { useMusicMarks } from "../marks";
-import { OFFSET_STEP_MS, litLineAt, nudgedOffset, shiftedLines } from "./lyrics";
+import { litLineAt, shiftedLines } from "./lyrics";
 import { LOOK_EVERY_MS, LyricsReport, lookAt, sayLyricsRead } from "./lyrics-watch";
 import { currentMusicClock, useExactMusicPosition, useMusicControls } from "./player";
 
@@ -63,105 +56,16 @@ export function LyricsPanel({ song }: { song: string }) {
   if (lyrics.lines.length === 0) {
     return <div className="music-lyrics music-lyrics-plain">{lyrics.plain}</div>;
   }
-  return <Moved key={song} song={song} lyrics={lyrics} />;
+  return <Moved song={song} lyrics={lyrics} />;
 }
 
-/** How long the presses rest before the offset is sent. */
-const SENT_AFTER_MS = 600;
-
 /** The lines as they are shown: as the server sends them, moved by what was
- *  pressed since, and the bar that moves them for an administrator. */
+ *  set by hand since (see lyrics-offset.tsx). */
 function Moved({ song, lyrics }: { song: string; lyrics: SongLyrics }) {
-  const { t, language } = useSettings();
-  const { account } = useAccount();
-  const toast = useToast();
-  const [offset, setOffset] = useState(lyrics.offset_ms);
-  const saved = useRef(lyrics.offset_ms);
-  const sending = useRef<{ timer: number; send: () => void } | null>(null);
+  const { lyricsShift } = useMusicMarks();
+  const offset = lyricsShift?.song === song ? lyricsShift.offsetMs : lyrics.offset_ms;
   const lines = useMemo(() => shiftedLines(lyrics.lines, offset - lyrics.offset_ms), [lyrics, offset]);
-
-  // Read again after the lines were lined up anew elsewhere, which puts the
-  // offset back to nothing, unless a press here is still on its way.
-  useEffect(() => {
-    if (!sending.current) {
-      saved.current = lyrics.offset_ms;
-      setOffset(lyrics.offset_ms);
-    }
-  }, [lyrics]);
-
-  // What is still waiting goes when the song or the panel does.
-  useEffect(
-    () => () => {
-      const waiting = sending.current;
-      if (waiting) {
-        window.clearTimeout(waiting.timer);
-        waiting.send();
-      }
-    },
-    [song],
-  );
-
-  const moveTo = (next: number) => {
-    setOffset(next);
-    if (sending.current) {
-      window.clearTimeout(sending.current.timer);
-    }
-    const send = () => {
-      sending.current = null;
-      server.setLyricsOffset(song, next).then(
-        () => {
-          saved.current = next;
-        },
-        (error: unknown) => {
-          setOffset(saved.current);
-          toast({ state: "trouble", title: t(refusalKey(refusalOf(error))) });
-        },
-      );
-    };
-    sending.current = { timer: window.setTimeout(send, SENT_AFTER_MS), send };
-  };
-
-  return (
-    <>
-      <Following song={song} lines={lines} />
-      {account?.is_administrator && (
-        <div className="music-lyrics-offset" role="group" aria-label={t("music.lyrics_offset")}>
-          <span className="music-lyrics-offset-name">{t("music.lyrics_offset")}</span>
-          <button
-            type="button"
-            className="music-lyrics-offset-step"
-            aria-label={t("music.lyrics_offset_sooner")}
-            title={t("music.lyrics_offset_sooner")}
-            onClick={() => moveTo(nudgedOffset(offset, -OFFSET_STEP_MS))}
-          >
-            −
-          </button>
-          <span className={`music-lyrics-offset-amount${offset === 0 ? "" : " music-lyrics-offset-moved"}`}>
-            {shiftInSeconds(offset, language)} s
-          </span>
-          <button
-            type="button"
-            className="music-lyrics-offset-step"
-            aria-label={t("music.lyrics_offset_later")}
-            title={t("music.lyrics_offset_later")}
-            onClick={() => moveTo(nudgedOffset(offset, OFFSET_STEP_MS))}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="music-lyrics-offset-step"
-            aria-label={t("music.lyrics_offset_reset")}
-            title={t("music.lyrics_offset_reset")}
-            disabled={offset === 0}
-            onClick={() => moveTo(0)}
-          >
-            <ResetIcon size={15} />
-          </button>
-        </div>
-      )}
-    </>
-  );
+  return <Following song={song} lines={lines} />;
 }
 
 function Following({ song, lines }: { song: string; lines: LyricLine[] }) {

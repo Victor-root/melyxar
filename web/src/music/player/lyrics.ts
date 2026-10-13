@@ -34,7 +34,7 @@ export function litLineAt(lines: readonly LyricLine[], positionSeconds: number):
 
 /** How far one press moves the lines, and the furthest they are moved either
  *  way, as the server holds it. */
-export const OFFSET_STEP_MS = 500;
+export const OFFSET_STEP_MS = 100;
 export const FURTHEST_OFFSET_MS = 30_000;
 
 /** An offset moved by a press, kept within the furthest. */

@@ -9,7 +9,8 @@
  * the foot beside the button that writes them.
  *
  * What is about to change is shown before anything is written, unless the
- * account chose otherwise in its settings. The library is read again once
+ * account chose otherwise in its settings. Shutting the window with changes
+ * not written asks first. The library is read again once
  * the files are written, and every screen showing the album follows.
  *
  * Each song can also be cut short at either end, its file cut by the server
@@ -96,14 +97,20 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
   const [busy, setBusy] = useState(false);
   const [cover, setCover] = useState<{ jpeg: Blob; shown: string } | null>(null);
   const [trimming, setTrimming] = useState<SongFields | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  /** The fields as they were read, to tell whether anything was changed. */
+  const [read, setRead] = useState<string | null>(null);
 
   useEffect(() => {
     const stop = new AbortController();
     music
       .albumTags(id, stop.signal)
       .then((found: SongTags[]) => {
-        setSongs(found.map(fieldsOf));
-        setAlbum(albumFieldsOf(found[0]?.tags));
+        const fields = found.map(fieldsOf);
+        const albumFields = albumFieldsOf(found[0]?.tags);
+        setSongs(fields);
+        setAlbum(albumFields);
+        setRead(typedOf(fields, albumFields));
       })
       .catch((error) => {
         if (!stop.signal.aborted) {
@@ -136,6 +143,9 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
     pattern: renaming ? pattern : null,
     keep_a_copy: keepACopy,
   });
+  const changed = cover !== null || (songs !== null && read !== null && typedOf(songs, album) !== read);
+  const askToLeave = () => (changed ? setLeaving(true) : onClose());
+
   const edit = (song: string, changes: Partial<SongFields>) =>
     setSongs((was) => was?.map((one) => (one.song === song ? { ...one, ...changes } : one)) ?? was);
 
@@ -189,7 +199,7 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
   return (
     <Modal
       title={t("music.edit_tags")}
-      onClose={onClose}
+      onClose={askToLeave}
       className="tag-dialog"
       footer={
         songs && (
@@ -214,7 +224,7 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
               </label>
             </div>
             <div className="tag-dialog-actions">
-              <button type="button" className="button button-quiet" onClick={onClose}>
+              <button type="button" className="button button-quiet" onClick={askToLeave}>
                 {t("lists.cancel")}
               </button>
               <button type="button" className="button button-accent" disabled={busy} onClick={() => void save(songs)}>
@@ -344,6 +354,26 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
         />
       )}
 
+      {leaving && (
+        <Modal
+          title={t("music.tag.leave_title")}
+          onClose={() => setLeaving(false)}
+          className="tag-leave"
+          footer={
+            <>
+              <button type="button" className="button button-quiet" onClick={() => setLeaving(false)}>
+                {t("music.tag.leave_stay")}
+              </button>
+              <button type="button" className="button button-accent" onClick={onClose}>
+                {t("music.tag.leave_go")}
+              </button>
+            </>
+          }
+        >
+          <p>{t("music.tag.leave_why")}</p>
+        </Modal>
+      )}
+
       {planned && songs && (
         <Modal
           title={t("music.tag.preview")}
@@ -415,6 +445,12 @@ function Field({
       {hint && <span className="tag-dialog-hint">{hint}</span>}
     </label>
   );
+}
+
+/** What was typed, the length of each song left out: a cut is written at
+ *  once, never left waiting. */
+function typedOf(songs: SongFields[], album: AlbumFields): string {
+  return JSON.stringify([songs.map(({ track, disc, title, artists }) => [track, disc, title, artists]), album]);
 }
 
 function fieldsOf(found: SongTags): SongFields {

@@ -33,8 +33,8 @@ describe("the lines moved by hand", () => {
   });
 
   it("are moved by a press no further than the furthest", () => {
-    expect(nudgedOffset(1000, 500)).toBe(1500);
-    expect(nudgedOffset(FURTHEST_OFFSET_MS - 200, 500)).toBe(FURTHEST_OFFSET_MS);
-    expect(nudgedOffset(-FURTHEST_OFFSET_MS, -500)).toBe(-FURTHEST_OFFSET_MS);
+    expect(nudgedOffset(1000, 100)).toBe(1100);
+    expect(nudgedOffset(FURTHEST_OFFSET_MS - 50, 100)).toBe(FURTHEST_OFFSET_MS);
+    expect(nudgedOffset(-FURTHEST_OFFSET_MS, -100)).toBe(-FURTHEST_OFFSET_MS);
   });
 });

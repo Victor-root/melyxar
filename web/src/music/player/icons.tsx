@@ -86,3 +86,14 @@ export function QueueIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Lines of words with an arrow either way beside them: the lyrics moved
+ *  sooner or later. */
+export function LyricsShiftIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.8 7h9.4M3.8 12h6.6M3.8 17h9.4" />
+      <path d="M14.6 12h6.2M17.2 9.4 14.6 12l2.6 2.6M18.2 9.4l2.6 2.6-2.6 2.6" />
+    </Icon>
+  );
+}
