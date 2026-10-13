@@ -247,13 +247,14 @@ function aDeck(): HTMLAudioElement {
   return element;
 }
 
-/** Where the sound of a song is asked for, from `start` seconds in. */
-function soundOf(song: Song, start: number): string {
+/** Where a song is heard from, `start` seconds in: what this browser plays,
+ *  so a form it does not is converted on the way. */
+export function soundOf(song: string, start: number): string {
   const query = new URLSearchParams({ plays: formsPlayedHere() });
   if (start > 0) {
     query.set("start", start.toFixed(3));
   }
-  return `/api/v1/music/songs/${song.id}/sound?${query.toString()}`;
+  return `/api/v1/music/songs/${song}/sound?${query.toString()}`;
 }
 
 /** How often where the song has got to is written down, for a tab closed
@@ -312,7 +313,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       const audio = live();
       startAt.current = start;
       offset.current = 0;
-      audio.src = soundOf(next, start);
+      audio.src = soundOf(next.id, start);
       time.set({ position: Math.floor(start), length: next.seconds ?? 0 });
       exact.set(start);
       if (andPlay) {
@@ -514,7 +515,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         letGoOfTheNext();
         const other = decks[1 - liveAt.current];
         other.preload = "auto";
-        other.src = soundOf(next, 0);
+        other.src = soundOf(next.id, 0);
         prepared.current = next.id;
       }
       if (takeOver.current === null) {

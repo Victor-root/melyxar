@@ -32,6 +32,8 @@ pub struct SongTags {
     pub song: WorkId,
     pub file_name: String,
     pub tags: EditedTags,
+    /// How long it plays, when the scan could tell: what a cut is made in.
+    pub duration: Option<Millis>,
 }
 
 /// What a person wants a song's file to carry.
@@ -106,6 +108,7 @@ pub async fn album_tags(state: &AppState, who: &User, album: WorkId) -> Result<V
             song,
             file_name: file_name_of(&on_disk.relative_path),
             tags: read_tags(on_disk.path()).await?,
+            duration: on_disk.duration,
         });
     }
     Ok(found)

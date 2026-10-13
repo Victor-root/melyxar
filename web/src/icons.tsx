@@ -816,6 +816,17 @@ export function DeviceIcon(props: IconProps) {
   );
 }
 
+/** Scissors, for a song cut short at either end. */
+export function ScissorsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="6.4" cy="6.6" r="2.8" />
+      <circle cx="6.4" cy="17.4" r="2.8" />
+      <path d="M8.6 8.4 20 17.6M8.6 15.6 20 6.4" />
+    </Icon>
+  );
+}
+
 /** A phone held upright, for what is chosen for a phone alone. */
 export function PhoneIcon(props: IconProps) {
   return (
