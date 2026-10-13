@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SongSpectrum } from "../api";
-import { approach, barsOf, levelsAt, momentOf } from "./spectrum-data";
+import { BarMeter, approach, barsOf, levelsAt, momentOf } from "./spectrum-data";
 
 /** Two bands, four readings a second: loud then quiet then loud again. */
 const SPECTRUM: SongSpectrum = {
@@ -59,13 +59,40 @@ describe("where the song is", () => {
 });
 
 describe("the bars of the button of the song playing", () => {
-  it("share the bands out in order, each the mean of its share, in a few steps", () => {
-    const levels = [1, 1, 0.6, 0.4, 0.3, 0.2, 0, 0.05];
-    expect(barsOf(levels)).toEqual([1, 0.5, 0.25, 0.25]);
+  it("share the bands out in order, each the loudest of its share", () => {
+    expect(barsOf([1, 0.2, 0.6, 0.4, 0.3, 0.2, 0, 0.05])).toEqual([1, 0.6, 0.3, 0.05]);
+    expect(barsOf([])).toEqual([0, 0, 0, 0]);
   });
 
-  it("are never quite flat, and stand at the floor with no wave", () => {
-    expect(barsOf([0, 0, 0, 0])).toEqual([0.25, 0.25, 0.25, 0.25]);
-    expect(barsOf([])).toEqual([0, 0, 0, 0]);
+  it("move a song kept to a narrow range all the way up and down", () => {
+    const meter = new BarMeter();
+    let shown: readonly number[] = [];
+    for (let step = 0; step < 60; step += 1) {
+      const level = step % 2 === 0 ? 0.55 : 0.65;
+      shown = meter.step([level, level, level, level], 33);
+    }
+    const up = [...meter.step([0.65, 0.65, 0.65, 0.65], 33)];
+    const down = [...meter.step([0.55, 0.55, 0.55, 0.55], 400)];
+    expect(shown.length).toBe(4);
+    expect(up[0]).toBeGreaterThan(0.75);
+    expect(down[0]).toBeLessThan(0.3);
+  });
+
+  it("jump up at once and fall back slowly", () => {
+    const meter = new BarMeter();
+    meter.step([0, 0, 0, 0], 33);
+    const up = meter.step([1, 1, 1, 1], 33)[0];
+    expect(up).toBeGreaterThan(0.6);
+    const fallen = meter.step([0, 0, 0, 0], 100)[0];
+    expect(fallen).toBeGreaterThan(up - 0.2);
+    expect(fallen).toBeLessThan(up);
+  });
+
+  it("never stand quite flat", () => {
+    const meter = new BarMeter();
+    for (let step = 0; step < 30; step += 1) {
+      meter.step([0, 0, 0, 0], 100);
+    }
+    expect(meter.step([0, 0, 0, 0], 100)).toEqual([0.15, 0.15, 0.15, 0.15]);
   });
 });

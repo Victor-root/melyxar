@@ -1006,10 +1006,10 @@
 }
 
 /* Moving with the wave behind the player: their heights are set as it is
-   drawn, and they glide between them. */
+   drawn, a little eased between two drawings. */
 .playing-bars[data-heard] .playing-bar {
   animation: none;
-  transition: transform 160ms linear;
+  transition: transform 50ms linear;
 }
 
 .playing-bars-pause {

@@ -55,30 +55,63 @@ export function momentOf(position: number, sinceItWasSaidMs: number): number {
   return position + FIRST_QUARTER + Math.min(1, Math.max(0, sinceItWasSaidMs / 1000));
 }
 
-/** How many bars the button of the song playing has, and how coarse they are
- *  told to be: a few steps of height, so they move with the wave without
- *  trying to be an equaliser. */
+/** How many bars the button of the song playing has. */
 const BARS = 4;
-const STEPS = 4;
 
 /** The heights of the bars of the button of the song playing, from the
- *  levels of the wave: the bands shared out between them in order, the
- *  lows first, each the mean of its share, rounded to a few steps and never
- *  quite flat. */
+ *  levels of the wave: the bands shared out between them in order, the lows
+ *  first, each the loudest of its share, so whatever stands out of the song
+ *  lifts its bar. */
 export function barsOf(levels: readonly number[]): number[] {
   const bars = new Array<number>(BARS).fill(0);
-  if (levels.length === 0) {
-    return bars;
-  }
-  for (let bar = 0; bar < BARS; bar += 1) {
+  for (let bar = 0; bar < BARS && levels.length > 0; bar += 1) {
     const first = Math.floor((bar * levels.length) / BARS);
     const last = Math.max(first + 1, Math.floor(((bar + 1) * levels.length) / BARS));
-    let sum = 0;
     for (let band = first; band < last; band += 1) {
-      sum += levels[band];
+      bars[bar] = Math.max(bars[bar], levels[band]);
     }
-    const mean = sum / (last - first);
-    bars[bar] = Math.max(1, Math.round(mean * STEPS)) / STEPS;
   }
   return bars;
+}
+
+/** How long a bar takes to forget the loudest and the quietest it has seen,
+ *  which is what it is spread between. */
+const GAIN_MEMORY_MS = 4000;
+/** The least a bar is spread over, so a song holding still does not make
+ *  noise of nothing. */
+const LEAST_SPREAD = 0.12;
+/** How much of the way up a bar goes in one step, and how fast it falls, in
+ *  heights a second: up at once, down slowly, as a level meter does. */
+const ATTACK = 0.7;
+const FALL_A_SECOND = 1.6;
+/** The lowest a bar stands, never quite flat. */
+const FLOOR = 0.15;
+
+/**
+ * The bars of the button of the song playing as they move: each spread
+ * between the loudest and the quietest of its own recent seconds, so a song
+ * that keeps to a narrow range still moves them all the way, then jumping up
+ * at once and falling back slowly.
+ */
+export class BarMeter {
+  private readonly low = new Array<number>(BARS).fill(1);
+  private readonly high = new Array<number>(BARS).fill(0);
+  private readonly shown = new Array<number>(BARS).fill(FLOOR);
+
+  /** The heights to show now, from nought to one, given the bars read from
+   *  the wave and how long it is since the last step. */
+  step(read: readonly number[], sinceMs: number): readonly number[] {
+    const forget = Math.min(1, sinceMs / GAIN_MEMORY_MS);
+    for (let bar = 0; bar < BARS; bar += 1) {
+      const level = read[bar] ?? 0;
+      this.high[bar] = level > this.high[bar] ? level : this.high[bar] + (level - this.high[bar]) * forget;
+      this.low[bar] = level < this.low[bar] ? level : this.low[bar] + (level - this.low[bar]) * forget;
+      const spread = Math.max(this.high[bar] - this.low[bar], LEAST_SPREAD);
+      const wanted = Math.min(1, Math.max(FLOOR, (level - this.low[bar]) / spread));
+      const shown = this.shown[bar];
+      this.shown[bar] =
+        wanted > shown ? shown + (wanted - shown) * ATTACK : Math.max(wanted, shown - (FALL_A_SECOND * sinceMs) / 1000);
+    }
+    return this.shown;
+  }
 }

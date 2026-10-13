@@ -138,7 +138,7 @@ function Spectrum({
         const settled = approach(levels, targets);
         draw();
         if (reading) {
-          sayWaveLevels(levels);
+          sayWaveLevels(targets, now);
         }
         if (!reading && settled) {
           return;
