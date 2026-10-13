@@ -1016,6 +1016,29 @@
   display: none;
 }
 
+/* The bars in a corner of the cover of what is playing, on a disc of the
+   accent: seen without the pointer, on a phone too, and under the button
+   that pauses it when the pointer comes. */
+.card-now {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 45%, transparent);
+  pointer-events: none;
+}
+
+.card-now .playing-bars {
+  height: 12px;
+}
+
 .music-song-toggle:is(:hover, :focus-visible) .playing-bars {
   display: none;
 }

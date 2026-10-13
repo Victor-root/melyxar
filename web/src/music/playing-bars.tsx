@@ -1,7 +1,8 @@
 /*
  * The mark of the song playing, inside its red button: four small bars, as a
  * little equaliser would stand, in place of the pause sign, which comes back
- * under the pointer or the keyboard.
+ * under the pointer or the keyboard. The same bars stand in a corner of the
+ * cover of the album or the playlist playing.
  *
  * While the wave behind the player is drawn, the bars rise and fall with it,
  * coarsely, from the same levels and nothing more; when there is no wave, the
@@ -18,7 +19,9 @@ import { hearWaveLevels } from "./player/wave-levels";
  *  beats: a few of its drawings. */
 const WAVE_GONE_MS = 300;
 
-export function PlayingBars() {
+/** `withPause` puts the pause sign in their place under the pointer, for a
+ *  button that pauses. */
+export function PlayingBars({ withPause = true }: { withPause?: boolean }) {
   const box = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -56,9 +59,11 @@ export function PlayingBars() {
         <span className="playing-bar" />
         <span className="playing-bar" />
       </span>
-      <span className="playing-bars-pause">
-        <PauseIcon size={20} />
-      </span>
+      {withPause && (
+        <span className="playing-bars-pause">
+          <PauseIcon size={20} />
+        </span>
+      )}
     </>
   );
 }

@@ -12,6 +12,7 @@ import { InARow, ROOM_IN_A_ROW } from "../components/card";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, HeartIcon, PlayIcon } from "../icons";
 import { PauseIcon } from "../player/icons";
+import { PlayingBars } from "./playing-bars";
 import { QuietLink } from "../navigating";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
@@ -160,6 +161,11 @@ function Tile({
         <QuietLink className="card-open" to={to} title={name} draggable={false}>
           <span className="visually-hidden">{name}</span>
         </QuietLink>
+        {going && (
+          <span className="card-now" aria-hidden="true">
+            <PlayingBars withPause={false} />
+          </span>
+        )}
         {reached && (
           <div className="card-hover">
             <button
