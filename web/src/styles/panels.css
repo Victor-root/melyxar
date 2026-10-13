@@ -80,6 +80,34 @@
   letter-spacing: -0.01em;
 }
 
+/* The pencil after a title that can be changed: quiet until the pointer is on
+   the head, always there for a finger. */
+.panel-rename {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.panel-rename:hover,
+.panel-rename:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-bright);
+}
+
+.panel-title-field {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding-block: 4px;
+  font: inherit;
+}
+
 .panel-words p {
   margin: 2px 0 0;
   color: var(--text-soft);
