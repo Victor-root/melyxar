@@ -20,7 +20,6 @@ import { figuresOf, useAsked, useTold } from "../../asking";
 import { Face } from "../../components/face";
 import { Modal } from "../../components/modal";
 import {
-  Editable,
   PageHead,
   Panel,
   Picker,
@@ -209,6 +208,12 @@ function AccountPanel({
       }
       lead={leadOf(account, libraries, t)}
       className="account-panel"
+      wide
+      rename={{
+        label: t("users.name"),
+        name: account.name,
+        onSettled: (name) => void rename.tell(name),
+      }}
       action={
         !account.is_you && (
           <>
@@ -272,19 +277,14 @@ function AccountPanel({
         </div>
       )}
 
-      <div className="settings-lines">
-        <Setting label={t("users.name")}>
-          <Editable
-            value={account.name}
-            label={t("users.name")}
-            onSettled={(name) => void rename.tell(name)}
-          />
-        </Setting>
+      <div className="panel-split">
         <RightsLines
           rights={account.rights}
           libraries={libraries}
           you={account.is_you}
           onChange={(rights) => void change.tell(rights)}
+          columns={2}
+          divided
         />
       </div>
 
@@ -318,6 +318,7 @@ function RightsLines({
   you,
   onChange,
   columns = 1,
+  divided = false,
 }: {
   rights: Rights;
   libraries: Library[];
@@ -327,6 +328,8 @@ function RightsLines({
   /** How many columns the lines are shared out between, evenly and in
    *  order, each opening on a line of its own with no rule above it. */
   columns?: number;
+  /** The columns are the two halves of a card, with a rule between them. */
+  divided?: boolean;
 }) {
   const { t } = useSettings();
   const set = (changed: Partial<Rights>) =>
@@ -502,11 +505,23 @@ function RightsLines({
   const each = Math.ceil(lines.length / columns);
   return (
     <>
-      {Array.from({ length: Math.ceil(lines.length / each) }, (_, column) => (
-        <div className="settings-lines" key={column}>
-          {lines.slice(column * each, (column + 1) * each)}
-        </div>
-      ))}
+      {Array.from({ length: Math.ceil(lines.length / each) }, (_, column) => {
+        const shared = (
+          <div className="settings-lines" key={column}>
+            {lines.slice(column * each, (column + 1) * each)}
+          </div>
+        );
+        return divided ? (
+          <div
+            className={column === 0 ? "panel-split-main" : "panel-split-beside"}
+            key={column}
+          >
+            {shared}
+          </div>
+        ) : (
+          shared
+        );
+      })}
     </>
   );
 }

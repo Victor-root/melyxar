@@ -171,6 +171,7 @@ function LibraryPanel({
       folding={{ open, toggle: () => setOpen((was) => !was) }}
       rename={{
         label: t("settings.library_name"),
+        name: library.name,
         onSettled: (name) => editing.rename(library, name),
       }}
       action={
