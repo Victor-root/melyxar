@@ -1,31 +1,43 @@
 /*
- * The outline of a wave wrapped round a disc: a smooth closed curve whose
- * distance from the middle rises and falls as the wave behind the player
- * does, for the mark of the song playing.
+ * The outline of a wave standing round a disc, as an equaliser would stand
+ * round it: a smooth closed curve through the tips of spikes growing out of
+ * the disc, each as tall as it is told, and the shapes it takes one after
+ * the other, for the mark of the song playing.
  */
 
-/** How many points the curve is drawn through. */
-const POINTS = 96;
-
-/** A closed path in a box from -1 to 1, its edge between `inner` and 1 away
- *  from the middle, rising and falling `lobes` times round, with a second,
- *  smaller rise laid over it so no two lobes look the same. Each point is a
- *  curve's corner, the way through the middle of the next, as the wave of
- *  the player is drawn. */
-export function ringWave(lobes: number, inner: number, turn = 0): string {
-  const points = Array.from({ length: POINTS }, (_, at) => {
-    const angle = (at / POINTS) * Math.PI * 2;
-    const swell = 0.6 * Math.sin(lobes * angle + turn) + 0.4 * Math.sin((lobes + 2) * angle + turn * 2 + 1.3);
-    const radius = inner + (1 - inner) * (0.5 + swell / 2);
+/** A closed path in a box from -1 to 1 through the tips of as many spikes
+ *  as `heights` holds, spread evenly round from the top, each standing from
+ *  `inner` out to the edge of the box as its height, from nought to one,
+ *  says. Each tip is a curve's corner, the way through the middle of the
+ *  next, as the wave of the player is drawn. */
+export function radialWave(heights: number[], inner: number): string {
+  const points = heights.map((height, at) => {
+    const angle = (at / heights.length) * Math.PI * 2 - Math.PI / 2;
+    const radius = inner + (1 - inner) * Math.min(Math.max(height, 0), 1);
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   });
   const middle = (a: { x: number; y: number }, b: { x: number; y: number }) =>
     `${round((a.x + b.x) / 2)} ${round((a.y + b.y) / 2)}`;
-  const start = middle(points[POINTS - 1], points[0]);
+  const start = middle(points[points.length - 1], points[0]);
   const curves = points
-    .map((point, at) => `Q${round(point.x)} ${round(point.y)} ${middle(point, points[(at + 1) % POINTS])}`)
+    .map((point, at) => `Q${round(point.x)} ${round(point.y)} ${middle(point, points[(at + 1) % points.length])}`)
     .join(" ");
   return `M${start} ${curves}Z`;
+}
+
+/** `count` sets of heights for `spikes` spikes, the right half drawn at
+ *  random and the left half its mirror, the same every time they are asked
+ *  for: the shapes the wave goes through. */
+export function mirroredHeights(spikes: number, count: number): number[][] {
+  let seed = 7;
+  const next = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  return Array.from({ length: count }, () => {
+    const half = Array.from({ length: spikes / 2 + 1 }, () => 0.15 + next() * 0.85);
+    return Array.from({ length: spikes }, (_, at) => half[Math.min(at, spikes - at)]);
+  });
 }
 
 function round(value: number): number {
