@@ -221,29 +221,10 @@
    its box and the page under them has nothing left to scroll. */
 .music-listened {
   display: grid;
-  /* The albums that arrived take a column of their own width, the two
-     lists sharing whatever the screen has beyond it, so a wider screen
-     widens the lists. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) clamp(320px, 24vw, 500px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--gap-wide);
-  /* No letters stand beside this tab: it takes their room at the right. */
-  margin-right: calc(-1 * (28px + 10px + var(--gap-wide)));
-}
-
-/* The albums that arrived, three to a line in their column, small enough
-   for several lines to show at once. */
-.music-grid.music-grid-newest {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gap) var(--gap-tight);
-}
-
-/* Room round the albums inside the box they scroll in, as far as the glow
-   of a cover grown under the pointer reaches, for it not to be cut by the
-   box. The box reaches out to the left by as much, so the covers keep in
-   line with the heading. */
-.music-listened-albums {
-  margin-left: -28px;
-  padding: 14px 28px 28px;
+  /* Only a gap from the row above, not a whole space between sections. */
+  margin-top: calc(var(--gap) - var(--gap-section));
 }
 
 .music-listened-column {
