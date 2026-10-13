@@ -7,6 +7,10 @@
 //! written. The files are renamed where they lie, never moved, and the scan
 //! that follows reads them again under the same songs, so nothing kept about
 //! them is lost.
+//!
+//! A song can also be cut short at either end, the silence a ripper left
+//! before the first note for one: the file itself is cut, its sound carried
+//! over without being encoded again and its tags put back as they were.
 
 use std::path::{Path, PathBuf};
 
@@ -14,6 +18,7 @@ use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::JobPriority;
 use melyxar_core::music_naming::{NameValues, name_from_pattern};
 use melyxar_core::refresh::RefreshMode;
+use melyxar_core::time::Millis;
 use melyxar_core::user::User;
 use melyxar_database::music_tag_editing::SongOnDisk;
 pub use melyxar_tags::EditedTags;
@@ -56,6 +61,10 @@ pub struct Written {
     /// The songs that could not be written, and why.
     pub failed: Vec<(WorkId, String)>,
 }
+
+/// The shortest a song may be cut to: anything shorter is a slip of the hand
+/// rather than a song.
+const SHORTEST_CUT: Millis = Millis::new(1_000);
 
 /// Where the copies of the files are kept before they are written.
 const BACKUPS: &str = "tag-backups";
@@ -176,6 +185,79 @@ pub async fn write(
         read_the_library_again(state, library).await;
     }
     Ok(written)
+}
+
+/// Cuts a song's file down to what lies between `from` and `to`, keeping a
+/// copy of it first when asked. The cut is written beside the file and put in
+/// its place only once it is whole, so a failure leaves the song as it was.
+pub async fn trim(
+    state: &AppState,
+    who: &User,
+    song: WorkId,
+    from: Millis,
+    to: Millis,
+    keep_a_copy: bool,
+) -> Result<()> {
+    let on_disk = writable(state, who, song).await?;
+    let tools = state
+        .tools()
+        .cloned()
+        .ok_or_else(|| refused("the media tools are not installed"))?;
+    if !cut_holds(from, to, on_disk.duration) {
+        return Err(refused(
+            "a song is cut between its start and its end, and kept at least a second long",
+        ));
+    }
+    let path = on_disk.path();
+    if keep_a_copy {
+        let backup = backups_now(state).await.join(&on_disk.relative_path);
+        copy_into(&path, &backup).await.map_err(refused)?;
+    }
+    let cut = cut_beside(&path);
+    let made = async {
+        melyxar_ffmpeg::song_cutting::cut(&tools, &path, from, to, &cut)
+            .await
+            .map_err(|error| error.to_string())?;
+        let (tagged, untagged) = (path.clone(), cut.clone());
+        tokio::task::spawn_blocking(move || melyxar_tags::copy_tags(&tagged, &untagged))
+            .await
+            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())?;
+        tokio::fs::rename(&cut, &path)
+            .await
+            .map_err(|error| format!("the cut could not be put in place: {error}"))
+    }
+    .await;
+    if let Err(reason) = made {
+        if let Err(error) = tokio::fs::remove_file(&cut).await
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(file = %cut.display(), %error, "a cut left halfway could not be removed");
+        }
+        tracing::warn!(file = %path.display(), reason, "a song could not be cut");
+        return Err(refused(reason));
+    }
+    read_the_library_again(state, on_disk.library_id).await;
+    Ok(())
+}
+
+/// Whether a cut from `from` to `to` keeps a song worth the name, within the
+/// length the scan found when it found one.
+fn cut_holds(from: Millis, to: Millis, length: Option<Millis>) -> bool {
+    from.get() >= 0
+        && to.get() - from.get() >= SHORTEST_CUT.get()
+        && length.is_none_or(|length| to <= length)
+}
+
+/// Where the cut of a file is written while it is made: beside it, hidden so
+/// that a scan running meanwhile does not take it for a song, and named with
+/// the same extension, which says what it is written as.
+fn cut_beside(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    path.with_file_name(format!(".melyxar-cut-{name}"))
 }
 
 /// Puts a picture beside the songs of an album as its cover, `cover.jpg` in
@@ -359,6 +441,24 @@ fn refused(reason: impl Into<String>) -> AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cut_keeps_a_second_at_least_and_stays_within_the_song() {
+        let length = Some(Millis::new(200_000));
+        assert!(cut_holds(Millis::new(2_400), Millis::new(200_000), length));
+        assert!(!cut_holds(Millis::new(-1), Millis::new(10_000), length), "before the start");
+        assert!(!cut_holds(Millis::new(5_000), Millis::new(5_900), length), "under a second");
+        assert!(!cut_holds(Millis::new(0), Millis::new(200_001), length), "past the end");
+        assert!(cut_holds(Millis::new(0), Millis::new(900_000), None), "a length nobody knows");
+    }
+
+    #[test]
+    fn a_cut_is_made_hidden_beside_its_song_under_the_same_extension() {
+        assert_eq!(
+            cut_beside(Path::new("/mnt/one/Quiet Harbour/01 - Low Tide.flac")),
+            PathBuf::from("/mnt/one/Quiet Harbour/.melyxar-cut-01 - Low Tide.flac")
+        );
+    }
 
     #[test]
     fn a_copy_is_kept_a_month_and_what_is_not_a_copy_stays() {

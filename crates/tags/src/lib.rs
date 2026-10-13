@@ -28,7 +28,7 @@ pub use cover::{Cover, front_cover};
 pub use lyrics::lyrics;
 pub use pairs::from_pairs;
 pub use read::read;
-pub use write::{EditedTags, WriteError, write};
+pub use write::{EditedTags, WriteError, copy_tags, write};
 
 /// Everything read out of one music file.
 #[derive(Debug, Clone, PartialEq)]

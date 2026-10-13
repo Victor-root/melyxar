@@ -1,11 +1,13 @@
 //! The routes of the tag manager: what the songs of an album carry in their
-//! files, what writing would change, writing it, and an album's cover.
+//! files, what writing would change, writing it, an album's cover, and a
+//! song cut short at either end.
 
 use axum::extract::{Path, Query, State};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_app::music::tag_editing::{EditedTags, Planned, SongTags, Wanted};
+use melyxar_core::time::Millis;
 use serde::{Deserialize, Serialize};
 
 use crate::account::Viewer;
@@ -17,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/albums/{id}/tags", get(album_tags))
         .route("/api/v1/music/tags/preview", post(preview))
         .route("/api/v1/music/tags/write", post(write))
+        .route("/api/v1/music/songs/{id}/trim", post(trim))
         .route(
             "/api/v1/music/albums/{id}/cover",
             // A picture straight off a phone, the same as a profile picture.
@@ -226,6 +229,33 @@ async fn cover(
         parse_work(&id)?,
         image.to_vec(),
         query.keep_a_copy,
+    )
+    .await?;
+    Ok(Json(()))
+}
+
+/// Where a song is cut, in milliseconds from its start.
+#[derive(Debug, Deserialize)]
+struct TrimAsked {
+    from_ms: i64,
+    to_ms: i64,
+    #[serde(default)]
+    keep_a_copy: bool,
+}
+
+async fn trim(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Json(asked): Json<TrimAsked>,
+) -> Result<Json<()>> {
+    melyxar_app::music::tag_editing::trim(
+        &state,
+        &who,
+        parse_work(&id)?,
+        Millis::new(asked.from_ms),
+        Millis::new(asked.to_ms),
+        asked.keep_a_copy,
     )
     .await?;
     Ok(Json(()))

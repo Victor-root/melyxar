@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use melyxar_core::id::{LibraryId, MediaSourceId, WorkId};
+use melyxar_core::time::Millis;
 use sqlx::Row;
 
 use crate::convert::parse_id;
@@ -17,6 +18,8 @@ pub struct SongOnDisk {
     /// The root it is under, and where it is inside that root.
     pub root_path: PathBuf,
     pub relative_path: PathBuf,
+    /// How long it plays, when the scan could tell.
+    pub duration: Option<Millis>,
 }
 
 impl SongOnDisk {
@@ -29,7 +32,7 @@ impl Database {
     /// The file a song is written into: the one it is played from.
     pub async fn song_on_disk(&self, song: WorkId) -> Result<Option<SongOnDisk>> {
         let row = sqlx::query(
-            "SELECT s.id, w.library_id, r.path AS root_path, s.relative_path
+            "SELECT s.id, w.library_id, r.path AS root_path, s.relative_path, s.duration_ms
                FROM media_sources s
                JOIN library_roots r ON r.id = s.root_id
                JOIN works w ON w.id = s.work_id AND w.kind = 'song'
@@ -46,6 +49,7 @@ impl Database {
                 library_id: parse_id(&row.try_get::<String, _>("library_id")?)?,
                 root_path: PathBuf::from(row.try_get::<String, _>("root_path")?),
                 relative_path: PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                duration: row.try_get::<Option<i64>, _>("duration_ms")?.map(Millis::new),
             })
         })
         .transpose()
@@ -108,6 +112,7 @@ mod tests {
         assert_eq!(on_disk.source_id, source);
         assert_eq!(on_disk.library_id, library);
         assert_eq!(on_disk.path(), PathBuf::from("/mnt/one/A/01 track.flac"));
+        assert_eq!(on_disk.duration, Some(Millis::new(1_000)));
 
         database
             .rename_source_file(source, std::path::Path::new("A/01 - Tides.flac"))
