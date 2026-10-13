@@ -1,6 +1,11 @@
 /*
  * A box that takes the rest of the screen below where it begins, so what it
  * holds scrolls inside it and the page itself has nothing to scroll.
+ *
+ * Down to the very edge of the screen when asked, behind the navigation bar
+ * of a phone drawn edge to edge, as the page itself runs: the room the page
+ * keeps at its foot is then handed to the box as `--room-foot`, for what
+ * scrolls in it to stop above that bar.
  */
 
 import { useLayoutEffect } from "react";
@@ -13,7 +18,7 @@ export function roomBelow(viewport: number, top: number, reserve: number, least:
   return Math.max(least, viewport - top - reserve);
 }
 
-export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: number) {
+export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: number, toTheEdge = false) {
   useLayoutEffect(() => {
     const element = box.current;
     const scroller = element && scrollerOf(element);
@@ -22,9 +27,20 @@ export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: nu
     }
     const page = element.closest(".page") ?? scroller;
     const measure = () => {
-      const foot = parseFloat(getComputedStyle(page).paddingBottom) || 0;
       const top = element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-      element.style.height = `${roomBelow(scroller.clientHeight, top, foot, least)}px`;
+      if (!toTheEdge) {
+        const foot = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+        element.style.height = `${roomBelow(scroller.clientHeight, top, foot, least)}px`;
+        return;
+      }
+      // Whatever the page still holds under the box, its foot and the
+      // scroller's own under the edge of the screen, is given back, so the
+      // page still has nothing to scroll.
+      const edge = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
+      element.style.height = `${roomBelow(scroller.clientHeight, top, 0, least)}px`;
+      element.style.marginBottom = "0px";
+      element.style.marginBottom = `${-Math.max(0, scroller.scrollHeight - scroller.clientHeight)}px`;
+      element.style.setProperty("--room-foot", `${edge}px`);
     };
     measure();
     const watcher = new ResizeObserver(measure);
@@ -33,5 +49,5 @@ export function useRoomBelow(box: React.RefObject<HTMLElement | null>, least: nu
       watcher.observe(element.parentElement);
     }
     return () => watcher.disconnect();
-  }, [box, least]);
+  }, [box, least, toTheEdge]);
 }

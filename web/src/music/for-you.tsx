@@ -148,7 +148,7 @@ function PagesTrack({ shown }: { shown: ForYouPage[] }) {
   const track = useRef<HTMLDivElement>(null);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
   const [page, setPage] = useState(0);
-  useRoomBelow(track, LEAST_LIST);
+  useRoomBelow(track, LEAST_LIST, true);
 
   useEffect(() => {
     const element = track.current;
