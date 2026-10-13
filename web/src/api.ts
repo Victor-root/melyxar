@@ -2400,6 +2400,12 @@ export const api = {
     put<ManagedAccount>(`/api/v1/accounts/${account}/rights`, rights),
   renameAccount: (account: string, name: string) =>
     put<ManagedAccount>(`/api/v1/accounts/${account}/name`, { name }),
+  /* The picture of another account, sent as the file chosen. Both answer the
+     account as it now is. */
+  setAccountAvatar: (account: string, image: Blob) =>
+    put<ManagedAccount>(`/api/v1/accounts/${account}/avatar`, image),
+  removeAccountAvatar: (account: string) =>
+    remove<ManagedAccount>(`/api/v1/accounts/${account}/avatar`),
   putPassword: (account: string, password: string) =>
     put<{ changed: boolean }>(`/api/v1/accounts/${account}/password`, { password }),
   signOutEverywhere: (account: string) =>

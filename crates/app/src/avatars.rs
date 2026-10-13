@@ -9,6 +9,7 @@ use std::path::Path;
 
 use melyxar_core::fingerprint;
 use melyxar_core::id::UserId;
+use melyxar_core::user::User;
 
 use crate::{AppError, AppState};
 
@@ -144,6 +145,31 @@ pub async fn remove(state: &AppState, user_id: UserId) -> Result<()> {
     Ok(())
 }
 
+/// Makes these bytes the picture of another account, from the administration,
+/// and answers the account wearing it.
+pub async fn set_of_account(state: &AppState, target: UserId, bytes: &[u8]) -> Result<User> {
+    let mut user = the_account(state, target).await?;
+    user.avatar_path = Some(set(state, target, bytes).await?);
+    Ok(user)
+}
+
+/// Takes the picture of another account away, from the administration, and
+/// answers the account without it.
+pub async fn remove_of_account(state: &AppState, target: UserId) -> Result<User> {
+    let mut user = the_account(state, target).await?;
+    remove(state, target).await?;
+    user.avatar_path = None;
+    Ok(user)
+}
+
+async fn the_account(state: &AppState, target: UserId) -> Result<User> {
+    state
+        .database()
+        .user(target)
+        .await?
+        .ok_or_else(|| Trouble::Failed(melyxar_core::Error::not_found("account").into()))
+}
+
 /// Deletes every picture an account ever had, once the account is gone.
 pub async fn forget_every_one_of(state: &AppState, user_id: UserId) {
     let folder = state
@@ -269,6 +295,56 @@ mod tests {
             .expect("read")
             .expect("account found");
         assert_eq!(read.avatar_path, None);
+    }
+
+    #[tokio::test]
+    async fn the_picture_of_an_account_that_is_not_there_is_not_taken() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let config = Config {
+            directories: Directories {
+                data: directory.path().join("data"),
+                cache: directory.path().join("cache"),
+                transcodes: directory.path().join("cache/transcodes"),
+                ..Default::default()
+            },
+            ..Config::default()
+        };
+        crate::startup::prepare_directories(&config).expect("directories prepared");
+        let database = Database::open_in_memory().await.expect("database opens");
+        let state = AppState::new(config, database, None, None);
+        let nobody = UserId::new();
+
+        assert!(set_of_account(&state, nobody, b"GIF89a....").await.is_err());
+        assert!(remove_of_account(&state, nobody).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn the_picture_of_another_account_is_taken_away_and_the_account_answered() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let config = Config {
+            directories: Directories {
+                data: directory.path().join("data"),
+                cache: directory.path().join("cache"),
+                transcodes: directory.path().join("cache/transcodes"),
+                ..Default::default()
+            },
+            ..Config::default()
+        };
+        crate::startup::prepare_directories(&config).expect("directories prepared");
+        let database = Database::open_in_memory().await.expect("database opens");
+        let zoe = database
+            .create_user("Zoe", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created");
+        database
+            .set_avatar(zoe.id, Some("somewhere/avatar.webp"))
+            .await
+            .expect("picture noted");
+        let state = AppState::new(config, database, None, None);
+
+        let without = remove_of_account(&state, zoe.id).await.expect("taken away");
+        assert_eq!(without.name, "Zoe");
+        assert_eq!(without.avatar_path, None);
     }
 
     #[test]
