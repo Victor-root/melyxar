@@ -16,6 +16,7 @@ use melyxar_app::music::browse::{
     MusicInitial, MusicPage, Paging, SongOrder, SongRow,
 };
 use melyxar_core::music::Spectrum;
+use melyxar_core::time::Millis;
 use serde::{Deserialize, Serialize};
 
 use melyxar_app::music::marks::Listened;
@@ -127,6 +128,8 @@ pub(crate) struct SongView {
     year: Option<i32>,
     /// Whole seconds, which is what a list of songs shows.
     seconds: Option<i64>,
+    /// The same to the millisecond, for what is matched against it.
+    duration_ms: Option<i64>,
     /// The file it plays from.
     source: Option<String>,
     /// The cover of its album.
@@ -149,6 +152,7 @@ pub(crate) fn song_view(song: &SongRow) -> SongView {
         disc: song.disc,
         year: song.year,
         seconds: song.duration.map(|length| (length.get() + 500) / 1_000),
+        duration_ms: song.duration.map(Millis::get),
         source: song.source_id.map(|source| source.to_string()),
         cover: song.cover.iter().map(image_view).collect(),
         lufs: song.lufs,

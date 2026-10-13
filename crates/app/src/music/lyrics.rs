@@ -238,7 +238,8 @@ fn said(error: ProviderError) -> AppError {
     AppError::Domain(melyxar_core::Error::new(code, error.to_string()))
 }
 
-/// What LRCLIB holds under an artist and a title, searched by hand. Looked up
+/// What LRCLIB holds under an artist and a title, searched by hand, the
+/// nearest to the length of the song's file first. Looked up
 /// whatever the library says about looking up lyrics online: that setting is
 /// for what is asked without anybody asking.
 pub async fn offers(state: &AppState, who: &User, song: WorkId, artist: &str, title: &str) -> Result<Vec<Offer>> {
@@ -248,8 +249,9 @@ pub async fn offers(state: &AppState, who: &User, song: WorkId, artist: &str, ti
         return Ok(Vec::new());
     }
     tracing::debug!(%song, artist, title, "lyrics: searched for by hand");
+    let duration_ms = state.database().song_to_look_up(song).await?.and_then(|found| found.duration_ms);
     let client = LrcLibClient::new().map_err(said)?;
-    client.offers(artist.trim(), title.trim()).await.map_err(said)
+    client.offers(artist.trim(), title.trim(), duration_ms).await.map_err(said)
 }
 
 /// Takes one entry of LRCLIB as the words of a song, kept like any answer of
