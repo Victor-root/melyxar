@@ -16,7 +16,7 @@ import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
 import { useGoneSongs, useLiking } from "./marks";
-import { PlayingCrown } from "./playing-crown";
+import { PlayingRing } from "./playing-ring";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
 import { useMusicControls, useMusicNow } from "./player/player";
@@ -277,6 +277,7 @@ export const SongLine = memo(function SongLine({
       }
     >
       <span className="music-song-lead">
+        {current && <PlayingRing playing={playing} />}
         {(onPlay || current) && (
           <button
             type="button"
@@ -286,7 +287,6 @@ export const SongLine = memo(function SongLine({
             onClick={() => (current ? toggle() : onPlay?.(index))}
           >
             {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-            {current && <PlayingCrown playing={playing} />}
           </button>
         )}
       </span>

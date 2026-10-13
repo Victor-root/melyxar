@@ -16,7 +16,7 @@ import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
 import { scrollerOf } from "../../landing";
 import { PauseIcon } from "../../player/icons";
 import { useSettings } from "../../settings";
-import { PlayingCrown } from "../playing-crown";
+import { PlayingRing } from "../playing-ring";
 import { Cover } from "../songs";
 import { keeping, linesAround, linesShown } from "./lines-shown";
 import type { Shown } from "./lines-shown";
@@ -328,9 +328,9 @@ export function QueuePanel() {
             className={`music-song music-song-full music-queue-line${here ? " music-song-playing" : ""}${at < queue.at ? " music-queue-played" : ""}${drag?.from === at ? " music-queue-lifted" : ""}${makesRoom}`}
           >
             <span className="music-song-lead">
+              {here && <PlayingRing playing={playing} />}
               <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
                 {here && playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-                {here && <PlayingCrown playing={playing} />}
               </button>
             </span>
             <span className="music-song-number">{at + 1}</span>
