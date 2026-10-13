@@ -1,7 +1,12 @@
 /*
- * The tag manager, for one album: what its songs' files carry, edited here
- * and written into the files, the files renamed by a pattern when asked, a
- * copy of each kept first when asked, and a new cover put beside them.
+ * The tag manager, for one album, in a window over its page: what its songs'
+ * files carry, edited here and written into the files, the files renamed by
+ * a pattern when asked, a copy of each kept first when asked, and a new
+ * cover put beside them.
+ *
+ * Laid out as the lyrics window is: the album on top with its cover, its
+ * songs under it as the one part that scrolls, and how they are written along
+ * the foot beside the button that writes them.
  *
  * What is about to change is shown before anything is written, unless the
  * account chose otherwise in its settings. The library is read again once
@@ -12,24 +17,23 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAccount } from "../account";
 import { refusalOf } from "../asking";
-import { PageBackdrop } from "../components/backdrop";
 import { Modal } from "../components/modal";
-import { Setting, Toggle } from "../components/panel";
+import { Toggle } from "../components/panel";
 import { useToast } from "../notifications/toasts";
 import { refusalKey } from "../i18n";
-import { useLeave } from "../leaving";
 import { useRunning } from "../running";
 import { ScissorsIcon } from "../icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
-import type { EditedTags, PlannedTags, SongTags, TagsAsked } from "./api";
+import type { AlbumPage, EditedTags, PlannedTags, SongTags, TagsAsked } from "./api";
 import { useMusicControls } from "./player/player";
 import { albumFieldsOf, namesField, namesIn, numberOf, textOf, withAlbum } from "./tag-form";
 import type { AlbumFields } from "./tag-form";
+import { AlbumCover } from "./tiles";
 import { TrimSong } from "./trim";
 
 /** A song's own fields, as they are typed. */
@@ -76,10 +80,9 @@ function Refusal({ refused }: { refused: string }) {
   );
 }
 
-export function TagEditorPage() {
+export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; onClose: () => void }) {
   const { t } = useSettings();
-  const { id = "" } = useParams();
-  const leave = useLeave(`/music/album/${id}`);
+  const id = shownAlbum.id;
   const toast = useToast();
   const { preferences } = useMusicControls();
   const { watch } = useRunning();
@@ -116,24 +119,8 @@ export function TagEditorPage() {
     }
   }, [cover]);
 
-  if (refused && !songs) {
-    return (
-      <main className="page">
-        <PageBackdrop />
-        <Refusal refused={refused} />
-      </main>
-    );
-  }
-  if (!songs) {
-    return (
-      <main className="page" aria-busy="true">
-        <PageBackdrop />
-      </main>
-    );
-  }
-
-  const asked = (): TagsAsked => ({
-    songs: songs.map((one) => ({
+  const asked = (from: SongFields[]): TagsAsked => ({
+    songs: from.map((one) => ({
       song: one.song,
       tags: withAlbum(
         {
@@ -152,14 +139,14 @@ export function TagEditorPage() {
   const edit = (song: string, changes: Partial<SongFields>) =>
     setSongs((was) => was?.map((one) => (one.song === song ? { ...one, ...changes } : one)) ?? was);
 
-  const write = async () => {
+  const write = async (from: SongFields[]) => {
     setBusy(true);
     setRefused(null);
     try {
       if (cover) {
         await music.setCover(id, cover.jpeg, keepACopy);
       }
-      const done = await music.writeTags(asked());
+      const done = await music.writeTags(asked(from));
       if (done.failed.length > 0) {
         toast({
           state: "attention",
@@ -175,7 +162,7 @@ export function TagEditorPage() {
       // The server reads the library again once it has written: watched at
       // once, so the album and every screen showing it follow without a reload.
       watch();
-      leave();
+      onClose();
     } catch (error) {
       setRefused(refusalOf(error));
       setPlanned(null);
@@ -183,15 +170,15 @@ export function TagEditorPage() {
       setBusy(false);
     }
   };
-  const save = async () => {
+  const save = async (from: SongFields[]) => {
     if (!preferences.tag_preview) {
-      await write();
+      await write(from);
       return;
     }
     setBusy(true);
     setRefused(null);
     try {
-      setPlanned(await music.previewTags(asked()));
+      setPlanned(await music.previewTags(asked(from)));
     } catch (error) {
       setRefused(refusalOf(error));
     } finally {
@@ -200,139 +187,151 @@ export function TagEditorPage() {
   };
 
   return (
-    <main className="page music-page tag-editor">
-      <PageBackdrop />
-      <div className="section-head">
-        <h1>{t("music.edit_tags")}</h1>
-      </div>
-      {refused && <Refusal refused={refused} />}
-
-      <section className="tag-editor-album">
-        <h2>{t("music.album")}</h2>
-        <div className="tag-editor-fields">
-          <Field label={t("music.tag.album")} value={album.album} onChange={(value) => setAlbum({ ...album, album: value })} />
+    <Modal
+      title={t("music.edit_tags")}
+      onClose={onClose}
+      className="tag-dialog"
+      footer={
+        songs && (
+          <>
+            <div className="tag-dialog-writing">
+              <label className="tag-dialog-option">
+                <Toggle label={t("music.tag.rename")} checked={renaming} onChange={setRenaming} />
+                <span title={t("music.tag.rename_why")}>{t("music.tag.rename")}</span>
+              </label>
+              {renaming && (
+                <input
+                  className="field-line tag-dialog-pattern"
+                  value={pattern}
+                  aria-label={t("music.tag.pattern")}
+                  title={t("music.tag.pattern_hint")}
+                  onChange={(event) => setPattern(event.target.value)}
+                />
+              )}
+              <label className="tag-dialog-option">
+                <Toggle label={t("music.tag.keep_a_copy")} checked={keepACopy} onChange={setKeepACopy} />
+                <span title={t("music.tag.keep_a_copy_why")}>{t("music.tag.keep_a_copy")}</span>
+              </label>
+            </div>
+            <div className="tag-dialog-actions">
+              <button type="button" className="button button-quiet" onClick={onClose}>
+                {t("lists.cancel")}
+              </button>
+              <button type="button" className="button button-accent" disabled={busy} onClick={() => void save(songs)}>
+                {t("music.tag.save")}
+              </button>
+            </div>
+          </>
+        )
+      }
+    >
+      <section className="tag-dialog-album" aria-label={t("music.album")}>
+        <div className="tag-dialog-cover">
+          {cover ? <img src={cover.shown} alt="" /> : <AlbumCover album={shownAlbum} />}
+          <label className="tag-dialog-cover-change">
+            {t("music.tag.choose_cover")}
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void asJpeg(file).then((jpeg) => setCover({ jpeg, shown: URL.createObjectURL(jpeg) }));
+                }
+              }}
+            />
+          </label>
+        </div>
+        <div className="tag-dialog-fields">
+          <Field
+            label={t("music.tag.album")}
+            value={album.album}
+            onChange={(value) => setAlbum({ ...album, album: value })}
+            wide
+          />
           <Field
             label={t("music.tag.album_artists")}
             value={album.albumArtists}
             onChange={(value) => setAlbum({ ...album, albumArtists: value })}
             hint={t("music.tag.names_hint")}
           />
-          <Field label={t("music.tag.year")} value={album.year} onChange={(value) => setAlbum({ ...album, year: value })} narrow />
           <Field
             label={t("music.tag.genres")}
             value={album.genres}
             onChange={(value) => setAlbum({ ...album, genres: value })}
             hint={t("music.tag.names_hint")}
           />
+          <Field label={t("music.tag.year")} value={album.year} onChange={(value) => setAlbum({ ...album, year: value })} />
+          <label className="tag-dialog-option tag-dialog-compilation" title={t("music.tag.compilation_why")}>
+            <Toggle
+              label={t("music.compilation")}
+              checked={album.compilation}
+              onChange={(compilation) => setAlbum({ ...album, compilation })}
+            />
+            <span>{t("music.compilation")}</span>
+          </label>
         </div>
-        <Setting label={t("music.compilation")} why={t("music.tag.compilation_why")}>
-          <Toggle
-            label={t("music.compilation")}
-            checked={album.compilation}
-            onChange={(compilation) => setAlbum({ ...album, compilation })}
-          />
-        </Setting>
-        <Setting label={t("music.tag.cover")} why={t("music.tag.cover_why")}>
-          <span className="tag-editor-cover">
-            {cover && <img src={cover.shown} alt="" />}
-            <label className="button button-small">
-              {t("music.tag.choose_cover")}
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    void asJpeg(file).then((jpeg) => setCover({ jpeg, shown: URL.createObjectURL(jpeg) }));
-                  }
-                }}
-              />
-            </label>
-          </span>
-        </Setting>
       </section>
 
-      <section className="tag-editor-songs">
-        <h2>{t("music.tab.songs")}</h2>
-        <div className="tag-editor-table" role="table">
-          <div className="tag-editor-row tag-editor-head" role="row">
+      {refused && <Refusal refused={refused} />}
+
+      {songs && (
+        <div className="tag-dialog-songs" role="table" aria-label={t("music.tab.songs")}>
+          <div className="tag-dialog-row tag-dialog-head" role="row">
             <span role="columnheader">{t("music.tag.disc")}</span>
             <span role="columnheader">{t("music.tag.track")}</span>
             <span role="columnheader">{t("music.tag.title")}</span>
             <span role="columnheader">{t("music.tag.artists")}</span>
             <span role="columnheader" aria-label={t("music.trim.open")} />
           </div>
-          {songs.map((one) => (
-            <div className="tag-editor-row" role="row" key={one.song}>
-              <input
-                className="field-line"
-                aria-label={t("music.tag.disc")}
-                inputMode="numeric"
-                value={one.disc}
-                onChange={(event) => edit(one.song, { disc: event.target.value })}
-              />
-              <input
-                className="field-line"
-                aria-label={t("music.tag.track")}
-                inputMode="numeric"
-                value={one.track}
-                onChange={(event) => edit(one.song, { track: event.target.value })}
-              />
-              <span className="tag-editor-title">
+          <div className="tag-dialog-list">
+            {songs.map((one) => (
+              <div className="tag-dialog-row tag-dialog-song" role="row" key={one.song}>
                 <input
                   className="field-line"
-                  aria-label={t("music.tag.title")}
-                  value={one.title}
-                  onChange={(event) => edit(one.song, { title: event.target.value })}
+                  aria-label={t("music.tag.disc")}
+                  inputMode="numeric"
+                  value={one.disc}
+                  onChange={(event) => edit(one.song, { disc: event.target.value })}
                 />
-                <span className="tag-editor-file">{one.fileName}</span>
-              </span>
-              <input
-                className="field-line"
-                aria-label={t("music.tag.artists")}
-                value={one.artists}
-                onChange={(event) => edit(one.song, { artists: event.target.value })}
-              />
-              <button
-                type="button"
-                className="tag-editor-trim"
-                disabled={one.length === null}
-                title={t("music.trim.open")}
-                aria-label={`${t("music.trim.open")} · ${one.title || one.fileName}`}
-                onClick={() => setTrimming(one)}
-              >
-                <ScissorsIcon size={18} />
-              </button>
-            </div>
-          ))}
+                <input
+                  className="field-line"
+                  aria-label={t("music.tag.track")}
+                  inputMode="numeric"
+                  value={one.track}
+                  onChange={(event) => edit(one.song, { track: event.target.value })}
+                />
+                <span className="tag-dialog-title">
+                  <input
+                    className="field-line"
+                    aria-label={t("music.tag.title")}
+                    value={one.title}
+                    onChange={(event) => edit(one.song, { title: event.target.value })}
+                  />
+                  <span className="tag-dialog-file">{one.fileName}</span>
+                </span>
+                <input
+                  className="field-line"
+                  aria-label={t("music.tag.artists")}
+                  value={one.artists}
+                  onChange={(event) => edit(one.song, { artists: event.target.value })}
+                />
+                <button
+                  type="button"
+                  className="tag-dialog-trim"
+                  disabled={one.length === null}
+                  title={t("music.trim.open")}
+                  aria-label={`${t("music.trim.open")} · ${one.title || one.fileName}`}
+                  onClick={() => setTrimming(one)}
+                >
+                  <ScissorsIcon size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
-      </section>
-
-      <section className="tag-editor-writing">
-        <Setting label={t("music.tag.rename")} why={t("music.tag.rename_why")}>
-          <Toggle label={t("music.tag.rename")} checked={renaming} onChange={setRenaming} />
-        </Setting>
-        {renaming && (
-          <Field
-            label={t("music.tag.pattern")}
-            value={pattern}
-            onChange={setPattern}
-            hint={t("music.tag.pattern_hint")}
-          />
-        )}
-        <Setting label={t("music.tag.keep_a_copy")} why={t("music.tag.keep_a_copy_why")}>
-          <Toggle label={t("music.tag.keep_a_copy")} checked={keepACopy} onChange={setKeepACopy} />
-        </Setting>
-        <div className="tag-editor-actions">
-          <button type="button" className="button button-quiet" onClick={leave}>
-            {t("lists.cancel")}
-          </button>
-          <button type="button" className="button button-accent" disabled={busy} onClick={() => void save()}>
-            {t("music.tag.save")}
-          </button>
-        </div>
-      </section>
+      )}
 
       {trimming && trimming.length !== null && (
         <TrimSong
@@ -345,13 +344,13 @@ export function TagEditorPage() {
         />
       )}
 
-      {planned && (
+      {planned && songs && (
         <Modal
           title={t("music.tag.preview")}
           onClose={() => setPlanned(null)}
           className="tag-preview"
           footer={
-            <button type="button" className="button button-accent" disabled={busy} onClick={() => void write()}>
+            <button type="button" className="button button-accent" disabled={busy} onClick={() => void write(songs)}>
               {t("music.tag.write")}
             </button>
           }
@@ -359,7 +358,7 @@ export function TagEditorPage() {
           <Preview planned={planned} coverChanges={cover !== null} />
         </Modal>
       )}
-    </main>
+    </Modal>
   );
 }
 
@@ -401,19 +400,19 @@ function Field({
   value,
   onChange,
   hint,
-  narrow = false,
+  wide = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   hint?: string;
-  narrow?: boolean;
+  wide?: boolean;
 }) {
   return (
-    <label className={`tag-editor-field${narrow ? " tag-editor-field-narrow" : ""}`}>
-      <span className="tag-editor-label">{label}</span>
+    <label className={`tag-dialog-field${wide ? " tag-dialog-field-wide" : ""}`}>
+      <span className="tag-dialog-label">{label}</span>
       <input className="field-line" value={value} onChange={(event) => onChange(event.target.value)} />
-      {hint && <span className="tag-editor-hint">{hint}</span>}
+      {hint && <span className="tag-dialog-hint">{hint}</span>}
     </label>
   );
 }
