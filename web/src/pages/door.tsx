@@ -42,15 +42,6 @@ import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
 
-/** The letter a name is shown by, where it has no picture.
- *
- *  Taken with the whole of what the browser calls a character, so a name
- *  starting with an accented letter or with something outside the alphabet is
- *  not cut in half. */
-function firstLetterOf(name: string): string {
-  return [...name][0]?.toUpperCase() ?? "?";
-}
-
 /**
  * What the screen is showing.
  *
@@ -211,10 +202,9 @@ export function Door({
                     title={offered.name}
                   >
                     <Face
-                      className="door-face door-who-face"
+                      className="door-who-face"
                       name={offered.name}
                       avatar={offered.avatar}
-                      letters={firstLetterOf(offered.name)}
                     />
                     <span className="door-who-name">{offered.name}</span>
                   </button>
@@ -241,10 +231,9 @@ export function Door({
           {forWhom !== null && (
             <div className="door-forwhom">
               <Face
-                className="door-face door-forwhom-face"
+                className="door-forwhom-face"
                 name={forWhom}
                 avatar={door.names.find((offered) => offered.name === forWhom)?.avatar ?? null}
-                letters={firstLetterOf(forWhom)}
               />
               <span className="door-forwhom-name">{forWhom}</span>
               {/* Out of sight and genuinely there: a password keeper fills the

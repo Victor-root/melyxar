@@ -661,17 +661,13 @@
 }
 
 /* An account's own face where a panel wears its mark: its picture, or its
-   letters on the accent, filling the square. */
+   painting, filling the square. */
 .account-face {
   display: grid;
   place-items: center;
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .account-panel .panel-mark {
