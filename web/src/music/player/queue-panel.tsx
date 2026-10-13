@@ -16,7 +16,7 @@ import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
 import { scrollerOf } from "../../landing";
 import { PauseIcon } from "../../player/icons";
 import { useSettings } from "../../settings";
-import { PlayingWave } from "../playing-wave";
+import { PlayingCrown } from "../playing-crown";
 import { Cover } from "../songs";
 import { keeping, linesAround, linesShown } from "./lines-shown";
 import type { Shown } from "./lines-shown";
@@ -330,9 +330,10 @@ export function QueuePanel() {
             <span className="music-song-lead">
               <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
                 {here && playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+                {here && <PlayingCrown playing={playing} />}
               </button>
             </span>
-            <span className="music-song-number">{here ? <PlayingWave playing={playing} /> : at + 1}</span>
+            <span className="music-song-number">{at + 1}</span>
             <Cover song={one} />
             <button type="button" className="music-queue-song" onClick={play} aria-current={here ? "true" : undefined}>
               <span className="music-song-title">{one.title}</span>
