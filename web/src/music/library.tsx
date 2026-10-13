@@ -6,7 +6,8 @@
  *
  * Which tab is open, and how its list is read, is written in the address, so
  * going back to the library finds it the way it was left. On a phone the tabs
- * are pages too, with a dot for each at the foot and chevrons either side.
+ * are pages too, a dot for each under the band at the top with chevrons
+ * either side.
  */
 
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -79,15 +80,18 @@ export function MusicLibraryPage({ library }: { library: Library }) {
 
   return (
     <main
-      className={`page music-page${besideLetters ? " page-beside-letters" : ""}${phone && shown.length > 1 ? " music-page-dotted" : ""}`}
+      className={`page music-page${besideLetters ? " page-beside-letters" : ""}`}
     >
       <PageBackdrop />
+      {phone && shown.length > 1 && <TabDots tabs={shown} open={tab} onOpen={openFrom} />}
       <div className="browse-head">
         <div className="section-head">
           <h1>{library.name}</h1>
         </div>
         <div className="browse-bar">
-          <TabsBar tabs={shown} open={tab} onOpen={open} />
+          {/* On a phone the dots above take the tabs' place, and the middle of
+              the band at the top is left to the tab open. */}
+          {!phone && <TabsBar tabs={shown} open={tab} onOpen={open} />}
           {!barred && tab !== "for_you" && <UploadButton library={library} bare className="browse-piece browse-alone" />}
         </div>
       </div>
@@ -106,7 +110,6 @@ export function MusicLibraryPage({ library }: { library: Library }) {
         {tab === "genres" && <GenresTab library={library.id} />}
       </div>
       </BesideLetters.Provider>
-      {phone && shown.length > 1 && <TabDots tabs={shown} open={tab} onOpen={openFrom} />}
     </main>
   );
 }
