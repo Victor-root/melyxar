@@ -17,7 +17,7 @@
  * names has nothing to open on and shows the form straight away.
  *
  * Nothing of Melyxar is written into this screen. The mark, the name and what
- * is behind the card all come from what the server says it wears, and what
+ * is behind the accounts all come from what the server says it wears, and what
  * this project ships with is the fallback rather than the rule: an
  * administrator is meant to be able to replace the lot without a line of this
  * file changing.
@@ -52,22 +52,12 @@ function firstLetterOf(name: string): string {
 }
 
 /**
- * What the card is showing.
+ * What the screen is showing.
  *
  * The accounts on this server, or the form. On the form, the name is either
- * already settled, because a card was pressed, or still to be typed.
+ * already settled, because a tile was pressed, or still to be typed.
  */
 type Showing = { the: "accounts" } | { the: "form"; forWhom: string | null };
-
-/**
- * The most account cards the card puts across before wrapping to a second row.
- *
- * It is what the card's own width is worked out from, so it is a count rather
- * than a width: four of them and the card comes out a little wider than it
- * stands at on its own, which is as wide as a sign in card should ever get.
- * A fifth account starts a second row instead of widening the screen further.
- */
-const MOST_ACROSS = 4;
 
 export function Door({
   branding,
@@ -93,7 +83,7 @@ export function Door({
   const first = useRef<HTMLInputElement>(null);
   const passwordField = useRef<HTMLInputElement>(null);
 
-  /* Nothing until something is pressed. Until then the card shows the accounts
+  /* Nothing until something is pressed. Until then the screen shows the accounts
      when the server offers any and the form when it does not, which is the
      only way a list that arrives a moment after the screen can be the thing
      the screen opens on. */
@@ -106,9 +96,9 @@ export function Door({
   const onTheForm = showing.the === "form";
   const forWhom = showing.the === "form" ? showing.forWhom : null;
 
-  // The cursor where the next word goes, every time the card turns to the
+  // The cursor where the next word goes, every time the screen turns to the
   // form: the name for somebody typing their own, the password for somebody
-  // whose name was settled by the card they pressed.
+  // whose name was settled by the tile they pressed.
   useEffect(() => {
     if (!door.asked || !onTheForm) {
       return;
@@ -137,9 +127,9 @@ export function Door({
     set(value);
   };
 
-  /* Turning the card empties it: a password half typed for one account and a
+  /* Turning the screen empties it: a password half typed for one account and a
      refusal earned by another both belong to the view being left. The name
-     comes from where the card is being turned to, so there is one place it is
+     comes from where the screen is being turned to, so there is one place it is
      ever decided. */
   const turnTo = (next: Showing) => {
     setTwiceDiffers(false);
@@ -152,67 +142,71 @@ export function Door({
   return (
     <main className="door">
       <DoorBackground branding={branding} />
+      {/* The light the accounts stand in, the same over every background: it is
+          what this screen is built around rather than a background somebody
+          picks. */}
+      <div className="door-stage" aria-hidden="true" />
 
-      {/* How many cards go across is what this card is as wide as, so the
-          count is handed to the drawing and the arithmetic stays in it. The
-          width is the same on both views: a card that shrank the moment
-          somebody pressed a face would be a screen that moves under a hand
-          already going for the password. */}
+      {/* The mark and the name, in the corner the way every other screen
+          carries them, so the middle is left to the accounts. */}
+      <header className="door-top">
+        {/* Only ever on the form, and only when there is a list to go back
+            to: on a server that offers no names it would go nowhere. */}
+        {onTheForm && door.names.length > 0 && (
+          <button
+            type="button"
+            className="door-back"
+            onClick={() => turnTo({ the: "accounts" })}
+          >
+            <BackIcon size={18} />
+            {t("door.back")}
+          </button>
+        )}
+        <div className="door-crown">
+          {/* A mark of the administrator's own stays in its own colours; the
+              one Melyxar ships takes the accent, like the rest of the page. */}
+          <ServerMark branding={branding} size={34} className="door-mark" />
+          <span className="door-name">{branding.server_name}</span>
+        </div>
+      </header>
+
+      {/* No card around any of it: the accounts stand in the open in the middle
+          of the screen, and the form takes their place once one is pressed. */}
       {door.asked && (
-        <form
-          className="door-card"
-          style={
-            {
-              "--across": Math.min(door.names.length, MOST_ACROSS),
-            } as React.CSSProperties
-          }
-          onSubmit={send}
-        >
-          {/* Only ever on the form, and only when there is a list to go back
-              to: on a server that offers no names it would go nowhere. */}
-          {onTheForm && door.names.length > 0 && (
-            <button
-              type="button"
-              className="door-back"
-              onClick={() => turnTo({ the: "accounts" })}
-            >
-              <BackIcon size={16} />
-              {t("door.back")}
-            </button>
-          )}
-
-          <div className="door-crown">
-            {/* A mark of the administrator's own stays in its own colours; the
-                one Melyxar ships takes the accent, like the rest of the page. */}
-            <ServerMark branding={branding} size={58} className="door-mark" />
-            <h1 className="door-name">{branding.server_name}</h1>
-          </div>
-
-          {/* Nothing here once a card has been pressed: the face and the name
-              under the mark say who this is for, and a line saying it again in
-              words is one the eye reads past on the way to the password. */}
+        <form className="door-hall" onSubmit={send}>
+          {/* Nothing here once a tile has been pressed: the face and the name
+              say who this is for, and a line saying it again in words is one
+              the eye reads past on the way to the password. */}
           {forWhom === null && (
-            <p className="door-invitation">
-              {showing.the === "accounts"
-                ? t("door.pick")
-                : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
-            </p>
+            <div className="door-greeting">
+              <h1 className="door-welcome">
+                {t("door.welcome_before")}
+                <span className="door-welcome-name">{branding.server_name}</span>
+                {t("door.welcome_after")}
+              </h1>
+              <p className="door-invitation">
+                {showing.the === "accounts"
+                  ? t("door.pick")
+                  : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
+              </p>
+            </div>
           )}
 
           {/* Who is on this server, for whoever is not typing their own name for
               the thousandth time. Pressing one settles the name and turns the
-              card to the password, which is the whole of the first half of
+              screen to the password, which is the whole of the first half of
               signing in done in one press. */}
           {showing.the === "accounts" && (
             <>
               <div className="door-who">
-                {door.names.map((offered) => (
+                {door.names.map((offered, at) => (
                   <button
                     type="button"
                     key={offered.name}
                     className="door-who-one"
+                    style={{ "--order": at } as React.CSSProperties}
                     onClick={() => turnTo({ the: "form", forWhom: offered.name })}
-                    /* A name too long for the card is cut on it, so the whole
+                    /* A name too long for the tile is cut on it, so the whole
                        of it has to be readable from somewhere. */
                     title={offered.name}
                   >
@@ -241,9 +235,9 @@ export function Door({
             </>
           )}
 
-          {/* Whose password is being asked for, once a card has settled it. The
+          {/* Whose password is being asked for, once a tile has settled it. The
               name itself is held rather than drawn as a field, so the one thing
-              left on the card is the one thing left to do. */}
+              left on the screen is the one thing left to do. */}
           {forWhom !== null && (
             <div className="door-forwhom">
               <Face
@@ -254,8 +248,8 @@ export function Door({
               />
               <span className="door-forwhom-name">{forWhom}</span>
               {/* Out of sight and genuinely there: a password keeper fills the
-                  entry it recognises by the name beside it, and a card with no
-                  name on it anywhere offers nothing to recognise. */}
+                  entry it recognises by the name beside it, and a screen with
+                  no name on it anywhere offers nothing to recognise. */}
               <input
                 className="door-kept-name"
                 type="text"
@@ -438,35 +432,37 @@ export function Door({
               )}
             </>
           )}
-
-          {/* What this server is for, at the card's own foot rather than
-              floating above it: the last thing read on this screen, once
-              there is nothing left to press. */}
-          <p className="door-slogan">{branding.door_slogan ?? t("door.slogan")}</p>
         </form>
       )}
 
-      {/* The two door settings a viewer can turn before anybody knows them:
-          the language, the browser's to begin with, and the theme, since
-          automatic does not always land on the one either wants. On a brand
-          new server the language chosen here is the first account's. */}
-      <div className="door-foot">
-        <LanguagePicker />
-        <ThemeToggle />
+      {/* The two door settings a viewer can turn before anybody knows them,
+          on one side: the language, the browser's to begin with, and the
+          theme, since automatic does not always land on the one either wants.
+          On a brand new server the language chosen here is the first
+          account's. What this server is for, and whose project it is, on the
+          other, the last things read on this screen. */}
+      <footer className="door-foot">
+        <div className="door-settings">
+          <LanguagePicker />
+          <ThemeToggle />
+        </div>
 
-        <p className="door-footer">
-          {t("door.footer_before")}
-          <a
-            href="https://github.com/Victor-root"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="door-footer-link"
-          >
-            Victor-root
-          </a>
-          {t("door.footer_after")}
-        </p>
-      </div>
+        <div className="door-credits">
+          <p className="door-slogan">{branding.door_slogan ?? t("door.slogan")}</p>
+          <p className="door-footer">
+            {t("door.footer_before")}
+            <a
+              href="https://github.com/Victor-root"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="door-footer-link"
+            >
+              Victor-root
+            </a>
+            {t("door.footer_after")}
+          </p>
+        </div>
+      </footer>
     </main>
   );
 }
