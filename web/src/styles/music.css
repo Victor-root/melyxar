@@ -117,6 +117,57 @@
   }
 }
 
+/* A tab reached by a swipe or a dot slides in from the side it came from. */
+.music-tab-content[data-came-from] {
+  animation: music-tab-in var(--calm) var(--ease);
+}
+
+.music-tab-content[data-came-from="before"] {
+  --came-from: -28px;
+}
+
+@keyframes music-tab-in {
+  from {
+    opacity: 0.3;
+    transform: translateX(var(--came-from, 28px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .music-tab-content[data-came-from] {
+    animation: none;
+  }
+}
+
+/* The dots of the tabs of a phone, over the foot of the screen and over the
+   player when it is there; the page keeps the room they take. */
+.music-tab-dots {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 12px);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--shadow-raised);
+  transform: translateX(-50%);
+}
+
+:root[data-music-bar] .music-tab-dots {
+  bottom: calc(var(--music-bar-height) + 8px);
+}
+
+/* A swipe sideways turns the tab rather than going back a page in the
+   browser; what scrolls sideways inside still does. */
+.music-page-dotted {
+  padding-bottom: calc(var(--gap-wide) + 44px);
+  touch-action: pan-y pinch-zoom;
+}
+
 /* The bar of the tab stands a little nearer the tabs than a grid's bar does
    its name. */
 .music-page .browse-head {
@@ -328,10 +379,9 @@
   /* Scrolled by the graphics card, for the reason given on the box the page
      scrolls in. */
   will-change: scroll-position;
-  /* Reaching either end of a list stops there: a swipe that ran out of list
-     carried on into the page. The albums under it are reached from outside
-     the list, by the peek left below it. Up and down only: a swipe sideways
-     is the row's, which brings the other list. */
+  /* Reaching either end of a page stops there: a swipe that ran out of list
+     carried on into the page. Up and down only: a swipe sideways is the
+     row's, which brings the next page. */
   overscroll-behavior-y: contain;
   /* Its place is shown by the thin line the pages of a phone draw. */
   scrollbar-width: none;

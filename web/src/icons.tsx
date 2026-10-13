@@ -983,6 +983,16 @@ export function WarningIcon(props: IconProps) {
 }
 
 /** A clock with an arrow running back round it, for what happened lately. */
+/** A spark, for what has just arrived. */
+export function NewIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10.4 4.2c.7 4.1 2.6 6 6.7 6.7-4.1.7-6 2.6-6.7 6.7-.7-4.1-2.6-6-6.7-6.7 4.1-.7 6-2.6 6.7-6.7Z" />
+      <path d="M18 14.6c.3 1.7 1 2.4 2.7 2.7-1.7.3-2.4 1-2.7 2.7-.3-1.7-1-2.4-2.7-2.7 1.7-.3 2.4-1 2.7-2.7Z" />
+    </Icon>
+  );
+}
+
 export function HistoryIcon(props: IconProps) {
   return (
     <Icon {...props}>
