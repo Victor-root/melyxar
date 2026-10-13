@@ -483,8 +483,7 @@
   }
 }
 
-/* Where a picture of the account will go the day accounts carry one. Until
-   then the letters of the name, which is what tells two of them apart. */
+/* The face of the account in the header: its picture, or its painting. */
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -495,25 +494,37 @@
   /* Square like everywhere else it is shown, its corners rounded in step
      with how small it is here. */
   border-radius: 7px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
-/* A picture of somebody in place of their initials: the frame it sits in
-   stays the frame, and the picture fills it. */
+/* A picture of somebody, or the painting of an account without one: the
+   frame it sits in stays the frame, and the picture fills it. */
 .face-picture {
   overflow: hidden;
   background: var(--surface-raised);
 }
 
-.face-picture img {
+.face-picture :is(img, svg) {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/*
+ * The tints the paintings are made of, worked out from the accent turned
+ * round the colour wheel by however far this account's painting asks. Each
+ * keeps a little colour even when the accent has almost none, so a grey
+ * accent still gives faces rather than smudges. The night is the same on a
+ * white screen as on a dark one: it is a painting of the sky, not a surface.
+ */
+.face-art {
+  --art-turn: 0;
+  --art-night: oklch(from var(--accent) 0.15 0.03 calc(h + var(--art-turn)));
+  --art-deep: oklch(from var(--accent) 0.34 max(calc(c * 0.8), 0.09) calc(h + var(--art-turn) - 8));
+  --art-base: oklch(from var(--accent) 0.6 max(c, 0.14) calc(h + var(--art-turn)));
+  --art-glow: oklch(from var(--accent) 0.72 max(c, 0.16) calc(h + var(--art-turn) + 18));
+  --art-light: oklch(from var(--accent) 0.93 max(calc(c * 0.45), 0.06) calc(h + var(--art-turn) + 10));
+  background: var(--art-night);
 }
 
 .cropper {
@@ -554,7 +565,7 @@
 }
 
 /* Who is here, at the end of the piece, and the way into everything that is
-   theirs. The letters and the name go together more closely than any two
+   theirs. The face and the name go together more closely than any two
    icons do, so they keep their own air while the glass around them is
    shared. */
 .header-account {

@@ -517,7 +517,7 @@ img.door-mark {
 
 /*
  * Two rims on every tile, both drawn over the face rather than around it, so
- * a picture is framed the same as a letter. A hairline, always there, that
+ * a picture is framed the same as a painting. A hairline, always there, that
  * keeps a dark picture from melting into the dark behind it, and the lit one,
  * the accent with its light spilling out of it, there only under the pointer
  * or the keyboard. Only its opacity changes, which is the cheapest thing a
@@ -565,53 +565,18 @@ img.door-mark {
   outline: none;
 }
 
-/* The one letter a name is shown by, wherever it is drawn: on the list and
-   again on the form once one of them has been pressed. Only the size differs
-   between the two. */
-.door-face {
-  display: grid;
-  place-items: center;
-  font-family: "Melyxar Display", "Inter", sans-serif;
-  font-weight: 700;
-  line-height: 1;
-}
-
 /*
  * The face itself, the same on the list and over the form: one account is one
  * face, and a tile that changed on being chosen read as two different things
- * rather than as the same one twice.
- *
- * Without a picture, the accent, deepening into the dark, with one arc of
- * light across its lower corner, so a row of letters is a row of lit things
- * rather than a row of flat squares. Square with soft corners, since it holds
- * the picture somebody chose and a large radius eats the corners of a
- * picture.
+ * rather than as the same one twice. Square with soft corners, since it holds
+ * a picture and a large radius eats the corners of a picture.
  */
 .door-who-face,
 .door-forwhom-face {
+  display: block;
   width: var(--door-tile);
   height: var(--door-tile);
   border-radius: var(--door-radius);
-  background:
-    radial-gradient(
-      150% 110% at 115% 125%,
-      transparent 54%,
-      color-mix(in srgb, var(--accent-bright) 50%, transparent) 55.5%,
-      color-mix(in srgb, var(--accent-bright) 12%, transparent) 60%,
-      transparent 70%
-    ),
-    radial-gradient(
-      90% 80% at 10% 0%,
-      color-mix(in srgb, var(--accent-bright) 55%, transparent),
-      transparent 70%
-    ),
-    linear-gradient(
-      160deg,
-      var(--accent),
-      color-mix(in srgb, var(--accent-dim) 55%, var(--surface-deep)) 90%
-    );
-  color: var(--accent-contrast);
-  font-size: calc(var(--door-tile) * 0.4);
   box-shadow: var(--shadow-raised);
 }
 
@@ -683,18 +648,14 @@ img.door-mark {
 
 .door-forwhom-face {
   --door-tile: clamp(96px, min(8vw, 15vh), 148px);
+  position: relative;
   box-shadow:
-    inset 0 0 0 2px var(--accent-bright),
     0 0 30px -2px color-mix(in srgb, var(--accent) 55%, transparent),
     0 16px 60px -12px color-mix(in srgb, var(--accent-dim) 70%, transparent);
 }
 
-/* The rim over a picture, which would otherwise cover it. */
-.door-forwhom-face.face-picture {
-  position: relative;
-}
-
-.door-forwhom-face.face-picture::after {
+/* The rim drawn over the picture, which would otherwise cover it. */
+.door-forwhom-face::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1093,9 +1054,7 @@ img.door-mark {
 }
 
 :root[data-theme="light"] .door-forwhom-face {
-  box-shadow:
-    inset 0 0 0 2px var(--accent-bright),
-    0 10px 28px -10px color-mix(in srgb, var(--accent-dim) 50%, transparent);
+  box-shadow: 0 10px 28px -10px color-mix(in srgb, var(--accent-dim) 50%, transparent);
 }
 
 :root[data-theme="light"] .door-box {
