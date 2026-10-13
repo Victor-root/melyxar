@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
             "/api/v1/music/songs/{id}/lyrics/sync",
             axum::routing::post(synchronise).delete(unsynchronise),
         )
+        .route("/api/v1/music/songs/{id}/lyrics/offset", axum::routing::put(set_offset))
 }
 
 /// One entry of LRCLIB offered for a song, as the window lists it.
@@ -126,6 +127,23 @@ async fn unsynchronise(
     Path(id): Path<String>,
 ) -> Result<Json<()>> {
     melyxar_app::music::lyrics_sync::forget(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(()))
+}
+
+#[derive(Debug, Deserialize)]
+struct OffsetAsked {
+    /// How much later every line is shown, sooner when negative.
+    offset_ms: i64,
+}
+
+/// Moves every line of a song by hand, for every account.
+async fn set_offset(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Json(asked): Json<OffsetAsked>,
+) -> Result<Json<()>> {
+    melyxar_app::music::lyrics::set_offset(&state, &who, parse_work(&id)?, asked.offset_ms).await?;
     Ok(Json(()))
 }
 

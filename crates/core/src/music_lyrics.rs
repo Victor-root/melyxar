@@ -23,6 +23,14 @@ impl Lyrics {
     pub fn is_empty(&self) -> bool {
         self.plain.trim().is_empty() && self.synced.is_empty()
     }
+
+    /// Every stamped line moved later by `by` milliseconds, sooner when it is
+    /// negative, never before the start of the song.
+    pub fn shift(&mut self, by: i64) {
+        for line in &mut self.synced {
+            line.at = Millis::new((line.at.get() + by).max(0));
+        }
+    }
 }
 
 /// Reads lyrics whatever their form. Stamped lines give the synced words and
@@ -116,6 +124,18 @@ mod tests {
             at: Millis::new(at),
             text: text.to_string(),
         }
+    }
+
+    #[test]
+    fn a_shift_moves_every_line_and_none_before_the_start() {
+        let mut lyrics = Lyrics {
+            plain: "a\nb\nc".into(),
+            synced: vec![line(300, "a"), line(2_000, "b"), line(9_500, "c")],
+        };
+        lyrics.shift(1_250);
+        assert_eq!(lyrics.synced, vec![line(1_550, "a"), line(3_250, "b"), line(10_750, "c")]);
+        lyrics.shift(-2_000);
+        assert_eq!(lyrics.synced, vec![line(0, "a"), line(1_250, "b"), line(8_750, "c")]);
     }
 
     #[test]

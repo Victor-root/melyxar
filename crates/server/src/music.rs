@@ -532,6 +532,9 @@ struct LyricsView {
     /// What came of lining the lines up with the song, and how they were moved
     /// if they were.
     synchronised: Option<SynchronisedLines>,
+    /// How much later every line is shown, set by hand, already applied to
+    /// the lines.
+    offset_ms: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -570,6 +573,7 @@ async fn lyrics(
                 lines_moved: moved.lines_moved,
                 confidence: moved.confidence,
             }),
+            offset_ms: found.offset_ms,
         }
     })))
 }

@@ -2,6 +2,9 @@
 //! are heard, kept so the lyrics are shown moved every time and the song is
 //! not listened to again for it. What came of the attempt is kept too when
 //! nothing was moved.
+//!
+//! A move of every line set by hand is kept beside it, and goes whenever the
+//! lining up changes: it was set against the lines as they then stood.
 
 use melyxar_core::id::WorkId;
 use melyxar_core::time::Timestamp;
@@ -79,16 +82,52 @@ impl Database {
         .bind(timestamp_to_text(at))
         .execute(self.writer())
         .await?;
-        Ok(())
+        self.set_lyrics_offset(song, 0, at).await
     }
 
-    /// Forgets how the lines of a song were moved, so they are shown as
-    /// stamped.
+    /// Forgets how the lines of a song were moved, by hand too, so they are
+    /// shown as stamped.
     pub async fn forget_lyrics_timing(&self, song: WorkId) -> Result<()> {
         sqlx::query("DELETE FROM music_lyrics_timing WHERE song_id = ?")
             .bind(song.to_db_string())
             .execute(self.writer())
             .await?;
+        sqlx::query("DELETE FROM music_lyrics_offsets WHERE song_id = ?")
+            .bind(song.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
+    /// How much later the lines of a song are shown, set by hand: nought when
+    /// they never were.
+    pub async fn lyrics_offset(&self, song: WorkId) -> Result<i64> {
+        let offset = sqlx::query_scalar("SELECT offset_ms FROM music_lyrics_offsets WHERE song_id = ?")
+            .bind(song.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+        Ok(offset.unwrap_or(0))
+    }
+
+    /// Sets how much later the lines of a song are shown, nought putting them
+    /// back where they stand.
+    pub async fn set_lyrics_offset(&self, song: WorkId, offset_ms: i64, at: Timestamp) -> Result<()> {
+        if offset_ms == 0 {
+            sqlx::query("DELETE FROM music_lyrics_offsets WHERE song_id = ?")
+                .bind(song.to_db_string())
+                .execute(self.writer())
+                .await?;
+            return Ok(());
+        }
+        sqlx::query(
+            "INSERT INTO music_lyrics_offsets (song_id, offset_ms, set_at) VALUES (?, ?, ?)
+             ON CONFLICT (song_id) DO UPDATE SET offset_ms = excluded.offset_ms, set_at = excluded.set_at",
+        )
+        .bind(song.to_db_string())
+        .bind(offset_ms)
+        .bind(timestamp_to_text(at))
+        .execute(self.writer())
+        .await?;
         Ok(())
     }
 }
@@ -121,6 +160,41 @@ mod tests {
 
         database.forget_lyrics_timing(song).await.expect("forgotten");
         assert_eq!(database.lyrics_timing(song).await.expect("read"), None);
+    }
+
+    #[tokio::test]
+    async fn an_offset_is_kept_changed_and_put_back_to_nothing() {
+        let (database, library, _) = collection().await;
+        let song = a_song(&database, library).await;
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 0);
+
+        database.set_lyrics_offset(song, 1_500, melyxar_core::time::now()).await.expect("set");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 1_500);
+        database.set_lyrics_offset(song, -750, melyxar_core::time::now()).await.expect("set");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), -750);
+        database.set_lyrics_offset(song, 0, melyxar_core::time::now()).await.expect("set");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 0);
+    }
+
+    #[tokio::test]
+    async fn an_offset_goes_whenever_the_lining_up_or_the_words_change() {
+        let (database, library, _) = collection().await;
+        let song = a_song(&database, library).await;
+        let timing = LyricsTiming { conclusion: "aligned".into(), shift_ms: 120, moves_ms: vec![120, 100], lines_moved: 2, confidence: 0.5 };
+        let words = LookedUpLyrics { plain: Some("words".into()), ..LookedUpLyrics::default() };
+        let now = melyxar_core::time::now();
+
+        database.set_lyrics_offset(song, 900, now).await.expect("set");
+        database.keep_lyrics_timing(song, &timing, now).await.expect("kept");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 0, "lined up anew");
+
+        database.set_lyrics_offset(song, 900, now).await.expect("set");
+        database.forget_lyrics_timing(song).await.expect("forgotten");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 0, "the lining up undone");
+
+        database.set_lyrics_offset(song, 900, now).await.expect("set");
+        database.keep_looked_up_lyrics(song, &words, now, 2).await.expect("kept");
+        assert_eq!(database.lyrics_offset(song).await.expect("read"), 0, "other words");
     }
 
     #[tokio::test]
