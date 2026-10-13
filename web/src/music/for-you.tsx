@@ -1,7 +1,8 @@
 /*
  * The tabs of a library of music that are this account's own: the one it
  * opens on, with what arrived lately and what was listened to lately and
- * most, the one of its playlists, and the one of what it likes.
+ * most, the one of its playlists, and the one of what it likes. On a phone
+ * the three of the first are pages side by side, a swipe apart.
  *
  * What was listened to is read again each time a listen is counted, and
  * what is liked follows the hearts at once: a song taken off here leaves the
@@ -11,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { ScrollBar } from "../components/scrollbar";
-import { FlameIcon, HistoryIcon } from "../icons";
+import { FlameIcon, HistoryIcon, NewIcon } from "../icons";
 import { useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
@@ -32,11 +33,6 @@ const NEWEST = 20;
 /** The width from which the two listened lists stand side by side, each
  *  scrolling in its own box. */
 const SIDE_BY_SIDE = "(min-width: 1000px)";
-
-/** How much of the newest albums, under the lists on a phone, is left in view
- *  below them: their heading and the top of their covers, so that the page is
- *  seen to go on and has somewhere to be pulled from. */
-const NEWEST_PEEKING = 120;
 
 /** The least a list is let shrink to, on a screen too short to give it more. */
 const LEAST_LIST = 280;
@@ -71,30 +67,48 @@ export function ForYouTab({ library }: { library: string }) {
   if (newest && newest.length === 0) {
     return <p className="notice">{t("music.no_album")}</p>;
   }
-  const newestRow = newest && (
-    <section className="section">
-      <RowHead title={t("music.newest")} />
-      <Row>
-        {newest.map((album) => (
-          <AlbumTile key={album.id} album={album} />
-        ))}
-      </Row>
-    </section>
-  );
+  if (phone) {
+    const songsOf = (songs: Song[]) => ({
+      filled: songs.length > 0,
+      content: <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={(index) => player.play(songs, index)} />,
+    });
+    return (
+      <div className="music-for-you">
+        {/* What was listened to first, under the thumb, then what arrived. */}
+        <ForYouPages
+          pages={[
+            { title: t("music.listened_lately"), mark: <HistoryIcon size={20} />, ...songsOf(lately) },
+            { title: t("music.listened_most"), mark: <FlameIcon size={20} />, ...songsOf(most) },
+            {
+              title: t("music.newest"),
+              mark: <NewIcon size={20} />,
+              filled: (newest?.length ?? 0) > 0,
+              content: (
+                <div className="music-grid">
+                  {newest?.map((album) => (
+                    <AlbumTile key={album.id} album={album} />
+                  ))}
+                </div>
+              ),
+            },
+          ]}
+        />
+      </div>
+    );
+  }
   return (
     <div className="music-for-you">
-      {/* On a phone what was listened to comes first, under the thumb, and the
-          newest albums are what a scroll reaches after it. */}
-      {!phone && newestRow}
-      {phone ? (
-        <ListenedSwitch
-          lists={[
-            { title: t("music.listened_lately"), mark: <HistoryIcon size={20} />, songs: lately },
-            { title: t("music.listened_most"), mark: <FlameIcon size={20} />, songs: most },
-          ]}
-          onPlay={(songs, index) => player.play(songs, index)}
-        />
-      ) : wide ? (
+      {newest && (
+        <section className="section">
+          <RowHead title={t("music.newest")} />
+          <Row>
+            {newest.map((album) => (
+              <AlbumTile key={album.id} album={album} />
+            ))}
+          </Row>
+        </section>
+      )}
+      {wide ? (
         <ListenedColumns>
           <ListenedList title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
           <ListenedList title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
@@ -105,42 +119,36 @@ export function ForYouTab({ library }: { library: string }) {
           <Listened title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
         </>
       )}
-      {phone && newestRow}
     </div>
   );
 }
 
-/**
- * The two listened lists on a phone: one list the whole width of the screen,
- * the other beside it, a swipe or a press on its name away. The one in view
- * is the one whose name is lit. Each holds every song and scrolls in its own
- * box, as tall as the screen allows less a peek of what follows, which the
- * page itself scrolls to.
- */
-function ListenedSwitch({
-  lists,
-  onPlay,
-}: {
-  lists: { title: string; mark: React.ReactNode; songs: Song[] }[];
-  onPlay: (songs: Song[], index: number) => void;
-}) {
-  const shown = lists.filter((list) => list.songs.length > 0);
-  return shown.length === 0 ? null : <ListenedPages shown={shown} onPlay={onPlay} />;
+/** One page of those of a phone: its name, its mark, and what it holds. */
+interface ForYouPage {
+  title: string;
+  mark: React.ReactNode;
+  filled: boolean;
+  content: React.ReactNode;
 }
 
-function ListenedPages({
-  shown,
-  onPlay,
-}: {
-  shown: { title: string; mark: React.ReactNode; songs: Song[] }[];
-  onPlay: (songs: Song[], index: number) => void;
-}) {
-  /* Sideways only: bringing a list into view scrolled the whole page along. A
-     list is a width of the row plus the gap between two, which is its padding. */
+/**
+ * The pages of a phone: one the whole width of the screen, the others beside
+ * it, a swipe or a press on their mark away. The one in view is the one whose
+ * mark is lit. Each scrolls in its own box, as tall as the screen allows,
+ * which leaves the page itself nothing to scroll.
+ */
+function ForYouPages({ pages }: { pages: ForYouPage[] }) {
+  const shown = pages.filter((one) => one.filled);
+  return shown.length === 0 ? null : <PagesTrack shown={shown} />;
+}
+
+function PagesTrack({ shown }: { shown: ForYouPage[] }) {
+  /* Sideways only: bringing a page into view scrolled the whole page along. A
+     page is a width of the row plus the gap between two, which is its padding. */
   const track = useRef<HTMLDivElement>(null);
-  const pages = useRef<(HTMLDivElement | null)[]>([]);
+  const slots = useRef<(HTMLDivElement | null)[]>([]);
   const [page, setPage] = useState(0);
-  useRoomBelow(track, LEAST_LIST, NEWEST_PEEKING);
+  useRoomBelow(track, LEAST_LIST);
 
   useEffect(() => {
     const element = track.current;
@@ -151,13 +159,13 @@ function ListenedPages({
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            setPage(pages.current.indexOf(entry.target as HTMLDivElement));
+            setPage(slots.current.indexOf(entry.target as HTMLDivElement));
           }
         }
       },
       { root: element, threshold: 0.6 },
     );
-    for (const one of pages.current) {
+    for (const one of slots.current) {
       if (one) {
         watcher.observe(one);
       }
@@ -169,53 +177,45 @@ function ListenedPages({
     <section className="section">
       <div className="section-head">
         <div className="music-listened-switch">
-          {shown.map((list, at) => (
+          {shown.map((one, at) => (
             <button
-              key={list.title}
+              key={one.title}
               type="button"
               className="music-listened-title"
               data-on={at === page ? "yes" : "no"}
-              aria-label={list.title}
-              title={list.title}
+              aria-label={one.title}
+              title={one.title}
               onClick={() => track.current?.scrollTo({ left: at * track.current.clientWidth, behavior: "smooth" })}
             >
-              {list.mark}
+              {one.mark}
             </button>
           ))}
         </div>
         <h2>{shown[Math.min(page, shown.length - 1)].title}</h2>
       </div>
       <div className="music-listened-pages" ref={track}>
-        {shown.map((list, at) => (
-          <ListenedPage
-            key={list.title}
-            songs={list.songs}
-            onPlay={(index) => onPlay(list.songs, index)}
+        {shown.map((one, at) => (
+          <PageSlot
+            key={one.title}
             hold={(element) => {
-              pages.current[at] = element;
+              slots.current[at] = element;
             }}
-          />
+          >
+            {one.content}
+          </PageSlot>
         ))}
       </div>
     </section>
   );
 }
 
-/** One list of the row, scrolling in its own box. */
-function ListenedPage({
-  songs,
-  onPlay,
-  hold,
-}: {
-  songs: Song[];
-  onPlay: (index: number) => void;
-  hold: (element: HTMLDivElement | null) => void;
-}) {
+/** One page of the row, scrolling in its own box. */
+function PageSlot({ hold, children }: { hold: (element: HTMLDivElement | null) => void; children: React.ReactNode }) {
   const page = useRef<HTMLDivElement>(null);
   return (
     <div className="music-listened-slot" ref={hold}>
       <div className="music-listened-page" ref={page}>
-        <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={onPlay} />
+        {children}
       </div>
       <ScrollBar holder={page} inside />
     </div>
