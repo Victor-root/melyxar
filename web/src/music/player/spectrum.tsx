@@ -12,6 +12,7 @@ import { music as server } from "../api";
 import type { SongSpectrum } from "../api";
 import { useMusic, useMusicTime } from "./player";
 import { approach, levelsAt, momentOf } from "./spectrum-data";
+import { sayWaveLevels } from "./wave-levels";
 
 const FRAME_EVERY_MS = 33;
 
@@ -136,6 +137,9 @@ function Spectrum({
         }
         const settled = approach(levels, targets);
         draw();
+        if (reading) {
+          sayWaveLevels(levels);
+        }
         if (!reading && settled) {
           return;
         }

@@ -952,8 +952,9 @@
 }
 
 /* The little equaliser inside the button of the song playing: four bars,
-   each rising and falling on a beat of its own, by transform alone. The
-   pause sign takes their place under the pointer or the keyboard. */
+   rising and falling with the wave behind the player or, without it, each
+   on a beat of its own, by transform alone. The pause sign takes their place
+   under the pointer or the keyboard. */
 .playing-bars {
   display: flex;
   align-items: flex-end;
@@ -1002,6 +1003,13 @@
   100% {
     transform: scaleY(0.85);
   }
+}
+
+/* Moving with the wave behind the player: their heights are set as it is
+   drawn, and they glide between them. */
+.playing-bars[data-heard] .playing-bar {
+  animation: none;
+  transition: transform 160ms linear;
 }
 
 .playing-bars-pause {
