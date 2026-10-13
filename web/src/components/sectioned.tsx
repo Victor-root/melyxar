@@ -33,6 +33,9 @@ export interface Section {
   label: string;
   /** Drawn, and not wired to anything yet. */
   soon?: boolean;
+  /** Takes the whole width of the screen instead of a reading width, for a
+   *  page of figures and curves rather than of settings. */
+  spread?: boolean;
 }
 
 export interface SectionGroup {
@@ -117,7 +120,7 @@ export function Sectioned({
         </aside>
       )}
 
-      <main className="sectioned-page" ref={page}>
+      <main className="sectioned-page" data-spread={here.spread ? "yes" : undefined} ref={page}>
         {theList ? (
           <SectionList base={base} place={place} groups={groups} foot={foot} />
         ) : (
