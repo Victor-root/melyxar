@@ -1048,8 +1048,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Against the button it follows, whatever its count of digits. */
+/* Against the button it follows, whatever its count of digits, nearer to
+   it than the space between the other cells of the line. */
 .music-song-number {
+  margin-left: calc(var(--gap) / -2);
   text-align: left;
 }
 
