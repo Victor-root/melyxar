@@ -13,6 +13,7 @@
 //! over without being encoded again and its tags put back as they were.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::job::JobPriority;
@@ -21,6 +22,9 @@ use melyxar_core::refresh::RefreshMode;
 use melyxar_core::time::Millis;
 use melyxar_core::user::User;
 use melyxar_database::music_tag_editing::SongOnDisk;
+use melyxar_ffmpeg::AskedToStop;
+use melyxar_ffmpeg::song_analysis::{self, analyse};
+use melyxar_sound::{WAVE_MOMENTS_A_SECOND, WaveReading};
 pub use melyxar_tags::EditedTags;
 
 use crate::reach::may_read;
@@ -62,6 +66,15 @@ pub struct Written {
     pub written: usize,
     /// The songs that could not be written, and why.
     pub failed: Vec<(WorkId, String)>,
+}
+
+/// How loud a song is along its length, read from its file as it is now, to
+/// cut it on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Wave {
+    pub moments_a_second: u32,
+    /// A byte a moment (see `melyxar_sound::WaveReading`).
+    pub levels: Vec<u8>,
 }
 
 /// The shortest a song may be cut to: anything shorter is a slip of the hand
@@ -242,6 +255,44 @@ pub async fn trim(
     }
     read_the_library_again(state, on_disk.library_id).await;
     Ok(())
+}
+
+/// The wave of a song to cut, read from its file every time rather than kept:
+/// a cut changes the file, and the spectrum kept from the scan follows only
+/// once the song has been analysed again.
+pub async fn wave(state: &AppState, who: &User, song: WorkId) -> Result<Wave> {
+    let on_disk = writable(state, who, song).await?;
+    let tools = state
+        .tools()
+        .cloned()
+        .ok_or_else(|| refused("the media tools are not installed"))?;
+    let reading = Arc::new(Mutex::new(WaveReading::default()));
+    let hearing = Arc::clone(&reading);
+    let wanted = song_analysis::Wanted {
+        loudness: false,
+        spectrum: true,
+    };
+    // Heard on the thread the sound is read on, never one that serves
+    // requests. A page closed meanwhile drops this, and the tool with it.
+    analyse(
+        &tools,
+        &on_disk.path(),
+        wanted,
+        AskedToStop::never(),
+        move |samples| {
+            hearing
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .hear(samples);
+        },
+    )
+    .await
+    .map_err(|error| refused(error.to_string()))?;
+    let reading = std::mem::take(&mut *reading.lock().unwrap_or_else(PoisonError::into_inner));
+    Ok(Wave {
+        moments_a_second: WAVE_MOMENTS_A_SECOND,
+        levels: reading.levels(),
+    })
 }
 
 /// Whether a cut from `from` to `to` keeps a song worth the name, within the

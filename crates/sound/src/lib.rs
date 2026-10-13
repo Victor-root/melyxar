@@ -47,11 +47,13 @@
 mod lyrics_alignment;
 mod spectrum;
 mod transform;
+mod wave;
 
 pub use lyrics_alignment::{Alignment, HeardWord, LyricLine, Verdict, align};
 pub use spectrum::{
     SPECTRUM_BANDS, SPECTRUM_FRAMES_A_SECOND, SPECTRUM_SAMPLES_A_SECOND, SpectrumReading,
 };
+pub use wave::{WAVE_MOMENTS_A_SECOND, WaveReading};
 
 use melyxar_core::time::Millis;
 

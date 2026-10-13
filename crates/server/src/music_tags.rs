@@ -1,12 +1,14 @@
 //! The routes of the tag manager: what the songs of an album carry in their
 //! files, what writing would change, writing it, an album's cover, and a
-//! song cut short at either end.
+//! song cut short at either end, drawn as its wave to cut it on.
 
 use axum::extract::{Path, Query, State};
+use axum::http::{HeaderName, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use melyxar_app::AppState;
-use melyxar_app::music::tag_editing::{EditedTags, Planned, SongTags, Wanted};
+use melyxar_app::music::tag_editing::{EditedTags, Planned, SongTags, Wanted, Wave};
 use melyxar_core::time::Millis;
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/tags/preview", post(preview))
         .route("/api/v1/music/tags/write", post(write))
         .route("/api/v1/music/songs/{id}/trim", post(trim))
+        .route("/api/v1/music/songs/{id}/wave", get(wave))
         .route(
             "/api/v1/music/albums/{id}/cover",
             // A picture straight off a phone, the same as a profile picture.
@@ -262,4 +265,50 @@ async fn trim(
     )
     .await?;
     Ok(Json(()))
+}
+
+/// How loud a song is along its length, a byte a moment, with how many
+/// moments a second in a header.
+async fn wave(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Response> {
+    let wave = melyxar_app::music::tag_editing::wave(&state, &who, parse_work(&id)?).await?;
+    Ok(wave_reply(wave))
+}
+
+/// Never kept by the browser: the file changes each time the song is cut.
+fn wave_reply(wave: Wave) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+            (
+                HeaderName::from_static("x-wave-moments-a-second"),
+                wave.moments_a_second.to_string(),
+            ),
+        ],
+        wave.levels,
+    )
+        .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_wave_goes_out_as_its_levels_never_kept_by_the_browser() {
+        let reply = wave_reply(Wave {
+            moments_a_second: 100,
+            levels: vec![0, 128, 255],
+        });
+        assert_eq!(reply.headers()["x-wave-moments-a-second"], "100");
+        assert_eq!(reply.headers()[header::CACHE_CONTROL], "no-store");
+        let body = axum::body::to_bytes(reply.into_body(), usize::MAX)
+            .await
+            .expect("a body");
+        assert_eq!(body.as_ref(), [0, 128, 255]);
+    }
 }
