@@ -260,6 +260,8 @@ export interface SongTags {
   song: string;
   file_name: string;
   tags: EditedTags;
+  /** How long it plays, in milliseconds, when the scan could tell. */
+  duration_ms: number | null;
 }
 
 /** What writing would do to one song. */
@@ -408,6 +410,10 @@ export const music = {
   previewTags: (asked: TagsAsked) => post<PlannedTags[]>("/api/v1/music/tags/preview", asked),
   writeTags: (asked: TagsAsked) =>
     post<{ written: number; failed: { song: string; reason: string }[] }>("/api/v1/music/tags/write", asked),
+  /** Cuts a song's file down to what lies between two moments, in
+   *  milliseconds from its start. */
+  trimSong: (song: string, fromMs: number, toMs: number, keepACopy: boolean) =>
+    post<null>(`/api/v1/music/songs/${song}/trim`, { from_ms: fromMs, to_ms: toMs, keep_a_copy: keepACopy }),
   setCover: (album: string, jpeg: Blob, keepACopy: boolean) =>
     put<null>(`/api/v1/music/albums/${album}/cover?keep_a_copy=${keepACopy}`, jpeg),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>

@@ -6,18 +6,23 @@
  * What is about to change is shown before anything is written, unless the
  * account chose otherwise in its settings. The library is read again once
  * the files are written, and every screen showing the album follows.
+ *
+ * Each song can also be cut short at either end, its file cut by the server
+ * (see trim.tsx).
  */
 
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAccount } from "../account";
 import { refusalOf } from "../asking";
+import { PageBackdrop } from "../components/backdrop";
 import { Modal } from "../components/modal";
 import { Setting, Toggle } from "../components/panel";
 import { useToast } from "../notifications/toasts";
 import { refusalKey } from "../i18n";
 import { useLeave } from "../leaving";
 import { useRunning } from "../running";
+import { ScissorsIcon } from "../icons";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -25,6 +30,7 @@ import type { EditedTags, PlannedTags, SongTags, TagsAsked } from "./api";
 import { useMusicControls } from "./player/player";
 import { albumFieldsOf, namesField, namesIn, numberOf, textOf, withAlbum } from "./tag-form";
 import type { AlbumFields } from "./tag-form";
+import { TrimSong } from "./trim";
 
 /** A song's own fields, as they are typed. */
 interface SongFields {
@@ -35,6 +41,8 @@ interface SongFields {
   title: string;
   artists: string;
   kept: EditedTags;
+  /** How long it plays, in seconds, when known: what a cut is made in. */
+  length: number | null;
 }
 
 /** The pattern offered first, the one most collections are named by. */
@@ -84,6 +92,7 @@ export function TagEditorPage() {
   const [planned, setPlanned] = useState<PlannedTags[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [cover, setCover] = useState<{ jpeg: Blob; shown: string } | null>(null);
+  const [trimming, setTrimming] = useState<SongFields | null>(null);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -110,12 +119,17 @@ export function TagEditorPage() {
   if (refused && !songs) {
     return (
       <main className="page">
+        <PageBackdrop />
         <Refusal refused={refused} />
       </main>
     );
   }
   if (!songs) {
-    return <main className="page" aria-busy="true" />;
+    return (
+      <main className="page" aria-busy="true">
+        <PageBackdrop />
+      </main>
+    );
   }
 
   const asked = (): TagsAsked => ({
@@ -187,6 +201,7 @@ export function TagEditorPage() {
 
   return (
     <main className="page music-page tag-editor">
+      <PageBackdrop />
       <div className="section-head">
         <h1>{t("music.edit_tags")}</h1>
       </div>
@@ -246,6 +261,7 @@ export function TagEditorPage() {
             <span role="columnheader">{t("music.tag.track")}</span>
             <span role="columnheader">{t("music.tag.title")}</span>
             <span role="columnheader">{t("music.tag.artists")}</span>
+            <span role="columnheader" aria-label={t("music.trim.open")} />
           </div>
           {songs.map((one) => (
             <div className="tag-editor-row" role="row" key={one.song}>
@@ -278,6 +294,16 @@ export function TagEditorPage() {
                 value={one.artists}
                 onChange={(event) => edit(one.song, { artists: event.target.value })}
               />
+              <button
+                type="button"
+                className="tag-editor-trim"
+                disabled={one.length === null}
+                title={t("music.trim.open")}
+                aria-label={`${t("music.trim.open")} · ${one.title || one.fileName}`}
+                onClick={() => setTrimming(one)}
+              >
+                <ScissorsIcon size={18} />
+              </button>
             </div>
           ))}
         </div>
@@ -307,6 +333,17 @@ export function TagEditorPage() {
           </button>
         </div>
       </section>
+
+      {trimming && trimming.length !== null && (
+        <TrimSong
+          song={trimming.song}
+          title={trimming.title || trimming.fileName}
+          length={trimming.length}
+          keepACopy={keepACopy}
+          onTrimmed={(length) => edit(trimming.song, { length })}
+          onClose={() => setTrimming(null)}
+        />
+      )}
 
       {planned && (
         <Modal
@@ -390,6 +427,7 @@ function fieldsOf(found: SongTags): SongFields {
     title: found.tags.title ?? "",
     artists: namesField(found.tags.artists),
     kept: found.tags,
+    length: found.duration_ms === null ? null : found.duration_ms / 1000,
   };
 }
 

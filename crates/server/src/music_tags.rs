@@ -84,6 +84,8 @@ struct SongTagsView {
     song: String,
     file_name: String,
     tags: TagsView,
+    /// How long it plays, in milliseconds, when known.
+    duration_ms: Option<i64>,
 }
 
 impl From<&SongTags> for SongTagsView {
@@ -92,6 +94,7 @@ impl From<&SongTags> for SongTagsView {
             song: found.song.to_string(),
             file_name: found.file_name.clone(),
             tags: TagsView::from(&found.tags),
+            duration_ms: found.duration.map(Millis::get),
         }
     }
 }
