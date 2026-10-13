@@ -30,8 +30,8 @@ import { AlbumTile, PlaylistTile } from "./tiles";
 /** As many albums as the row of the newest on the home page. */
 const NEWEST = 20;
 
-/** The width from which what was listened to and what arrived stand in three
- *  columns side by side, each scrolling in its own box. */
+/** The width from which the two listened lists stand side by side, each
+ *  scrolling in its own box. */
 const SIDE_BY_SIDE = "(min-width: 1000px)";
 
 /** The least a list is let shrink to, on a screen too short to give it more. */
@@ -96,36 +96,6 @@ export function ForYouTab({ library }: { library: string }) {
       </div>
     );
   }
-  const newestGrid = (
-    <div className="music-grid music-grid-newest">
-      {newest?.map((album) => (
-        <AlbumTile key={album.id} album={album} />
-      ))}
-    </div>
-  );
-  if (wide) {
-    // What was listened to and what arrived, in three columns side by side.
-    return (
-      <div className="music-for-you">
-        <ListenedColumns>
-          <ListenedList title={t("music.listened_lately")} mark={<HistoryIcon size={20} />} filled={lately.length > 0}>
-            <SongList songs={lately} numbered="place" showAlbum={false} menuOnly onPlay={(index) => player.play(lately, index)} />
-          </ListenedList>
-          <ListenedList title={t("music.listened_most")} mark={<FlameIcon size={20} />} filled={most.length > 0}>
-            <SongList songs={most} numbered="place" showAlbum={false} menuOnly onPlay={(index) => player.play(most, index)} />
-          </ListenedList>
-          <ListenedList
-            title={t("music.newest")}
-            mark={<NewAlbumIcon size={20} />}
-            filled={(newest?.length ?? 0) > 0}
-            boxed="music-listened-albums"
-          >
-            {newestGrid}
-          </ListenedList>
-        </ListenedColumns>
-      </div>
-    );
-  }
   return (
     <div className="music-for-you">
       {newest && (
@@ -138,8 +108,17 @@ export function ForYouTab({ library }: { library: string }) {
           </Row>
         </section>
       )}
-      <Listened mark={<HistoryIcon size={20} />} title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
-      <Listened mark={<FlameIcon size={20} />} title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+      {wide ? (
+        <ListenedColumns>
+          <ListenedList mark={<HistoryIcon size={20} />} title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
+          <ListenedList mark={<FlameIcon size={20} />} title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+        </ListenedColumns>
+      ) : (
+        <>
+          <Listened mark={<HistoryIcon size={20} />} title={t("music.listened_lately")} songs={lately} onPlay={(index) => player.play(lately, index)} />
+          <Listened mark={<FlameIcon size={20} />} title={t("music.listened_most")} songs={most} onPlay={(index) => player.play(most, index)} />
+        </>
+      )}
     </div>
   );
 }
@@ -253,7 +232,7 @@ function PageSlot({ hold, children }: { hold: (element: HTMLDivElement | null) =
   );
 }
 
-/** The three columns side by side, as tall as the screen has room for under the
+/** The two lists side by side, as tall as the screen has room for under the
  *  rest of the page. */
 function ListenedColumns({ children }: { children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
@@ -266,26 +245,25 @@ function ListenedColumns({ children }: { children: React.ReactNode }) {
 }
 
 function ListenedList({
-  title,
   mark,
-  filled,
-  boxed,
-  children,
+  title,
+  songs,
+  onPlay,
 }: {
-  title: string;
   mark: React.ReactNode;
-  filled: boolean;
-  /** A class of its own for the box it scrolls in. */
-  boxed?: string;
-  children: React.ReactNode;
+  title: string;
+  songs: Song[];
+  onPlay: (index: number) => void;
 }) {
-  if (!filled) {
+  if (songs.length === 0) {
     return null;
   }
   return (
     <section className="music-listened-column">
       <RowHead mark={mark} title={title} />
-      <div className={`music-listened-list${boxed ? ` ${boxed}` : ""}`}>{children}</div>
+      <div className="music-listened-list">
+        <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={onPlay} />
+      </div>
     </section>
   );
 }
