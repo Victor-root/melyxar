@@ -9,7 +9,7 @@
  * list the moment its heart goes out.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { ScrollBar } from "../components/scrollbar";
 import { FlameIcon, HistoryIcon, NewAlbumIcon } from "../icons";
@@ -168,8 +168,18 @@ function PagesTrack({ shown }: { shown: ForYouPage[] }) {
      page is a width of the row plus the gap between two, which is its padding. */
   const track = useRef<HTMLDivElement>(null);
   const slots = useRef<(HTMLDivElement | null)[]>([]);
-  const [page, setPage] = useState(0);
+  /* Kept, so that coming back from an album opened from the third page finds
+     the third page, put back before it is first drawn. */
+  const [kept, setPage] = useKeptState("for-you|page", 0);
+  const page = Math.min(kept, shown.length - 1);
   useRoomBelow(track, LEAST_LIST, true);
+  useLayoutEffect(() => {
+    const element = track.current;
+    if (element) {
+      element.scrollLeft = page * element.clientWidth;
+    }
+    // Only as it is first drawn: after that the row is where the hand left it.
+  }, []);
 
   useEffect(() => {
     const element = track.current;
@@ -212,7 +222,7 @@ function PagesTrack({ shown }: { shown: ForYouPage[] }) {
             </button>
           ))}
         </div>
-        <h2>{shown[Math.min(page, shown.length - 1)].title}</h2>
+        <h2>{shown[page].title}</h2>
       </div>
       <div className="music-listened-pages" ref={track}>
         {shown.map((one, at) => (
