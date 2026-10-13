@@ -75,14 +75,6 @@
  * Phones. Only here do the rules below apply: a wider window keeps what it
  * was given above.
  */
-/* A length, so that the window of glass in the bubble of a phone can be
-   transitioned and everything drawn from it follows. */
-@property --bubble-o {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
 @media (max-width: 600px) {
   /* The bar of the top stands almost against the edge of the screen, where a
      thumb reaches it and a small screen cannot spare the air. The same air
@@ -824,20 +816,17 @@
      end to end, of which a window shows: as wide as the dots rolled up, as
      wide as the band rolled out. Two halves of glass meeting in the middle
      had a line where they met. How far each end of the window is from its
-     side of the band is one length, and everything that follows the window
-     reads it, so that it all moves in the same step. */
+     side of the band is one length, `--bubble-o` below, and each thing that
+     follows the window moves by it in the same step.
+
+     Each is transitioned on its own property rather than through that
+     length: a length transitioned on the bubble had every piece inside it
+     styled again at every frame, all of it on the thread that draws, and
+     four times the styling it now takes, measured on a slowed phone. The
+     ends of the rim now move by transform alone, which the graphics card
+     does. */
   .browse-piece.music-tabs {
     --bubble-o: calc(50vw - 40px);
-    transition:
-      transform var(--calm) var(--ease),
-      --bubble-o 200ms var(--ease);
-  }
-
-  .browse-piece.music-tabs[data-unrolled="yes"] {
-    --bubble-o: 0px;
-    transition:
-      transform var(--calm) var(--ease),
-      --bubble-o 340ms var(--ease);
   }
 
   .music-tabs-glass {
@@ -847,6 +836,12 @@
     box-shadow: none;
     clip-path: inset(0 var(--bubble-o) round var(--radius-pill));
     pointer-events: none;
+    transition: clip-path 200ms var(--ease);
+  }
+
+  .music-tabs[data-unrolled="yes"] .music-tabs-glass {
+    clip-path: inset(0 0 round var(--radius-pill));
+    transition: clip-path 340ms var(--ease);
   }
 
   /* Its line and its glow, drawn over it as the bar's are: one piece for
@@ -882,6 +877,7 @@
     border-right-width: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     transform: translateX(var(--bubble-o));
+    transition: transform 200ms var(--ease);
   }
 
   .music-tabs-rim-end {
@@ -893,6 +889,12 @@
     border-left-width: 0;
     border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
     transform: translateX(calc(var(--bubble-o) * -1));
+    transition: transform 200ms var(--ease);
+  }
+
+  .music-tabs[data-unrolled="yes"] .music-tabs-rim .glass-rim {
+    transform: none;
+    transition: transform 340ms var(--ease);
   }
 
   /* Nothing of the tabs shows round the dots: they come in once the bubble
@@ -1037,9 +1039,11 @@
     transition: none;
   }
 
-  .browse-piece.music-tabs,
-  .browse-piece.music-tabs[data-unrolled="yes"] {
-    transition: transform var(--calm) var(--ease);
+  .music-tabs-glass,
+  .music-tabs[data-unrolled="yes"] .music-tabs-glass,
+  .music-tabs-rim .glass-rim,
+  .music-tabs[data-unrolled="yes"] .music-tabs-rim .glass-rim {
+    transition: none;
   }
 }
 
