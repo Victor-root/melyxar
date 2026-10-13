@@ -827,6 +827,25 @@ export function ScissorsIcon(props: IconProps) {
   );
 }
 
+/** A magnifier with a plus, and with a minus, for a bar zoomed in and out. */
+export function ZoomInIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10.6" cy="10.6" r="6.8" />
+      <path d="M15.6 15.6 20.6 20.6M7.8 10.6h5.6M10.6 7.8v5.6" />
+    </Icon>
+  );
+}
+
+export function ZoomOutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="10.6" cy="10.6" r="6.8" />
+      <path d="M15.6 15.6 20.6 20.6M7.8 10.6h5.6" />
+    </Icon>
+  );
+}
+
 /** A phone held upright, for what is chosen for a phone alone. */
 export function PhoneIcon(props: IconProps) {
   return (

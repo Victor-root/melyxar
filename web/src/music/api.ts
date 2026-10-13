@@ -264,6 +264,14 @@ export interface SongTags {
   duration_ms: number | null;
 }
 
+/** How loud a song is along its length, read from its file: a byte a
+ *  moment, the loudest of the moment over the sixty decibels under full
+ *  scale, nought for that quiet or quieter. */
+export interface SongWave {
+  momentsASecond: number;
+  levels: Uint8Array;
+}
+
 /** What writing would do to one song. */
 export interface PlannedTags {
   song: string;
@@ -414,6 +422,11 @@ export const music = {
    *  milliseconds from its start. */
   trimSong: (song: string, fromMs: number, toMs: number, keepACopy: boolean) =>
     post<null>(`/api/v1/music/songs/${song}/trim`, { from_ms: fromMs, to_ms: toMs, keep_a_copy: keepACopy }),
+  songWave: async (song: string, signal?: AbortSignal): Promise<SongWave> => {
+    const answer = await getRaw(`/api/v1/music/songs/${song}/wave`, "application/octet-stream", signal);
+    const momentsASecond = Number(answer.headers.get("x-wave-moments-a-second"));
+    return { momentsASecond, levels: new Uint8Array(await answer.arrayBuffer()) };
+  },
   setCover: (album: string, jpeg: Blob, keepACopy: boolean) =>
     put<null>(`/api/v1/music/albums/${album}/cover?keep_a_copy=${keepACopy}`, jpeg),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>

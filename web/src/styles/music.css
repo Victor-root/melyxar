@@ -2560,6 +2560,110 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
+/* The moments at either edge of the bar once it is zoomed in. */
+.trim-edge {
+  position: absolute;
+  top: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-deep) 80%, transparent);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.trim-edge-from {
+  left: 6px;
+}
+
+.trim-edge-to {
+  right: 6px;
+}
+
+/* The whole song in a strip, between the two zoom buttons, the stretch the
+   bar shows framed in it and moved by dragging. */
+.trim-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  margin-top: calc(var(--gap-wide) * -0.5);
+}
+
+.trim-zoom-button {
+  display: grid;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.trim-zoom-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.trim-zoom-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.trim-strip {
+  position: relative;
+  flex: 1;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--surface-deep);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.trim-strip:active {
+  cursor: grabbing;
+}
+
+.trim-strip-wave {
+  position: absolute;
+  inset: 4px 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  color: color-mix(in srgb, var(--text) 45%, transparent);
+  transition: opacity var(--calm) var(--ease);
+}
+
+.trim-strip-out {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--surface-deep) 70%, transparent);
+  pointer-events: none;
+}
+
+.trim-strip-out-start {
+  left: 0;
+  border-radius: 8px 0 0 8px;
+}
+
+.trim-strip-out-end {
+  right: 0;
+  border-radius: 0 8px 8px 0;
+}
+
+.trim-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 6px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+}
+
 .trim-clocks {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
