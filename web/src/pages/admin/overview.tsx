@@ -41,7 +41,7 @@ import { useRunning } from "../../running";
 import { useAttention } from "../../notifications/attention";
 import { useSettings } from "../../settings";
 import { sayPoint, sayWorry } from "./activity";
-import { ActivityLines, useActivity } from "./activity-list";
+import { ActivityJournal } from "./activity-list";
 import { useOverview } from "./layout";
 import { SystemPanel } from "./machine";
 import { PlayingPanel } from "./playback";
@@ -50,9 +50,6 @@ import { ServerMark } from "../../components/server-mark";
 
 /** Every family of the journal, for the lines of the summary. */
 const EVERY_FAMILY: ActivityFamily[] = [];
-
-/** How many of the latest lines the summary shows. */
-const RECENT_LINES = 6;
 
 /** How often the time the server has been up is written again. */
 const A_MINUTE_MS = 60_000;
@@ -520,15 +517,16 @@ function PeoplePanel({ overview }: { overview: Overview | null }) {
   );
 }
 
-/** What happened lately, across the whole server. */
-/** The latest lines of the journal, beside what is playing. */
+/** The journal of the whole server, scrolling in a box of its own beside
+ *  what is playing, newest first. */
 function RecentActivity() {
   const { t } = useSettings();
-  const { lines } = useActivity(EVERY_FAMILY, RECENT_LINES);
   return (
-    <section>
+    <section className="recent-activity">
       <h3 className="part-title">{t("admin.recent")}</h3>
-      <ActivityLines lines={lines} />
+      <div className="recent-activity-lines">
+        <ActivityJournal families={EVERY_FAMILY} />
+      </div>
     </section>
   );
 }

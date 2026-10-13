@@ -108,14 +108,16 @@ export function AdminLibraries() {
         />
       )}
 
-      {libraries.map((library) => (
-        <LibraryPanel
-          key={library.id}
-          library={library}
-          editing={editing}
-          onChanged={refresh}
-        />
-      ))}
+      <div className="panels">
+        {libraries.map((library) => (
+          <LibraryPanel
+            key={library.id}
+            library={library}
+            editing={editing}
+            onChanged={refresh}
+          />
+        ))}
+      </div>
     </>
   );
 }

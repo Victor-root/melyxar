@@ -43,46 +43,102 @@ import { lookWhileSeen } from "../../polling";
 const LOOKED_AT_EVERY_MS = 15_000;
 
 const SECTIONS: SectionGroup[] = [
-  { sections: [{ path: "overview", icon: SummaryIcon, label: "admin.overview", spread: true }] },
+  {
+    sections: [
+      {
+        path: "overview",
+        icon: SummaryIcon,
+        label: "admin.overview",
+        spread: true,
+      },
+    ],
+  },
   {
     label: "admin.group.content",
     sections: [
-      { path: "libraries", icon: FolderIcon, label: "admin.libraries" },
-      { path: "metadata", icon: TagIcon, label: "admin.metadata" },
+      {
+        path: "libraries",
+        icon: FolderIcon,
+        label: "admin.libraries",
+        spread: true,
+      },
+      {
+        path: "metadata",
+        icon: TagIcon,
+        label: "admin.metadata",
+        spread: true,
+      },
     ],
   },
   {
     label: "admin.group.playback",
     sections: [
-      { path: "playback", icon: PlaybackIcon, label: "admin.playback" },
+      {
+        path: "playback",
+        icon: PlaybackIcon,
+        label: "admin.playback",
+        spread: true,
+      },
       {
         path: "transcoding",
         icon: GraphicsCardIcon,
         label: "admin.transcoding",
+        spread: true,
       },
     ],
   },
   {
     label: "admin.group.access",
     sections: [
-      { path: "users", icon: PeopleIcon, label: "admin.users" },
-      { path: "devices", icon: DeviceIcon, label: "admin.devices" },
-      { path: "security", icon: ShieldIcon, label: "admin.security" },
-      { path: "notifications", icon: BellIcon, label: "admin.notifications" },
-      { path: "requests", icon: RequestIcon, label: "admin.requests" },
+      { path: "users", icon: PeopleIcon, label: "admin.users", spread: true },
+      {
+        path: "devices",
+        icon: DeviceIcon,
+        label: "admin.devices",
+        spread: true,
+      },
+      {
+        path: "security",
+        icon: ShieldIcon,
+        label: "admin.security",
+        spread: true,
+      },
+      {
+        path: "notifications",
+        icon: BellIcon,
+        label: "admin.notifications",
+        spread: true,
+      },
+      {
+        path: "requests",
+        icon: RequestIcon,
+        label: "admin.requests",
+        spread: true,
+      },
     ],
   },
   {
     label: "admin.group.system",
     sections: [
-      { path: "tasks", icon: TasksIcon, label: "admin.tasks" },
-      { path: "journal", icon: JournalIcon, label: "admin.journal" },
+      { path: "tasks", icon: TasksIcon, label: "admin.tasks", spread: true },
+      {
+        path: "journal",
+        icon: JournalIcon,
+        label: "admin.journal",
+        spread: true,
+      },
       {
         path: "diagnostics",
         icon: DiagnosticsIcon,
         label: "admin.diagnostics",
+        spread: true,
       },
-      { path: "settings", icon: SlidersIcon, label: "admin.settings" },
+      {
+        path: "settings",
+        icon: SlidersIcon,
+        label: "admin.settings",
+        spread: true,
+      },
     ],
   },
 ];
