@@ -332,6 +332,9 @@
 
 .music-listened-page {
   height: 100%;
+  /* The pages run on behind the navigation bar of a phone, and their last
+     line stops above it. */
+  padding-bottom: calc(var(--room-foot, 0px) + var(--gap));
   overflow-x: hidden;
   overflow-y: auto;
   /* Scrolled by the graphics card, for the reason given on the box the page
