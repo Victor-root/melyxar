@@ -173,6 +173,12 @@
   container-type: inline-size;
 }
 
+/* The summary keeps the whole width: what is playing, what just happened and
+   the curves of the machine need it. */
+.sectioned-page[data-spread] {
+  max-width: none;
+}
+
 .sectioned-page > * {
   grid-column: 1 / -1;
 }
