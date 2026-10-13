@@ -91,6 +91,19 @@ pub fn write(path: &Path, edited: &EditedTags) -> Result<(), WriteError> {
         .map_err(|error| WriteError::Unwritable(cause_of(&error)))
 }
 
+/// Puts every tag of one file, its pictures with it, into another of the
+/// same kind that carries none: what a song cut short, whose sound was written
+/// anew, carries again. Blocking, like every reading of a file.
+pub fn copy_tags(from: &Path, to: &Path) -> Result<(), WriteError> {
+    let source =
+        lofty::read_from_path(from).map_err(|error| WriteError::Unreadable(cause_of(&error)))?;
+    for tag in source.tags() {
+        tag.save_to_path(to, WriteOptions::default())
+            .map_err(|error| WriteError::Unwritable(cause_of(&error)))?;
+    }
+    Ok(())
+}
+
 /// An error and what lay under it, in one sentence. The library says only
 /// "failed to write to file" of an error that is the disk's, and the disk's
 /// word, a permission refused or a disk read only, is the one that says what
@@ -168,6 +181,44 @@ mod tests {
         };
         assert_eq!(after.changed_from(&before), vec!["title", "year"]);
         assert!(before.changed_from(&before).is_empty());
+    }
+
+    #[test]
+    fn every_tag_and_picture_is_carried_into_a_file_that_has_none() {
+        use lofty::picture::{MimeType, Picture, PictureType};
+
+        for fixture in ["one-second.flac", "one-second.mp3", "one-second.m4a", "one-second.ogg"] {
+            let directory = tempfile::tempdir().expect("temporary directory");
+            let from = directory.path().join(fixture);
+            let to = directory.path().join(format!("cut-{fixture}"));
+            std::fs::copy(format!("tests/fixtures/{fixture}"), &from).expect("copied");
+            std::fs::copy(format!("tests/fixtures/{fixture}"), &to).expect("copied");
+
+            let mut tagged = lofty::read_from_path(&from).expect("read");
+            let tag_type = tagged.primary_tag_type();
+            if tagged.primary_tag().is_none() {
+                tagged.insert_tag(Tag::new(tag_type));
+            }
+            let tag = tagged.primary_tag_mut().expect("a tag");
+            tag.insert_text(ItemKey::TrackTitle, "Low Tide".to_string());
+            tag.insert_text(ItemKey::Comment, "kept as it was".to_string());
+            tag.push_picture(
+                Picture::unchecked(vec![0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10])
+                    .pic_type(PictureType::CoverFront)
+                    .mime_type(MimeType::Jpeg)
+                    .build(),
+            );
+            tag.save_to_path(&from, WriteOptions::default())
+                .expect("written");
+
+            copy_tags(&from, &to).expect("carried over");
+
+            let carried = lofty::read_from_path(&to).expect("read");
+            let tag = carried.primary_tag().expect("a tag");
+            assert_eq!(tag.get_string(ItemKey::TrackTitle), Some("Low Tide"), "{fixture}");
+            assert_eq!(tag.get_string(ItemKey::Comment), Some("kept as it was"), "{fixture}");
+            assert_eq!(tag.pictures().len(), 1, "{fixture}");
+        }
     }
 
     #[test]

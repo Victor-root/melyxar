@@ -26,6 +26,7 @@ pub mod formats;
 pub mod process;
 mod reading;
 pub mod song_analysis;
+pub mod song_cutting;
 pub mod speech;
 pub mod spoken_lines;
 pub mod sound;
