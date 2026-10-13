@@ -55,6 +55,7 @@ import { PHONE, useMediaQuery } from "../media-query";
 import type { Headroom } from "../headroom";
 import {
   BackIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ClockIcon,
@@ -73,6 +74,7 @@ import {
 import { ServerMark } from "./server-mark";
 import { sayTheBarIsOut } from "../bar-room";
 import { music } from "../music/api";
+import { useNowPlayingPage } from "../music/player/opening";
 import { musicScopeOf, quickLinesOf } from "../music/search";
 import type { QuickLine } from "../music/search";
 
@@ -349,9 +351,13 @@ export function Header({
       forget();
     };
   }, []);
+  /* The page of what is playing does not scroll the page under it, so the
+     bar is out over it whatever it was doing, and its arrow lowers the page
+     back into the player. */
+  const nowPlaying = useNowPlayingPage().marked;
   /* How much of the top of the page the bar covers right now: all of its
      band while it is out, none once it has stepped aside. */
-  const shown = out || looking;
+  const shown = out || looking || nowPlaying;
   useLayoutEffect(() => {
     sayTheBarIsOut(shown);
     return () => sayTheBarIsOut(null);
@@ -606,20 +612,21 @@ export function Header({
     <header className={`header${shown ? "" : " header-away"}`}>
       <div className="header-inner">
         <div
-          className={`header-piece header-start${location.pathname !== "/" ? " header-start-back" : ""}`}
+          className={`header-piece header-start${location.pathname !== "/" || nowPlaying ? " header-start-back" : ""}`}
           ref={start}
         >
           {/* Off the front page only: there is nowhere to come back from
-              there, and the brand right next to it already leads home. */}
-          {location.pathname !== "/" && (
+              there, and the brand right next to it already leads home. The
+              page of what is playing is always lowered from here. */}
+          {(location.pathname !== "/" || nowPlaying) && (
             <button
               type="button"
               className="header-icon"
               onClick={() => navigate(-1)}
-              title={t("nav.back")}
-              aria-label={t("nav.back")}
+              title={t(nowPlaying ? "music.lower_player" : "nav.back")}
+              aria-label={t(nowPlaying ? "music.lower_player" : "nav.back")}
             >
-              <BackIcon size={22} />
+              {nowPlaying ? <ChevronDownIcon size={30} /> : <BackIcon size={22} />}
             </button>
           )}
           <Link className="brand" to="/">

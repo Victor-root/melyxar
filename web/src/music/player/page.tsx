@@ -13,7 +13,7 @@ import type { Song } from "../api";
 import { PageBackdrop } from "../../components/backdrop";
 import { ScrollBar } from "../../components/scrollbar";
 import { ServerMark } from "../../components/server-mark";
-import { BackIcon } from "../../icons";
+import { ChevronDownIcon } from "../../icons";
 import { useMediaQuery } from "../../media-query";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useBranding } from "../../player/logo";
@@ -208,8 +208,8 @@ function PhoneHeader({ title, close }: { title: string; close: () => void }) {
   return (
     <div className="header-inner music-now-header">
       <div className="header-piece header-start header-start-back">
-        <button type="button" className="header-icon" onClick={close} title={t("music.close_player")} aria-label={t("music.close_player")}>
-          <BackIcon size={22} />
+        <button type="button" className="header-icon" onClick={close} title={t("music.lower_player")} aria-label={t("music.lower_player")}>
+          <ChevronDownIcon size={30} />
         </button>
         <Link className="brand" to="/" replace>
           <ServerMark branding={branding} size={28} logoClassName="brand-logo" />
