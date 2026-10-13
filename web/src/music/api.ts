@@ -160,6 +160,9 @@ export interface SongLyrics {
     lines_moved: number;
     confidence: number;
   } | null;
+  /** How much later every line is shown, set by hand, already applied to
+      the lines. */
+  offset_ms: number;
 }
 
 /** One entry of LRCLIB offered for a song, to be taken as its words. */
@@ -389,6 +392,8 @@ export const music = {
   forgetLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/online`),
   synchroniseLyrics: (song: string) => post<{ job_id: string }>(`/api/v1/music/songs/${song}/lyrics/sync`, {}),
   unsynchroniseLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/sync`),
+  setLyricsOffset: (song: string, offsetMs: number) =>
+    put<null>(`/api/v1/music/songs/${song}/lyrics/offset`, { offset_ms: offsetMs }),
   /** Nothing for a song whose sound was not read yet. */
   spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
     const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);

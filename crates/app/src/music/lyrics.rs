@@ -49,7 +49,13 @@ pub struct SongLyrics {
     /// What came of the last attempt to line the lines up with the song, and
     /// how they were moved if they were.
     pub synchronised: Option<Synchronised>,
+    /// How much later every line is shown, set by hand, in milliseconds.
+    pub offset_ms: i64,
 }
+
+/// The furthest the lines of a song are moved by hand, either way: further
+/// is other lyrics, or another version of the song.
+pub const FURTHEST_OFFSET_MS: i64 = 30_000;
 
 /// What was moved of the stamps of a song, as it is told.
 #[derive(Debug, Clone, PartialEq)]
@@ -62,8 +68,37 @@ pub struct Synchronised {
 }
 
 /// The lyrics of a song, or nothing when none were found anywhere, their
-/// lines as they were moved to fall where their words are heard if they were.
+/// lines as they were moved to fall where their words are heard if they were,
+/// then by the offset set by hand.
 pub async fn lyrics_of(state: &AppState, who: &User, song: WorkId) -> Result<Option<SongLyrics>> {
+    let Some(mut found) = lined_up(state, who, song).await? else {
+        return Ok(None);
+    };
+    if !found.lyrics.synced.is_empty() {
+        found.offset_ms = state.database().lyrics_offset(song).await?;
+        found.lyrics.shift(found.offset_ms);
+    }
+    Ok(Some(found))
+}
+
+/// Sets how much later the lines of a song are shown, for every account:
+/// nought shows them where they stand.
+pub async fn set_offset(state: &AppState, who: &User, song: WorkId, offset_ms: i64) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    if offset_ms.abs() > FURTHEST_OFFSET_MS {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "the lines of a song are moved by thirty seconds at most",
+        )));
+    }
+    tracing::debug!(%song, offset_ms, "lyrics: moved by hand");
+    state.database().set_lyrics_offset(song, offset_ms, melyxar_core::time::now()).await?;
+    Ok(())
+}
+
+/// The lyrics of a song, their lines as they were moved to fall where their
+/// words are heard if they were.
+async fn lined_up(state: &AppState, who: &User, song: WorkId) -> Result<Option<SongLyrics>> {
     let Some(mut found) = found_lyrics(state, who, song).await? else {
         return Ok(None);
     };
@@ -311,6 +346,7 @@ async fn near(path: &Path) -> Option<SongLyrics> {
             source: Source::Song,
             instrumental: false,
             synchronised: None,
+            offset_ms: 0,
         });
     }
     let beside_path = path.with_extension("lrc");
@@ -327,6 +363,7 @@ async fn near(path: &Path) -> Option<SongLyrics> {
         source: Source::Beside,
         instrumental: false,
         synchronised: None,
+        offset_ms: 0,
     })
 }
 
@@ -343,6 +380,7 @@ fn online(kept: &LookedUpLyrics) -> Option<SongLyrics> {
         source: Source::Online,
         instrumental: kept.instrumental,
         synchronised: None,
+        offset_ms: 0,
     })
 }
 

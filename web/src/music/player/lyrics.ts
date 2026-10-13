@@ -1,5 +1,5 @@
 /*
- * Which line of stamped lyrics is being sung.
+ * Which line of stamped lyrics is being sung, and the lines moved by hand.
  */
 
 import type { LyricLine } from "../api";
@@ -30,4 +30,20 @@ export const LIT_AHEAD_MS = 250;
 /** The line that is lit when the song is this far in, in seconds. */
 export function litLineAt(lines: readonly LyricLine[], positionSeconds: number): number {
   return lineAt(lines, positionSeconds * 1000 + LIT_AHEAD_MS);
+}
+
+/** How far one press moves the lines, and the furthest they are moved either
+ *  way, as the server holds it. */
+export const OFFSET_STEP_MS = 500;
+export const FURTHEST_OFFSET_MS = 30_000;
+
+/** An offset moved by a press, kept within the furthest. */
+export function nudgedOffset(offsetMs: number, byMs: number): number {
+  return Math.min(FURTHEST_OFFSET_MS, Math.max(-FURTHEST_OFFSET_MS, offsetMs + byMs));
+}
+
+/** The lines moved later by `byMs`, sooner when negative, none before the
+ *  start of the song: the same lines when nothing moves. */
+export function shiftedLines(lines: LyricLine[], byMs: number): LyricLine[] {
+  return byMs === 0 ? lines : lines.map((line) => ({ ...line, at_ms: Math.max(0, line.at_ms + byMs) }));
 }
