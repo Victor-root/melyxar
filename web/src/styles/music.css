@@ -139,33 +139,38 @@
   }
 }
 
-/* The dots of the tabs of a phone, over the foot of the screen and over the
-   player when it is there; the page keeps the room they take. */
+/* The dots of the tabs of a phone, at the very foot of the screen and just
+   over the player when it is there: bare, with nothing drawn round them,
+   between the two chevrons. The page keeps the little room they take. */
 .music-tab-dots {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 12px);
+  bottom: calc(var(--safe-bottom) + 2px);
   z-index: 40;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
-  box-shadow: var(--shadow-raised);
   transform: translateX(-50%);
 }
 
 :root[data-music-bar] .music-tab-dots {
-  bottom: calc(var(--music-bar-height) + 8px);
+  bottom: calc(var(--music-bar-height) - 2px);
 }
 
-/* A swipe sideways turns the tab rather than going back a page in the
-   browser; what scrolls sideways inside still does. */
+.music-tab-step {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: var(--text-soft);
+}
+
+.music-tab-step:disabled {
+  opacity: 0.25;
+}
+
 .music-page-dotted {
-  padding-bottom: calc(var(--gap-wide) + 44px);
-  touch-action: pan-y pinch-zoom;
+  padding-bottom: 30px;
 }
 
 /* The bar of the tab stands a little nearer the tabs than a grid's bar does
@@ -310,7 +315,17 @@
 }
 
 .section-head:has(> .music-listened-switch) > h2 {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .section-head:has(> .music-listened-switch) > h2 {
+    font-size: 1.45rem;
+  }
 }
 
 .music-listened-switch {

@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { ScrollBar } from "../components/scrollbar";
-import { FlameIcon, HistoryIcon, NewIcon } from "../icons";
+import { FlameIcon, HistoryIcon, NewAlbumIcon } from "../icons";
 import { useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
@@ -81,7 +81,7 @@ export function ForYouTab({ library }: { library: string }) {
             { title: t("music.listened_most"), mark: <FlameIcon size={20} />, ...songsOf(most) },
             {
               title: t("music.newest"),
-              mark: <NewIcon size={20} />,
+              mark: <NewAlbumIcon size={20} />,
               filled: (newest?.length ?? 0) > 0,
               content: (
                 <div className="music-grid">
