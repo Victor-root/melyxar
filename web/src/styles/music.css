@@ -348,6 +348,12 @@
   scrollbar-width: none;
 }
 
+/* The line that says where in a page somebody is ends where its last line
+   does, above the navigation bar the page runs on behind. */
+.music-listened-slot > .scrollbar-inside {
+  bottom: calc(var(--room-foot, 0px) + var(--gap));
+}
+
 .music-listened-page::-webkit-scrollbar {
   display: none;
 }
