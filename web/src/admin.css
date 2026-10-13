@@ -960,21 +960,19 @@
   margin-top: calc(var(--gap) * 1.5);
 }
 
-/* What is playing and, beside it past a hairline, what just happened. One
-   above the other once there is no room for both side by side.
+/* A panel's body in two halves with a hairline between them, such as what is
+   playing and what just happened. One above the other once there is no room
+   for both side by side.
 
    Half each, the hairline dead in the middle: the air either side of it is
    the same, and is padding rather than a gap between the columns, which
    would push the line off the middle. */
-.playing-split {
+.panel-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  /* Room for the journal beside, which is as tall as what is playing and no
-     taller: it scrolls in its own box. */
-  min-height: 360px;
 }
 
-.playing-now {
+.panel-split-main {
   display: flex;
   flex-direction: column;
   gap: var(--gap);
@@ -982,11 +980,20 @@
   padding-right: calc(var(--gap) * 1.5);
 }
 
-.playing-beside {
-  position: relative;
+.panel-split-beside {
   min-width: 0;
   padding-left: calc(var(--gap) * 1.5);
   border-left: 1px solid var(--border);
+}
+
+/* What is playing keeps room for the journal beside, which is as tall as it
+   and no taller: it scrolls in its own box. */
+.playing-split {
+  min-height: 360px;
+}
+
+.playing-beside {
+  position: relative;
 }
 
 /* Laid over the whole of the column, so that however many lines it holds
@@ -1006,15 +1013,15 @@
 }
 
 @container (max-width: 1000px) {
-  .playing-split {
+  .panel-split {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .playing-now {
+  .panel-split-main {
     padding-right: 0;
   }
 
-  .playing-beside {
+  .panel-split-beside {
     margin-top: var(--gap);
     padding: var(--gap) 0 0;
     border-left: none;

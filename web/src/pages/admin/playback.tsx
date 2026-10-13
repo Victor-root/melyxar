@@ -128,9 +128,9 @@ export function PlayingPanel({
       lead={t("admin.playing_lead")}
     >
       {beside ? (
-        <div className="playing-split">
-          <div className="playing-now">{now}</div>
-          <div className="playing-beside">{beside}</div>
+        <div className="panel-split playing-split">
+          <div className="panel-split-main">{now}</div>
+          <div className="panel-split-beside playing-beside">{beside}</div>
         </div>
       ) : (
         now
