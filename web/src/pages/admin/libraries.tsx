@@ -108,16 +108,14 @@ export function AdminLibraries() {
         />
       )}
 
-      <div className="panels">
-        {libraries.map((library) => (
-          <LibraryPanel
-            key={library.id}
-            library={library}
-            editing={editing}
-            onChanged={refresh}
-          />
-        ))}
-      </div>
+      {libraries.map((library) => (
+        <LibraryPanel
+          key={library.id}
+          library={library}
+          editing={editing}
+          onChanged={refresh}
+        />
+      ))}
     </>
   );
 }
@@ -222,107 +220,112 @@ function LibraryPanel({
         />
       )}
 
-      <div className="settings-lines">
-        <Setting label={t("settings.library_name")}>
-          <Editable
-            value={library.name}
-            label={t("settings.library_name")}
-            onSettled={(name) => editing.rename(library, name)}
-          />
-        </Setting>
-        <LibraryChoicesFields
-          kind={library.kind}
-          choices={library}
-          onChange={(changes) => editing.settle(library, changes)}
-          watchWhy={
-            library.watch_state === "starting"
-              ? "admin.watch_starting"
-              : undefined
-          }
-          watchRefusal={library.watch_refusal}
-        />
-        {library.kind === "music" && (
-          <MusicLibraryOptionsFields library={library.id} />
-        )}
-      </div>
-
-      {/* The folders it looks in. A log line shows only the label, but this is
-          the one screen roots are managed from, and telling two of them apart
-          by more than a label somebody gave one is the point of being here. */}
-      <div className="library-folders">
-        <div className="library-folders-head">
-          <span>{t("admin.folders")}</span>
-          <button
-            className="button button-small"
-            onClick={() => setAddingFolder(true)}
-          >
-            <FolderIcon size={15} />
-            {t("settings.add_folder")}
-          </button>
+      <div className="panel-split">
+        <div className="panel-split-main">
+          <div className="settings-lines">
+            <Setting label={t("settings.library_name")}>
+              <Editable
+                value={library.name}
+                label={t("settings.library_name")}
+                onSettled={(name) => editing.rename(library, name)}
+              />
+            </Setting>
+            <LibraryChoicesFields
+              kind={library.kind}
+              choices={library}
+              onChange={(changes) => editing.settle(library, changes)}
+              watchWhy={
+                library.watch_state === "starting"
+                  ? "admin.watch_starting"
+                  : undefined
+              }
+              watchRefusal={library.watch_refusal}
+            />
+            {library.kind === "music" && (
+              <MusicLibraryOptionsFields library={library.id} />
+            )}
+          </div>
         </div>
-        <div className="lines">
-          {library.roots.map((root) => (
-            <div className="line" key={root.id}>
-              <span className="line-mark" aria-hidden="true">
-                <FolderIcon size={18} />
-              </span>
-              <span className="line-words">
-                <Editable
-                  value={root.label}
-                  label={t("settings.folder_label")}
-                  className="field-quiet"
-                  onSettled={(label) =>
-                    editing.renameFolder(library, root.id, label)
-                  }
-                />
-                <span className="line-note line-path">{root.path}</span>
-                {ACCESS_STATE[root.access] === "trouble" && (
-                  <span className="line-note line-trouble">
-                    {t(`root.${root.explanation_code}`)}
+        <div className="panel-split-beside">
+          {/* The folders it looks in. A log line shows only the label, but this is
+            the one screen roots are managed from, and telling two of them apart
+            by more than a label somebody gave one is the point of being here. */}
+          <div className="library-folders">
+            <div className="library-folders-head">
+              <span>{t("admin.folders")}</span>
+              <button
+                className="button button-small"
+                onClick={() => setAddingFolder(true)}
+              >
+                <FolderIcon size={15} />
+                {t("settings.add_folder")}
+              </button>
+            </div>
+            <div className="lines">
+              {library.roots.map((root) => (
+                <div className="line" key={root.id}>
+                  <span className="line-mark" aria-hidden="true">
+                    <FolderIcon size={18} />
                   </span>
-                )}
+                  <span className="line-words">
+                    <Editable
+                      value={root.label}
+                      label={t("settings.folder_label")}
+                      className="field-quiet"
+                      onSettled={(label) =>
+                        editing.renameFolder(library, root.id, label)
+                      }
+                    />
+                    <span className="line-note line-path">{root.path}</span>
+                    {ACCESS_STATE[root.access] === "trouble" && (
+                      <span className="line-note line-trouble">
+                        {t(`root.${root.explanation_code}`)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="line-end">
+                    <StatePill state={ACCESS_STATE[root.access]}>
+                      {t(`admin.access_state.${root.access}`)}
+                    </StatePill>
+                    <button
+                      className="button button-small button-quiet"
+                      title={t("settings.remove_folder")}
+                      aria-label={t("settings.remove_folder")}
+                      onClick={() =>
+                        setRemoving(
+                          removing?.root === root.id ? null : { root: root.id },
+                        )
+                      }
+                    >
+                      <DeleteIcon size={15} />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* What was taken out of it and left on the disk is walked past by every
+            scan; this is the way to change one's mind. */}
+          {library.set_aside > 0 && (
+            <div className="line">
+              <span className="line-words">
+                <span className="line-name">
+                  {howMany(library.set_aside, "library.set_aside", t)}
+                </span>
               </span>
               <span className="line-end">
-                <StatePill state={ACCESS_STATE[root.access]}>
-                  {t(`admin.access_state.${root.access}`)}
-                </StatePill>
                 <button
-                  className="button button-small button-quiet"
-                  title={t("settings.remove_folder")}
-                  aria-label={t("settings.remove_folder")}
-                  onClick={() =>
-                    setRemoving(
-                      removing?.root === root.id ? null : { root: root.id },
-                    )
-                  }
+                  className="button button-small"
+                  onClick={() => setTakingBack(true)}
                 >
-                  <DeleteIcon size={15} />
+                  {t("library.take_back")}
                 </button>
               </span>
             </div>
-          ))}
+          )}
         </div>
       </div>
-
-      {/* What was taken out of it and left on the disk is walked past by every
-          scan; this is the way to change one's mind. */}
-      {library.set_aside > 0 && (
-        <div className="line">
-          <span className="line-words">
-            <span className="line-name">
-              {howMany(library.set_aside, "library.set_aside", t)}
-            </span>
-          </span>
-          <span className="line-end">
-            <button
-              className="button button-small"
-              onClick={() => setTakingBack(true)}
-            >
-              {t("library.take_back")}
-            </button>
-          </span>
-        </div>
-      )}
 
       {addingFolder && (
         <FolderPicker
