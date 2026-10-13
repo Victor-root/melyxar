@@ -201,8 +201,16 @@ function useKeptPlaces(scroller: React.RefObject<HTMLElement | null>) {
       }
       places.current = remember(places.current, page.current, { top: box.scrollTop, rows: rows.along }, PAGES_KEPT);
     };
+    /* Anything else that scrolls inside the page is no business of this: a
+       list in its own box, the pages of For you sliding along. Noted, they
+       had the rows read and the page laid out on every frame of their
+       movement, which a slide started by a button, drawn by the page itself
+       rather than by the finger, showed as stutter. */
     const moved = (event: Event) => {
       if (event.target !== box) {
+        if (!(event.target instanceof Element && event.target.classList.contains("row-track"))) {
+          return;
+        }
         rowsMoved = true;
       }
       if (frame === 0) {
