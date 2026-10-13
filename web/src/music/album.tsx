@@ -10,7 +10,6 @@ import { useAccount } from "../account";
 import { PlayIcon, TagIcon, UploadIcon } from "../icons";
 import { useLibraries, useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
-import { useGoTo } from "../navigating";
 import { UploadDialog } from "../components/upload";
 import { UploadButton } from "../components/upload-button";
 import { useSettings } from "../settings";
@@ -24,6 +23,7 @@ import type { MenuLine } from "./song-menu";
 import { ShuffleIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
 import { SongList } from "./songs";
+import { TagEditor } from "./tag-editor";
 import { AlbumCover, namesOf } from "./tiles";
 import { useTabPage } from "../tab-page";
 
@@ -41,8 +41,8 @@ export function MusicAlbumPage() {
   /* On a phone, writing the tags and adding a file go into the menu of the
      album: two more buttons under the others took a third of the screen. */
   const phone = useMediaQuery(PHONE);
-  const goTo = useGoTo();
   const [uploading, setUploading] = useState(false);
+  const [editingTags, setEditingTags] = useState(false);
   useTabPage(album?.title);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function MusicAlbumPage() {
   const inTheMenu: MenuLine[] = phone
     ? [
         ...(mayEditTags
-          ? [{ key: "tags", said: t("music.edit_tags"), mark: <TagIcon size={17} />, act: () => goTo(`/music/album/${album.id}/tags`) }]
+          ? [{ key: "tags", said: t("music.edit_tags"), mark: <TagIcon size={17} />, act: () => setEditingTags(true) }]
           : []),
         ...(mayUpload
           ? [{ key: "upload", said: t("upload.button_album"), mark: <UploadIcon size={17} />, act: () => setUploading(true) }]
@@ -137,10 +137,10 @@ export function MusicAlbumPage() {
               extra={inTheMenu}
             />
             {!phone && mayEditTags && (
-              <Link className="button button-quiet" to={`/music/album/${album.id}/tags`}>
+              <button type="button" className="button button-quiet" onClick={() => setEditingTags(true)}>
                 <TagIcon size={16} />
                 {t("music.edit_tags")}
-              </Link>
+              </button>
             )}
             {!phone && inLibrary && (
               <UploadButton
@@ -161,6 +161,7 @@ export function MusicAlbumPage() {
           </p>
         </div>
       </header>
+      {editingTags && <TagEditor album={album} onClose={() => setEditingTags(false)} />}
       {uploading && inLibrary && (
         <UploadDialog library={inLibrary} album={{ id: album.id, title: album.title }} onClose={() => setUploading(false)} />
       )}

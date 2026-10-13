@@ -2265,69 +2265,209 @@
   }
 }
 
-/* The tag manager: the album's fields, then a table of its songs, then how
-   they are written. */
-.tag-editor section {
-  margin-top: calc(var(--gap) * 2);
+/* The tag manager, in a window: the album with its cover on top, its songs
+   under it as the one part that scrolls, how they are written along the
+   foot. */
+.tag-dialog {
+  width: min(1120px, 100%);
+  height: min(880px, 100%);
 }
 
-.tag-editor h2 {
-  margin: 0 0 var(--gap);
-  font-size: 1.2rem;
-}
-
-.tag-editor-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--gap);
-}
-
-.tag-editor-field {
+.tag-dialog .modal-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.tag-editor-label {
-  color: var(--text-soft);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.tag-editor-hint,
-.tag-editor-file {
-  color: var(--text-faint);
-  font-size: 0.8rem;
-}
-
-.tag-editor-cover {
-  display: inline-flex;
-  align-items: center;
   gap: var(--gap);
+  overflow: hidden;
 }
 
-.tag-editor-cover img {
-  width: 64px;
-  height: 64px;
+.tag-dialog .notice {
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tag-dialog .modal-foot {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tag-dialog-album {
+  display: grid;
+  flex: none;
+  grid-template-columns: 148px minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+}
+
+/* The cover, and over its foot the button that changes it. */
+.tag-dialog-cover {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
   border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.tag-dialog-cover > *:not(.tag-dialog-cover-change),
+.tag-dialog-cover img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-.tag-editor-table {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.tag-dialog-cover-change {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--surface-deep) 78%, transparent);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
 }
 
-.tag-editor-row {
+.tag-dialog-cover:hover .tag-dialog-cover-change,
+.tag-dialog-cover-change:focus-within {
+  opacity: 1;
+}
+
+.tag-dialog-cover-change:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+@media (hover: none) {
+  .tag-dialog-cover-change {
+    opacity: 1;
+  }
+}
+
+.tag-dialog-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px var(--gap);
+}
+
+.tag-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tag-dialog-field-wide {
+  grid-column: 1 / -1;
+}
+
+.tag-dialog-label {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tag-dialog-hint,
+.tag-dialog-file {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.tag-dialog-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tag-dialog-compilation {
+  align-self: center;
+  margin-top: 18px;
+}
+
+/* The songs: their heading stays, their lines scroll, the bar against the
+   edge of the window. */
+.tag-dialog-songs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--gap-wide)) calc(-1 * var(--gap-wide));
+}
+
+.tag-dialog-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 2px var(--gap-wide) var(--gap-wide);
+  overflow-y: auto;
+}
+
+.tag-dialog-row {
   display: grid;
   grid-template-columns: 5ch 6ch minmax(0, 2fr) minmax(0, 1.4fr) 40px;
   align-items: start;
   gap: 8px;
 }
 
+.tag-dialog-head {
+  padding: 0 calc(var(--gap-wide) + 10px) 6px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tag-dialog-song {
+  flex: none;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+  transition: border-color var(--quick) var(--ease);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 70px;
+}
+
+.tag-dialog-song:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.tag-dialog-title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tag-dialog-file {
+  overflow: hidden;
+  padding-left: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The scissors at the end of each song's line, which open its cut. */
-.tag-editor-trim {
+.tag-dialog-trim {
   display: grid;
   place-items: center;
   width: 40px;
@@ -2343,41 +2483,37 @@
     background var(--quick) var(--ease);
 }
 
-.tag-editor-trim:hover:not(:disabled) {
+.tag-dialog-trim:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-raised));
   color: var(--accent-bright);
 }
 
-.tag-editor-trim:disabled {
+.tag-dialog-trim:disabled {
   opacity: 0.4;
   cursor: default;
 }
 
-.tag-editor-head {
-  color: var(--text-soft);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.tag-editor-title {
+/* How the files are written, at the left of the foot, beside the buttons. */
+.tag-dialog-writing {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
   min-width: 0;
 }
 
-.tag-editor-file {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tag-dialog-pattern {
+  width: 220px;
+  max-width: 100%;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
-.tag-editor-actions {
+.tag-dialog-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--gap);
-  margin-top: var(--gap);
+  gap: var(--gap-tight);
+  margin-left: auto;
 }
 
 .tag-preview-list {
@@ -2419,23 +2555,58 @@
 }
 
 @media (max-width: 600px) {
-  .tag-editor-row {
+  /* A phone has no room to keep the album still over the songs: the whole
+     window scrolls, still one bar. */
+  .tag-dialog .modal-body {
+    overflow-y: auto;
+  }
+
+  .tag-dialog-songs {
+    flex: none;
+    margin-bottom: 0;
+  }
+
+  .tag-dialog-list {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .tag-dialog-album {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .tag-dialog-hint {
+    display: none;
+  }
+
+  .tag-dialog-fields {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .tag-dialog-row {
     grid-template-columns: 4ch 5ch minmax(0, 1fr) 40px;
   }
 
   /* The artists under the title, the scissors beside it. */
-  .tag-editor-row > :nth-child(4) {
+  .tag-dialog-row > :nth-child(4) {
     grid-row: 2;
     grid-column: 3;
   }
 
-  .tag-editor-row > :nth-child(5) {
+  .tag-dialog-row > :nth-child(5) {
     grid-row: 1;
     grid-column: 4;
   }
 
-  .tag-editor-head > :nth-child(4) {
+  .tag-dialog-head > :nth-child(4) {
     display: none;
+  }
+
+  .tag-dialog-head {
+    padding-right: calc(var(--gap-wide) + 10px);
+    padding-left: calc(var(--gap-wide) + 10px);
   }
 }
 
