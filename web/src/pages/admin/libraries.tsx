@@ -169,6 +169,10 @@ function LibraryPanel({
       lead={`${t(`kind.${library.kind}`)} · ${howMany(library.works, "admin.works", t)}`}
       className="library-panel"
       folding={{ open, toggle: () => setOpen((was) => !was) }}
+      rename={{
+        label: t("settings.library_name"),
+        onSettled: (name) => editing.rename(library, name),
+      }}
       action={
         <>
           <button
@@ -223,13 +227,6 @@ function LibraryPanel({
       <div className="panel-split">
         <div className="panel-split-main">
           <div className="settings-lines">
-            <Setting label={t("settings.library_name")}>
-              <Editable
-                value={library.name}
-                label={t("settings.library_name")}
-                onSettled={(name) => editing.rename(library, name)}
-              />
-            </Setting>
             <LibraryChoicesFields
               kind={library.kind}
               choices={library}

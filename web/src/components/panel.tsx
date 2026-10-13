@@ -12,7 +12,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDownIcon, TickIcon } from "../icons";
+import { ChevronDownIcon, EditIcon, TickIcon } from "../icons";
 import type { IconProps } from "../icons";
 import { insideTheRange } from "../readable";
 import { useSettings } from "../settings";
@@ -67,6 +67,7 @@ export function Panel({
   wide,
   className,
   folding,
+  rename,
   children,
 }: {
   icon: ComponentType<IconProps>;
@@ -82,6 +83,9 @@ export function Panel({
    *  is asked for: whether it is open, and what opens and shuts it. Its
    *  head, its words included, and the chevron at its end both do. */
   folding?: { open: boolean; toggle: () => void };
+  /** For a panel that is named by whoever uses it: a pencil beside its title
+   *  turns the title into a field, sent once it is left. */
+  rename?: { label: string; onSettled: (name: string) => void };
   children?: ReactNode;
 }) {
   const { t } = useSettings();
@@ -98,7 +102,7 @@ export function Panel({
         </span>
         <div className="panel-words" onClick={folding?.toggle}>
           <h2>
-            {title}
+            {rename ? <RenamableTitle title={title} {...rename} /> : title}
             {soon && <Soon />}
           </h2>
           {lead && <p>{lead}</p>}
@@ -119,6 +123,69 @@ export function Panel({
       </header>
       {children && shown && <div className="panel-body">{children}</div>}
     </section>
+  );
+}
+
+/** A panel's title with a pencil after it. Pressed, the title becomes a field:
+ *  Enter or leaving it keeps the name, Escape puts the old one back. Neither
+ *  the pencil nor the field open or shut a folding panel. */
+function RenamableTitle({
+  title,
+  label,
+  onSettled,
+}: {
+  title: string;
+  label: string;
+  onSettled: (name: string) => void;
+}) {
+  const { t } = useSettings();
+  const [typed, setTyped] = useState<string | null>(null);
+
+  const finish = (keep: boolean) => {
+    const name = typed?.trim();
+    setTyped(null);
+    if (keep && name && name !== title) {
+      onSettled(name);
+    }
+  };
+
+  if (typed === null) {
+    return (
+      <>
+        {title}
+        <button
+          type="button"
+          className="panel-rename"
+          aria-label={t("lists.rename")}
+          title={t("lists.rename")}
+          onClick={(event) => {
+            event.stopPropagation();
+            setTyped(title);
+          }}
+        >
+          <EditIcon size={15} />
+        </button>
+      </>
+    );
+  }
+  return (
+    <input
+      type="text"
+      autoFocus
+      aria-label={label}
+      className="field-line panel-title-field"
+      value={typed}
+      onClick={(event) => event.stopPropagation()}
+      onChange={(event) => setTyped(event.target.value)}
+      onBlur={() => finish(true)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          finish(true);
+        } else if (event.key === "Escape") {
+          finish(false);
+        }
+      }}
+    />
   );
 }
 
