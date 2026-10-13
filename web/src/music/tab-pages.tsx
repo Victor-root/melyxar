@@ -1,11 +1,10 @@
 /*
- * The tabs of a library of music as pages on a phone: a dot for each at the
- * very foot of the screen, the open one lit, as the banner of the home page
+ * The tabs of a library of music as pages on a phone: a dot for each just
+ * under the band at the top, the open one lit, as the banner of the home page
  * shows where it is in its five, between two chevrons that go to the tab
  * before and the one after.
  */
 
-import { createPortal } from "react-dom";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { useSettings } from "../settings";
 import { tabBeside } from "./tabs";
@@ -15,9 +14,7 @@ export function TabDots({ tabs, open, onOpen }: { tabs: MusicTab[]; open: MusicT
   const { t } = useSettings();
   const before = tabBeside(tabs, open, -1);
   const after = tabBeside(tabs, open, 1);
-  // Drawn over the page rather than in it: the foot of the page fades into
-  // the player, and the dots would fade with it.
-  return createPortal(
+  return (
     <nav className="music-tab-dots" aria-label={t("music.tabs")}>
       <button
         type="button"
@@ -47,7 +44,6 @@ export function TabDots({ tabs, open, onOpen }: { tabs: MusicTab[]; open: MusicT
       >
         <ChevronRightIcon size={18} />
       </button>
-    </nav>,
-    document.body,
+    </nav>
   );
 }

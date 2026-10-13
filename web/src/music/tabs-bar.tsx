@@ -2,15 +2,13 @@
  * The tabs of a library of music, in one piece of the glass of the browse
  * bar. When they do not all fit, they are a carousel: an arrow at the edge
  * that has more beyond it moves along, the tab open is always brought into
- * view, and a hand can pull them too.
+ * view, and a hand can pull them too. A phone has dots instead (see
+ * tab-pages.tsx).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { BubbleParts, UNROLL_MS, useBubble } from "../components/bubble";
 import { useDragToScroll } from "../dragging";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
-import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import type { MusicTab } from "./tabs";
 
@@ -33,10 +31,6 @@ export function TabsBar({
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoOn, setCanGoOn] = useState(false);
   const drag = useDragToScroll(track);
-  /* On a phone the tabs are a small bubble in the band at the top, rolled out
-     by a press and rolled up again by themselves. */
-  const phone = useMediaQuery(PHONE);
-  const { unrolled, setUnrolled, unroll, stay, bubble } = useBubble();
 
   const measure = useCallback(() => {
     const element = track.current;
@@ -61,27 +55,9 @@ export function TabsBar({
     return () => watcher.disconnect();
   }, [measure, tabs]);
 
-  /* Rolled up, the tabs of a phone have a bubble's width to be seen in, and
-     bringing the open one into it would leave them pulled along when they
-     roll out. They start from their beginning then, the open one brought in
-     only if the width they end with does not show it. */
   useEffect(() => {
-    const element = track.current;
-    if (!element || (phone && !unrolled)) {
-      return;
-    }
-    const current = element.querySelector<HTMLElement>("[aria-current]");
-    if (!phone) {
-      current?.scrollIntoView({ inline: "nearest", block: "nearest" });
-      return;
-    }
-    element.scrollLeft = 0;
-    const later = window.setTimeout(
-      () => current?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" }),
-      UNROLL_MS,
-    );
-    return () => window.clearTimeout(later);
-  }, [open, phone, unrolled]);
+    track.current?.querySelector<HTMLElement>("[aria-current]")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [open]);
 
   /* One tab at a time: the next one cut off at the edge is brought in whole
      and nothing else is asked of it. */
@@ -106,15 +82,8 @@ export function TabsBar({
     }
   };
 
-  const bar = (
-    <nav
-      ref={bubble}
-      className="browse-piece music-tabs"
-      aria-label={t("music.tabs")}
-      data-unrolled={unrolled ? "yes" : "no"}
-      onPointerDown={unrolled ? stay : undefined}
-    >
-      {phone && <BubbleParts unrolled={unrolled} onUnroll={unroll} label={t("music.tabs_open")} />}
+  return (
+    <nav className="browse-piece music-tabs" aria-label={t("music.tabs")}>
       {canGoBack && (
         <button type="button" className="music-tabs-arrow" onClick={() => move(-1)} aria-label={t("music.tabs_back")}>
           <ChevronLeftIcon size={18} />
@@ -123,12 +92,7 @@ export function TabsBar({
       <div
         className="music-tabs-track"
         ref={track}
-        onScroll={() => {
-          measure();
-          if (unrolled) {
-            stay();
-          }
-        }}
+        onScroll={measure}
         {...drag}
       >
         {tabs.map((tab) => (
@@ -137,10 +101,7 @@ export function TabsBar({
             type="button"
             className={`music-tab${tab === open ? " music-tab-on" : ""}`}
             aria-current={tab === open ? "page" : undefined}
-            onClick={() => {
-              setUnrolled(false);
-              onOpen(tab);
-            }}
+            onClick={() => onOpen(tab)}
           >
             {t(`music.tab.${tab}`)}
           </button>
@@ -153,6 +114,4 @@ export function TabsBar({
       )}
     </nav>
   );
-
-  return phone ? createPortal(bar, document.body) : bar;
 }
