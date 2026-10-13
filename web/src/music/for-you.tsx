@@ -97,7 +97,7 @@ export function ForYouTab({ library }: { library: string }) {
     );
   }
   const newestGrid = (
-    <div className="music-grid music-grid-two">
+    <div className="music-grid music-grid-newest">
       {newest?.map((album) => (
         <AlbumTile key={album.id} album={album} />
       ))}
@@ -114,7 +114,12 @@ export function ForYouTab({ library }: { library: string }) {
           <ListenedList title={t("music.listened_most")} mark={<FlameIcon size={20} />} filled={most.length > 0}>
             <SongList songs={most} numbered="place" showAlbum={false} menuOnly onPlay={(index) => player.play(most, index)} />
           </ListenedList>
-          <ListenedList title={t("music.newest")} mark={<NewAlbumIcon size={20} />} filled={(newest?.length ?? 0) > 0}>
+          <ListenedList
+            title={t("music.newest")}
+            mark={<NewAlbumIcon size={20} />}
+            filled={(newest?.length ?? 0) > 0}
+            boxed="music-listened-albums"
+          >
             {newestGrid}
           </ListenedList>
         </ListenedColumns>
@@ -254,11 +259,14 @@ function ListenedList({
   title,
   mark,
   filled,
+  boxed,
   children,
 }: {
   title: string;
   mark: React.ReactNode;
   filled: boolean;
+  /** A class of its own for the box it scrolls in. */
+  boxed?: string;
   children: React.ReactNode;
 }) {
   if (!filled) {
@@ -267,7 +275,7 @@ function ListenedList({
   return (
     <section className="music-listened-column">
       <RowHead mark={mark} title={title} />
-      <div className="music-listened-list">{children}</div>
+      <div className={`music-listened-list${boxed ? ` ${boxed}` : ""}`}>{children}</div>
     </section>
   );
 }
