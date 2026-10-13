@@ -69,7 +69,9 @@ pub struct Offer {
     pub artist: String,
     pub title: String,
     pub album: Option<String>,
-    pub seconds: Option<u64>,
+    /// How long the song it was stamped on lasts, to the millisecond as
+    /// LRCLIB gives it.
+    pub duration_ms: Option<i64>,
     /// Stamped line by line.
     pub synced: bool,
     pub plain: bool,
@@ -197,11 +199,14 @@ impl LrcLibClient {
     }
 
     /// What LRCLIB holds under an artist and a title, as a person chooses
-    /// among them: an entry for each album and length a song came out with.
-    /// The artist may be left empty.
-    pub async fn offers(&self, artist: &str, title: &str) -> Result<Vec<Offer>> {
+    /// among them: an entry for each album and length a song came out with,
+    /// the nearest to the length of the file first when it is known. The
+    /// artist may be left empty.
+    pub async fn offers(&self, artist: &str, title: &str, duration_ms: Option<i64>) -> Result<Vec<Offer>> {
         for (way, query) in searches(artist, title) {
-            let offers: Vec<Offer> = self.search(&query).await?.into_iter().filter_map(offer_of).take(MOST_OFFERS).collect();
+            let mut offers: Vec<Offer> = self.search(&query).await?.into_iter().filter_map(offer_of).collect();
+            nearest_first(&mut offers, duration_ms);
+            offers.truncate(MOST_OFFERS);
             if !offers.is_empty() {
                 tracing::debug!(way, offers = offers.len(), "a search of LRCLIB by hand");
                 return Ok(offers);
@@ -334,7 +339,7 @@ fn offer_of(entry: Answer) -> Option<Offer> {
         artist: entry.artist_name?,
         title: entry.track_name?,
         album: entry.album_name.filter(|album| !album.trim().is_empty()),
-        seconds: entry.duration.map(|seconds| seconds.round() as u64),
+        duration_ms: entry.duration.map(|seconds| (seconds * 1000.0).round() as i64),
         synced: has_words(&entry.synced_lyrics),
         plain: has_words(&entry.plain_lyrics),
         instrumental: entry.instrumental,
@@ -557,6 +562,14 @@ const THE_SAME_LENGTH: f64 = 3.0;
 
 /// The entry among these that is the song asked for, if there is one.
 ///
+/// Offers in the order of how far their length is from the file's, those that
+/// give none last, each kept in LRCLIB's order among equals.
+fn nearest_first(offers: &mut [Offer], duration_ms: Option<i64>) {
+    if let Some(here) = duration_ms {
+        offers.sort_by_key(|offer| offer.duration_ms.map_or(i64::MAX, |there| (there - here).abs()));
+    }
+}
+
 /// The artist and the title, taken together, must be alike enough, by their
 /// words or by their letters, whichever comes nearer: a title that carries its artist, a file name for a title,
 /// a spelling with or without accents all come to the same words. Then the
@@ -958,7 +971,7 @@ mod tests {
                 artist: "Fontaines D.C.".into(),
                 title: "Starburster".into(),
                 album: Some("Romance".into()),
-                seconds: Some(221),
+                duration_ms: Some(221_400),
                 synced: true,
                 plain: true,
                 instrumental: false,
@@ -969,6 +982,38 @@ mod tests {
         assert_eq!(offers[1].album, None);
         assert!(offers[1].instrumental && !offers[1].plain);
         assert!(entries_of("not json").is_err());
+    }
+
+    #[test]
+    fn offers_come_nearest_to_the_file_first_and_without_a_length_last() {
+        let offer = |id: i64, duration_ms: Option<i64>| Offer {
+            id,
+            artist: "Amber Field".into(),
+            title: "Tides".into(),
+            album: None,
+            duration_ms,
+            synced: true,
+            plain: true,
+            instrumental: false,
+            synced_lines: 1,
+            longest_gap_seconds: None,
+        };
+        let listed = vec![
+            offer(1, Some(260_000)),
+            offer(2, None),
+            offer(3, Some(251_400)),
+            offer(4, Some(250_900)),
+            offer(5, Some(251_000)),
+        ];
+        let ids = |offers: &[Offer]| offers.iter().map(|offer| offer.id).collect::<Vec<_>>();
+
+        let mut sorted = listed.clone();
+        nearest_first(&mut sorted, Some(251_100));
+        assert_eq!(ids(&sorted), [5, 4, 3, 1, 2]);
+
+        let mut unknown = listed.clone();
+        nearest_first(&mut unknown, None);
+        assert_eq!(ids(&unknown), ids(&listed), "without the file's length, LRCLIB's order stays");
     }
 
     #[test]

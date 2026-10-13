@@ -36,7 +36,8 @@ struct OfferView {
     artist: String,
     title: String,
     album: Option<String>,
-    seconds: Option<u64>,
+    /// How long the song it was stamped on lasts.
+    duration_ms: Option<i64>,
     /// Stamped line by line, so it follows the song.
     synced: bool,
     /// Whether it has words at all.
@@ -55,7 +56,7 @@ impl From<Offer> for OfferView {
             artist: offer.artist,
             title: offer.title,
             album: offer.album,
-            seconds: offer.seconds,
+            duration_ms: offer.duration_ms,
             synced: offer.synced,
             plain: offer.plain,
             instrumental: offer.instrumental,
