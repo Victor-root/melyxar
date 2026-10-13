@@ -221,10 +221,13 @@
    its box and the page under them has nothing left to scroll. */
 .music-listened {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap-wide);
-  /* Only a gap from the row above, not a whole space between sections. */
-  margin-top: calc(var(--gap) - var(--gap-section));
+}
+
+/* The albums that arrived, two to a line in their column. */
+.music-grid.music-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .music-listened-column {
