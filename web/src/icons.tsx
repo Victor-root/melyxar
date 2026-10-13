@@ -983,12 +983,15 @@ export function WarningIcon(props: IconProps) {
 }
 
 /** A clock with an arrow running back round it, for what happened lately. */
-/** A spark, for what has just arrived. */
-export function NewIcon(props: IconProps) {
+/** A record with a plus at its foot, for albums that have just arrived. The
+ *  record leaves a gap round the plus, so the two read apart. */
+export function NewAlbumIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M10.4 4.2c.7 4.1 2.6 6 6.7 6.7-4.1.7-6 2.6-6.7 6.7-.7-4.1-2.6-6-6.7-6.7 4.1-.7 6-2.6 6.7-6.7Z" />
-      <path d="M18 14.6c.3 1.7 1 2.4 2.7 2.7-1.7.3-2.4 1-2.7 2.7-.3-1.7-1-2.4-2.7-2.7 1.7-.3 2.4-1 2.7-2.7Z" />
+      <path d="M20.4 12.6A8.4 8.4 0 1 0 12.6 20.4" />
+      <path d="M11.1 12a.9.9 0 1 0 1.8 0a.9.9 0 1 0-1.8 0" />
+      <path d="M7.4 12a4.6 4.6 0 0 1 4.6-4.6" />
+      <path d="M18.6 15.2v6M15.6 18.2h6" />
     </Icon>
   );
 }

@@ -6,7 +6,7 @@
  *
  * Which tab is open, and how its list is read, is written in the address, so
  * going back to the library finds it the way it was left. On a phone the tabs
- * are pages too, a swipe apart, with a dot for each at the foot.
+ * are pages too, with a dot for each at the foot and chevrons either side.
  */
 
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -36,8 +36,8 @@ import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
 import { LibraryTools } from "./library-tools";
 import { TabsBar } from "./tabs-bar";
-import { TabDots, useTabSwipe } from "./tab-pages";
-import { openTab, shownTabs, tabBeside } from "./tabs";
+import { TabDots } from "./tab-pages";
+import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
 import { AlbumTile, ArtistTile, GenreTile, LetterStarts } from "./tiles";
 
@@ -64,19 +64,14 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
   const phone = useMediaQuery(PHONE);
-  const page = useRef<HTMLElement>(null);
-  /* Which side the open tab came in from, for it to slide in from there. */
+  /* Which side the open tab came in from, for it to slide in from there,
+     when it was reached by the dots. */
   const [cameFrom, setCameFrom] = useState<"next" | "before" | null>(null);
   const openFrom = (next: MusicTab) => {
     setCameFrom(shown.indexOf(next) > shown.indexOf(tab) ? "next" : "before");
     open(next);
   };
-  useTabSwipe(page, phone && shown.length > 1, (way) => {
-    const next = tabBeside(shown, tab, way);
-    if (next) {
-      openFrom(next);
-    }
-  });
+
   const tools = <LibraryTools library={library} />;
   /* The tabs with a bar of their own carry the tools in it; the others keep
      the way to put files in beside the tabs. */
@@ -84,7 +79,6 @@ export function MusicLibraryPage({ library }: { library: Library }) {
 
   return (
     <main
-      ref={page}
       className={`page music-page${besideLetters ? " page-beside-letters" : ""}${phone && shown.length > 1 ? " music-page-dotted" : ""}`}
     >
       <PageBackdrop />
