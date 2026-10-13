@@ -19,6 +19,7 @@ import { useIsAFilmOnScreen } from "../../on-screen";
 import { useBranding } from "../../player/logo";
 import { useSettings } from "../../settings";
 import { Cover } from "./bar";
+import { LyricsShiftButton } from "./lyrics-offset";
 import { HeartButton, Rail, StopButton, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
 import { setNowPlayingCovers } from "./covering";
@@ -159,6 +160,7 @@ export function MusicNowPlaying() {
               <Transport music={music} withStop={false} greyedWhenNone disc />
             </div>
             <div className="player-zone player-zone-bottom-right">
+              <LyricsShiftButton song={song.id} />
               <HeartButton id={song.id} />
               <Volume music={music} />
               <Ways music={music} />

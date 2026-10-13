@@ -31,6 +31,11 @@ export interface MusicMarks {
       lyrics on screen to be read again. */
   lyricsAt: number;
   lyricsHaveMoved: () => void;
+  /** How much later the lines of a song are shown, moved by hand since they
+      were read: shown at once by the lyrics on screen while the server is
+      told. Forgotten when the lyrics move otherwise, which reads them again. */
+  lyricsShift: { song: string; offsetMs: number } | null;
+  shiftLyrics: (song: string, offsetMs: number) => void;
 }
 
 const MarksContext = createContext<MusicMarks | null>(null);
@@ -104,7 +109,12 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
   const [gone, setGoneHere] = useState<ReadonlySet<string>>(new Set());
   const setGone = useCallback((ids: string[]) => setGoneHere((was) => new Set([...was, ...ids])), []);
   const playlistsHaveMoved = useCallback(() => setPlaylistsAt(Date.now()), []);
-  const lyricsHaveMoved = useCallback(() => setLyricsAt(Date.now()), []);
+  const [lyricsShift, setLyricsShift] = useState<MusicMarks["lyricsShift"]>(null);
+  const lyricsHaveMoved = useCallback(() => {
+    setLyricsShift(null);
+    setLyricsAt(Date.now());
+  }, []);
+  const shiftLyrics = useCallback((song: string, offsetMs: number) => setLyricsShift({ song, offsetMs }), []);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -134,8 +144,10 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
       playlistsHaveMoved,
       lyricsAt,
       lyricsHaveMoved,
+      lyricsShift,
+      shiftLyrics,
     }),
-    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved],
+    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved, lyricsShift, shiftLyrics],
   );
   return (
     <MarksContext.Provider value={marks}>

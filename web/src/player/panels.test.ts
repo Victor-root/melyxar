@@ -4,7 +4,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { nudged, offsetSaid } from "./panels";
+import { offsetSaid } from "./menu";
+import { nudged } from "./panels";
 
 describe("a shift of the words as a viewer reads it", () => {
   it("carries its sign and a tenth of a second", () => {
