@@ -14,9 +14,8 @@ import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import { asClock } from "../../clock";
 import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
 import { scrollerOf } from "../../landing";
-import { PauseIcon } from "../../player/icons";
 import { useSettings } from "../../settings";
-import { PlayingRing } from "../playing-ring";
+import { PlayingBars } from "../playing-bars";
 import { Cover } from "../songs";
 import { keeping, linesAround, linesShown } from "./lines-shown";
 import type { Shown } from "./lines-shown";
@@ -328,9 +327,8 @@ export function QueuePanel() {
             className={`music-song music-song-full music-queue-line${here ? " music-song-playing" : ""}${at < queue.at ? " music-queue-played" : ""}${drag?.from === at ? " music-queue-lifted" : ""}${makesRoom}`}
           >
             <span className="music-song-lead">
-              {here && <PlayingRing playing={playing} />}
               <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
-                {here && playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+                {here && playing ? <PlayingBars /> : <PlayIcon size={20} />}
               </button>
             </span>
             <span className="music-song-number">{at + 1}</span>
