@@ -19,9 +19,9 @@ import { Slider } from "./panel";
  *  upright with the margins of the panel around it. */
 const FRAME = 260;
 
-/** How many pixels across the square sent is: twice the largest it is shown
- *  at, which the server brings down to its own size. */
-const SENT = 512;
+/** How many pixels across the square sent is: twice what the server keeps,
+ *  which it brings down to its own size, so what it keeps is sharp. */
+const SENT = 1024;
 
 /** How much one notch of the wheel zooms. */
 const NOTCH = 0.1;
@@ -76,14 +76,16 @@ export function Cropper({
     const canvas = document.createElement("canvas");
     canvas.width = side;
     canvas.height = side;
-    canvas
-      .getContext("2d")
-      ?.drawImage(shown, square.x, square.y, square.side, square.side, 0, 0, side, side);
-    canvas.toBlob(
-      (blob) => (blob ? onFramed(blob) : setUnreadable(true)),
-      "image/jpeg",
-      0.92,
-    );
+    const drawing = canvas.getContext("2d");
+    if (drawing) {
+      // A photo is brought down a long way here, and the browser's quick way
+      // of doing it leaves it jagged and soft.
+      drawing.imageSmoothingQuality = "high";
+      drawing.drawImage(shown, square.x, square.y, square.side, square.side, 0, 0, side, side);
+    }
+    // Without loss: the server compresses it once, and a picture compressed
+    // twice keeps the blur of both.
+    canvas.toBlob((blob) => (blob ? onFramed(blob) : setUnreadable(true)), "image/png");
   };
 
   const scale = framing && size ? (FRAME / Math.min(size.width, size.height)) * framing.zoom : 0;

@@ -155,9 +155,14 @@ pub async fn average_colour(tools: &crate::ToolPaths, source: &Path) -> Result<S
     })
 }
 
-/// How many points across a profile picture is written: twice the largest
-/// round it is shown in, for a screen with fine pixels.
-pub const AVATAR_SIDE: u32 = 256;
+/// How many points across a profile picture is written: the largest it is
+/// shown at, an account's tile on the sign in screen of a big display, on a
+/// screen with fine pixels.
+pub const AVATAR_SIDE: u32 = 512;
+
+/// Quality of a profile picture: a face is looked at closely and from near,
+/// where the softening a poster hides at eighty shows in skin and hair.
+const AVATAR_QUALITY: u8 = 92;
 
 /// The most points an image sent for a profile picture may hold, read by the
 /// tool from what the image declares, before it decodes anything.
@@ -193,7 +198,7 @@ pub fn avatar_arguments(
         source,
         orientation,
         &square,
-        Written::Webp,
+        Written::Webp(AVATAR_QUALITY),
         Some(AVATAR_MOST_POINTS),
         destination,
     )
@@ -207,7 +212,14 @@ pub fn logo_arguments(source: &Path, orientation: Orientation, destination: &Pat
     let inside = format!(
         "scale='min(iw,{LOGO_SIDE})':'min(ih,{LOGO_SIDE})':force_original_aspect_ratio=decrease:flags=lanczos"
     );
-    sent_picture_arguments(source, orientation, &inside, Written::Webp, None, destination)
+    sent_picture_arguments(
+        source,
+        orientation,
+        &inside,
+        Written::Webp(QUALITY),
+        None,
+        destination,
+    )
 }
 
 /// The widest the picture behind the sign in screen is kept: a large screen
@@ -223,7 +235,14 @@ pub fn door_picture_arguments(
     destination: &Path,
 ) -> Vec<OsString> {
     let inside = format!("scale='min(iw,{DOOR_PICTURE_WIDTH})':-2:flags=lanczos");
-    sent_picture_arguments(source, orientation, &inside, Written::Webp, None, destination)
+    sent_picture_arguments(
+        source,
+        orientation,
+        &inside,
+        Written::Webp(QUALITY),
+        None,
+        destination,
+    )
 }
 
 /// How wide the square icons made from a server's logo are, the size a
@@ -259,8 +278,8 @@ pub fn logo_icon_arguments(
 /// How a picture made out of an image somebody sent is written.
 #[derive(Clone, Copy)]
 enum Written {
-    /// As a picture a page shows, small for what it holds.
-    Webp,
+    /// As a picture a page shows, small for what it holds, at this quality.
+    Webp(u8),
     /// Whole, for what is read again to be laid on a ground.
     Png,
 }
@@ -298,11 +317,11 @@ fn sent_picture_arguments(
         OsString::from("1"),
     ]);
     match written {
-        Written::Webp => arguments.extend([
+        Written::Webp(quality) => arguments.extend([
             OsString::from("-c:v"),
             OsString::from("libwebp"),
             OsString::from("-quality"),
-            OsString::from(QUALITY.to_string()),
+            OsString::from(quality.to_string()),
         ]),
         Written::Png => arguments.extend([OsString::from("-c:v"), OsString::from("png")]),
     }
@@ -621,11 +640,11 @@ mod tests {
         );
         assert!(
             turned.contains(
-                "-vf transpose=cclock,crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,256)':-1"
+                "-vf transpose=cclock,crop='min(iw,ih)':'min(iw,ih)',scale='min(iw,512)':-1"
             ),
             "turned before it is cut, or the square is taken from the wrong side: {turned}"
         );
-        assert!(turned.ends_with("-c:v libwebp -quality 80 /data/avatar.webp"));
+        assert!(turned.ends_with("-c:v libwebp -quality 92 /data/avatar.webp"));
 
         let upright = rendered(&avatar_arguments(
             Path::new("/data/sent.source"),

@@ -243,7 +243,7 @@ mod tests {
             }
         };
         // A wide picture, as a phone held sideways takes one.
-        let made = |colour: &'static str| made_at(colour, "400x300");
+        let made = |colour: &'static str| made_at(colour, "800x600");
         let root = state.config().directories.avatars();
 
         let first = set(&state, zoe.id, &made("red").await).await.expect("worn");
@@ -260,7 +260,7 @@ mod tests {
             .output()
             .await
             .expect("probed");
-        assert_eq!(String::from_utf8_lossy(&size.stdout).trim(), "256,256");
+        assert_eq!(String::from_utf8_lossy(&size.stdout).trim(), "512,512");
 
         let second = set(&state, zoe.id, &made("blue").await)
             .await
