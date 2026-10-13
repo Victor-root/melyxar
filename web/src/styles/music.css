@@ -146,7 +146,9 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: calc(var(--gap) / -2) 0 var(--gap-tight);
+  /* Close under the band: into the air the page keeps under it, and as much
+     higher as the band itself rises on a screen drawn edge to edge. */
+  margin: calc(var(--gap) / -2 - var(--header-edge) - var(--header-lift)) 0 var(--gap-tight);
 }
 
 .music-tab-step {
@@ -298,34 +300,38 @@
 /* Two small buttons in a piece of the glass of the bar at the top, the one of
    the list in view lit in the accent, and the name of that list beside
    them. */
-/* The pages of For you are chosen from the middle of the band at the top of
-   a phone, where nothing else stands, and step aside with it. */
-.music-listened-switch {
-  position: fixed;
-  top: calc(var(--header-edge) + var(--safe-top) - var(--header-lift));
-  left: 50%;
-  z-index: 19;
-  display: flex;
+/* The marks of For you's pages and the name of the one open share one line,
+   both drawn smaller as the screen narrows so the name never wraps. */
+.section-head:has(> .music-listened-switch) {
+  flex-wrap: nowrap;
   align-items: center;
+  gap: clamp(8px, 3vw, 14px);
+}
+
+.section-head:has(> .music-listened-switch) > h2 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: min(1.6rem, 5.5vw);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-listened-switch {
+  display: flex;
+  flex: none;
   gap: 2px;
-  height: var(--header-piece);
-  padding: 0 5px;
+  padding: 3px;
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: var(--radius-pill);
   background: var(--header-glass);
-  transform: translateX(-50%);
-  transition: transform var(--calm) var(--ease);
-}
-
-:root[data-bar-away] .music-listened-switch {
-  transform: translate(-50%, calc(-100% - var(--safe-top) - 24px));
 }
 
 .music-listened-title {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: calc(var(--header-piece) - 10px);
+  width: min(38px, 9vw);
+  height: min(28px, 7vw);
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);

@@ -2,8 +2,7 @@
  * The tabs of a library of music that are this account's own: the one it
  * opens on, with what arrived lately and what was listened to lately and
  * most, the one of its playlists, and the one of what it likes. On a phone
- * the three of the first are pages side by side, a swipe apart, chosen from
- * the middle of the band at the top.
+ * the three of the first are pages side by side, a swipe apart.
  *
  * What was listened to is read again each time a listen is counted, and
  * what is liked follows the hearts at once: a song taken off here leaves the
@@ -11,7 +10,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Row, RowHead } from "../components/row";
 import { ScrollBar } from "../components/scrollbar";
 import { FlameIcon, HistoryIcon, NewAlbumIcon } from "../icons";
@@ -177,9 +175,7 @@ function PagesTrack({ shown }: { shown: ForYouPage[] }) {
 
   return (
     <section className="section">
-      {/* In the middle of the band at the top, where nothing else stands on
-          a phone, so the name of the page has the whole width. */}
-      {createPortal(
+      <div className="section-head">
         <div className="music-listened-switch">
           {shown.map((one, at) => (
             <button
@@ -194,10 +190,7 @@ function PagesTrack({ shown }: { shown: ForYouPage[] }) {
               {one.mark}
             </button>
           ))}
-        </div>,
-        document.body,
-      )}
-      <div className="section-head">
+        </div>
         <h2>{shown[Math.min(page, shown.length - 1)].title}</h2>
       </div>
       <div className="music-listened-pages" ref={track}>
