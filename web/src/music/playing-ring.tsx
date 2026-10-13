@@ -1,30 +1,55 @@
 /*
- * The mark of the song playing: its red button itself rippling. While the
- * song plays, the disc of the button gives way to two waves of the same
- * accent, of different lobes, laid one over the other, which turn slowly in
- * opposite directions and breathe: the outline they make together keeps
- * changing, so the button seems to ripple at its edge without anything being
- * drawn again, each moving by transform alone, on the one line that is
- * playing. It follows nothing of the song; paused, the button is a plain
- * disc again.
+ * The mark of the song playing: a wave standing round its red button, as an
+ * equaliser would stand round it, the smooth curve through the tips of
+ * spikes that each rise and fall on their own, the two halves mirroring one
+ * another. It follows nothing of the song: it goes through shapes drawn
+ * once at random, the browser easing from one to the next. Only the one
+ * line that is playing has it, a small picture redrawn as it eases; paused,
+ * it holds still and draws back behind the button.
  */
 
-import { ringWave } from "./ring-wave";
+import { useEffect, useRef } from "react";
+import { mirroredHeights, radialWave } from "./ring-wave";
 
-/** How far in the edge of the wave can come, as a share of how far it
- *  reaches: shallow, so the button keeps its size and only its edge moves. */
-const INNER = 0.8;
+/** How many spikes the wave stands on, and how far in it starts, as a share
+ *  of how far it reaches: at the button's edge. */
+const SPIKES = 20;
+const INNER = 0.62;
 
-const WAVES = [ringWave(5, INNER), ringWave(7, INNER, 2.1)];
+/** The shapes it goes through, and how long it takes from one to the next. */
+const SHAPES = mirroredHeights(SPIKES, 8).map((heights) => radialWave(heights, INNER));
+const STEP_MS = 380;
 
 export function PlayingRing({ playing }: { playing: boolean }) {
+  const wave = useRef<SVGPathElement>(null);
+  const motion = useRef<Animation | null>(null);
+
+  useEffect(() => {
+    const path = wave.current;
+    if (!path || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const frames = [...SHAPES, SHAPES[0]].map((shape) => ({ d: `path("${shape}")`, easing: "ease-in-out" }));
+    motion.current = path.animate(frames, { duration: STEP_MS * SHAPES.length, iterations: Infinity });
+    return () => {
+      motion.current?.cancel();
+      motion.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (playing) {
+      motion.current?.play();
+    } else {
+      motion.current?.pause();
+    }
+  }, [playing]);
+
   return (
     <span className={`playing-ring${playing ? " playing-ring-on" : ""}`} aria-hidden="true">
-      {WAVES.map((wave, at) => (
-        <svg key={at} className="playing-ring-wave" viewBox="-1 -1 2 2">
-          <path d={wave} />
-        </svg>
-      ))}
+      <svg viewBox="-1 -1 2 2">
+        <path ref={wave} d={SHAPES[0]} />
+      </svg>
     </span>
   );
 }

@@ -951,10 +951,8 @@
   color: var(--accent-bright);
 }
 
-/* The button of the song playing, rippling: while it plays its disc gives
-   way to two filled waves of the same accent, each turning slowly its own
-   way and breathing, by transform alone, their outline together the edge of
-   the button. Paused, the button is its disc again. */
+/* The wave standing round the button of the song playing, behind it, in
+   the accent. Paused, it holds still and draws back behind the button. */
 .music-song-lead {
   position: relative;
 }
@@ -967,81 +965,28 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 42px;
-  height: 42px;
-  margin: -21px 0 0 -21px;
+  width: 58px;
+  height: 58px;
+  margin: -29px 0 0 -29px;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--quick) var(--ease);
+  transform: scale(0.65);
+  transition:
+    opacity var(--calm) var(--ease),
+    transform var(--calm) var(--ease);
 }
 
 .playing-ring-on {
   opacity: 1;
+  transform: none;
 }
 
-.playing-ring-on + .music-song-toggle,
-.playing-ring-on + .music-song-toggle:hover {
-  background: transparent;
-}
-
-.playing-ring-wave {
-  position: absolute;
-  inset: 0;
+.playing-ring svg {
   width: 100%;
   height: 100%;
   overflow: visible;
-  fill: var(--accent);
-  transition: fill var(--quick) var(--ease);
-  animation: playing-ring-turn 9s linear infinite;
-  animation-play-state: paused;
-}
-
-.playing-ring-wave:last-child {
-  animation-name: playing-ring-turn-back;
-  animation-duration: 6.5s;
-}
-
-.music-song-lead:hover .playing-ring-wave {
-  fill: var(--accent-bright);
-}
-
-.playing-ring-on .playing-ring-wave {
-  animation-play-state: running;
-}
-
-/* Turning, and breathing a little as it turns. */
-@keyframes playing-ring-turn {
-  0% {
-    transform: rotate(0deg) scale(0.92);
-  }
-
-  50% {
-    transform: rotate(180deg) scale(1);
-  }
-
-  100% {
-    transform: rotate(360deg) scale(0.92);
-  }
-}
-
-@keyframes playing-ring-turn-back {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-
-  50% {
-    transform: rotate(-180deg) scale(0.9);
-  }
-
-  100% {
-    transform: rotate(-360deg) scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .playing-ring-wave {
-    animation: none;
-  }
+  /* Lighter than the button, so the disc stands out of the wave. */
+  fill: color-mix(in srgb, var(--accent-bright) 55%, transparent);
 }
 
 .music-song:hover {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ringWave } from "./ring-wave";
+import { mirroredHeights, radialWave } from "./ring-wave";
 
 /** Every point the path goes through, from its numbers taken two by two. */
 function pointsOf(path: string): { x: number; y: number }[] {
@@ -11,23 +11,38 @@ function pointsOf(path: string): { x: number; y: number }[] {
   return points;
 }
 
-describe("ringWave", () => {
-  it("is one closed curve", () => {
-    const path = ringWave(5, 0.6);
-    expect(path.startsWith("M")).toBe(true);
-    expect(path.endsWith("Z")).toBe(true);
+describe("radialWave", () => {
+  it("is one closed curve with the same commands whatever the heights", () => {
+    const low = radialWave([0, 0, 0, 0], 0.7);
+    const high = radialWave([1, 0.5, 1, 0.5], 0.7);
+    expect(low.endsWith("Z")).toBe(true);
+    expect(low.replace(/[-\d. ]/g, "")).toBe(high.replace(/[-\d. ]/g, ""));
   });
 
-  it("keeps its edge between the disc and the edge of its box", () => {
-    for (const point of pointsOf(ringWave(6, 0.62, 0.8))) {
+  it("stands between the disc and the edge of its box", () => {
+    for (const point of pointsOf(radialWave([0, 1, 0.3, 2, -1, 0.7], 0.7))) {
       const away = Math.hypot(point.x, point.y);
       expect(away).toBeLessThanOrEqual(1.001);
-      expect(away).toBeGreaterThanOrEqual(0.55);
+      expect(away).toBeGreaterThanOrEqual(0.6);
     }
   });
 
-  it("rises and falls, rather than being a plain circle", () => {
-    const aways = pointsOf(ringWave(5, 0.6)).map((point) => Math.hypot(point.x, point.y));
-    expect(Math.max(...aways) - Math.min(...aways)).toBeGreaterThan(0.25);
+  it("puts its first spike at the top", () => {
+    const tips = pointsOf(radialWave([1, 0, 0, 0], 0.5));
+    expect(tips[1]).toEqual({ x: 0, y: -1 });
+  });
+});
+
+describe("mirroredHeights", () => {
+  it("mirrors each shape round its middle, and is the same each time", () => {
+    const shapes = mirroredHeights(8, 3);
+    expect(shapes).toHaveLength(3);
+    for (const shape of shapes) {
+      expect(shape).toHaveLength(8);
+      for (let at = 1; at < 8; at += 1) {
+        expect(shape[at]).toBe(shape[8 - at]);
+      }
+    }
+    expect(mirroredHeights(8, 3)).toEqual(shapes);
   });
 });
