@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SongSpectrum } from "../api";
-import { approach, levelsAt, momentOf } from "./spectrum-data";
+import { approach, barsOf, levelsAt, momentOf } from "./spectrum-data";
 
 /** Two bands, four readings a second: loud then quiet then loud again. */
 const SPECTRUM: SongSpectrum = {
@@ -55,5 +55,17 @@ describe("where the song is", () => {
     expect(momentOf(10, 400)).toBeCloseTo(10.525);
     expect(momentOf(10, 5_000)).toBeCloseTo(11.125);
     expect(momentOf(10, -50)).toBeCloseTo(10.125);
+  });
+});
+
+describe("the bars of the button of the song playing", () => {
+  it("share the bands out in order, each the mean of its share, in a few steps", () => {
+    const levels = [1, 1, 0.6, 0.4, 0.3, 0.2, 0, 0.05];
+    expect(barsOf(levels)).toEqual([1, 0.5, 0.25, 0.25]);
+  });
+
+  it("are never quite flat, and stand at the floor with no wave", () => {
+    expect(barsOf([0, 0, 0, 0])).toEqual([0.25, 0.25, 0.25, 0.25]);
+    expect(barsOf([])).toEqual([0, 0, 0, 0]);
   });
 });

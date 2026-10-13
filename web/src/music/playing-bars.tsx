@@ -1,23 +1,60 @@
 /*
- * The mark of the song playing, inside its red button: four small bars
- * rising and falling each on a beat of their own, as a little equaliser
- * would, in place of the pause sign. The pause sign comes back under the
- * pointer or the keyboard, which is when it is about to be pressed. They
- * follow nothing of the song, and move by transform alone.
+ * The mark of the song playing, inside its red button: four small bars, as a
+ * little equaliser would stand, in place of the pause sign, which comes back
+ * under the pointer or the keyboard.
+ *
+ * While the wave behind the player is drawn, the bars rise and fall with it,
+ * coarsely, from the same levels and nothing more; when there is no wave, the
+ * account having turned it off or the song having no levels yet, they rise
+ * and fall on beats of their own. Either way they move by transform alone,
+ * and nothing of React is drawn again for them.
  */
 
+import { useEffect, useRef } from "react";
 import { PauseIcon } from "../player/icons";
+import { hearWaveLevels } from "./player/wave-levels";
 
-/** How many bars stand in the button. */
-const BARS = 4;
+/** How long the bars wait for the wave before they go back to their own
+ *  beats: a few of its drawings. */
+const WAVE_GONE_MS = 300;
 
 export function PlayingBars() {
+  const box = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const element = box.current;
+    if (!element || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const bars = Array.from(element.children) as HTMLElement[];
+    let gone = 0;
+    const leaveToTheirOwn = () => {
+      delete element.dataset.heard;
+      for (const bar of bars) {
+        bar.style.transform = "";
+      }
+    };
+    const stop = hearWaveLevels((heights) => {
+      element.dataset.heard = "yes";
+      bars.forEach((bar, at) => {
+        bar.style.transform = `scaleY(${heights[at]})`;
+      });
+      window.clearTimeout(gone);
+      gone = window.setTimeout(leaveToTheirOwn, WAVE_GONE_MS);
+    });
+    return () => {
+      stop();
+      window.clearTimeout(gone);
+    };
+  }, []);
+
   return (
     <>
-      <span className="playing-bars" aria-hidden="true">
-        {Array.from({ length: BARS }, (_, at) => (
-          <span key={at} className="playing-bar" />
-        ))}
+      <span className="playing-bars" ref={box} aria-hidden="true">
+        <span className="playing-bar" />
+        <span className="playing-bar" />
+        <span className="playing-bar" />
+        <span className="playing-bar" />
       </span>
       <span className="playing-bars-pause">
         <PauseIcon size={20} />

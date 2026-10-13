@@ -54,3 +54,31 @@ export function momentOf(position: number, sinceItWasSaidMs: number): number {
   const FIRST_QUARTER = 0.125;
   return position + FIRST_QUARTER + Math.min(1, Math.max(0, sinceItWasSaidMs / 1000));
 }
+
+/** How many bars the button of the song playing has, and how coarse they are
+ *  told to be: a few steps of height, so they move with the wave without
+ *  trying to be an equaliser. */
+const BARS = 4;
+const STEPS = 4;
+
+/** The heights of the bars of the button of the song playing, from the
+ *  levels of the wave: the bands shared out between them in order, the
+ *  lows first, each the mean of its share, rounded to a few steps and never
+ *  quite flat. */
+export function barsOf(levels: readonly number[]): number[] {
+  const bars = new Array<number>(BARS).fill(0);
+  if (levels.length === 0) {
+    return bars;
+  }
+  for (let bar = 0; bar < BARS; bar += 1) {
+    const first = Math.floor((bar * levels.length) / BARS);
+    const last = Math.max(first + 1, Math.floor(((bar + 1) * levels.length) / BARS));
+    let sum = 0;
+    for (let band = first; band < last; band += 1) {
+      sum += levels[band];
+    }
+    const mean = sum / (last - first);
+    bars[bar] = Math.max(1, Math.round(mean * STEPS)) / STEPS;
+  }
+  return bars;
+}
