@@ -33,7 +33,12 @@ export function Tooltips() {
     let element: HTMLElement | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
+    /* Nothing to do while nothing is pointed at, which is every frame of a
+       page scrolling under a finger. */
     const leave = () => {
+      if (element === null) {
+        return;
+      }
       clearTimeout(timer);
       if (element?.dataset.tip !== undefined) {
         element.setAttribute("title", element.dataset.tip);
