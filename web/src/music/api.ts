@@ -51,6 +51,8 @@ export interface Song {
   disc: number | null;
   year: number | null;
   seconds: number | null;
+  /** The same to the millisecond, for what is matched against it. */
+  duration_ms: number | null;
   /** The file it plays from. */
   source: string | null;
   /** The cover of its album. */
@@ -166,7 +168,8 @@ export interface LyricsOffer {
   artist: string;
   title: string;
   album: string | null;
-  seconds: number | null;
+  /** How long the song it was stamped on lasts. */
+  duration_ms: number | null;
   /** Stamped line by line, so it follows the song. */
   synced: boolean;
   /** Whether it has words at all. */

@@ -2721,3 +2721,296 @@
 .trim-warning-for-good {
   color: var(--attention);
 }
+
+/* --------------------------------------------------------------------------
+ * The lyrics of a song, for an administrator: the song, a search of LRCLIB
+ * and its entries, which alone scroll
+ * ----------------------------------------------------------------------- */
+
+.lyrics-dialog {
+  width: min(920px, 100%);
+  height: min(820px, 100%);
+}
+
+.lyrics-dialog .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: hidden;
+}
+
+.lyrics-dialog .notice,
+.lyrics-dialog .panel-notice {
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lyrics-song {
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+}
+
+.lyrics-song .music-song-cover {
+  width: 76px;
+}
+
+.lyrics-song-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lyrics-song-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-song-by {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-song-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+}
+
+/* Words without their moments: said, without the colour of a state. */
+.lyrics-pill-plain {
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.lyrics-song-note {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.lyrics-song-meter {
+  max-width: 320px;
+  margin-top: 6px;
+}
+
+.lyrics-song-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.lyrics-length {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.lyrics-length-name {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lyrics-length-time {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.lyrics-song-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lyrics-forget {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.lyrics-forget:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.lyrics-search {
+  flex: none;
+}
+
+.lyrics-search input:first-of-type {
+  flex: 0.7;
+}
+
+.lyrics-search-between {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+}
+
+/* The one part that scrolls, its bar against the edge of the panel. */
+.lyrics-offers {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--gap-wide)) calc(-1 * var(--gap-wide));
+  padding: 2px var(--gap-wide) var(--gap-wide);
+  overflow-y: auto;
+}
+
+.lyrics-offers-quiet {
+  margin: 0;
+  padding: var(--gap-wide) 0;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.lyrics-offer {
+  display: grid;
+  flex: none;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 86px;
+}
+
+.lyrics-offer:hover,
+.lyrics-offer-taken {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.lyrics-offer:hover {
+  box-shadow: 0 0 14px 2px var(--accent-glow);
+}
+
+.lyrics-offer-length {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-offer-time {
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.lyrics-offer-gap {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.lyrics-offer-words {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.lyrics-offer-title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-offer-by {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-offer-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+@media (max-width: 600px) {
+  .lyrics-song {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .lyrics-song .music-song-cover {
+    width: 60px;
+  }
+
+  .lyrics-song-side {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .lyrics-length {
+    align-items: flex-start;
+  }
+
+  .lyrics-length-time {
+    font-size: 20px;
+  }
+
+  .lyrics-search {
+    padding: 0 14px;
+  }
+
+  .lyrics-search input {
+    font-size: 15px;
+  }
+
+  .lyrics-offer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+
+  .lyrics-offer-length {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+}

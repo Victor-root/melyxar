@@ -18,6 +18,13 @@ export function asClock(seconds: number): string {
   return hours > 0 ? `${hours}:${padded}` : padded;
 }
 
+/** The same to the hundredth of a second: 4:11.10. */
+export function asPreciseClock(seconds: number): string {
+  const hundredths = Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 100) : 0;
+  const rest = hundredths % 100;
+  return `${asClock(Math.floor(hundredths / 100))}.${rest < 10 ? "0" : ""}${rest}`;
+}
+
 /** A moment typed by hand, read back: "1:02", "1:02:03", or plain seconds.
  *  Nothing for anything else, which a field then leaves as it was. */
 export function fromClock(text: string): number | null {
