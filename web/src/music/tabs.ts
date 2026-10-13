@@ -1,6 +1,5 @@
 /*
- * The tabs of a library of music, which of them an account shows, and the
- * one beside another.
+ * The tabs of a library of music, and which of them an account shows.
  */
 
 export const MUSIC_TABS = [
@@ -28,9 +27,4 @@ export function shownTabs(hidden: string[]): MusicTab[] {
  *  otherwise the first that is. */
 export function openTab(asked: string | null, shown: MusicTab[]): MusicTab {
   return shown.find((tab) => tab === asked) ?? shown[0];
-}
-
-/** The tab beside the open one, that way, or nothing at either end. */
-export function tabBeside(shown: MusicTab[], open: MusicTab, way: -1 | 1): MusicTab | null {
-  return shown[shown.indexOf(open) + way] ?? null;
 }

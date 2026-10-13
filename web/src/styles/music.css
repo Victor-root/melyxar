@@ -117,52 +117,6 @@
   }
 }
 
-/* A tab reached by a swipe or a dot slides in from the side it came from. */
-.music-tab-content[data-came-from] {
-  animation: music-tab-in var(--calm) var(--ease);
-}
-
-.music-tab-content[data-came-from="before"] {
-  --came-from: -28px;
-}
-
-@keyframes music-tab-in {
-  from {
-    opacity: 0.3;
-    transform: translateX(var(--came-from, 28px));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .music-tab-content[data-came-from] {
-    animation: none;
-  }
-}
-
-/* The dots of the tabs of a phone, just under the band at the top, bare,
-   between the two chevrons. */
-.music-tab-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  /* Close under the band: into the air the page keeps under it, and as much
-     higher as the band itself rises on a screen drawn edge to edge. */
-  margin: calc(var(--gap) / -2 - var(--header-edge) - var(--header-lift)) 0 var(--gap-tight);
-}
-
-.music-tab-step {
-  display: grid;
-  width: 30px;
-  height: 26px;
-  place-items: center;
-  color: var(--text-soft);
-}
-
-.music-tab-step:disabled {
-  opacity: 0.25;
-}
-
 /* The bar of the tab stands a little nearer the tabs than a grid's bar does
    its name. */
 .music-page .browse-head {
@@ -297,11 +251,10 @@
 /* On a phone the two lists are one, and the other is a swipe away: the names
    of both at the top, the one in view lit, and the lists side by side in a
    row that comes to rest on one of them. */
-/* Two small buttons in a piece of the glass of the bar at the top, the one of
-   the list in view lit in the accent, and the name of that list beside
-   them. */
-/* The marks of For you's pages and the name of the one open share one line,
-   both drawn smaller as the screen narrows so the name never wraps. */
+/* Small buttons in a piece of the glass of the bar at the top, the one of
+   the page in view lit in the accent, and the name of that page beside them
+   on one line, both drawn smaller as the screen narrows so the name never
+   wraps. */
 .section-head:has(> .music-listened-switch) {
   flex-wrap: nowrap;
   align-items: center;

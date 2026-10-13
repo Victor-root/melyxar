@@ -5,9 +5,7 @@
  * it out.
  *
  * Which tab is open, and how its list is read, is written in the address, so
- * going back to the library finds it the way it was left. On a phone the tabs
- * are pages too, a dot for each under the band at the top with chevrons
- * either side.
+ * going back to the library finds it the way it was left.
  */
 
 import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +22,6 @@ import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
 import { useLibraryVersion } from "../libraries";
-import { PHONE, useMediaQuery } from "../media-query";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -37,7 +34,6 @@ import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
 import { LibraryTools } from "./library-tools";
 import { TabsBar } from "./tabs-bar";
-import { TabDots } from "./tab-pages";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
 import { AlbumTile, ArtistTile, GenreTile, LetterStarts } from "./tiles";
@@ -64,42 +60,26 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const shown = useMemo(() => shownTabs(preferences.hidden_tabs), [preferences.hidden_tabs]);
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
-  const phone = useMediaQuery(PHONE);
-  /* Which side the open tab came in from, for it to slide in from there,
-     when it was reached by the dots. */
-  const [cameFrom, setCameFrom] = useState<"next" | "before" | null>(null);
-  const openFrom = (next: MusicTab) => {
-    setCameFrom(shown.indexOf(next) > shown.indexOf(tab) ? "next" : "before");
-    open(next);
-  };
-
   const tools = <LibraryTools library={library} />;
   /* The tabs with a bar of their own carry the tools in it; the others keep
      the way to put files in beside the tabs. */
   const barred = tab === "albums" || tab === "album_artists" || tab === "artists" || tab === "songs";
 
   return (
-    <main
-      className={`page music-page${besideLetters ? " page-beside-letters" : ""}`}
-    >
+    <main className={`page music-page${besideLetters ? " page-beside-letters" : ""}`}>
       <PageBackdrop />
-      {phone && shown.length > 1 && <TabDots tabs={shown} open={tab} onOpen={openFrom} />}
       <div className="browse-head">
         <div className="section-head">
           <h1>{library.name}</h1>
         </div>
         <div className="browse-bar">
-          {/* On a phone the dots above take the tabs' place, and the middle of
-              the band at the top is left to the tab open. */}
-          {!phone && <TabsBar tabs={shown} open={tab} onOpen={open} />}
+          <TabsBar tabs={shown} open={tab} onOpen={open} />
           {!barred && tab !== "for_you" && <UploadButton library={library} bare className="browse-piece browse-alone" />}
         </div>
       </div>
 
       <BesideLetters.Provider value={setBesideLetters}>
-      {/* Drawn anew for each tab, so that it slides in from the side it came
-          from. */}
-      <div className="music-tab-content" key={tab} data-came-from={cameFrom ?? undefined}>
+      <div className="music-tab-content">
         {tab === "for_you" && <ForYouTab library={library.id} />}
         {tab === "albums" && <AlbumsTab library={library.id} tools={tools} />}
         {tab === "album_artists" && <ArtistsTab library={library.id} tools={tools} albumArtistsOnly />}
