@@ -2,18 +2,17 @@
  * The door.
  *
  * Its own stylesheet because it shares nothing with the interface behind it:
- * no bar, no grid, no card. It is one thing on an empty screen, and it is what
- * anybody sees first.
+ * no bar, no grid, no card. It is what anybody sees first.
  *
  * Every colour, spacing and radius comes from a token, the accent included, so
  * a server given another accent keeps this screen with it. Not one colour is
  * written down here as a colour.
  *
- * The whole screen is laid out as two rows down the middle: the card, and the
- * two quiet lines at the foot. Everything to either side of them is background
- * and is meant to stay that way, which is what leaves the card the only thing
- * on the screen asking to be looked at. What this server is for travels
- * inside the card itself, at its foot, rather than floating above it.
+ * Three rows: the mark in the corner, the accounts in the middle, and the
+ * quiet lines at the foot. Nothing is boxed in. The accounts stand in the
+ * open, in a light of their own, the way somebody picks who is watching
+ * rather than fills in a form: what is pressed first on this screen is a
+ * face, and the screen is drawn around it.
  */
 
 .door {
@@ -25,11 +24,10 @@
   overflow-x: hidden;
   position: relative;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: auto 1fr auto;
   justify-items: center;
-  align-items: start;
   gap: var(--gap-wide);
-  padding: calc(clamp(18px, 3vw, 40px) + var(--safe-top)) calc(clamp(18px, 4vw, 64px) + var(--safe-right)) calc(clamp(18px, 3vw, 40px) + var(--safe-bottom)) calc(clamp(18px, 4vw, 64px) + var(--safe-left));
+  padding: calc(clamp(18px, 2.6vw, 40px) + var(--safe-top)) calc(clamp(18px, 3vw, 56px) + var(--safe-right)) calc(clamp(16px, 2.4vw, 36px) + var(--safe-bottom)) calc(clamp(18px, 3vw, 56px) + var(--safe-left));
   /* Its own background rather than the page's: this screen is the only one
      with nothing else on it, so the surface it sits on is part of it. */
   background: var(--surface-deep);
@@ -61,7 +59,7 @@
   object-fit: cover;
 }
 
-/* Over it, a wash that darkens towards the card. Without one the words would
+/* Over it, a wash that darkens towards the middle. Without one the words would
    be read against whatever somebody happened to upload, which is a thing
    nobody can design for. */
 .door-picture-wash {
@@ -84,7 +82,7 @@
 /*
  * The one a server wears out of the box: light, and dust caught in it.
  *
- * Arriving a moment after the card, so the screen settles rather than
+ * Arriving a moment after the accounts, so the screen settles rather than
  * appearing all at once.
  */
 .door-drift {
@@ -105,9 +103,16 @@
   .door-drift,
   .door-piece,
   .door-shelf,
-  .door-card {
+  .door-stage,
+  .door-hall > *,
+  .door-who-one {
     animation: none;
     opacity: 1;
+  }
+
+  .door-who-one:hover,
+  .door-who-one:focus-visible {
+    transform: none;
   }
 }
 
@@ -171,7 +176,7 @@
 }
 
 /* The ones that need room. Each waits for the screen to be wide enough that it
-   sits clear of the card. */
+   sits clear of the accounts. */
 .door-piece-from-900,
 .door-piece-from-1100 {
   display: none;
@@ -189,172 +194,133 @@
   }
 }
 
-/* A screen with no room to spare shows the card and the light behind it, and
-   nothing else: half a poster cut off by the edge is not a background. */
+/* A screen with no room to spare shows the accounts and the light behind
+   them, and nothing else: half a poster cut off by the edge is not a
+   background. */
 @media (max-width: 700px) {
   .door-shelf {
     display: none;
   }
 }
 
-/* ---------------------------------------------------------------------------
- * The card
- * ------------------------------------------------------------------------ */
+/*
+ * The stage.
+ *
+ * Drawn over whichever background the server wears, because it is what this
+ * screen is built around rather than a choice: a beam falling from above onto
+ * the middle of the screen, where the accounts stand, the edges of the room
+ * falling away into the dark, and at either side a faint run of spines, the
+ * edge of a collection seen from too far away to read. Nothing in it is a
+ * thing to look at, and nothing in it is a picture of a cinema.
+ *
+ * Painted once and never moved, on one box and its two halves, for the
+ * reason the paintings of light give: a gradient costs nothing once it is
+ * painted, a moving or blurred one costs every frame.
+ */
+.door-stage {
+  /* How much of it there is, turned down on a white screen. */
+  --stage-force: 1;
 
-.door-card {
-  /* The tile one account is drawn on, and the room between two of them. Set
-     here rather than on the tile itself, because the card's own width is
-     worked out from them and the two have to be the same numbers. */
-  --door-tile: 104px;
-  --door-tile-gap: 16px;
-  /* The narrowest the card stands at, the mark, the name over it, and the
-     size of what is read and typed: set again together for a big screen. */
-  --door-least: 480px;
-  --door-mark: 58px;
-  --door-name: 21px;
-  --door-read: 13.5px;
-  --door-type: 14.5px;
-  /* What the card keeps for its own edges: the padding on both sides and the
-     two hairlines, since everything here is measured border to border. */
-  --door-room: 66px;
-  /* How many tiles go across, put here by the drawing. None until it says
-     otherwise, which is the width the form alone stands at. */
-  --across: 0;
-
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  /* As wide as the accounts on it need, and never narrower than a sign in
-     card should be. The count comes from the drawing, which is the only place
-     that knows how many there are and how many it will put across. */
-  width: min(
-    100%,
-    max(
-      var(--door-least),
-      calc(
-        var(--across) * var(--door-tile) + (var(--across) - 1) *
-          var(--door-tile-gap) + var(--door-room)
-      )
-    )
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* The edges of the room, darkened, so the light in the middle has depth to
+     fall into. */
+  background: radial-gradient(
+    120% 95% at 50% 46%,
+    transparent 52%,
+    color-mix(in srgb, var(--surface-deep) calc(72% * var(--stage-force)), transparent) 100%
   );
-  display: flex;
-  flex-direction: column;
-  padding: 34px 32px 30px;
-  border-radius: 20px;
-  /* Glass rather than a solid panel: it stands over a background of its own
-     server's choosing, and a solid box on top of one is a box stuck to a
-     photograph. The wash is dark enough that the fields inside it hold their
-     contrast over anything behind, and the accent rises into it from below and
-     from the top corner, so the rim that surrounds it is not a line stuck onto
-     a grey box but the edge of something already lit. */
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
-  background:
-    radial-gradient(
-      118% 78% at 50% 116%,
-      color-mix(in srgb, var(--accent) 26%, transparent),
-      color-mix(in srgb, var(--accent-dim) 11%, transparent) 44%,
-      transparent 72%
-    ),
-    radial-gradient(
-      76% 56% at 6% -10%,
-      color-mix(in srgb, var(--accent-dim) 18%, transparent),
-      transparent 62%
-    ),
-    color-mix(in srgb, var(--surface) 80%, transparent);
-  backdrop-filter: blur(26px) saturate(125%);
-  /* The light the card sits in. One shadow seats it on the screen; the three
-     above it are the same accent at widening blurs, which is what a bloom is:
-     a bright edge, the air just off it, and the whole card's worth of it
-     spilling down the background. No spread ring among them, because the rim
-     itself is drawn below and a hard ring outside it would flatten it. */
-  box-shadow:
-    var(--shadow-raised),
-    0 0 24px -3px color-mix(in srgb, var(--accent-bright) 42%, transparent),
-    0 0 72px -10px color-mix(in srgb, var(--accent) 38%, transparent),
-    0 20px 110px -18px color-mix(in srgb, var(--accent-dim) 55%, transparent);
-  animation: door-arrive var(--calm) var(--ease) both;
+  opacity: 0;
+  animation: door-arrive-slowly 1100ms var(--ease) 120ms forwards;
 }
 
-/*
- * The rim. One even line of accent all the way round, drawn just inside the
- * card's edge, the same way as the rim of the tiles on the home page: a rim cut
- * out of a turning gradient by a mask came out thicker on some sides and
- * brighter in some corners, and the card's corners showed it.
- */
-.door-card::before {
+.door-stage::before,
+.door-stage::after {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 62%, transparent);
-  pointer-events: none;
 }
 
-@keyframes door-arrive {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+/* The beam: a column of light from above the top of the screen, brightest
+   down its middle, spreading as it falls and gone before it reaches the
+   floor. Round gradients rather than a wedge, so it has no edge anywhere. */
+.door-stage::before {
+  background:
+    radial-gradient(
+      9% 62% at 50% -6%,
+      color-mix(in srgb, var(--accent-bright) calc(13% * var(--stage-force)), transparent),
+      transparent 100%
+    ),
+    radial-gradient(
+      26% 78% at 50% -12%,
+      color-mix(in srgb, var(--accent) calc(15% * var(--stage-force)), transparent),
+      color-mix(in srgb, var(--accent-dim) calc(5% * var(--stage-force)), transparent) 60%,
+      transparent 100%
+    );
 }
 
-/*
- * A big screen.
- *
- * The accounts are what is aimed at from across a room, so they grow the
- * most, as a television's own sign in draws them: the tile follows the
- * screen's width and its height alike, so the tallest view the card has, the
- * form with a face over it, still fits a window that is wide and short. The
- * mark, the name and the words grow less, and the fields keep to a column of
- * a form's width in the middle of the card rather than stretching across it.
- */
-@media (min-width: 1100px) and (min-height: 700px) {
-  .door-card {
-    --door-tile: clamp(104px, min(9vw, 15vh), 176px);
-    --door-tile-gap: clamp(16px, 1.4vw, 28px);
-    --door-least: clamp(480px, 34vw, 600px);
-    --door-room: 90px;
-    --door-mark: clamp(58px, 7vh, 80px);
-    --door-name: clamp(21px, 2.7vh, 30px);
-    --door-read: clamp(13.5px, 1.6vh, 16px);
-    --door-type: clamp(14.5px, 1.7vh, 16.5px);
-    padding: clamp(32px, 4.5vh, 44px) 44px clamp(26px, 3.5vh, 36px);
-    border-radius: 24px;
-  }
+/* The spines: two runs of hairlines at different spacings, so where they
+   cross they read as the uneven edge of a shelf rather than as a grille.
+   Only at the two sides, and only through the middle of the height. */
+.door-stage::after {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--text) calc(7% * var(--stage-force)), transparent) 0 1px,
+      transparent 1px 11px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) calc(12% * var(--stage-force)), transparent) 0 2px,
+      transparent 2px 37px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--text) calc(5% * var(--stage-force)), transparent) 0 3px,
+      transparent 3px 26px
+    );
+  mask-image:
+    linear-gradient(to right, #000 0%, transparent 20%, transparent 80%, #000 100%),
+    linear-gradient(to bottom, transparent 12%, #000 42%, #000 62%, transparent 92%);
+  -webkit-mask-image:
+    linear-gradient(to right, #000 0%, transparent 20%, transparent 80%, #000 100%),
+    linear-gradient(to bottom, transparent 12%, #000 42%, #000 62%, transparent 92%);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  opacity: 0.7;
+}
 
-  .door-card > :is(
-      .door-box,
-      .door-rule,
-      .door-aside,
-      .door-answer,
-      .door-go,
-      .door-or,
-      .door-make,
-      .door-by-hand
-    ) {
-    width: 100%;
-    max-width: 440px;
-    margin-inline: auto;
-  }
+/* ---------------------------------------------------------------------------
+ * The corner
+ * ------------------------------------------------------------------------ */
+
+.door-top {
+  grid-row: 1;
+  justify-self: stretch;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 40px;
 }
 
 /* The mark and the name, together: they are one thing, and what the server
    calls itself is the half an administrator changes most often. */
 .door-crown {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 11px;
+  min-width: 0;
 }
 
 .door-mark {
-  width: var(--door-mark);
-  height: var(--door-mark);
-  border-radius: 15px;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
 }
 
@@ -362,201 +328,32 @@
    wide one is not shrunk to fit a square it was never drawn for. */
 img.door-mark {
   width: auto;
-  max-width: 240px;
-  border-radius: 0;
+  max-width: 180px;
 }
 
 /* Spaced out and in capitals, the way a name is set when it is standing in
    for a wordmark rather than being read as a word. */
 .door-name {
-  margin: 0;
-  text-align: center;
-  font-family: "Melyxar Display", "Inter", sans-serif;
-  font-size: var(--door-name);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  /* The first letter forward of the rest, since the spacing after the last
-     one would otherwise push the whole name off centre. */
-  text-indent: 0.16em;
-}
-
-.door-invitation {
-  margin: 8px 0 24px;
-  text-align: center;
-  color: var(--text-soft);
-  font-size: var(--door-read);
-  line-height: 1.5;
-}
-
-/*
- * Who is on this server.
- *
- * A card each rather than a row of pills: this is the one place on the screen
- * where somebody is picked rather than a setting, and a thing to be picked is
- * drawn large enough to be aimed at from a sofa.
- *
- * Wrapped rather than scrolled: a household is a handful of names, and a row
- * that scrolls sideways hides the very thing it is there to offer. A server
- * with a great many accounts turns the whole list off, which is what that
- * switch is for.
- *
- * A letter rather than a face. Nobody has a picture on this server yet, and
- * the address that offers these names deliberately carries none: a row of
- * identical silhouettes would say less than a row of initials anyway.
- */
-.door-who {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--door-tile-gap);
-  margin-bottom: 22px;
-}
-
-.door-who-one {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 9px;
-  width: var(--door-tile);
-  padding: 0;
-  background: none;
-  border: none;
-  color: var(--text-soft);
-  font-size: calc(var(--door-read) - 1px);
-  font-weight: 550;
-  transition: color var(--quick) var(--ease);
-}
-
-/* The one letter a name is shown by, wherever it is drawn: on the list and
-   again on the form once one of them has been pressed. Only the size and the
-   skin differ between the two. */
-.door-face {
-  display: grid;
-  place-items: center;
-  font-family: "Melyxar Display", "Inter", sans-serif;
-  font-weight: 700;
-  line-height: 1;
-}
-
-/*
- * The tile itself.
- *
- * The same tile it becomes once it has been pressed, in the same accent and
- * lit the same way: one account is one face, and a tile that changed colour
- * on being chosen read as two different things rather than as the same one
- * twice. What the press changes is the screen, not the face.
- *
- * Square with the corners of a card of the library, the way Emby draws its
- * accounts: it holds the picture somebody chose, and a large radius eats the
- * corners of a picture.
- */
-.door-who-face {
-  width: var(--door-tile);
-  height: var(--door-tile);
-  border-radius: var(--radius-card);
-  background: linear-gradient(150deg, var(--accent-bright), var(--accent-dim));
-  color: var(--accent-contrast);
-  font-size: calc(var(--door-tile) * 0.37);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
-    0 8px 26px color-mix(in srgb, var(--accent) 32%, transparent);
-  transition:
-    transform var(--quick) var(--ease),
-    box-shadow var(--quick) var(--ease);
-}
-
-/* It comes forward under the pointer, the way every card and every button in
-   this interface does, and the light it stands in widens with it: there is
-   no colour left to change, so what answers the pointer is the air around
-   it. */
-.door-who-one:hover .door-who-face {
-  transform: scale(1.04);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 26%, transparent),
-    0 10px 34px color-mix(in srgb, var(--accent) 46%, transparent);
-}
-
-.door-who-one:hover {
-  color: var(--text);
-}
-
-.door-who-one:focus-visible {
-  outline: none;
-}
-
-.door-who-one:focus-visible .door-who-face {
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 26%, transparent),
-    0 0 0 3px var(--accent-glow),
-    0 10px 34px color-mix(in srgb, var(--accent) 46%, transparent);
-}
-
-/* A long name is cut rather than allowed to widen the card, and the whole of
-   it is on the card's own title. */
-.door-who-name {
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
 }
 
-/*
- * The way in that is not on the list.
- *
- * An outline rather than a fill, and under the tiles rather than beside them:
- * the cards are what this screen offers, and this is the door next to them for
- * an account that asked to be left off and for anybody who would rather type.
- */
-.door-by-hand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: 100%;
-  padding: 11px 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
-  color: var(--text-soft);
-  font-size: 13.5px;
-  font-weight: 550;
-  transition:
-    color var(--quick) var(--ease),
-    border-color var(--quick) var(--ease),
-    background var(--quick) var(--ease);
-}
-
-.door-by-hand:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-  background: var(--surface-hover);
-}
-
-.door-by-hand:focus-visible {
-  outline: none;
-  border-color: var(--accent-bright);
-  box-shadow: var(--focus-rim);
-}
-
-/*
- * Back to the accounts.
- *
- * Out of the flow, in the card's own corner: a row of its own would push the
- * mark down on the one view that carries it and not on the other, and the two
- * views are meant to be one card rather than two.
- */
+/* Back to the accounts, ahead of the mark the way a back arrow sits ahead of
+   the title of any screen. */
 .door-back {
-  position: absolute;
-  top: 13px;
-  left: 13px;
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 11px 5px 8px;
+  gap: 6px;
+  padding: 7px 13px 7px 9px;
   border-radius: var(--radius-pill);
-  font-size: 12.5px;
-  color: var(--text-faint);
+  font-size: 13.5px;
+  color: var(--text-soft);
   transition:
     color var(--quick) var(--ease),
     background var(--quick) var(--ease);
@@ -573,51 +370,352 @@ img.door-mark {
   box-shadow: 0 0 0 2px var(--accent-glow);
 }
 
-/*
- * Whose password is being asked for.
- *
- * In place of the name field, once a card has settled it. Filled where the
- * tiles on the list are glass: this is the one that was chosen, and on a
- * screen whose next move is a password, who the password is for has to be
- * readable at a glance and from across a room, the way a full sized tile is
- * and a tile squeezed beside a name is not.
- */
-.door-forwhom {
+/* ---------------------------------------------------------------------------
+ * The hall: whatever is in the middle of the screen
+ * ------------------------------------------------------------------------ */
+
+.door-hall {
+  /* The tile one account is drawn on, and the room between two of them.
+     Following the screen's width and its height alike, the way a television
+     draws its accounts: aimed at from across a room on a large screen, and
+     still leaving room for the form under a face on a wide, short one. */
+  --door-tile: clamp(112px, min(10vw, 19vh), 184px);
+  --door-tile-gap: clamp(22px, 2.8vw, 48px);
+  --door-radius: calc(var(--door-tile) * 0.1);
+  --door-read: clamp(14px, 1.7vh, 16.5px);
+  --door-type: 15px;
+
+  grid-row: 2;
+  align-self: center;
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  /* Its own room above, since it stands directly under the mark: the line it
-     takes the place of carried that spacing with it. */
-  margin: 16px 0 24px;
+  width: 100%;
+  padding-bottom: clamp(0px, 4vh, 48px);
 }
 
-.door-forwhom-face {
-  flex: 0 0 auto;
-  width: calc(var(--door-tile) * 0.85);
-  height: calc(var(--door-tile) * 0.85);
-  border-radius: var(--radius-card);
-  background: linear-gradient(150deg, var(--accent-bright), var(--accent-dim));
-  color: var(--accent-contrast);
-  font-size: calc(var(--door-tile) * 0.33);
+/* Whatever turns up in the middle rises into place, which is also what the
+   screen does when it turns from the accounts to the form. Backwards only, so
+   once it has arrived nothing of the animation is left holding a transform
+   the pointer wants to change. */
+.door-hall > * {
+  animation: door-arrive 420ms var(--ease) backwards;
+}
+
+@keyframes door-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.door-greeting {
+  max-width: 760px;
+  margin-bottom: clamp(30px, 6.5vh, 68px);
+  text-align: center;
+}
+
+.door-welcome {
+  margin: 0;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: clamp(30px, min(3.4vw, 6vh), 54px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* The server's own name, in the accent and in a little of its light. */
+.door-welcome-name {
+  color: var(--accent-bright);
+  text-shadow: 0 0 36px var(--accent-glow);
+}
+
+.door-invitation {
+  margin: clamp(10px, 1.6vh, 16px) 0 0;
+  color: var(--text-soft);
+  font-size: clamp(15px, min(1.3vw, 2.3vh), 19px);
+  line-height: 1.5;
+}
+
+/*
+ * Who is on this server.
+ *
+ * A tile each, large, in the open: this is the one place on the screen where
+ * somebody is picked rather than a setting, and a thing to be picked is drawn
+ * large enough to be aimed at from a sofa.
+ *
+ * Wrapped rather than scrolled: a household is a handful of names, and a row
+ * that scrolls sideways hides the very thing it is there to offer. Five at
+ * most across, so a big household reads as rows rather than as a ribbon. A
+ * server with a great many accounts turns the whole list off, which is what
+ * that switch is for.
+ */
+.door-who {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(26px, 4vh, 40px) var(--door-tile-gap);
+  max-width: calc(5 * var(--door-tile) + 4 * var(--door-tile-gap));
+  margin-bottom: clamp(30px, 6vh, 60px);
+}
+
+/* The floor the first row stands on: a pool of the accent, and through it
+   one thin line of brighter light, the flare a lens draws across a bright
+   source. */
+.door-who::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: calc(var(--door-tile) * 0.55);
+  left: 50%;
+  width: max(130%, calc(4 * var(--door-tile)));
+  height: calc(var(--door-tile) * 0.9);
+  transform: translateX(-50%);
+  background:
+    radial-gradient(
+      42% 1px at 50% 50%,
+      color-mix(in srgb, var(--accent-bright) 40%, transparent),
+      transparent
+    ),
+    radial-gradient(
+      50% 50% at 50% 50%,
+      color-mix(in srgb, var(--accent) 22%, transparent),
+      color-mix(in srgb, var(--accent-dim) 8%, transparent) 55%,
+      transparent 100%
+    );
+  pointer-events: none;
+}
+
+.door-who-one {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: var(--door-tile);
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-soft);
+  font-size: var(--door-read);
+  font-weight: 550;
+  /* One after the other, and never more than a short wait for the last. */
+  animation: door-arrive 520ms var(--ease) calc(80ms + min(var(--order), 8) * 55ms) backwards;
+  transition:
+    transform var(--calm) var(--ease),
+    color var(--quick) var(--ease);
+}
+
+/*
+ * Two rims on every tile, both drawn over the face rather than around it, so
+ * a picture is framed the same as a letter. A hairline, always there, that
+ * keeps a dark picture from melting into the dark behind it, and the lit one,
+ * the accent with its light spilling out of it, there only under the pointer
+ * or the keyboard. Only its opacity changes, which is the cheapest thing a
+ * browser can be asked to change.
+ */
+.door-who-one::before,
+.door-who-one::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: var(--door-tile);
+  height: var(--door-tile);
+  border-radius: var(--door-radius);
+  pointer-events: none;
+}
+
+.door-who-one::before {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.door-who-one::after {
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
-    0 8px 26px color-mix(in srgb, var(--accent) 32%, transparent);
+    inset 0 0 0 2px var(--accent-bright),
+    0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 0 30px -2px color-mix(in srgb, var(--accent) 60%, transparent),
+    0 16px 60px -12px color-mix(in srgb, var(--accent-dim) 70%, transparent);
+  opacity: 0;
+  transition: opacity var(--calm) var(--ease);
 }
 
-.door-forwhom-name {
+.door-who-one:hover,
+.door-who-one:focus-visible {
+  transform: translateY(-6px);
+  color: var(--text);
+}
+
+.door-who-one:hover::after,
+.door-who-one:focus-visible::after {
+  opacity: 1;
+}
+
+.door-who-one:focus-visible {
+  outline: none;
+}
+
+/* The one letter a name is shown by, wherever it is drawn: on the list and
+   again on the form once one of them has been pressed. Only the size differs
+   between the two. */
+.door-face {
+  display: grid;
+  place-items: center;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/*
+ * The face itself, the same on the list and over the form: one account is one
+ * face, and a tile that changed on being chosen read as two different things
+ * rather than as the same one twice.
+ *
+ * Without a picture, the accent, deepening into the dark, with one arc of
+ * light across its lower corner, so a row of letters is a row of lit things
+ * rather than a row of flat squares. Square with soft corners, since it holds
+ * the picture somebody chose and a large radius eats the corners of a
+ * picture.
+ */
+.door-who-face,
+.door-forwhom-face {
+  width: var(--door-tile);
+  height: var(--door-tile);
+  border-radius: var(--door-radius);
+  background:
+    radial-gradient(
+      150% 110% at 115% 125%,
+      transparent 54%,
+      color-mix(in srgb, var(--accent-bright) 50%, transparent) 55.5%,
+      color-mix(in srgb, var(--accent-bright) 12%, transparent) 60%,
+      transparent 70%
+    ),
+    radial-gradient(
+      90% 80% at 10% 0%,
+      color-mix(in srgb, var(--accent-bright) 55%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      160deg,
+      var(--accent),
+      color-mix(in srgb, var(--accent-dim) 55%, var(--surface-deep)) 90%
+    );
+  color: var(--accent-contrast);
+  font-size: calc(var(--door-tile) * 0.4);
+  box-shadow: var(--shadow-raised);
+}
+
+/* A long name is cut rather than allowed to widen the tile, and the whole of
+   it is on the tile's own title. */
+.door-who-name {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * The way in that is not on the list.
+ *
+ * Quiet and under the tiles rather than beside them: the faces are what this
+ * screen offers, and this is the door next to them for an account that asked
+ * to be left off and for anybody who would rather type.
+ */
+.door-by-hand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 22px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 40%, transparent);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 550;
+  transition:
+    color var(--quick) var(--ease),
+    border-color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.door-hall > .door-by-hand {
+  animation-delay: 260ms;
+}
+
+.door-by-hand:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.door-by-hand:focus-visible {
+  outline: none;
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+/*
+ * Whose password is being asked for.
+ *
+ * In place of the greeting, once a tile has settled it: the same face, lit
+ * the way it was under the pointer a moment ago, so pressing it reads as
+ * stepping forward rather than as being taken somewhere else.
+ */
+.door-forwhom {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: clamp(22px, 4vh, 36px);
+}
+
+.door-forwhom-face {
+  --door-tile: clamp(96px, min(8vw, 15vh), 148px);
+  box-shadow:
+    inset 0 0 0 2px var(--accent-bright),
+    0 0 30px -2px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 16px 60px -12px color-mix(in srgb, var(--accent-dim) 70%, transparent);
+}
+
+/* The rim over a picture, which would otherwise cover it. */
+.door-forwhom-face.face-picture {
+  position: relative;
+}
+
+.door-forwhom-face.face-picture::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--accent-bright);
+}
+
+.door-forwhom-name {
+  max-width: min(100%, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: center;
-  font-size: calc(var(--door-read) + 3.5px);
-  font-weight: 600;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: clamp(20px, 2.6vh, 26px);
+  font-weight: 700;
   color: var(--text);
 }
 
-/* The name, out of sight and genuinely on the card: a password keeper fills
-   the entry it recognises by the name beside it, and a card with the name
+/* The name, out of sight and genuinely on the screen: a password keeper fills
+   the entry it recognises by the name beside it, and a screen with the name
    drawn as text and nowhere as a field offers it nothing to recognise. */
 .door-kept-name {
   position: absolute;
@@ -625,6 +723,20 @@ img.door-mark {
   height: 1px;
   opacity: 0;
   pointer-events: none;
+}
+
+/* The form keeps to a column of a form's width under the face, rather than
+   stretching across a screen that is no longer boxed in. */
+.door-hall > :is(
+    .door-box,
+    .door-rule,
+    .door-aside,
+    .door-answer,
+    .door-go,
+    .door-or,
+    .door-make
+  ) {
+  width: min(100%, 380px);
 }
 
 /* The labels are for whoever is not looking at the screen. What is on it is
@@ -652,7 +764,7 @@ img.door-mark {
   padding: 0 14px;
   border-radius: var(--radius-control);
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-deep) 82%, transparent);
   transition:
     border-color var(--quick) var(--ease),
     box-shadow var(--quick) var(--ease),
@@ -702,7 +814,7 @@ img.door-mark {
 }
 
 /* The browser's own idea of a filled in field is a colour this interface never
-   chose, and on a dark card it comes out white. Held back to the card's own
+   chose, and on a dark screen it comes out white. Held back to the screen's own
    colours the long way round, which is the only way there is. */
 .door-field:-webkit-autofill,
 .door-field:-webkit-autofill:hover,
@@ -783,7 +895,7 @@ img.door-mark {
 
 /* A way out of a forgotten password, once there is one. Drawn as the link it
    will be and turned off until then, rather than left out and added later to
-   a card that was laid out without room for it. */
+   a form that was laid out without room for it. */
 .door-forgot {
   padding: 0;
   font-size: 12.5px;
@@ -815,7 +927,7 @@ img.door-mark {
  */
 .door-answer {
   /* One line of it, which is what every refusal but one takes. The one that
-     runs to two grows the card rather than moving the button, which is the
+     runs to two grows the form rather than moving the button, which is the
      thing this is for. */
   min-height: 30px;
   display: flex;
@@ -845,7 +957,7 @@ img.door-mark {
 }
 
 /* The one thing on this screen to do, and it is drawn as such: the full width
-   of the card, the accent, and a light under it that none of the quieter
+   of the form, the accent, and a light under it that none of the quieter
    controls has. */
 .door-go {
   justify-content: center;
@@ -894,49 +1006,51 @@ img.door-mark {
   background: var(--surface-hover);
 }
 
-/*
- * What this server is for.
- *
- * At the card's own foot, under a hairline that separates it from whatever
- * ends above it: the last thing pressed and the last thing read are not the
- * same line. Small, in the quietest colour that still reads: it is a thing
- * said once, not a thing to be sold with. Replaced by whatever an
- * administrator writes in its place, the day this server carries one of its
- * own.
- */
-.door-slogan {
-  margin: 22px 0 0;
-  padding-top: 18px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--text-faint);
-}
-
 /* ---------------------------------------------------------------------------
  * The foot
  * ------------------------------------------------------------------------ */
 
 .door-foot {
-  /* Always the bottom row, even while the card is not drawn yet, so the footer
-     does not sit at the top for a moment on arrival. */
-  grid-row: 2;
+  /* Always the bottom row, even while the middle is not drawn yet, so the
+     foot does not sit at the top for a moment on arrival. */
+  grid-row: 3;
+  justify-self: stretch;
   position: relative;
   z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--gap-wide);
+}
+
+.door-settings {
   display: flex;
   align-items: center;
   gap: var(--gap);
 }
 
-/* What this server is, out of the way of everything above it: an accent-free
-   line nobody needs to read. */
+.door-credits {
+  text-align: right;
+}
+
+/* What this server is for: said once, small, in the quietest colour that
+   still reads. Replaced by whatever an administrator writes in its place. */
+.door-slogan {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-soft);
+  opacity: 0.8;
+}
+
+/* Whose project this is, out of the way of everything above it: an
+   accent-free line nobody needs to read. */
 .door-footer {
   margin: 0;
   font-size: 11.5px;
   color: var(--text-faint);
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 .door-footer-link {
@@ -958,39 +1072,34 @@ img.door-mark {
  *
  * Everything above is drawn for the dark this interface opens in, where light
  * added to a surface is light. On a white surface the same pools of accent
- * come out as smudges of pink, and the card, being white on white, stops
- * being a card at all. So what changes here is only how much of each thing
- * there is: no shape moves, and not one colour is chosen again.
+ * come out as smudges of pink. So what changes here is only how much of each
+ * thing there is: no shape moves, and not one colour is chosen again.
  */
-/* Solid, and seated on the page by its shadow rather than by its glow: glass
-   over white is white, and a bloom of accent over white is a pink smudge. The
-   wash inside it and the light around it are kept, at a fraction: enough that
-   the rim reads as the edge of something and not as a red line ruled on a
-   white box. */
-:root[data-theme="light"] .door-card {
-  background:
-    radial-gradient(
-      118% 78% at 50% 116%,
-      color-mix(in srgb, var(--accent) 7%, transparent),
-      transparent 68%
-    ),
-    var(--surface);
-  backdrop-filter: none;
-  box-shadow:
-    var(--shadow-raised),
-    0 0 26px -6px color-mix(in srgb, var(--accent) 22%, transparent),
-    0 16px 60px -22px color-mix(in srgb, var(--accent-dim) 30%, transparent);
+:root[data-theme="light"] .door-stage {
+  --stage-force: 0.45;
 }
 
-/* The turn of the colour is the point of the rim, so it stays; what goes is
-   the strength of it, which on white would read at several times what it
-   reads at on black. */
-:root[data-theme="light"] .door-card::before {
-  opacity: 0.62;
+:root[data-theme="light"] .door-who::before {
+  opacity: 0.45;
+}
+
+:root[data-theme="light"] .door-welcome-name {
+  color: var(--accent);
+  text-shadow: none;
+}
+
+:root[data-theme="light"] :is(.door-who-face, .door-forwhom-face) {
+  box-shadow: 0 10px 28px -10px color-mix(in srgb, var(--text) 40%, transparent);
+}
+
+:root[data-theme="light"] .door-forwhom-face {
+  box-shadow:
+    inset 0 0 0 2px var(--accent-bright),
+    0 10px 28px -10px color-mix(in srgb, var(--accent-dim) 50%, transparent);
 }
 
 :root[data-theme="light"] .door-box {
-  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
 }
 
 :root[data-theme="light"] .door-box:focus-within {
@@ -998,37 +1107,48 @@ img.door-mark {
 }
 
 :root[data-theme="light"] .door-by-hand {
-  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
 }
 
 /* ---------------------------------------------------------------------------
  * Narrow
  * ------------------------------------------------------------------------ */
 
-/* The card is the screen. It stops being a panel standing beside a background
-   and becomes the thing itself, centred, with the background behind it rather
-   than next to it. Nothing is rearranged inside it: it was laid out down one
-   column from the start. */
+/* A phone: the same screen, down one column, with everything a little closer
+   together so the whole sign in fits it without a scrollbar. The spines at
+   the sides go, since on a screen this narrow there are no sides. */
 @media (max-width: 760px) {
   .door {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
     gap: var(--gap);
-    padding: calc(8px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(8px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
+    padding: calc(12px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
   }
 
-  /* A phone is shorter than the screen it was drawn on, and the whole sign in
-     has to fit it without a scrollbar: the card keeps its shape and gives up
-     only the spaces between its parts. The account tiles shrink with it, since
-     the card is as wide as the phone and never as wide as its accounts. */
-  .door-card {
-    --door-tile: 88px;
-    --door-tile-gap: 14px;
-    padding: 22px 24px 16px;
+  .door-stage::after {
+    display: none;
   }
 
-  .door-forwhom {
-    margin: 8px 0 14px;
+  .door-name {
+    font-size: 14px;
+  }
+
+  .door-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .door-hall {
+    --door-tile: clamp(84px, 26vw, 112px);
+    --door-tile-gap: 18px;
+    padding-bottom: 0;
+  }
+
+  .door-who {
+    max-width: calc(3 * var(--door-tile) + 2 * var(--door-tile-gap));
+    gap: 22px var(--door-tile-gap);
+  }
+
+  .door-forwhom-face {
+    --door-tile: 92px;
   }
 
   .door-box {
@@ -1039,43 +1159,37 @@ img.door-mark {
     margin: 8px 0;
   }
 
-  .door-slogan {
-    margin-top: 10px;
-    padding-top: 10px;
+  .door-foot {
+    flex-direction: column;
+    align-items: center;
+    gap: var(--gap);
   }
 
-  .door-foot {
+  .door-settings {
     flex-wrap: wrap;
     justify-content: center;
     gap: var(--gap-tight);
-    text-align: center;
   }
 
-  .door-footer {
-    flex-basis: 100%;
+  .door-credits {
+    text-align: center;
   }
 }
 
 /* An installed app drawn edge to edge gives up the bars of the system at its
-   top and bottom, so the sign in is a little tighter on a phone there: the
-   footer's two controls share a row, and the spaces between its parts are
-   narrower. Only in an installed app, so a browser tab keeps its layout. */
+   top and bottom, so the sign in is a little tighter on a phone there.
+   Only in an installed app, so a browser tab keeps its layout. */
 @media (display-mode: standalone) and (max-width: 760px) {
   :root[data-edge-room] .door {
     gap: 8px;
   }
 
-  :root[data-edge-room] .door-card {
-    padding: 16px 24px 12px;
-  }
-
   :root[data-edge-room] .door-forwhom {
-    margin: 4px 0 10px;
+    margin-bottom: 14px;
   }
 
   :root[data-edge-room] .door-forwhom-face {
-    width: 80px;
-    height: 80px;
+    --door-tile: 80px;
   }
 
   :root[data-edge-room] .door-box {
@@ -1084,11 +1198,6 @@ img.door-mark {
 
   :root[data-edge-room] .door-or {
     margin: 6px 0;
-  }
-
-  :root[data-edge-room] .door-slogan {
-    margin-top: 8px;
-    padding-top: 8px;
   }
 
   :root[data-edge-room] .door-foot .picker {

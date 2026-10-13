@@ -173,7 +173,9 @@ const en: Dictionary = {
 
   /* Authentication and account setup. */
   "door.invitation": "Sign in to access your library.",
-  "door.pick": "Choose an account",
+  "door.welcome_before": "Welcome to ",
+  "door.welcome_after": "",
+  "door.pick": "Choose your profile to continue",
   "door.by_hand": "Enter a username",
   "door.back": "Back",
   "door.first.invitation":
@@ -2252,7 +2254,9 @@ const fr: Dictionary = {
 
   /* Authentification et création du premier compte. */
   "door.invitation": "Connectez-vous pour accéder à vos contenus.",
-  "door.pick": "Choisissez un compte",
+  "door.welcome_before": "Bienvenue sur ",
+  "door.welcome_after": "",
+  "door.pick": "Choisissez votre profil pour continuer",
   "door.by_hand": "Saisir un nom d’utilisateur",
   "door.back": "Retour",
   "door.first.invitation":
