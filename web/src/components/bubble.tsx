@@ -7,6 +7,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/** How long the bubble takes to roll out, as the stylesheet draws it. */
+export const UNROLL_MS = 340;
+
 /** How long it stays rolled out once nobody has touched it. */
 const UNROLLED_MS = 2000;
 

@@ -957,6 +957,10 @@
     font-size: 14px;
   }
 
+  .music-tabs-arrow {
+    display: none;
+  }
+
   /* The letters of a list stand at the right of the screen as they do on a
      wide one, rather than in a block above the list. */
   .grid-with-letters {
