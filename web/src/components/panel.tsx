@@ -84,8 +84,8 @@ export function Panel({
    *  head, its words included, and the chevron at its end both do. */
   folding?: { open: boolean; toggle: () => void };
   /** For a panel that is named by whoever uses it: a pencil beside its title
-   *  turns the title into a field, sent once it is left. */
-  rename?: { label: string; onSettled: (name: string) => void };
+   *  turns the title into a field holding `name`, sent once it is left. */
+  rename?: { label: string; name: string; onSettled: (name: string) => void };
   children?: ReactNode;
 }) {
   const { t } = useSettings();
@@ -132,10 +132,12 @@ export function Panel({
 function RenamableTitle({
   title,
   label,
+  name: kept,
   onSettled,
 }: {
   title: string;
   label: string;
+  name: string;
   onSettled: (name: string) => void;
 }) {
   const { t } = useSettings();
@@ -144,7 +146,7 @@ function RenamableTitle({
   const finish = (keep: boolean) => {
     const name = typed?.trim();
     setTyped(null);
-    if (keep && name && name !== title) {
+    if (keep && name && name !== kept) {
       onSettled(name);
     }
   };
@@ -160,7 +162,7 @@ function RenamableTitle({
           title={t("lists.rename")}
           onClick={(event) => {
             event.stopPropagation();
-            setTyped(title);
+            setTyped(kept);
           }}
         >
           <EditIcon size={15} />
