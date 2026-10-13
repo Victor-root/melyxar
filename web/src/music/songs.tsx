@@ -11,12 +11,11 @@ import { useShownPicture } from "../components/picture";
 import { HeartIcon, PlayIcon } from "../icons";
 import { PHONE, useMediaQuery } from "../media-query";
 import { QuietLink } from "../navigating";
-import { PauseIcon } from "../player/icons";
 import { useSettings } from "../settings";
 import type { Credited, Song } from "./api";
 import { Heart } from "./heart";
 import { useGoneSongs, useLiking } from "./marks";
-import { PlayingRing } from "./playing-ring";
+import { PlayingBars } from "./playing-bars";
 import { SongMenuButton, useSongActions } from "./song-menu";
 import type { MenuLine } from "./song-menu";
 import { useMusicControls, useMusicNow } from "./player/player";
@@ -277,7 +276,6 @@ export const SongLine = memo(function SongLine({
       }
     >
       <span className="music-song-lead">
-        {current && <PlayingRing playing={playing} />}
         {(onPlay || current) && (
           <button
             type="button"
@@ -286,7 +284,7 @@ export const SongLine = memo(function SongLine({
             title={label}
             onClick={() => (current ? toggle() : onPlay?.(index))}
           >
-            {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+            {playing ? <PlayingBars /> : <PlayIcon size={20} />}
           </button>
         )}
       </span>

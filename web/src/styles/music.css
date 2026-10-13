@@ -951,42 +951,76 @@
   color: var(--accent-bright);
 }
 
-/* The wave standing round the button of the song playing, behind it, in
-   the accent. Paused, it holds still and draws back behind the button. */
-.music-song-lead {
-  position: relative;
+/* The little equaliser inside the button of the song playing: four bars,
+   each rising and falling on a beat of its own, by transform alone. The
+   pause sign takes their place under the pointer or the keyboard. */
+.playing-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
 }
 
-.music-song-toggle {
-  position: relative;
-}
-
-.playing-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 58px;
-  height: 58px;
-  margin: -29px 0 0 -29px;
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(0.65);
-  transition:
-    opacity var(--calm) var(--ease),
-    transform var(--calm) var(--ease);
-}
-
-.playing-ring-on {
-  opacity: 1;
-  transform: none;
-}
-
-.playing-ring svg {
-  width: 100%;
+.playing-bar {
+  width: 3px;
   height: 100%;
-  overflow: visible;
-  /* Lighter than the button, so the disc stands out of the wave. */
-  fill: color-mix(in srgb, var(--accent-bright) 55%, transparent);
+  border-radius: 1.5px;
+  background: currentColor;
+  transform: scaleY(0.4);
+  transform-origin: 50% 100%;
+  animation: playing-bar 900ms ease-in-out infinite alternate;
+}
+
+.playing-bar:nth-child(2) {
+  animation-duration: 640ms;
+  animation-delay: -300ms;
+}
+
+.playing-bar:nth-child(3) {
+  animation-duration: 1100ms;
+  animation-delay: -520ms;
+}
+
+.playing-bar:nth-child(4) {
+  animation-duration: 760ms;
+  animation-delay: -180ms;
+}
+
+@keyframes playing-bar {
+  0% {
+    transform: scaleY(0.25);
+  }
+
+  40% {
+    transform: scaleY(1);
+  }
+
+  70% {
+    transform: scaleY(0.55);
+  }
+
+  100% {
+    transform: scaleY(0.85);
+  }
+}
+
+.playing-bars-pause {
+  display: none;
+}
+
+.music-song-toggle:is(:hover, :focus-visible) .playing-bars {
+  display: none;
+}
+
+.music-song-toggle:is(:hover, :focus-visible) .playing-bars-pause {
+  display: grid;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playing-bar {
+    animation: none;
+    transform: scaleY(0.7);
+  }
 }
 
 .music-song:hover {
