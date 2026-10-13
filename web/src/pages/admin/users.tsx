@@ -34,6 +34,7 @@ import { useJournalNews } from "../../live";
 import { howMany } from "../../readable";
 import type { Wording } from "../../readable";
 import { useSettings } from "../../settings";
+import { PictureButtons, pictureRefusalKey } from "./account-picture";
 import {
   AN_ORDINARY_ACCOUNT,
   granting,
@@ -181,6 +182,14 @@ function AccountPanel({
     }
     onChanged();
   });
+  const picture = useTold(async (change: () => Promise<unknown>) => {
+    await change();
+    // One's own picture is also the one the bar at the top shows.
+    if (account.is_you) {
+      cameIn(await api.me());
+    }
+    onChanged();
+  });
   const signOut = useTold(async () => {
     await api.signOutEverywhere(account.id);
     setAsking(null);
@@ -192,9 +201,12 @@ function AccountPanel({
     onDone(t("users.removed", { name: account.name }));
   });
 
+  const pictureKey = pictureRefusalKey(picture.failure);
+  const pictureRefusal = pictureKey && t(pictureKey);
   const refusal =
     refusalOf(change.failure, t) ??
     refusalOf(rename.failure, t) ??
+    pictureRefusal ??
     refusalOf(signOut.failure, t) ??
     refusalOf(remove.failure, t);
 
@@ -215,32 +227,35 @@ function AccountPanel({
         onSettled: (name) => void rename.tell(name),
       }}
       action={
-        !account.is_you && (
-          <>
-            <button
-              className="button button-small"
-              onClick={() => setChoosingPassword(true)}
-            >
-              <LockIcon size={15} />
-              {t("users.password")}
-            </button>
-            <button
-              className="button button-small"
-              disabled={account.devices === 0}
-              onClick={() =>
-                setAsking(asking === "sign_out" ? null : "sign_out")
-              }
-            >
-              {t("users.sign_out")}
-            </button>
-            <button
-              className="button button-small button-danger"
-              onClick={() => setAsking(asking === "remove" ? null : "remove")}
-            >
-              {t("users.remove")}
-            </button>
-          </>
-        )
+        <>
+          <PictureButtons account={account} told={picture} />
+          {!account.is_you && (
+            <>
+              <button
+                className="button button-small"
+                onClick={() => setChoosingPassword(true)}
+              >
+                <LockIcon size={15} />
+                {t("users.password")}
+              </button>
+              <button
+                className="button button-small"
+                disabled={account.devices === 0}
+                onClick={() =>
+                  setAsking(asking === "sign_out" ? null : "sign_out")
+                }
+              >
+                {t("users.sign_out")}
+              </button>
+              <button
+                className="button button-small button-danger"
+                onClick={() => setAsking(asking === "remove" ? null : "remove")}
+              >
+                {t("users.remove")}
+              </button>
+            </>
+          )}
+        </>
       }
     >
       {refusal && (

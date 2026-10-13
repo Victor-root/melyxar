@@ -23,6 +23,16 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/accounts/{id}", delete(remove))
         .route("/api/v1/accounts/{id}/rights", put(set_rights))
         .route("/api/v1/accounts/{id}/name", put(rename))
+        .route(
+            "/api/v1/accounts/{id}/avatar",
+            put(choose_avatar)
+                .delete(remove_avatar)
+                // A photo straight off a phone is larger than what any other
+                // request is allowed to carry.
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    melyxar_app::avatars::LARGEST,
+                )),
+        )
         .route("/api/v1/accounts/{id}/password", put(put_a_password))
         .route(
             "/api/v1/accounts/{id}/sessions",
@@ -199,6 +209,31 @@ async fn rename(
     let target = parse_account(&id)?;
     let renamed = melyxar_app::accounts::rename_account(&state, target, &body.name).await?;
     Ok(Json(one_view(renamed, who.id)))
+}
+
+/// Makes the image sent the picture of this account, and answers the account
+/// wearing it.
+async fn choose_avatar(
+    _: Administrator,
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    image: axum::body::Bytes,
+) -> Result<Json<ManagedAccountView>> {
+    let target = parse_account(&id)?;
+    let user = melyxar_app::avatars::set_of_account(&state, target, &image).await?;
+    Ok(Json(one_view(user, who.id)))
+}
+
+async fn remove_avatar(
+    _: Administrator,
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ManagedAccountView>> {
+    let target = parse_account(&id)?;
+    let user = melyxar_app::avatars::remove_of_account(&state, target).await?;
+    Ok(Json(one_view(user, who.id)))
 }
 
 #[derive(Debug, Deserialize)]
