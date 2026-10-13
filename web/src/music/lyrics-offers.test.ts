@@ -1,18 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { LyricsOffer } from "./api";
-import { offersMissingLines } from "./lyrics-offers";
+import { lengthGap, offersMissingLines } from "./lyrics-offers";
 
 const offer = (id: number, gap: number | null, synced = true): LyricsOffer => ({
   id,
   artist: "A",
   title: "T",
   album: null,
-  seconds: 166,
+  duration_ms: 166_000,
   synced,
   plain: true,
   instrumental: false,
   synced_lines: 40,
   longest_gap_seconds: gap,
+});
+
+describe("lengthGap", () => {
+  it("says how much longer or shorter the offer is than the file", () => {
+    expect(lengthGap(offer(1, null), 165_400)).toBe(600);
+    expect(lengthGap(offer(1, null), 167_000)).toBe(-1_000);
+  });
+
+  it("says nothing when either length is unknown", () => {
+    expect(lengthGap(offer(1, null), null)).toBeNull();
+    expect(lengthGap({ ...offer(1, null), duration_ms: null }, 166_000)).toBeNull();
+  });
 });
 
 describe("offersMissingLines", () => {

@@ -4,6 +4,10 @@
  * words of the song. Asked of the song's menu, the way the subtitles of a
  * film are asked of its own.
  *
+ * Laid out as the search of the requests is: the song on top with the length
+ * of its file to the hundredth, a search that asks as typing rests, and the
+ * entries under it, nearest to that length first. Only the entries scroll.
+ *
  * Whatever changes here is read again by the lyrics on screen, so the words
  * taken are the words shown at once.
  */
@@ -12,17 +16,21 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "../account";
 import { refusalOf, useAsked } from "../asking";
-import { asClock } from "../clock";
+import { asPreciseClock } from "../clock";
 import { Modal } from "../components/modal";
-import { CloseIcon, DownloadIcon, SubtitlesIcon } from "../icons";
+import { CloseIcon, DownloadIcon, SearchIcon, SubtitlesIcon } from "../icons";
 import { outOfAHundred, shiftInSeconds } from "../readable";
 import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { LyricsOffer, Song, SongLyrics } from "./api";
-import { offersMissingLines } from "./lyrics-offers";
+import { SAME_LENGTH_MS, lengthGap, offersMissingLines } from "./lyrics-offers";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
+import { Cover } from "./songs";
+
+/** How long typing rests before LRCLIB is asked. */
+const ASKED_AFTER_MS = 500;
 
 /** The line of the menu and the window it opens, for one song and an
     administrator only. */
@@ -46,16 +54,30 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   const { jobs, watch, finished } = useRunning();
   const [again, setAgain] = useState(0);
   const current = useAsked((signal) => music.lyrics(song.id, signal), [song.id, again]);
-  const [artist, setArtist] = useState(song.artists[0]?.name ?? "");
-  const [title, setTitle] = useState(song.title);
-  const [offers, setOffers] = useState<LyricsOffer[] | null>(null);
-  const [busy, setBusy] = useState<number | "search" | null>(null);
+  const [typed, setTyped] = useState({ artist: song.artists[0]?.name ?? "", title: song.title });
+  const [words, setWords] = useState(typed);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [taken, setTaken] = useState<number | null>(null);
   const [listenAsked, setListenAsked] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
 
+  // LRCLIB is asked once typing rests, and at once on Enter.
+  useEffect(() => {
+    const resting = window.setTimeout(() => setWords(typed), ASKED_AFTER_MS);
+    return () => window.clearTimeout(resting);
+  }, [typed]);
+  const offers = useAsked(
+    (signal) =>
+      words.title.trim() === ""
+        ? Promise.resolve([])
+        : music.lyricsOffers(song.id, words.artist.trim(), words.title.trim(), signal),
+    [song.id, words.artist, words.title],
+  );
+
   const attempt = async (doing: () => Promise<void>) => {
     setRefused(null);
+    setSaid(null);
     try {
       await doing();
     } catch (error) {
@@ -64,19 +86,11 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
     setBusy(null);
   };
 
-  const search = () => {
-    setBusy("search");
-    setSaid(null);
-    void attempt(async () => {
-      setOffers(await music.lyricsOffers(song.id, artist, title));
-    });
-  };
-
   const take = (offer: LyricsOffer) => {
     setBusy(offer.id);
-    setSaid(null);
     void attempt(async () => {
       await music.takeLyrics(song.id, offer.id);
+      setTaken(offer.id);
       setSaid(t("lyrics_dialog.taken"));
       setAgain((count) => count + 1);
       lyricsHaveMoved();
@@ -86,13 +100,13 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   const forget = () =>
     void attempt(async () => {
       await music.forgetLyrics(song.id);
+      setTaken(null);
       setSaid(t("lyrics_dialog.forgotten"));
       setAgain((count) => count + 1);
       lyricsHaveMoved();
     });
 
   const synchronise = () => {
-    setSaid(null);
     setListenAsked(true);
     void attempt(async () => {
       try {
@@ -127,25 +141,82 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
     }
   }, [finished, lyricsHaveMoved]);
 
-  const missingLines = offersMissingLines(offers ?? []);
+  const found = offers.answer ?? [];
+  const missingLines = offersMissingLines(found);
+  // A queue kept by the browser from before songs carried it has none.
+  const fileLength = song.duration_ms ?? null;
   const lyrics = current.answer;
+  const stamped = lyrics !== null && lyrics.lines.length > 0;
+  const notice = refused ?? (offers.failure ? `lyrics_dialog.refused.${refusalOf(offers.failure)}` : null);
+
   return (
-    <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="modal-subtitles">
-      <h3 className="subtitles-heading">{t("lyrics_dialog.current")}</h3>
-      {!current.waiting && (
-        <ul className="subtitles-lines">
-          <li className="subtitles-line">
-            <span className="subtitles-release">
-              {lyrics === null
-                ? t("music.lyrics_none")
-                : t(lyrics.instrumental && lyrics.plain === "" ? "music.lyrics_instrumental" : `lyrics_dialog.origin.${lyrics.source}`)}
+    <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="lyrics-dialog">
+      <section className="lyrics-song" aria-label={t("lyrics_dialog.current")}>
+        <Cover song={song} />
+        <div className="lyrics-song-words">
+          <h3 className="lyrics-song-title">{song.title}</h3>
+          <span className="lyrics-song-by">
+            {[song.artists.map((artist) => artist.name).join(", "), song.album?.name]
+              .filter((part) => part)
+              .join(" · ")}
+          </span>
+          {!current.waiting && (
+            <div className="lyrics-song-state">
+              {lyrics === null ? (
+                <span className="state-pill state-attention">{t("music.lyrics_none")}</span>
+              ) : lyrics.instrumental && lyrics.plain === "" ? (
+                <span className="state-pill state-news">{t("music.lyrics_instrumental")}</span>
+              ) : (
+                <>
+                  <span className="state-pill state-news">{t(`lyrics_dialog.origin.${lyrics.source}`)}</span>
+                  <span className={`state-pill${stamped ? " state-ok" : " lyrics-pill-plain"}`}>
+                    {t(stamped ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
+                  </span>
+                </>
+              )}
+              {stamped && !listeningRuns && lyrics.synchronised && (
+                <span className="lyrics-song-note">{syncSaid(t, language, lyrics.synchronised)}</span>
+              )}
+              {listeningRuns && <span className="lyrics-song-note">{t("lyrics_dialog.sync_running")}</span>}
+            </div>
+          )}
+          {listeningRuns && listening?.ratio != null && (
+            <span className="meter lyrics-song-meter">
+              <span className="meter-fill" style={{ width: `${outOfAHundred(listening.ratio)}%` }} />
             </span>
-            {lyrics !== null && lyrics.plain !== "" && (
-              <span className="subtitles-origin">
-                {t(lyrics.lines.length > 0 ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
-              </span>
-            )}
-            {lyrics === null && (
+          )}
+        </div>
+        <div className="lyrics-song-side">
+          {fileLength !== null && (
+            <span className="lyrics-length">
+              <span className="lyrics-length-name">{t("lyrics_dialog.file_length")}</span>
+              <span className="lyrics-length-time">{asPreciseClock(fileLength / 1000)}</span>
+            </span>
+          )}
+          <div className="lyrics-song-actions">
+            {stamped &&
+              (lyrics.synchronised?.conclusion === "aligned" && !listeningRuns ? (
+                <button
+                  type="button"
+                  className="button button-small"
+                  title={t("lyrics_dialog.sync_undo")}
+                  disabled={busy !== null}
+                  onClick={unsynchronise}
+                >
+                  {t("lyrics_dialog.sync_undo_short")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button button-small"
+                  title={t("lyrics_dialog.sync_why")}
+                  disabled={busy !== null || listeningRuns}
+                  onClick={synchronise}
+                >
+                  {t("lyrics_dialog.sync_run")}
+                </button>
+              ))}
+            {lyrics === null && !current.waiting && (
               <button type="button" className="button button-small" title={t("lyrics_dialog.look_again_why")} onClick={forget}>
                 {t("lyrics_dialog.look_again")}
               </button>
@@ -153,136 +224,111 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
             {lyrics?.source === "online" && (
               <button
                 type="button"
-                className="subtitles-off"
+                className="lyrics-forget"
                 aria-label={t("lyrics_dialog.forget")}
                 title={t("lyrics_dialog.forget")}
                 onClick={forget}
               >
-                <CloseIcon size={15} />
+                <CloseIcon size={16} />
               </button>
             )}
-          </li>
-        </ul>
-      )}
+          </div>
+        </div>
+      </section>
 
-      {lyrics !== null && lyrics.lines.length > 0 && (
-        <>
-          <h3 className="subtitles-heading">{t("lyrics_dialog.sync")}</h3>
-          <p className="settings-why">{t("lyrics_dialog.sync_why")}</p>
-          <ul className="subtitles-lines">
-            <li className="subtitles-line">
-              <span className="subtitles-release">
-                {listeningRuns
-                  ? t("lyrics_dialog.sync_running")
-                  : lyrics.synchronised
-                    ? syncSaid(t, language, lyrics.synchronised)
-                    : ""}
-              </span>
-              {lyrics.synchronised?.conclusion === "aligned" && !listeningRuns ? (
-                <button
-                  type="button"
-                  className="subtitles-off"
-                  aria-label={t("lyrics_dialog.sync_undo")}
-                  title={t("lyrics_dialog.sync_undo")}
-                  disabled={busy !== null}
-                  onClick={unsynchronise}
-                >
-                  <CloseIcon size={15} />
-                </button>
+      <form
+        className="search-pill lyrics-search"
+        role="search"
+        aria-label={t("lyrics_dialog.search")}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setWords(typed);
+        }}
+      >
+        <SearchIcon size={20} />
+        <input
+          value={typed.artist}
+          placeholder={t("lyrics_dialog.artist")}
+          aria-label={t("lyrics_dialog.artist")}
+          onChange={(event) => setTyped((was) => ({ ...was, artist: event.target.value }))}
+        />
+        <span className="lyrics-search-between" aria-hidden="true" />
+        <input
+          value={typed.title}
+          placeholder={t("lyrics_dialog.song")}
+          aria-label={t("lyrics_dialog.song")}
+          onChange={(event) => setTyped((was) => ({ ...was, title: event.target.value }))}
+        />
+        {/* Two fields need a button of the form for Enter to send it. */}
+        <button type="submit" hidden />
+      </form>
+
+      {notice && <p className="notice">{t(notice)}</p>}
+      {said && <p className="panel-notice panel-notice-ok">{said}</p>}
+
+      <div className="lyrics-offers" aria-busy={offers.waiting}>
+        {offers.waiting && found.length === 0 && <p className="lyrics-offers-quiet">{t("lyrics_dialog.searching")}</p>}
+        {!offers.waiting && !offers.failure && found.length === 0 && words.title.trim() !== "" && (
+          <p className="lyrics-offers-quiet">{t("lyrics_dialog.nothing")}</p>
+        )}
+        {found.map((offer) => {
+          const gap = lengthGap(offer, fileLength);
+          return (
+            <article key={offer.id} className={`lyrics-offer${taken === offer.id ? " lyrics-offer-taken" : ""}`}>
+              <div className="lyrics-offer-length">
+                <span className="lyrics-offer-time">
+                  {offer.duration_ms === null ? "?" : asPreciseClock(offer.duration_ms / 1000)}
+                </span>
+                {gap !== null && (
+                  <span
+                    className={`lyrics-offer-gap${Math.abs(gap) <= SAME_LENGTH_MS ? " state-ok" : " state-attention"}`}
+                    title={t("lyrics_dialog.length_gap_why")}
+                  >
+                    {Math.round(gap / 100) === 0 ? t("lyrics_dialog.same_length") : `${shiftInSeconds(gap, language)} s`}
+                  </span>
+                )}
+              </div>
+              <div className="lyrics-offer-words">
+                <span className="lyrics-offer-title">{offer.title}</span>
+                <span className="lyrics-offer-by">
+                  {offer.artist}
+                  {offer.album ? ` · ${offer.album}` : ""}
+                </span>
+                <span className="lyrics-offer-marks">
+                  {offer.instrumental ? (
+                    <span className="state-pill state-news">{t("lyrics_dialog.instrumental")}</span>
+                  ) : (
+                    <>
+                      <span className={`state-pill${offer.synced ? " state-ok" : " lyrics-pill-plain"}`}>
+                        {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
+                      </span>
+                      {offer.synced && <span>{t("lyrics_dialog.lines", { count: offer.synced_lines })}</span>}
+                      {missingLines.has(offer.id) && (
+                        <span className="state-pill state-attention" title={t("lyrics_dialog.gap_why")}>
+                          {t("lyrics_dialog.gap", { seconds: offer.longest_gap_seconds ?? 0 })}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </span>
+              </div>
+              {taken === offer.id ? (
+                <span className="state-pill state-ok">{t("lyrics_dialog.in_use")}</span>
               ) : (
                 <button
                   type="button"
-                  className="button button-small"
-                  disabled={busy !== null || listeningRuns}
-                  onClick={synchronise}
+                  className="button button-small lyrics-offer-take"
+                  disabled={busy !== null}
+                  onClick={() => take(offer)}
                 >
-                  {t("lyrics_dialog.sync_run")}
+                  <DownloadIcon size={15} />
+                  {t("lyrics_dialog.take")}
                 </button>
               )}
-            </li>
-          </ul>
-          {listeningRuns && listening?.ratio != null && (
-            <div className="job-card-progress">
-              <span className="meter">
-                <span className="meter-fill" style={{ width: `${outOfAHundred(listening.ratio)}%` }} />
-              </span>
-              <span className="job-card-count">{outOfAHundred(listening.ratio)} %</span>
-            </div>
-          )}
-        </>
-      )}
-
-      <h3 className="subtitles-heading">{t("lyrics_dialog.search")}</h3>
-      <form
-        className="subtitles-search"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (busy === null && title.trim() !== "") {
-            search();
-          }
-        }}
-      >
-        <input
-          className="field-line"
-          value={artist}
-          placeholder={t("lyrics_dialog.artist")}
-          aria-label={t("lyrics_dialog.artist")}
-          onChange={(event) => {
-            setArtist(event.target.value);
-            setOffers(null);
-          }}
-        />
-        <input
-          className="field-line"
-          value={title}
-          placeholder={t("lyrics_dialog.song")}
-          aria-label={t("lyrics_dialog.song")}
-          onChange={(event) => {
-            setTitle(event.target.value);
-            setOffers(null);
-          }}
-        />
-        <button type="submit" className="button button-small button-accent" disabled={busy !== null || title.trim() === ""}>
-          {t("online_subtitles.look")}
-        </button>
-      </form>
-      {refused && <p className="notice">{t(refused)}</p>}
-      {said && <p className="panel-notice panel-notice-ok">{said}</p>}
-      {offers?.length === 0 && <p className="settings-why">{t("lyrics_dialog.nothing")}</p>}
-      {offers && offers.length > 0 && (
-        <ul className="subtitles-lines subtitles-offers">
-          {offers.map((offer) => (
-            <li key={offer.id} className="subtitles-line">
-              <span className="subtitles-release">
-                {offer.artist} · {offer.title}
-                {offer.album ? ` · ${offer.album}` : ""}
-                {offer.seconds === null ? "" : ` · ${asClock(offer.seconds)}`}
-              </span>
-              <span className="subtitles-marks">
-                {offer.instrumental ? (
-                  <span className="work-badge">{t("lyrics_dialog.instrumental")}</span>
-                ) : (
-                  <>
-                    <span className={`work-badge${offer.synced ? " subtitles-fits" : ""}`}>
-                      {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
-                    </span>
-                    {offer.synced && <span>{t("lyrics_dialog.lines", { count: offer.synced_lines })}</span>}
-                    {missingLines.has(offer.id) && (
-                      <span className="work-badge work-badge-warning" title={t("lyrics_dialog.gap_why")}>
-                        {t("lyrics_dialog.gap", { seconds: offer.longest_gap_seconds ?? 0 })}
-                      </span>
-                    )}
-                  </>
-                )}
-              </span>
-              <button type="button" className="button button-small" disabled={busy !== null} onClick={() => take(offer)}>
-                <DownloadIcon size={15} />
-                {t("lyrics_dialog.take")}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+            </article>
+          );
+        })}
+      </div>
     </Modal>
   );
 }

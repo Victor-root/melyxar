@@ -679,3 +679,33 @@ input[type="radio"]:disabled {
   height: 16px;
 }
 
+/* A search in a pill, a magnifier at its left: the requests' and the
+   lyrics'. Its fields are bare, the pill is what is drawn. */
+.search-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--panel-glass);
+  color: var(--text-soft);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.search-pill:focus-within {
+  border-color: var(--accent-bright);
+  box-shadow: var(--focus-rim);
+}
+
+.search-pill input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}

@@ -13,34 +13,8 @@
 }
 
 .request-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   max-width: 620px;
   margin: 0 auto var(--gap-wide);
-  padding: 0 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--panel-glass);
-  color: var(--text-soft);
-  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
-}
-
-.request-search:focus-within {
-  border-color: var(--accent-bright);
-  box-shadow: var(--focus-rim);
-}
-
-.request-search input {
-  flex: 1;
-  min-width: 0;
-  padding: 12px 0;
-  border: 0;
-  outline: none;
-  background: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 16px;
 }
 
 /* --------------------------------------------------------------------------

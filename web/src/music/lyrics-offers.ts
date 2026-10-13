@@ -1,6 +1,6 @@
 /*
  * Which offers of lyrics are missing lines, told by comparing them with each
- * other.
+ * other, and which were stamped on a song of the length of the file.
  *
  * A long stretch between two stamped lines says nothing on its own: a song has
  * its instrumental breaks, and every version of it has them. It says something
@@ -9,6 +9,16 @@
  */
 
 import type { LyricsOffer } from "./api";
+
+/** How far from the length of the file a stamped version still lines up with
+    it, in milliseconds, as the server holds it when it chooses on its own. */
+export const SAME_LENGTH_MS = 3_000;
+
+/** How far an offer's length is from the file's, in milliseconds, when both
+    are known. */
+export function lengthGap(offer: LyricsOffer, durationMs: number | null): number | null {
+  return offer.duration_ms === null || durationMs === null ? null : offer.duration_ms - durationMs;
+}
 
 /** How much longer than the best version's longest stretch is worth saying, in
     seconds: the same break stamped a little differently is not a missing line. */

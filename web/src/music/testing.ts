@@ -15,6 +15,7 @@ export function aSong(changes: Partial<Song> = {}): Song {
     disc: null,
     year: null,
     seconds: 200,
+    duration_ms: 200_000,
     source: null,
     cover: [],
     lufs: null,

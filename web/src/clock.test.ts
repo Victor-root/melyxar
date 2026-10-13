@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { asClock, fromClock } from "./clock";
+import { asClock, asPreciseClock, fromClock } from "./clock";
+
+describe("a moment to the hundredth", () => {
+  it("adds the hundredths to the clock", () => {
+    expect(asPreciseClock(251.1)).toBe("4:11.10");
+    expect(asPreciseClock(7.004)).toBe("0:07.00");
+    expect(asPreciseClock(59.996)).toBe("1:00.00");
+    expect(asPreciseClock(3723.05)).toBe("1:02:03.05");
+    expect(asPreciseClock(-1)).toBe("0:00.00");
+  });
+
+  it("is read back by hand", () => {
+    expect(fromClock(asPreciseClock(251.25))).toBe(251.25);
+  });
+});
 
 describe("a moment typed by hand", () => {
   it("reads minutes and seconds, hours too, and plain seconds", () => {

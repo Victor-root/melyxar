@@ -45,7 +45,7 @@ export function AskSearch() {
   return (
     <>
       <form
-        className="request-search"
+        className="search-pill request-search"
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
