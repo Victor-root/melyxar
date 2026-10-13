@@ -11,7 +11,7 @@
  * offered on it at all: one's own password is changed from one's profile.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, ApiError } from "../../api";
 import type { Library, ManagedAccount, Rights } from "../../api";
@@ -169,6 +169,10 @@ function AccountPanel({
   const { cameIn } = useAccount();
   const [asking, setAsking] = useState<"sign_out" | "remove" | null>(null);
   const [choosingPassword, setChoosingPassword] = useState(false);
+  /* Folded to its head at first: a server with many accounts was a page of
+     rights to scroll through to reach one. A question, a refusal or a
+     password being put opens it. */
+  const [open, setOpen] = useState(false);
 
   const change = useTold(async (rights: Rights) => {
     await api.setRights(account.id, settled(rights));
@@ -210,6 +214,12 @@ function AccountPanel({
     refusalOf(signOut.failure, t) ??
     refusalOf(remove.failure, t);
 
+  useEffect(() => {
+    if (refusal) {
+      setOpen(true);
+    }
+  }, [refusal]);
+
   return (
     <Panel
       icon={faceOf(account)}
@@ -221,6 +231,7 @@ function AccountPanel({
       lead={leadOf(account, libraries, t)}
       className="account-panel"
       wide
+      folding={{ open, toggle: () => setOpen((was) => !was) }}
       rename={{
         label: t("users.name"),
         name: account.name,
@@ -233,7 +244,10 @@ function AccountPanel({
             <>
               <button
                 className="button button-small"
-                onClick={() => setChoosingPassword(true)}
+                onClick={() => {
+                  setChoosingPassword(true);
+                  setOpen(true);
+                }}
               >
                 <LockIcon size={15} />
                 {t("users.password")}
@@ -241,15 +255,19 @@ function AccountPanel({
               <button
                 className="button button-small"
                 disabled={account.devices === 0}
-                onClick={() =>
-                  setAsking(asking === "sign_out" ? null : "sign_out")
-                }
+                onClick={() => {
+                  setAsking(asking === "sign_out" ? null : "sign_out");
+                  setOpen(true);
+                }}
               >
                 {t("users.sign_out")}
               </button>
               <button
                 className="button button-small button-danger"
-                onClick={() => setAsking(asking === "remove" ? null : "remove")}
+                onClick={() => {
+                  setAsking(asking === "remove" ? null : "remove");
+                  setOpen(true);
+                }}
               >
                 {t("users.remove")}
               </button>
