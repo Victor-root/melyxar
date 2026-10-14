@@ -13,6 +13,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Row, RowHead } from "../components/row";
 import { ScrollBar } from "../components/scrollbar";
 import { FlameIcon, HistoryIcon, NewAlbumIcon } from "../icons";
+import { wasAbandoned } from "../asking";
 import { useLibraryVersion } from "../libraries";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
@@ -45,8 +46,12 @@ export function ForYouTab({ library }: { library: string }) {
   const wide = useMediaQuery(SIDE_BY_SIDE);
   const phone = useMediaQuery(PHONE);
   const [newest, setNewest] = useKeptState<Album[] | null>(`for-you|newest|${library}`, null);
-  const [lately, setLately] = useKeptState<Song[]>(`for-you|lately|${library}`, []);
-  const [most, setMost] = useKeptState<Song[]>(`for-you|most|${library}`, []);
+  /* Nothing until the server has answered: a phone's pages wait for both, see
+     below. A list that could not be read is an empty one. */
+  const [heardLately, setLately] = useKeptState<Song[] | null>(`for-you|lately|${library}`, null);
+  const [heardMost, setMost] = useKeptState<Song[] | null>(`for-you|most|${library}`, null);
+  const lately = heardLately ?? [];
+  const most = heardMost ?? [];
 
   useEffect(() => {
     const stop = new AbortController();
@@ -59,8 +64,13 @@ export function ForYouTab({ library }: { library: string }) {
 
   useEffect(() => {
     const stop = new AbortController();
-    music.listened(library, "lately", stop.signal).then(setLately).catch(() => {});
-    music.listened(library, "most", stop.signal).then(setMost).catch(() => {});
+    const unread = (set: (songs: Song[]) => void) => (error: unknown) => {
+      if (!wasAbandoned(error)) {
+        set([]);
+      }
+    };
+    music.listened(library, "lately", stop.signal).then(setLately).catch(unread(setLately));
+    music.listened(library, "most", stop.signal).then(setMost).catch(unread(setMost));
     return () => stop.abort();
   }, [library, listenedAt, setLately, setMost]);
 
@@ -68,6 +78,12 @@ export function ForYouTab({ library }: { library: string }) {
     return <p className="notice">{t("music.no_album")}</p>;
   }
   if (phone) {
+    /* The listened pages come before the newest one: drawn without them, the
+       row would open on the newest albums and, held there by its snapping,
+       stay on them once the pages before it arrived. */
+    if (heardLately === null || heardMost === null) {
+      return <div className="music-for-you" />;
+    }
     const songsOf = (songs: Song[]) => ({
       filled: songs.length > 0,
       content: <SongList songs={songs} numbered="place" showAlbum={false} menuOnly onPlay={(index) => player.play(songs, index)} />,
