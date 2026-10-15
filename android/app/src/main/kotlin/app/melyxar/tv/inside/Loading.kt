@@ -34,19 +34,20 @@ val LocalAnswers = staticCompositionLocalOf<MutableMap<String, Any?>> { HashMap(
 /**
  * Asks the server [question], named so its last answer is shown straight
  * away when the screen comes back, and asks again whenever the screen comes
- * on or one of [keys] changes.
+ * on, one of [keys] changes, or what the server's rows hold moved.
  */
 @Composable
 fun <T> rememberLoaded(question: String, vararg keys: Any?, ask: suspend Api.() -> T): MutableState<Loaded<T>> {
     val api = LocalServer.current
     val signedOut = LocalSignedOut.current
     val answers = LocalAnswers.current
+    val moved = LocalMarks.current.rowsMoved
     val loaded = remember(question) {
         @Suppress("UNCHECKED_CAST")
         val kept = answers[question] as Loaded.Ready<T>?
         mutableStateOf<Loaded<T>>(kept ?: Loaded.Waiting)
     }
-    LaunchedEffect(api, question, *keys) {
+    LaunchedEffect(api, question, moved, *keys) {
         try {
             val answer = Loaded.Ready(api.ask())
             answers[question] = answer

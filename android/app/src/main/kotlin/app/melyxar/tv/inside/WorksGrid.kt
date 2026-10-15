@@ -129,15 +129,17 @@ class Works(
     }
 }
 
-/** The grid [browse] asks for, read again whenever the screen comes on;
- *  not asked for at all while [asking] is false. */
+/** The grid [browse] asks for, read again whenever the screen comes on or
+ *  what the server's grids hold moved; not asked for at all while [asking]
+ *  is false. */
 @Composable
 fun rememberWorks(browse: Browse, comebacks: Int, asking: Boolean = true): Works {
     val api = LocalServer.current
     val answers = LocalAnswers.current
     val signedOut = LocalSignedOut.current
+    val moved = LocalMarks.current.rowsMoved
     val works = remember(api, browse) { Works(api, browse, answers, signedOut) }
-    LaunchedEffect(works, comebacks, works.tries, asking) {
+    LaunchedEffect(works, comebacks, moved, works.tries, asking) {
         if (asking) works.refresh()
     }
     return works
@@ -161,12 +163,15 @@ fun WorksGrid(
     firstCard: FocusRequester? = null,
     /** Told of the card the remote comes to. */
     onReach: (Card) -> Unit = {},
+    /** Whether a card still has its place, for a grid made of what a mark
+     *  says: what no longer does leaves it as soon as it is said. */
+    belongs: (Card) -> Boolean = { true },
     top: @Composable (PageHead) -> Unit,
 ) {
     val palette = LocalPalette.current
     var reached by remember(works) { mutableIntStateOf(0) }
     LaunchedEffect(works, reached, works.cards) { works.reachedTo(reached) }
-    val cards = works.cards
+    val cards = works.cards?.filter(belongs)
     if (works.failed) {
         Trouble(onRetry = works::retry)
         return

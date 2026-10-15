@@ -91,6 +91,8 @@ class Playback(
     private val scope: CoroutineScope,
     /** An administrator asked the film to stop. */
     private val onStopped: () -> Unit,
+    /** The server holds where the film was left, once it is left. */
+    private val onLeft: () -> Unit,
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
@@ -379,6 +381,7 @@ class Playback(
             try {
                 if (plan != null) {
                     api.report(work, at, paused, leaving = true)
+                    withContext(Dispatchers.Main) { onLeft() }
                 }
                 closing?.let { api.closeStream(it.id) }
             } catch (_: IOException) {

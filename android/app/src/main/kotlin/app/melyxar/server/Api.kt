@@ -1,6 +1,9 @@
 package app.melyxar.server
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -24,7 +27,11 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /** The server said no, or did not answer as a Melyxar server does. */
 class Refusal(
@@ -258,6 +265,35 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
     }
 
     /** Sends a change, and gives back the server's answer as it wrote it. */
+    /**
+     * What the server's live line says, word by word, its opening said as
+     * "open"; over when the line closes, and failing when it breaks.
+     */
+    fun live(): Flow<String> = callbackFlow {
+        val listening = object : EventSourceListener() {
+            override fun onOpen(eventSource: EventSource, response: Response) {
+                trySend("open")
+            }
+
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                type?.let { trySend(it) }
+            }
+
+            override fun onClosed(eventSource: EventSource) {
+                close()
+            }
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                close(response?.code?.takeIf { it >= 400 }?.let { Refusal(it, null) } ?: t ?: IOException("the live line broke"))
+            }
+        }
+        // Held open for as long as it is followed: nothing on it may be
+        // read as late.
+        val line = EventSources.createFactory(http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build())
+            .newEventSource(request("/api/v1/system/live").header("Accept", "text/event-stream").build(), listening)
+        awaitClose { line.cancel() }
+    }
+
     /** A file the server hands over as it is, the words of a subtitle. */
     suspend fun file(path: String): ByteArray = withContext(Dispatchers.IO) {
         http.newCall(Request.Builder().url(address(path)).get().build()).execute().use { answer ->

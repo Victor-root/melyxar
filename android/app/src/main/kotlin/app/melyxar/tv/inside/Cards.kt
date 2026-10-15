@@ -74,10 +74,10 @@ fun WorkCard(
     title: String = card.title,
     note: String? = card.year?.toString(),
     trailing: String? = null,
-    /** How far in, from 0 to 1, when the row says it rather than the card. */
-    progress: Float? = card.resumeFromSeconds?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) },
 ) {
     val palette = LocalPalette.current
+    val whereabouts = LocalMarks.current.whereabouts(card)
+    val progress = whereabouts.resume?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) }
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val glowing by remember { derivedStateOf { lit > 0.001f } }
@@ -122,7 +122,7 @@ fun WorkCard(
                 }
             }
             if (card.watchedMarks) {
-                SeenCorner(card, Modifier.align(Alignment.TopEnd))
+                SeenCorner(whereabouts, card.episodes, Modifier.align(Alignment.TopEnd))
             }
         }
         Text(
@@ -161,13 +161,13 @@ fun WorkCard(
 
 /** How many episodes are left, or a tick once a work is watched. */
 @Composable
-private fun SeenCorner(card: Card, modifier: Modifier) {
+private fun SeenCorner(whereabouts: Whereabouts, episodes: Int, modifier: Modifier) {
     val palette = LocalPalette.current
-    val counting = card.episodes > 0 && card.unwatched > 0
-    if (!counting && card.seen != "watched") {
+    val counting = episodes > 0 && whereabouts.unwatched > 0
+    if (!counting && whereabouts.seen != "watched") {
         return
     }
-    val written = if (counting) card.unwatched.toString() else ""
+    val written = if (counting) whereabouts.unwatched.toString() else ""
     val side = when {
         written.length > 3 -> 56.dp
         written.length > 2 -> 48.dp

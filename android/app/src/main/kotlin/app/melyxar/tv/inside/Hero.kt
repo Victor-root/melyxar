@@ -265,7 +265,8 @@ private fun Words(
             )
         }
         val playable = card.source != null && card.kind != "series"
-        val started = card.resumeFromSeconds != null
+        val resume = LocalMarks.current.whereabouts(card).resume
+        val started = resume != null
         // One accent button whatever the work, so the remote stays on it
         // as the banner turns: it plays what can be played, and opens the
         // rest.
@@ -292,7 +293,7 @@ private fun Words(
                 )
             }
         }
-        card.resumeFromSeconds?.let { at -> Progress(at.toDouble(), lengthOfAPlay(card)) }
+        resume?.let { at -> Progress(at.toDouble(), lengthOfAPlay(card)) }
     }
 }
 
