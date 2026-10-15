@@ -386,10 +386,11 @@
 
 /* The server's mark, over the greeting that says its name. */
 .door-greeting-mark {
+  --door-mark: clamp(96px, 14vh, 140px);
   display: block;
-  width: 64px;
-  height: 64px;
-  margin: 0 auto clamp(16px, 2.6vh, 24px);
+  width: var(--door-mark);
+  height: var(--door-mark);
+  margin: 0 auto clamp(16px, 2.6vh, 28px);
   object-fit: contain;
   filter: drop-shadow(0 8px 24px var(--accent-glow));
 }
@@ -398,7 +399,7 @@
    wide one is not shrunk to fit a square it was never drawn for. */
 img.door-greeting-mark {
   width: auto;
-  max-width: min(240px, 70vw);
+  max-width: min(360px, 80vw);
 }
 
 .door-welcome {
@@ -1098,6 +1099,10 @@ img.door-greeting-mark {
 
   .door-top {
     min-height: 0;
+  }
+
+  .door-greeting-mark {
+    --door-mark: clamp(84px, 24vw, 104px);
   }
 
   /* The name on a line of its own, under the words that lead to it. */

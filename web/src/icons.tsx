@@ -773,7 +773,7 @@ export function MelyxarMark({ size = 22, className }: IconProps) {
   return (
     <span
       className={`melyxar-mark${className ? ` ${className}` : ""}`}
-      style={{ width: size, height: size, "--relief": `url(${relief})` } as React.CSSProperties}
+      style={{ "--mark-size": `${size}px`, "--relief": `url(${relief})` } as React.CSSProperties}
       aria-hidden="true"
     >
       <img src={relief} alt="" />
