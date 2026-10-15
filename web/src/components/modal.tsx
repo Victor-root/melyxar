@@ -8,7 +8,9 @@
  *
  * Drawn over the page rather than inside it, so nothing above it clips it and
  * the row it was opened from keeps its place. Shut by the cross, by the key
- * every panel in the world is shut with, and by a press outside it.
+ * every panel in the world is shut with, and by a press outside it. The back
+ * key of a phone takes it a step back when it has steps, and shuts it on the
+ * first.
  *
  * The page behind stops scrolling while it is open: a wheel turned over a
  * panel that scrolls the library behind it is the one thing that says "this is
@@ -20,6 +22,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { BackIcon, CloseIcon } from "../icons";
 import { useSettings } from "../settings";
+import { useBackClosesIt } from "./back-closes";
 import { useHoldsTheScreen } from "./hold-the-screen";
 
 export function Modal({
@@ -51,6 +54,13 @@ export function Modal({
   const { t } = useSettings();
   const panel = useRef<HTMLDivElement>(null);
   useHoldsTheScreen(panel, onClose);
+  useBackClosesIt(() => {
+    if (onBack) {
+      onBack();
+      return true;
+    }
+    onClose();
+  });
 
   return createPortal(
     <div

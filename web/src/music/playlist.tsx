@@ -29,6 +29,7 @@ import { SongMenuButton } from "./song-menu";
 import type { MenuLine } from "./song-menu";
 import { SongLine } from "./songs";
 import { PlaylistCover } from "./tiles";
+import { afterTheOverlays } from "../components/back-closes";
 import { useTabPage } from "../tab-page";
 
 /** A song of the playlist, with a name of its own on the page: the same song
@@ -260,7 +261,7 @@ export function MusicPlaylistPage() {
                 void attempt(async () => {
                   await music.deletePlaylist(id);
                   playlistsHaveMoved();
-                  navigate(-1);
+                  afterTheOverlays(() => navigate(-1));
                 }).then(() => setDeleting(false))
               }
             >

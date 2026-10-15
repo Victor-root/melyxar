@@ -18,6 +18,7 @@ import { useMarks } from "../marks";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
+import { afterTheOverlays } from "./back-closes";
 import { useToast } from "../notifications/toasts";
 
 /** How many files are named before the rest are only counted. */
@@ -168,7 +169,9 @@ export function DeleteButton({
           onClose={() => setAsking(false)}
           onDeleted={() => {
             setAsking(false);
-            onDeleted();
+            // What follows leaves the page, once the question is out of the
+            // history.
+            afterTheOverlays(onDeleted);
           }}
         />
       )}

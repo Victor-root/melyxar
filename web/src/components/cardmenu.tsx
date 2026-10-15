@@ -42,6 +42,7 @@ import { COLLECTIONS, PLAYLISTS, PutInListsDialog } from "./lists";
 import { OnlineSubtitlesDialog } from "./online-subtitles";
 import { useSelection } from "./selection";
 import { useToast } from "../notifications/toasts";
+import { afterTheOverlays } from "./back-closes";
 import {
   ClockIcon,
   CollectionIcon,
@@ -246,7 +247,9 @@ function WorkMenuPanels({
           onClose={() => setDeleting(false)}
           onDeleted={() => {
             setDeleting(false);
-            after.deleted?.();
+            // What follows may leave the page, once the question is out of
+            // the history.
+            afterTheOverlays(() => after.deleted?.());
           }}
         />
       )}
