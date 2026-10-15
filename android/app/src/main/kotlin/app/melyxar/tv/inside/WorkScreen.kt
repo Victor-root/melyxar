@@ -1,11 +1,9 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,7 +22,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +61,6 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
-import app.melyxar.tv.look.Pivot
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
@@ -102,16 +98,15 @@ fun WorkScreen(id: String, comebacks: Int) {
     RestoreFocus(memory, first, ready = work != null)
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
     val chrome = LocalChrome.current
-    val pivot = remember { Pivot(0f, 0.3f) }
+    val list = rememberLazyListState()
     Backdrop(work)
-    CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
-        LazyColumn(state = rememberLazyListState(), modifier = Modifier.fillMaxSize()) {
+    ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
+        LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
             item("top") {
-                Column {
+                Column(Modifier.head(head, "top")) {
                     TopBar()
                     Top(work, first)
                 }

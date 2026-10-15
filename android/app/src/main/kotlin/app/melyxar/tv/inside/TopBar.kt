@@ -1,6 +1,5 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -20,13 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import app.melyxar.R
 import app.melyxar.server.Picture
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.tv.door.Face
@@ -38,15 +36,16 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
-import androidx.compose.ui.layout.ContentScale
 
 /**
- * The bar at the top of every screen, as the web's: the server's logo and
- * name, the libraries one tab each, and whose profile this is. It scrolls
- * away with the screen, and the remote finds it again going up.
+ * The bar at the top of every screen, as the web's less its tabs, which the
+ * band of the home screen stands for on a television: the server's logo and
+ * name, and whose profile this is. It scrolls away with the screen, and the
+ * remote finds it again going up. [first] is where the remote starts on a
+ * screen with nothing else to start on.
  */
 @Composable
-fun TopBar(modifier: Modifier = Modifier, tabs: FocusRequester? = null) {
+fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
     Row(
@@ -83,68 +82,19 @@ fun TopBar(modifier: Modifier = Modifier, tabs: FocusRequester? = null) {
                 modifier = Modifier.widthIn(max = 220.dp),
             )
         }
-        Row(
-            modifier = Modifier.glassPiece().padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Tab(
-                stringResource(R.string.tv_home),
-                active = chrome.here == Place.Home,
-                onClick = { chrome.go(Place.Home) },
-                modifier = tabs?.let { Modifier.focusRequester(it) } ?: Modifier,
-            )
-            chrome.libraries.forEach { library ->
-                Tab(
-                    library.name,
-                    active = (chrome.here as? Place.Shelf)?.library?.id == library.id,
-                    onClick = { chrome.go(Place.Shelf(library)) },
-                )
-            }
-        }
-        Account()
+        Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
     }
-}
-
-@Composable
-private fun Tab(text: String, active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val palette = LocalPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val lit by litBy(interaction)
-    val focused = lit > 0.5f
-    Text(
-        text = text,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.SemiBold,
-        maxLines = 1,
-        color = when {
-            active -> palette.accentContrast
-            focused -> palette.accentBright
-            else -> palette.textSoft
-        },
-        modifier = modifier
-            .clip(PillShape)
-            .background(
-                when {
-                    active -> palette.accent
-                    focused -> palette.accent.copy(alpha = 0.22f)
-                    else -> palette.accent.copy(alpha = 0f)
-                },
-            )
-            .rim(PillShape, palette.accentBright, 2.dp) { lit }
-            .clickable(interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    )
 }
 
 /** Whose profile this is; choosing it goes back to "Who is watching?". */
 @Composable
-private fun Account() {
+private fun Account(modifier: Modifier) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .height(46.dp)
             .glassPiece()
             .rim(PillShape, palette.accentBright, 2.dp) { lit }

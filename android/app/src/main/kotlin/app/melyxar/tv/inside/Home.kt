@@ -1,7 +1,5 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -9,19 +7,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.melyxar.R
@@ -30,10 +22,6 @@ import app.melyxar.server.Home
 import app.melyxar.tv.howFarIn
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.Icons
-import app.melyxar.tv.look.Pivot
-
-/** Where the row the remote is on stands, as a share of the screen's height. */
-private const val ROWS_STAND_AT = 0.3f
 
 /**
  * The home screen, as the web's: the banner, the band of libraries, and the
@@ -43,7 +31,6 @@ private const val ROWS_STAND_AT = 0.3f
  * while the remote is in them; the page scrolls once it goes down into the
  * rows below.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(comebacks: Int) {
     val chrome = LocalChrome.current
@@ -54,21 +41,12 @@ fun HomeScreen(comebacks: Int) {
     val home = loaded.ready
     val open = { card: Card -> chrome.go(Place.Opened(card.id)) }
     val list = rememberLazyListState()
-    var inTheTop by remember { mutableStateOf(false) }
-    var inTheBand by remember { mutableStateOf(false) }
-    // The band is part of the top only where it stands right under it.
-    val bandOnTop by rememberUpdatedState(home?.sections?.firstOrNull() == "band")
-    val inTheHead by remember { derivedStateOf { inTheTop || (bandOnTop && inTheBand) } }
-    val pivot = remember { Pivot(0f, ROWS_STAND_AT) { inTheHead } }
-    LaunchedEffect(inTheHead) {
-        if (inTheHead) list.animateScrollToItem(0)
-    }
     Box(Modifier.fillMaxSize()) {
         when {
-            home != null -> CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
+            home != null -> ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
                 LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                     item("top") {
-                        Box(Modifier.onFocusChanged { inTheTop = it.hasFocus }) {
+                        Box(Modifier.head(head, "top")) {
                             if (home.hero.isNotEmpty()) {
                                 Hero(
                                     items = home.hero,
@@ -79,10 +57,13 @@ fun HomeScreen(comebacks: Int) {
                             } else {
                                 Box(Modifier.height(100.dp))
                             }
-                            TopBar(Modifier.align(Alignment.TopCenter), tabs = if (home.hero.isEmpty()) first else null)
+                            TopBar(Modifier.align(Alignment.TopCenter), first = if (home.hero.isEmpty()) first else null)
                         }
                     }
-                    sections(home, open, memory, onBandFocus = { inTheBand = it })
+                    // The band is part of the head only where it stands right
+                    // under the banner.
+                    val band = if (home.sections.firstOrNull() == "band") Modifier.head(head, "band") else Modifier
+                    sections(home, open, memory, band)
                 }
             }
             loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
@@ -92,12 +73,12 @@ fun HomeScreen(comebacks: Int) {
     RestoreFocus(memory, first, ready = home != null)
 }
 
-private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: FocusMemory, onBandFocus: (Boolean) -> Unit) {
+private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: FocusMemory, band: Modifier) {
     home.sections.forEach { section ->
         when {
             section == "band" -> item("band") {
                 val chrome = LocalChrome.current
-                Box(Modifier.onFocusChanged { onBandFocus(it.hasFocus) }) {
+                Box(band) {
                     Band(home.shelves, chrome.libraries, home.kindOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory)
                 }
             }

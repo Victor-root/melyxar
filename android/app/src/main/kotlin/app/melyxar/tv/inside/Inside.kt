@@ -65,7 +65,6 @@ class Chrome(
     val branding: Branding,
     val account: Account,
     val libraries: List<Library>,
-    val here: Place,
     val go: (Place) -> Unit,
     val changeProfile: () -> Unit,
 ) {
@@ -126,11 +125,10 @@ fun Inside(
             branding = branding,
             account = account,
             libraries = libraries.orEmpty(),
-            here = here,
             go = { place ->
                 when (place) {
-                    // The tabs of the bar lead from home, not from wherever
-                    // the trail had got to.
+                    // Home and the libraries lead from home, not from
+                    // wherever the trail had got to.
                     Place.Home -> backTo(1)
                     is Place.Shelf -> {
                         backTo(1)
