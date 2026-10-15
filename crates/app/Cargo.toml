@@ -37,6 +37,7 @@ rustls = { workspace = true }
 rcgen = { workspace = true }
 x509-parser = { workspace = true }
 unicode-security = { workspace = true }
+mdns-sd = { workspace = true }
 
 [dev-dependencies]
 flate2 = { workspace = true }

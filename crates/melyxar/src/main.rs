@@ -531,10 +531,17 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .await
         .context("applying how the server is reached")?;
 
+    // Said to the home network, so the applications there find it on their
+    // own; not from an address nothing else can reach.
+    let announced = (!address.ip().is_loopback())
+        .then(|| melyxar_app::neighbours::announce(address.port()))
+        .flatten();
+
     melyxar_app::activity::record(&state, melyxar_app::activity::Event::ServerStarted).await;
     melyxar_server::serve(address, state.clone(), shutdown_signal())
         .await
         .context("serving")?;
+    drop(announced);
 
     // The listener has stopped accepting: nothing new can open a session, so
     // closing them all is the last thing left to do. Each step says how long
