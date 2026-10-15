@@ -2,9 +2,11 @@ package app.melyxar.web
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -89,6 +92,23 @@ class WebActivity : ComponentActivity() {
         picking = null
     }
 
+    /** Asked once a sitting, and only of a phone that asks for it: a phone
+     *  answers by itself after the second refusal, and never asks again. */
+    private var notificationsAsked = false
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
+    /** The card of the music shows on the lock screen of some phones only for
+     *  an application allowed to notify: asked at the first song played. */
+    private fun askToShowTheMusic() {
+        if (notificationsAsked || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        notificationsAsked = true
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     /** What the page put into full screen, a video, while it is there. */
     private var fullScreen: View? = null
 
@@ -108,7 +128,7 @@ class WebActivity : ComponentActivity() {
         page.addJavascriptInterface(film, "MelyxarPlayer")
         page.addJavascriptInterface(pageWindow, "MelyxarWindow")
         music = MusicEngine.of(this) { serverFetching(page.settings.userAgentString) }
-        val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms)
+        val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms, ::askToShowTheMusic)
         music.listener = musicBridge
         page.addJavascriptInterface(musicBridge, "MelyxarMusic")
         // The service that keeps the music going, woken now so it is there

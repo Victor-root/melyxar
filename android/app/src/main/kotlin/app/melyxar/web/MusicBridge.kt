@@ -22,6 +22,8 @@ class MusicBridge(
     private val isTheServers: (String) -> Boolean,
     /** The forms of sound the device plays, as the server reads them. */
     private val forms: () -> String,
+    /** Told each time a song is asked to sound, on the main thread. */
+    private val onPlay: () -> Unit,
 ) : MusicEngine.Listener {
     private fun onDeck(deck: Int, request: () -> Unit) {
         if (deck in DECKS) {
@@ -32,7 +34,12 @@ class MusicBridge(
     @JavascriptInterface
     fun load(deck: Int, address: String, andPlay: Boolean) {
         if (isTheServers(address)) {
-            onDeck(deck) { engine.load(deck, address, andPlay) }
+            onDeck(deck) {
+                engine.load(deck, address, andPlay)
+                if (andPlay) {
+                    onPlay()
+                }
+            }
         }
     }
 
@@ -40,7 +47,10 @@ class MusicBridge(
     fun clear(deck: Int) = onDeck(deck) { engine.clear(deck) }
 
     @JavascriptInterface
-    fun play(deck: Int) = onDeck(deck) { engine.play(deck) }
+    fun play(deck: Int) = onDeck(deck) {
+        engine.play(deck)
+        onPlay()
+    }
 
     @JavascriptInterface
     fun pause(deck: Int) = onDeck(deck) { engine.pause(deck) }
