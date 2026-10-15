@@ -114,7 +114,8 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 ) {
                     item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
                         Column(Modifier.head(head, "top")) {
-                            TopBar()
+                            // The grid keeps the page's margin already.
+                            TopBar(edges = 0.dp)
                             Row(
                                 modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
