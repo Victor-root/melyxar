@@ -21,7 +21,6 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * The sound of the page's player of music: its two decks, each a player of
@@ -43,9 +42,10 @@ class MusicEngine private constructor(
     /** How the songs, and the covers on the card, are fetched. */
     val fetching: DataSource.Factory,
 ) {
-    /** What the engine says, to whoever hears it: the page. */
+    /** What the engine says, to whoever leads it: the page, or the
+     *  television's own player. */
     interface Listener {
-        fun told(told: String)
+        fun told(told: DeckTold)
         fun asked(asked: String, seconds: Double)
     }
 
@@ -140,7 +140,7 @@ class MusicEngine private constructor(
                 events = events.toList(),
             )
             events.clear()
-            listener?.told(Json.encodeToString(told))
+            listener?.told(told)
         }
 
         private inner class Heard : Player.Listener {
@@ -397,7 +397,7 @@ class MusicEngine private constructor(
 
 /** What the engine says of one deck, word for word what the page reads. */
 @Serializable
-private data class DeckTold(
+data class DeckTold(
     val deck: Int,
     val position: Double,
     val duration: Double?,
