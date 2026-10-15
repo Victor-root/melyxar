@@ -258,6 +258,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
     }
 
     /** Sends a change, and gives back the server's answer as it wrote it. */
+    /** A file the server hands over as it is, the words of a subtitle. */
+    suspend fun file(path: String): ByteArray = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(address(path)).get().build()).execute().use { answer ->
+            if (!answer.isSuccessful) throw Refusal(answer.code, null)
+            answer.body.bytes()
+        }
+    }
+
     suspend fun send(method: String, path: String, body: JsonObject?): JsonObject? = withContext(Dispatchers.IO) {
         val sent = body?.toString()?.asJson()
         http.newCall(request(path).method(method, sent).build()).execute().use { answer ->

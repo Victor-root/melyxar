@@ -92,6 +92,13 @@ class ReadableTest {
     }
 
     @Test
+    fun writesAnOffsetAsTheWebDoes() {
+        assertEquals("+1.5 s", offsetName(1.5f))
+        assertEquals("0.0 s", offsetName(0f))
+        assertEquals("-2.0 s", offsetName(-2f))
+    }
+
+    @Test
     fun writesASpeedAsTheWebDoes() {
         assertEquals("1×", speedName(1f))
         assertEquals("0.75×", speedName(0.75f))

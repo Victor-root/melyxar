@@ -92,6 +92,8 @@
     <string name="tv_wide_gamut_why">For this film only. Keep HDR on a screen that shows it, and convert if the colours look washed out.</string>
     <string name="tv_wide_gamut_imposed_converted">Converted whatever is chosen here: the picture is rebuilt for another reason, or this HDR format cannot be shown as it is.</string>
     <string name="tv_wide_gamut_imposed_kept">Kept whatever is chosen here: the server is set never to convert HDR.</string>
+    <string name="tv_words_offset">Subtitle sync</string>
+    <string name="tv_words_offset_why">Adjust subtitle timing if it is ahead of or behind the video.</string>
     <string name="tv_search">Search</string>
     <string name="tv_search_placeholder">Search for a title</string>
     <string name="tv_search_none">No title matches.</string>
