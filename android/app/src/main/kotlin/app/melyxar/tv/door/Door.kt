@@ -68,6 +68,7 @@ import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.wantsLight
 import app.melyxar.tv.look.AccentButton
+import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.Ease
 import app.melyxar.tv.look.FacePainting
 import app.melyxar.tv.look.Gutter
@@ -78,10 +79,11 @@ import app.melyxar.tv.look.MelyxarMark
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.TvLook
-import app.melyxar.tv.look.halo
+import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.look.rim
+import app.melyxar.tv.look.shadowRaised
 import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -330,7 +332,13 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
         Box(
             Modifier
                 .size(TILE)
-                .halo(shape, palette.accent) { lit }
+                .boxShadow(shape, palette.shadowRaised)
+                .boxShadow(
+                    shape,
+                    BoxShadow(palette.accent.copy(alpha = 0.7f), blur = 0.dp, spread = 1.dp),
+                    BoxShadow(palette.accent.copy(alpha = 0.6f), blur = 30.dp, spread = (-2).dp),
+                    BoxShadow(palette.accentDim.copy(alpha = 0.7f), blur = 60.dp, spread = (-12).dp, y = 16.dp),
+                ) { lit }
                 .clip(shape)
                 .rim(shape, palette.text.copy(alpha = 0.1f), 1.dp)
                 .rim(shape, palette.accentBright, 2.dp) { lit },
@@ -365,7 +373,7 @@ fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifie
 fun ServerMark(branding: Branding, size: Dp) {
     val palette = LocalPalette.current
     val logo = branding.logo
-    val glow = Modifier.halo(RoundedCornerShape(size / 2), palette.accentGlow, 14.dp)
+    val glow = Modifier.boxShadow(RoundedCornerShape(size / 2), BoxShadow(palette.accentGlow, blur = 24.dp, y = 8.dp))
     if (logo != null) {
         ServerPicture(listOf(Picture(logo)), size, glow.size(size), contentScale = ContentScale.Fit)
     } else {

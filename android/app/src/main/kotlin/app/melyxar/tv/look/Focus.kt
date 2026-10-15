@@ -7,23 +7,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 
 /*
  * What the web does on hover, done when the remote comes to a piece: it
- * grows a little, its rim lights in the accent and a halo of the accent
- * shines around it. Every one of these reads how lit the piece is while it
- * draws, so the easing in and out never composes the piece again.
+ * grows a little and its rim lights in the accent; a card also wears the
+ * web's halo (`Shadows.kt`). Every one of these reads how lit the piece is
+ * while it draws, so the easing in and out never composes the piece again.
  */
 
 /** How lit a piece is, from 0 at rest to 1 when the remote is on it, eased
@@ -40,41 +36,6 @@ fun Modifier.grows(lit: () -> Float, growth: Float = FOCUS_GROWTH) = graphicsLay
     scaleX = scale
     scaleY = scale
 }
-
-/**
- * A soft light of [color] round the piece, [reach] wide, as strong as [lit]
- * says, as the web's halo on hover: rings of the piece's own shape drawn
- * from its edge outwards, each a little wider and faint, laid over one
- * another so the light thickens towards the edge. Strokes rather than fills,
- * so nothing lands under a piece that lets light through, and smooth at
- * their edges, which a cut out of the piece is not. Laid out once per size,
- * drawn by the graphics card, nothing at all while unlit; never a blurred
- * shadow, which is painted into a picture of its own on the thread that
- * draws the screen.
- */
-fun Modifier.halo(shape: Shape, color: Color, reach: Dp = HALO_REACH, lit: () -> Float = { 1f }) = drawWithCache {
-    val rings = (1..HALO_RINGS).map { ring ->
-        val width = reach.toPx() * ring / HALO_RINGS
-        // A stroke of this width round the piece grown by half of it covers
-        // the band from the piece's edge out to the width.
-        val half = width / 2
-        Triple(half, shape.createOutline(Size(size.width + width, size.height + width), layoutDirection, this), Stroke(width))
-    }
-    onDrawBehind {
-        val shown = lit()
-        if (shown > 0f) {
-            rings.forEach { (half, outline, stroke) ->
-                translate(-half, -half) { drawOutline(outline, color, alpha = HALO_RING_ALPHA * shown, style = stroke) }
-            }
-        }
-    }
-}
-
-/** How far the halo of a lit piece reaches, in how many rings, each how
- *  strong: about half the colour at the piece's edge, fading out from it. */
-private val HALO_REACH = 16.dp
-private const val HALO_RINGS = 8
-private const val HALO_RING_ALPHA = 0.075f
 
 /** A rim drawn inside the piece's edge, as the web's inset ring. */
 fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithContent {
