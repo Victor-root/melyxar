@@ -7,9 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,6 +40,7 @@ import app.melyxar.server.Account
 import app.melyxar.server.Api
 import app.melyxar.server.KeptSession
 import app.melyxar.server.Refusal
+import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
@@ -111,10 +110,7 @@ fun Knock(
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(palette.ground.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
-    ) {
+    AboveKeyboard(Modifier.background(palette.ground.copy(alpha = 0.72f))) {
         val shape = RoundedCornerShape(18.dp)
         Column(
             modifier = Modifier
