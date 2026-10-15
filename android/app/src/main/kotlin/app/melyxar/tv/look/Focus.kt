@@ -10,10 +10,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
@@ -54,11 +58,16 @@ fun Modifier.halo(shape: Shape, color: Color, reach: Dp = HALO_REACH, lit: () ->
         val spread = reach.toPx() * ring / HALO_RINGS
         spread to shape.createOutline(Size(size.width + 2 * spread, size.height + 2 * spread), layoutDirection, this)
     }
+    // Outside the piece only: under one that lets light through, the rings
+    // would tint it.
+    val piece = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
     onDrawBehind {
         val shown = lit()
         if (shown > 0f) {
-            rings.forEach { (spread, outline) ->
-                translate(-spread, -spread) { drawOutline(outline, color, alpha = HALO_RING_ALPHA * shown) }
+            clipPath(piece, ClipOp.Difference) {
+                rings.forEach { (spread, outline) ->
+                    translate(-spread, -spread) { drawOutline(outline, color, alpha = HALO_RING_ALPHA * shown) }
+                }
             }
         }
     }
