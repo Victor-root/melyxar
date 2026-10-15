@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Melyxar</string>
+    <string name="connect_title">Connect to your server</string>
+    <string name="connect_lead">Enter the address of your Melyxar server, for example 192.168.1.20:2100.</string>
+    <string name="connect_address">Server address</string>
+    <string name="connect_go">Connect</string>
+    <string name="connect_not_address">This is not a server address.</string>
+    <string name="connect_open_over_internet">Outside your home network, the address must start with https:// so your password is never sent in the clear.</string>
+    <string name="connect_unreachable">No Melyxar server answers at this address.</string>
+    <string name="connect_known">Your servers</string>
+    <string name="connect_forget">Forget</string>
+    <string name="unreachable_title">Server unreachable</string>
+    <string name="unreachable_lead">%1$s does not answer. Check that it is running and that this device is on the right network.</string>
+    <string name="unreachable_retry">Try again</string>
+    <string name="unreachable_change">Change server</string>
+</resources>
