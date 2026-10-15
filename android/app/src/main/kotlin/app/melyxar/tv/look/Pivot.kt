@@ -1,7 +1,5 @@
 package app.melyxar.tv.look
 
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 
 /**
@@ -16,8 +14,6 @@ class Pivot(
     private val share: Float = 0f,
     private val stays: () -> Boolean = { false },
 ) : BringIntoViewSpec {
-    override val scrollAnimationSpec: AnimationSpec<Float> = tween(360, easing = Ease)
-
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
         if (stays()) 0f else offset - (lead + containerSize * share)
 }
@@ -28,8 +24,6 @@ class Pivot(
  * [margin] points from the edge, and not at all while it is.
  */
 class Nearest(private val margin: Float) : BringIntoViewSpec {
-    override val scrollAnimationSpec: AnimationSpec<Float> = tween(360, easing = Ease)
-
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
         val before = offset - margin
         val after = offset + size - (containerSize - margin)

@@ -13,7 +13,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.LinearGradientShader
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RadialGradientShader
 import androidx.compose.ui.graphics.ShaderBrush
@@ -403,12 +402,12 @@ private fun CacheDrawScope.dotsOf(band: Band, tones: Tones): List<Dots> {
     val grain = (band.dot + 0.05f).dp.toPx() * 2
     return shades.withIndex().filter { it.value.isNotEmpty() }.map { (shade, points) ->
         val strength = tones.dustStrength * band.force * (shade + 0.5f) / SHADES
-        val paint = Paint().apply {
-            color = tones.dust.copy(alpha = strength)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = tones.dust.copy(alpha = strength).toArgb()
             strokeWidth = grain
-            strokeCap = StrokeCap.Round
+            strokeCap = android.graphics.Paint.Cap.ROUND
         }
-        Dots(points.toFloatArray(), paint.asFrameworkPaint())
+        Dots(points.toFloatArray(), paint)
     }
 }
 
