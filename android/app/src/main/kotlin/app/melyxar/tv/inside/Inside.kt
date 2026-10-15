@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -104,6 +105,9 @@ fun Inside(
     api: Api,
     account: Account,
     branding: Branding,
+    /** A work to open, asked from the system's Continue watching row. */
+    opening: String?,
+    onOpened: () -> Unit,
     onChangeProfile: () -> Unit,
     onSignedOut: () -> Unit,
     onLeave: () -> Unit,
@@ -174,6 +178,13 @@ fun Inside(
             canGoBack = trail.size > 1,
             changeProfile = onChangeProfile,
         )
+        // Its page over home, as if opened from Melyxar's own row.
+        LaunchedEffect(opening) {
+            opening ?: return@LaunchedEffect
+            chrome.go(Place.Home)
+            chrome.go(Place.Opened(opening))
+            onOpened()
+        }
         // Before the screens, so what a screen opens is closed by the key first.
         BackHandler {
             if (trail.size > 1) {
