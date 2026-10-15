@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -165,6 +166,8 @@ fun WorksGrid(
     /** Whether a card still has its place, for a grid made of what a mark
      *  says: what no longer does leaves it as soon as it is said. */
     belongs: (Card) -> Boolean = { true },
+    /** What stands between the head and the cards. */
+    besides: LazyGridScope.(PageHead) -> Unit = {},
     top: @Composable (PageHead) -> Unit,
 ) {
     var reached by remember(works) { mutableIntStateOf(0) }
@@ -186,6 +189,7 @@ fun WorksGrid(
             reached = at
             onReach(card)
         },
+        besides = besides,
         top = top,
     )
 }
@@ -209,6 +213,8 @@ fun CardGrid(
     noteOf: (Card) -> String? = { it.year?.toString() },
     /** Told of the card the remote comes to, and where it stands. */
     onReach: (Int, Card) -> Unit = { _, _ -> },
+    /** What stands between the head and the cards. */
+    besides: LazyGridScope.(PageHead) -> Unit = {},
     top: @Composable (PageHead) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -225,6 +231,7 @@ fun CardGrid(
                 item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
                     Box(Modifier.head(head, "top")) { top(head) }
                 }
+                besides(head)
                 if (cards != null && cards.isEmpty()) {
                     item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                         Text(empty, fontSize = 16.sp, color = palette.textSoft, modifier = Modifier.padding(top = 8.dp))
