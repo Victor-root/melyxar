@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -48,6 +50,7 @@ import androidx.core.view.updatePadding
 import app.melyxar.BuildConfig
 import app.melyxar.R
 import app.melyxar.connect.ConnectActivity
+import app.melyxar.player.FilmPlayer
 import app.melyxar.server.KnownServer
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
@@ -57,12 +60,14 @@ import app.melyxar.theme.MelyxarTheme
  *
  * Everything shown here is the server's: a server brought up to date brings
  * this screen with it. What is native is only what a page cannot do well on
- * a phone, and the screen saying the server does not answer.
+ * a phone, the screen saying the server does not answer, and the film itself,
+ * played beneath the page by the device's own player (see FilmPlayer).
  */
 class WebActivity : ComponentActivity() {
     private lateinit var page: WebView
     private lateinit var server: KnownServer
     private lateinit var notice: ComposeView
+    private lateinit var film: FilmPlayer
     private val chrome = InterfaceChrome()
 
     /** The page waiting for files somebody picks, while the picker is open. */
@@ -85,6 +90,9 @@ class WebActivity : ComponentActivity() {
 
         val holder = FrameLayout(this)
         page = interfacePage()
+        film = FilmPlayer(this, page, Melyxar.ground.toArgb(), ::isTheServers)
+        page.addJavascriptInterface(film, "MelyxarPlayer")
+        holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))
         holder.addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
         notice = ComposeView(this).apply {
             visibility = View.GONE
@@ -106,9 +114,13 @@ class WebActivity : ComponentActivity() {
         }
         holder.addView(notice, FrameLayout.LayoutParams(MATCH, MATCH))
         // Until the interface draws under the bars itself, it is kept between
-        // them, the way a browser shows it.
+        // them, the way a browser shows it, and clear of the camera.
         ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or
+                    WindowInsetsCompat.Type.displayCutout() or
+                    WindowInsetsCompat.Type.ime(),
+            )
             view.updatePadding(left = bars.left, top = bars.top, right = bars.right, bottom = bars.bottom)
             WindowInsetsCompat.CONSUMED
         }
@@ -152,6 +164,21 @@ class WebActivity : ComponentActivity() {
         page.saveState(outState)
     }
 
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        film.leaving()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        film.windowed(isInPictureInPictureMode)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        film.stopped()
+    }
+
     override fun onPause() {
         super.onPause()
         // The session cookie is written to the disk now, not whenever the
@@ -161,6 +188,7 @@ class WebActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        film.release()
         page.destroy()
         super.onDestroy()
     }
@@ -189,6 +217,10 @@ class WebActivity : ComponentActivity() {
                 // which is what a link to nowhere does in a browser too.
             }
             return true
+        }
+
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            film.pageLeft()
         }
 
         /** The engine drawing the page was stopped, by the system short of

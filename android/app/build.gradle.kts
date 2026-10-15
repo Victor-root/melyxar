@@ -89,11 +89,10 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
-
-    // The prototype of the controls laid over a native picture: debug builds
-    // only, until the player itself moves to Media3.
-    debugImplementation(libs.media3.exoplayer)
-    debugImplementation(libs.media3.ui)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.exoplayer.hls)
+    implementation(libs.media3.effect)
+    implementation(libs.media3.ui)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

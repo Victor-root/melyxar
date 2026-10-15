@@ -28,6 +28,7 @@ const UNTOLD: Omit<Told, "id"> = {
   duration: null,
   buffered: 0,
   playing: false,
+  advancing: false,
   ended: false,
   seeking: false,
   width: 0,
@@ -206,17 +207,14 @@ export class NativePicture extends HTMLElement implements Picture {
       this.dispatchEvent(new Event("volumechange"));
     }
     for (const name of told.events) {
-      if (name === "playing") {
-        this.dispatchEvent(new Event("play"));
-      }
       this.dispatchEvent(new Event(name));
     }
     this.dispatchEvent(new Event("timeupdate"));
   }
 
   get currentTime() {
-    const { position, playing, seeking, duration } = this.told;
-    if (!playing || seeking) {
+    const { position, advancing, seeking, duration } = this.told;
+    if (!advancing || seeking) {
       return position;
     }
     const carried = position + ((performance.now() - this.toldAt) / 1000) * this.rate;
