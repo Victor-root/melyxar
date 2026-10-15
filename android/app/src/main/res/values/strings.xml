@@ -97,6 +97,10 @@
     <string name="tv_chapters">Chapters</string>
     <string name="tv_chapter_number">Chapter %1$d</string>
     <string name="tv_playing_now">Playing now</string>
+    <string name="tv_next_episode">Next episode</string>
+    <string name="tv_next_in">Starts in %1$d s</string>
+    <string name="tv_play_now">Play now</string>
+    <string name="tv_cancel">Cancel</string>
     <string name="tv_search">Search</string>
     <string name="tv_search_placeholder">Search for a title</string>
     <string name="tv_search_none">No title matches.</string>

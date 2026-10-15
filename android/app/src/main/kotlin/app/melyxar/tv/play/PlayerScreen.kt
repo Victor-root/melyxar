@@ -46,6 +46,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
+import app.melyxar.server.NextEpisode
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
 import app.melyxar.tv.inside.rememberLoaded
@@ -93,6 +94,13 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val quiet = remember { FocusRequester() }
     val controls = remember { FocusRequester() }
     val buttons = remember { FocusRequester() }
+    val upNextFirst = remember { FocusRequester() }
+    val next = work?.carryOnWith?.takeIf { it.sourceId != null }
+    var declined by remember { mutableStateOf(false) }
+    val inCredits by rememberInCredits(playback)
+    val announced = next?.takeIf { !declined && (ended || inCredits) }
+
+    fun playNext(episode: NextEpisode) = onNext(Play(episode.id, episode.sourceId, null))
 
     DisposableEffect(playback) {
         val heard = object : Player.Listener {
@@ -107,12 +115,9 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         playback.player.addListener(heard)
         onDispose { playback.player.removeListener(heard) }
     }
-    // The next episode once this one is over, or back to where it came from.
-    LaunchedEffect(ended) {
-        if (ended) {
-            val next = work?.carryOnWith
-            if (next?.sourceId != null) onNext(Play(next.id, next.sourceId, null)) else onDone()
-        }
+    // Over with no next episode to announce: back to where it came from.
+    LaunchedEffect(ended, declined) {
+        if (ended && (next == null || declined)) onDone()
     }
     // Away a moment after the remote stops, while the film plays.
     LaunchedEffect(shown, nudges, playing, menu) {
@@ -121,8 +126,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             shown = false
         }
     }
-    LaunchedEffect(shown) {
-        if (shown) controls.requestFocus() else quiet.requestFocus()
+    LaunchedEffect(shown, announced != null) {
+        when {
+            announced != null -> upNextFirst.requestFocus()
+            shown -> controls.requestFocus()
+            else -> quiet.requestFocus()
+        }
     }
 
     fun nudge() {
@@ -169,7 +178,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         nudge()
                         true
                     }
-                    else -> if (!shown) {
+                    else -> if (!shown && announced == null) {
                         // The controls away, the arrows and the middle button
                         // act on the film itself.
                         when (event.key) {
@@ -199,12 +208,25 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 first = controls,
                 buttons = buttons,
                 onMenu = ::openMenu,
-                onNext = work?.carryOnWith?.takeIf { it.sourceId != null }?.let { next ->
-                    { onNext(Play(next.id, next.sourceId, null)) }
-                },
+                onNext = next?.let { { playNext(it) } },
             )
         }
-        Skip(playback, Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp))
+        // The credits of an episode with another after it are the next
+        // episode's announcement rather than something to skip.
+        Skip(
+            playback,
+            creditsToo = next == null || declined,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
+        )
+        announced?.let {
+            UpNext(
+                it,
+                first = upNextFirst,
+                onPlay = { playNext(it) },
+                onCancel = { declined = true },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
+            )
+        }
         menu?.let { open ->
             PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
         }
@@ -243,7 +265,7 @@ private fun Picture(playback: Playback) {
 /** A skip of the recap, the opening or the credits, while the film is in
  *  one. */
 @Composable
-private fun Skip(playback: Playback, modifier: Modifier) {
+private fun Skip(playback: Playback, creditsToo: Boolean, modifier: Modifier) {
     var at by remember { mutableDoubleStateOf(0.0) }
     LaunchedEffect(playback) {
         while (true) {
@@ -255,7 +277,7 @@ private fun Skip(playback: Playback, modifier: Modifier) {
     val words = when (segment.kind) {
         "recap" -> R.string.tv_skip_recap
         "intro" -> R.string.tv_skip_intro
-        "outro" -> R.string.tv_skip_outro
+        "outro" -> if (creditsToo) R.string.tv_skip_outro else return
         else -> return
     }
     AccentButton(

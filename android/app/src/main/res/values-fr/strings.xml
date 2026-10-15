@@ -98,6 +98,10 @@
     <string name="tv_chapters">Chapitres</string>
     <string name="tv_chapter_number">Chapitre %1$d</string>
     <string name="tv_playing_now">Lecture en cours</string>
+    <string name="tv_next_episode">Épisode suivant</string>
+    <string name="tv_next_in">Commence dans %1$d s</string>
+    <string name="tv_play_now">Lire maintenant</string>
+    <string name="tv_cancel">Annuler</string>
     <string name="tv_search">Rechercher</string>
     <string name="tv_search_placeholder">Rechercher un titre</string>
     <string name="tv_search_none">Aucun titre ne correspond.</string>
