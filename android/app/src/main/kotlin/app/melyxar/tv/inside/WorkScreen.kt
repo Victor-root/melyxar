@@ -350,6 +350,7 @@ private fun Actions(work: Work, first: FocusRequester) {
         if (card?.watchedMarks != false) {
             RoundMark(
                 Icons.Tick,
+                label = stringResource(R.string.tv_mark_watched),
                 on = marks.watched,
                 // Watched takes a work off the list to watch later, as the
                 // server does.
@@ -359,11 +360,13 @@ private fun Actions(work: Work, first: FocusRequester) {
         }
         RoundMark(
             if (marks.favourite) Icons.HeartFull else Icons.Heart,
+            label = stringResource(R.string.tv_favourites),
             on = marks.favourite,
             onClick = { mark("favourite", marks.copy(favourite = !marks.favourite)) },
         )
         RoundMark(
             Icons.Clock,
+            label = stringResource(R.string.tv_watch_later),
             on = marks.watchLater,
             onClick = { mark("watch-later", marks.copy(watchLater = !marks.watchLater)) },
         )

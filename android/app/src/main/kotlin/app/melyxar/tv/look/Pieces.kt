@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -96,6 +98,8 @@ fun PlainButton(
 @Composable
 fun RoundMark(
     icon: ImageVector,
+    /** What it does, said by the system for somebody who does not see it. */
+    label: String,
     on: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -111,7 +115,8 @@ fun RoundMark(
             .background(palette.surfaceRaised.copy(alpha = 0.74f))
             .border(1.dp, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, CircleShape)
             .rim(CircleShape, palette.accentBright, 2.dp) { lit }
-            .clickable(interaction, indication = null, onClick = onClick),
+            .clickable(interaction, indication = null, onClick = onClick)
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         Glyph(icon, if (on || lit > 0.5f) palette.accentBright else palette.text, 22.dp)
