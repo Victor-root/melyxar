@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { fromHsv, hsvOf, parseHex } from "../colour";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
+import { useBackClosesIt } from "./back-closes";
 import { BottomSheet } from "./bottom-sheet";
 
 const PANEL_WIDTH = 248;
@@ -39,6 +40,8 @@ export function ColourPicker({
   const [open, setOpen] = useState(false);
   const asASheet = useMediaQuery(PHONE);
   const floating = open && !asASheet;
+  // The sheet answers the back key itself.
+  useBackClosesIt(() => setOpen(false), floating);
   const [under, setUnder] = useState<React.CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);

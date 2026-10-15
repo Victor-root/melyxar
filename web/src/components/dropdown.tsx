@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "../icons";
+import { useBackClosesIt } from "./back-closes";
 
 /**
  * A word that opens a short list under it.
  *
  * Closes on a click anywhere else and on the escape key, which are the two
- * ways anybody ever tries to close one.
+ * ways anybody ever tries to close one, and on the back key of a phone, where
+ * the bell's list is a sheet over the whole width.
  *
  * The list is drawn at the end of the page rather than inside the bar, and
  * placed against the window by hand. That is not a preference: the pieces
@@ -49,6 +51,7 @@ export function Dropdown({
   const list = useRef<HTMLDivElement>(null);
   /** Where the list goes: under what opened it, and ending where it ends. */
   const [under, setUnder] = useState({ top: 0, right: 0 });
+  useBackClosesIt(() => setOpen(false), open);
 
   /* Measured when it opens and again if the window changes shape. The bar it
      hangs from is fixed to the window, so a page scrolled underneath moves
