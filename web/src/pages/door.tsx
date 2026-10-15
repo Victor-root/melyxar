@@ -138,8 +138,8 @@ export function Door({
           picks. */}
       <div className="door-stage" aria-hidden="true" />
 
-      {/* The mark and the name, in the corner the way every other screen
-          carries them, so the middle is left to the accounts. */}
+      {/* The way back to the accounts, alone at the top: the server's mark
+          and name stand in the middle, over the greeting. */}
       <header className="door-top">
         {/* Only ever on the form, and only when there is a list to go back
             to: on a server that offers no names it would go nowhere. */}
@@ -153,12 +153,6 @@ export function Door({
             {t("door.back")}
           </button>
         )}
-        <div className="door-crown">
-          {/* A mark of the administrator's own stays in its own colours; the
-              one Melyxar ships takes the accent, like the rest of the page. */}
-          <ServerMark branding={branding} size={34} className="door-mark" />
-          <span className="door-name">{branding.server_name}</span>
-        </div>
       </header>
 
       {/* No card around any of it: the accounts stand in the open in the middle
@@ -170,8 +164,9 @@ export function Door({
               the eye reads past on the way to the password. */}
           {forWhom === null && (
             <div className="door-greeting">
-              {/* On a phone the corner goes and the mark stands over the
-                  greeting instead: the server's name said once, not twice. */}
+              {/* A mark of the administrator's own stays in its own colours;
+                  the one Melyxar ships takes the accent, like the rest of the
+                  page. */}
               <ServerMark branding={branding} size={64} className="door-greeting-mark" />
               <h1 className="door-welcome">
                 {t("door.welcome_before")}

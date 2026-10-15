@@ -308,44 +308,7 @@
   min-height: 40px;
 }
 
-/* The mark and the name, together: they are one thing, and what the server
-   calls itself is the half an administrator changes most often. */
-.door-crown {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-}
-
-.door-mark {
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-}
-
-/* The administrator's own logo, at the same height and in its own shape, so a
-   wide one is not shrunk to fit a square it was never drawn for. */
-img.door-mark {
-  width: auto;
-  max-width: 180px;
-}
-
-/* Spaced out and in capitals, the way a name is set when it is standing in
-   for a wordmark rather than being read as a word. */
-.door-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: "Melyxar Display", "Inter", sans-serif;
-  font-size: 16px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.22em;
-}
-
-/* Back to the accounts, ahead of the mark the way a back arrow sits ahead of
-   the title of any screen. */
+/* Back to the accounts, in the corner a back arrow takes on any screen. */
 .door-back {
   display: flex;
   align-items: center;
@@ -421,9 +384,21 @@ img.door-mark {
   text-align: center;
 }
 
-/* Only on a phone, where it takes the place of the corner. */
+/* The server's mark, over the greeting that says its name. */
 .door-greeting-mark {
-  display: none;
+  display: block;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto clamp(16px, 2.6vh, 24px);
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px var(--accent-glow));
+}
+
+/* The administrator's own logo at the same height and in its own shape, so a
+   wide one is not shrunk to fit a square it was never drawn for. */
+img.door-greeting-mark {
+  width: auto;
+  max-width: min(240px, 70vw);
 }
 
 .door-welcome {
@@ -473,9 +448,7 @@ img.door-mark {
   margin-bottom: clamp(30px, 6vh, 60px);
 }
 
-/* The floor the first row stands on: a pool of the accent, and through it
-   one thin line of brighter light, the flare a lens draws across a bright
-   source. */
+/* The floor the first row stands on: a pool of the accent. */
 .door-who::before {
   content: "";
   position: absolute;
@@ -486,11 +459,6 @@ img.door-mark {
   height: calc(var(--door-tile) * 0.9);
   transform: translateX(-50%);
   background:
-    radial-gradient(
-      42% 1px at 50% 50%,
-      color-mix(in srgb, var(--accent-bright) 40%, transparent),
-      transparent
-    ),
     radial-gradient(
       50% 50% at 50% 50%,
       color-mix(in srgb, var(--accent) 22%, transparent),
@@ -1128,29 +1096,8 @@ img.door-mark {
     display: none;
   }
 
-  /* The corner keeps only the way back to the accounts: the mark moves over
-     the greeting, which already says the server's name. */
-  .door-crown {
-    display: none;
-  }
-
   .door-top {
     min-height: 0;
-  }
-
-  .door-greeting-mark {
-    display: block;
-    width: 64px;
-    height: 64px;
-    margin: 0 auto clamp(16px, 2.6vh, 24px);
-    object-fit: contain;
-    filter: drop-shadow(0 8px 24px var(--accent-glow));
-  }
-
-  /* The administrator's own logo at the same height and in its own shape. */
-  img.door-greeting-mark {
-    width: auto;
-    max-width: min(240px, 70vw);
   }
 
   /* The name on a line of its own, under the words that lead to it. */
