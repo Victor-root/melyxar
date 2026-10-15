@@ -293,6 +293,40 @@ data class Plan(
     val audio: List<Track> = emptyList(),
     val subtitles: List<Track> = emptyList(),
     val segments: List<Segment> = emptyList(),
+    /** The little pictures of the bar, when the film has been read for them. */
+    val thumbnails: Thumbnails? = null,
+    /** Where the film changes scene, when its file names them. */
+    val chapters: List<Chapter> = emptyList(),
+    /** What is done with the film's HDR, when it has any. */
+    val wideGamut: WideGamutHandling? = null,
+)
+
+/** The little pictures of a film, as sheets of many: a slash, the sheet's
+ *  number and ".jpg" after [url] fetch one. */
+@Serializable
+data class Thumbnails(
+    val url: String,
+    /** How far apart in the film two of them stand. */
+    val everySeconds: Double,
+    /** One of them on its sheet, in pixels. */
+    val width: Int,
+    val height: Int,
+    val columns: Int,
+    val rows: Int,
+    /** How many the film has: past the last, a sheet holds only black. */
+    val counted: Int,
+)
+
+@Serializable
+data class Chapter(val atSecond: Double, val title: String? = null)
+
+@Serializable
+data class WideGamutHandling(
+    /** Converted to standard range, rather than handed over as it is. */
+    val converted: Boolean,
+    /** Whether the viewer's choice decided it: when it did not, choosing
+     *  otherwise changes nothing. */
+    val followsChoice: Boolean,
 )
 
 /** A film the server rebuilds as it is watched, and where to read it. */
