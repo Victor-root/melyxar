@@ -255,6 +255,9 @@ data class Work(
     /** The series and season above an episode, the series first. */
     val ancestry: List<Ancestor> = emptyList(),
     val carryOnWith: NextEpisode? = null,
+    /** The photos before and after a photo in its folder, when there are. */
+    val previousPhoto: String? = null,
+    val nextPhoto: String? = null,
     val card: Card? = null,
     val alike: Kin? = null,
     val saga: Kin? = null,

@@ -146,10 +146,9 @@ fun rememberWorks(browse: Browse, comebacks: Int, asking: Boolean = true): Works
 }
 
 /**
- * The cards of [works] in a grid, as the web lays them: [top] above them,
- * which stays shown whole with the first line of cards while the remote is
- * in them, and the page scrolling below that. [firstCard] is given to the
- * first card, for a screen that starts the remote there.
+ * The cards of [works] in a grid, as the web lays them, read on a page at a
+ * time as the remote goes down. [firstCard] is given to the first card, for
+ * a screen that starts the remote there.
  */
 @Composable
 fun WorksGrid(
@@ -168,14 +167,51 @@ fun WorksGrid(
     belongs: (Card) -> Boolean = { true },
     top: @Composable (PageHead) -> Unit,
 ) {
-    val palette = LocalPalette.current
     var reached by remember(works) { mutableIntStateOf(0) }
     LaunchedEffect(works, reached, works.cards) { works.reachedTo(reached) }
-    val cards = works.cards?.filter(belongs)
     if (works.failed) {
         Trouble(onRetry = works::retry)
         return
     }
+    CardGrid(
+        cards = works.cards?.filter(belongs),
+        lying = lying,
+        empty = empty,
+        memory = memory,
+        grid = grid,
+        onOpen = onOpen,
+        modifier = modifier,
+        firstCard = firstCard,
+        onReach = { at, card ->
+            reached = at
+            onReach(card)
+        },
+        top = top,
+    )
+}
+
+/**
+ * [cards] in a grid, as the web lays them: [top] above them, which stays
+ * shown whole with the first line of cards while the remote is in them, and
+ * the page scrolling below that; [empty] said when there are none.
+ */
+@Composable
+fun CardGrid(
+    cards: List<Card>?,
+    lying: Boolean,
+    empty: String,
+    memory: FocusMemory,
+    grid: LazyGridState,
+    onOpen: (Card) -> Unit,
+    modifier: Modifier = Modifier,
+    firstCard: FocusRequester? = null,
+    /** What is written under a card, its year unless said otherwise. */
+    noteOf: (Card) -> String? = { it.year?.toString() },
+    /** Told of the card the remote comes to, and where it stands. */
+    onReach: (Int, Card) -> Unit = { _, _ -> },
+    top: @Composable (PageHead) -> Unit,
+) {
+    val palette = LocalPalette.current
     Box(modifier.fillMaxSize()) {
         ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
             LazyVerticalGrid(
@@ -198,14 +234,14 @@ fun WorksGrid(
                     WorkCard(
                         card = card,
                         lying = lying,
+                        note = noteOf(card),
                         onClick = { onOpen(card) },
                         modifier = Modifier
                             .remembered(memory, card.id)
                             .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
                             .onFocusChanged {
                                 if (it.isFocused) {
-                                    reached = at
-                                    onReach(card)
+                                    onReach(at, card)
                                 }
                                 // The first line of cards is part of the head,
                                 // the line under what the grid is.

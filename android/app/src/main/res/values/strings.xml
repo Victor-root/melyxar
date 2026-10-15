@@ -136,4 +136,13 @@
     <string name="tv_person_no_biography">No biography yet.</string>
     <string name="tv_person_films">Movies</string>
     <string name="tv_person_series">Series</string>
+    <plurals name="tv_item_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <string name="tv_folder_empty">Nothing in this folder yet.</string>
+    <string name="tv_not_on_disk">File unavailable</string>
+    <string name="tv_previous_photo">Previous photo</string>
+    <string name="tv_next_photo">Next photo</string>
+    <string name="tv_slideshow">Slideshow</string>
 </resources>
