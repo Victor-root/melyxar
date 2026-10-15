@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,14 @@ fun TvField(
 ) {
     val palette = LocalPalette.current
     var typing by remember { mutableStateOf(false) }
+    // The screen makes room for the keyboard while this is typed in.
+    val room = LocalKeyboardRoom.current
+    if (room != null) {
+        DisposableEffect(room, typing) {
+            room.typing = typing
+            onDispose { room.typing = false }
+        }
+    }
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val textStyle = LocalTextStyle.current.copy(color = palette.text, fontSize = 18.sp)
