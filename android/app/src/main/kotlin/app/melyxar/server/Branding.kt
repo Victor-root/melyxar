@@ -17,6 +17,9 @@ data class Branding(
     @SerialName("server_name") val serverName: String,
     /** Where the administrator's own logo is, or nothing for Melyxar's. */
     val logo: String? = null,
+    /** "dark", "light" or "system": the theme of an account that follows
+     *  the server's. */
+    @SerialName("default_theme") val defaultTheme: String = "dark",
     @SerialName("setup_complete") val setupComplete: Boolean = true,
 )
 

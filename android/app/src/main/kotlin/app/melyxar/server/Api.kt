@@ -1,0 +1,260 @@
+package app.melyxar.server
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.DeserializationStrategy
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNamingStrategy
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
+
+/** The server said no, or did not answer as a Melyxar server does. */
+class Refusal(
+    val status: Int,
+    val code: String?,
+    /** How long the server asks to wait before trying again, when it does. */
+    val waitSeconds: Int? = null,
+) : IOException("$status $code") {
+    /** The session this was asked with is over. */
+    val signedOut get() = status == 401
+}
+
+/** The server read with the names it writes, snake case, and whatever else
+ *  it has started writing since left aside. */
+@OptIn(ExperimentalSerializationApi::class)
+val serverJson = Json {
+    ignoreUnknownKeys = true
+    explicitNulls = false
+    coerceInputValues = true
+    namingStrategy = JsonNamingStrategy.SnakeCase
+}
+
+/** The cookie the server keeps a session in. */
+private const val SESSION_COOKIE = "melyxar_session"
+
+private val JSON = "application/json".toMediaType()
+
+/** What a television calls its browser in the server's lists of devices. */
+private const val DEVICE_NAME = "Melyxar"
+
+/** Below this many seconds in, a film is only said to be on, not where. */
+private const val WORTH_KEEPING_S = 5.0
+
+/** What the player asks of the subtitles. */
+sealed interface TrackChoice {
+    /** Whatever the account's way with subtitles gives. */
+    data object Unsaid : TrackChoice
+
+    data object Off : TrackChoice
+
+    /** A subtitle of pictures, painted into the film by the server. */
+    data class Painted(val id: String) : TrackChoice
+}
+
+@Serializable
+private data class SignIn(val name: String, val password: String, val remember: Boolean, val client: String)
+
+@Serializable
+private data class Failure(val code: String? = null, val details: Details? = null)
+
+@Serializable
+private data class Details(val seconds: Int? = null)
+
+/**
+ * One server, asked as one account, or as nobody before anybody has signed
+ * in. Every picture and every film is fetched through [http] too, so all of
+ * them carry the same session.
+ */
+class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: String?) {
+    private val host = origin.value.toHttpUrl().host
+    private val port = origin.value.toHttpUrl().port
+
+    val http: OkHttpClient = base.newBuilder()
+        .addInterceptor { chain ->
+            val asked = chain.request()
+            val ours = token != null && asked.url.host == host && asked.url.port == port
+            chain.proceed(if (ours) asked.newBuilder().header("Cookie", "$SESSION_COOKIE=$token").build() else asked)
+        }
+        .build()
+
+    /** Where a path of the server's is, written whole. */
+    fun address(path: String): String = if ("://" in path) path else origin.value + path
+
+    fun signedInAs(token: String?) = Api(origin, base, token)
+
+    suspend fun names(): DoorNames = get("/api/v1/public/names", DoorNames.serializer())
+
+    suspend fun branding(): Branding = get("/api/v1/public/branding", Branding.serializer())
+
+    /** Signs in, and gives back the account with its session; a wrong name
+     *  or password is a [Refusal] of 401. */
+    suspend fun signIn(name: String, password: String, client: String): Pair<Account, String> =
+        withContext(Dispatchers.IO) {
+            val body = serverJson.encodeToString(SignIn.serializer(), SignIn(name, password, remember = true, client))
+            http.newCall(request("/api/v1/session").post(body.asJson()).build()).execute().use { answer ->
+                val account = read(answer, Account.serializer())
+                val session = answer.headers("Set-Cookie")
+                    .firstNotNullOfOrNull { cookie ->
+                        cookie.substringBefore(';').takeIf { it.startsWith("$SESSION_COOKIE=") }?.substringAfter('=')
+                    }
+                    ?: throw Refusal(answer.code, "no_session")
+                account to session
+            }
+        }
+
+    suspend fun me(): Account = get("/api/v1/me", Account.serializer())
+
+    /** Names this device in the account's list of devices. */
+    suspend fun nameTheDevice() = send("PUT", "/api/v1/me/browser", buildJsonObject { put("browser", DEVICE_NAME) })
+
+    suspend fun signOut() = send("DELETE", "/api/v1/session", null)
+
+    suspend fun preferences(): Preferences = get("/api/v1/preferences", Preferences.serializer())
+
+    suspend fun home(): Home = get("/api/v1/home", Home.serializer())
+
+    suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
+
+    suspend fun works(library: String, after: String?, limit: Int): CardPage {
+        val url = address("/api/v1/works").toHttpUrl().newBuilder()
+            .addQueryParameter("library", library)
+            .addQueryParameter("limit", limit.toString())
+            .apply { after?.let { addQueryParameter("after", it) } }
+            .build()
+        return get(url.toString(), CardPage.serializer())
+    }
+
+    suspend fun work(id: String): Work = get("/api/v1/works/$id", Work.serializer())
+
+    /** watched, favourite or watch-later, set on or off; the answer is what
+     *  the server holds now. */
+    suspend fun mark(work: String, mark: String, on: Boolean): Boolean {
+        val field = mark.replace('-', '_')
+        val answer = send("PUT", "/api/v1/works/$work/$mark", buildJsonObject { put(field, on) })
+        return answer?.get(field)?.jsonPrimitive?.booleanOrNull == true
+    }
+
+    /**
+     * How the server will hand this file over to a device that plays what
+     * [profile] says, with these tracks, said by a player about to show it.
+     */
+    suspend fun plan(source: String, profile: JsonElement, audio: String?, subtitle: TrackChoice): Plan =
+        post("/api/v1/playback/$source/plan", watched(profile, audio, subtitle), Plan.serializer())
+
+    /** Opens a film the server rebuilds, starting at [from] seconds. */
+    suspend fun openStream(source: String, profile: JsonElement, audio: String?, subtitle: TrackChoice, from: Double): StreamSession =
+        post(
+            "/api/v1/playback/$source/session",
+            JsonObject(watched(profile, audio, subtitle) + ("start_at_seconds" to JsonPrimitive(from))),
+            StreamSession.serializer(),
+        )
+
+    /** Tells the server a rebuilt film is still watched; false when it has
+     *  gone, and a new one has to be opened. */
+    suspend fun keepStream(id: String): Boolean = try {
+        send("POST", "/api/v1/stream/$id", JsonObject(emptyMap()))
+        true
+    } catch (refused: Refusal) {
+        if (refused.status !in 400..499) throw refused
+        false
+    }
+
+    suspend fun closeStream(id: String) {
+        send("DELETE", "/api/v1/stream/$id", null)
+    }
+
+    /** Where the film is and whether it stands still. Below a few seconds
+     *  only that the player is there: a position worth keeping starts later. */
+    suspend fun report(work: String, seconds: Double, paused: Boolean, leaving: Boolean): Heard {
+        val path = if (seconds >= WORTH_KEEPING_S) "/api/v1/playback/progress" else "/api/v1/playback/watching"
+        val body = buildJsonObject {
+            put("work_id", work)
+            put("position_seconds", if (seconds > 0) JsonPrimitive(seconds) else JsonNull)
+            put("paused", paused)
+            put("leaving", leaving)
+        }
+        return post(path, body, Heard.serializer())
+    }
+
+    /** Remembers the tracks chosen, so the next time starts the same way. */
+    suspend fun rememberTracks(work: String, source: String, audio: String?, subtitle: String?) {
+        send(
+            "POST",
+            "/api/v1/playback/tracks",
+            buildJsonObject {
+                put("work_id", work)
+                put("source_id", source)
+                audio?.let { put("audio_track_id", it) }
+                subtitle?.let { put("subtitle_track_id", it) }
+            },
+        )
+    }
+
+    private fun watched(profile: JsonElement, audio: String?, subtitle: TrackChoice): JsonObject =
+        buildJsonObject {
+            put("profile", profile)
+            put("watching", true)
+            audio?.let { put("audio_track_id", it) }
+            when (subtitle) {
+                TrackChoice.Off -> put("subtitles_off", true)
+                is TrackChoice.Painted -> put("subtitle_track_id", subtitle.id)
+                TrackChoice.Unsaid -> Unit
+            }
+        }
+
+    private suspend fun <T> post(path: String, body: JsonObject, answer: DeserializationStrategy<T>): T =
+        withContext(Dispatchers.IO) {
+            http.newCall(request(path).post(body.toString().asJson()).build()).execute().use { read(it, answer) }
+        }
+
+    suspend fun <T> get(path: String, answer: DeserializationStrategy<T>): T = withContext(Dispatchers.IO) {
+        http.newCall(request(path).get().build()).execute().use { read(it, answer) }
+    }
+
+    /** Sends a change, and gives back the server's answer as it wrote it. */
+    suspend fun send(method: String, path: String, body: JsonObject?): JsonObject? = withContext(Dispatchers.IO) {
+        val sent = body?.toString()?.asJson()
+        http.newCall(request(path).method(method, sent).build()).execute().use { answer ->
+            read(answer, JsonObject.serializer())
+        }
+    }
+
+    private fun request(path: String) = Request.Builder().url(address(path)).header("Accept", "application/json")
+
+    private fun String.asJson(): RequestBody = toRequestBody(JSON)
+
+    private fun <T> read(answer: Response, reading: DeserializationStrategy<T>): T {
+        val text = answer.body.string()
+        if (!answer.isSuccessful) {
+            val failure = try {
+                serverJson.decodeFromString(Failure.serializer(), text)
+            } catch (_: SerializationException) {
+                null
+            }
+            throw Refusal(answer.code, failure?.code, failure?.details?.seconds)
+        }
+        return try {
+            serverJson.decodeFromString(reading, text)
+        } catch (failure: SerializationException) {
+            throw Refusal(answer.code, "unreadable: ${failure.message}")
+        }
+    }
+}
