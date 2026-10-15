@@ -167,7 +167,7 @@ export function Door({
               {/* A mark of the administrator's own stays in its own colours;
                   the one Melyxar ships takes the accent, like the rest of the
                   page. */}
-              <ServerMark branding={branding} size={64} className="door-greeting-mark" />
+              <ServerMark branding={branding} size={140} className="door-greeting-mark" />
               <h1 className="door-welcome">
                 {t("door.welcome_before")}
                 <span className="door-welcome-name">{branding.server_name}</span>

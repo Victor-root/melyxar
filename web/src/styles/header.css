@@ -178,9 +178,14 @@
    logo's own light and shade: hard light keeps the colour beneath where the
    relief is a middle grey and lightens or darkens it from there. See mark.ts
    for the colour beneath. */
+/* Drawn at the size it was asked for, which a stylesheet may change for a
+   place of its own: the size it was asked for also decides which relief is
+   fetched, so it is the largest it will ever be drawn at. */
 .melyxar-mark {
   flex: none;
   display: inline-block;
+  width: var(--mark-size);
+  height: var(--mark-size);
   isolation: isolate;
   background: var(--mark-colour);
   -webkit-mask: var(--relief) center / contain no-repeat;
