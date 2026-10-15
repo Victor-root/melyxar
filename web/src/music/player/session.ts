@@ -8,10 +8,13 @@
  * finished listening wants it gone.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { pictureSet } from "../../api";
+import { appMusic } from "./app-music";
+import type { Described } from "./app-music";
 import type { Music } from "./player";
 import { useMusicTime } from "./player";
+import { canStepOn } from "./queue";
 
 export function useMediaSession(music: Music): void {
   const { song, playing } = music;
@@ -118,4 +121,73 @@ export function MediaSessionPosition({ song }: { song: Music["song"] }) {
     }
   }, [session, song, position, length]);
   return null;
+}
+
+/**
+ * The same card inside the Android application, drawn by its engine rather
+ * than by the web view, which shows none: the song as the page describes it,
+ * and every press on the card, a headset or a watch handed back to the
+ * page's own buttons. Where the song has got to, the engine reads itself.
+ */
+export function useEngineCard(music: Music): void {
+  const { song, queue } = music;
+  const stepOn = canStepOn(queue);
+
+  useEffect(() => {
+    if (!appMusic) {
+      return;
+    }
+    if (!song) {
+      appMusic.describe(null);
+      return;
+    }
+    const largest = [...song.cover].sort((one, other) => (other.width ?? 0) - (one.width ?? 0))[0];
+    const described: Described = {
+      title: song.title,
+      artist: song.artists.map((artist) => artist.name).join(", "),
+      album: song.album?.name ?? "",
+      artwork: largest ? new URL(largest.url, window.location.origin).toString() : null,
+      seconds: song.seconds,
+      canStepOn: stepOn,
+    };
+    appMusic.describe(JSON.stringify(described));
+  }, [song, stepOn]);
+
+  const musicNow = useRef(music);
+  musicNow.current = music;
+  useEffect(() => {
+    if (!appMusic) {
+      return;
+    }
+    window.melyxarMusicAsked = (asked, seconds) => {
+      const now = musicNow.current;
+      switch (asked) {
+        case "play":
+          if (!now.playing) {
+            now.toggle();
+          }
+          break;
+        case "pause":
+          if (now.playing) {
+            now.toggle();
+          }
+          break;
+        case "next":
+          now.next();
+          break;
+        case "previous":
+          now.previous();
+          break;
+        case "stop":
+          now.stop();
+          break;
+        case "seek":
+          now.seek(seconds);
+          break;
+      }
+    };
+    return () => {
+      window.melyxarMusicAsked = undefined;
+    };
+  }, []);
 }
