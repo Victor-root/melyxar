@@ -9,7 +9,6 @@
  * the session's cookie.
  */
 
-import { appWindow } from "./app-window";
 import { tabWearsTheLogo } from "./mark";
 
 /** Where the manifest and the icons are served. */
@@ -94,9 +93,6 @@ export function markTheApp(): void {
  * icons are coloured is chosen from this colour: the accent is dark enough to
  * have them drawn white, and white on the light page is nothing at all. Called
  * whenever the accent or the theme changes.
- *
- * Melyxar's Android application draws the page under the phone's bars without
- * reading this, so it is told the same colour, to choose the same way.
  */
 export function colourTheWindow(): void {
   const accent = tokenOf("--accent");
@@ -111,5 +107,4 @@ export function colourTheWindow(): void {
     return made;
   });
   meta.content = `#${colour}`;
-  appWindow?.colour(`#${colour}`);
 }

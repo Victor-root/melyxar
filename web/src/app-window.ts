@@ -3,9 +3,8 @@
  *
  * The application draws the page under the phone's bars, its camera and its
  * keyboard, and says itself how much room each takes, rather than leaving it
- * to the web view, which only learnt to say so in its recent versions. In
- * return the page tells it the colour of its window, from which the bars'
- * icons are drawn dark or light.
+ * to the web view, which only learnt to say so in its recent versions. The
+ * bars' icons it draws dark or light itself, from what it sees under them.
  *
  * Absent in a browser, where nothing here is used.
  */
@@ -21,8 +20,6 @@ export interface Edges {
 interface AppWindow {
   /** The JSON of the {@link Edges} as they are now. */
   edges(): string;
-  /** The colour the page gives its window, as `#rrggbb`. */
-  colour(colour: string): void;
 }
 
 declare global {

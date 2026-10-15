@@ -68,6 +68,7 @@ class WebActivity : ComponentActivity() {
     private lateinit var notice: ComposeView
     private lateinit var film: FilmPlayer
     private lateinit var pageWindow: PageWindow
+    private lateinit var barShades: BarShades
     private val chrome = InterfaceChrome()
 
     /** The page waiting for files somebody picks, while the picker is open. */
@@ -91,7 +92,8 @@ class WebActivity : ComponentActivity() {
         val holder = FrameLayout(this)
         page = interfacePage()
         pageWindow = PageWindow(this, holder, page)
-        film = FilmPlayer(this, page, Melyxar.ground.toArgb(), ::isTheServers, pageWindow::filmShown)
+        barShades = BarShades(this, page)
+        film = FilmPlayer(this, page, Melyxar.ground.toArgb(), ::isTheServers, barShades::filmShown)
         page.addJavascriptInterface(film, "MelyxarPlayer")
         page.addJavascriptInterface(pageWindow, "MelyxarWindow")
         holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))
