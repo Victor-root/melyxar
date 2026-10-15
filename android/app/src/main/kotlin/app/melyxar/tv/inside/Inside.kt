@@ -16,6 +16,11 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.melyxar.server.Account
@@ -50,6 +55,10 @@ sealed interface Place {
 
     data class Opened(val work: String) : Place {
         override val key = "work:$work"
+    }
+
+    data object Search : Place {
+        override val key = "search"
     }
 
     data class Playing(val play: Play) : Place {
@@ -139,6 +148,12 @@ fun Inside(
                         trail.add(place)
                     }
                     is Place.Opened, is Place.Playing -> trail.add(place)
+                    // One search at a time: going to it again comes back to
+                    // the one already open.
+                    Place.Search -> {
+                        val open = trail.indexOf(Place.Search)
+                        if (open >= 0) backTo(open + 1) else trail.add(place)
+                    }
                 }
             },
             canGoBack = trail.size > 1,
@@ -154,7 +169,17 @@ fun Inside(
         }
         TvLook(palette) {
             CompositionLocalProvider(LocalChrome provides chrome) {
-                Box(Modifier.fillMaxSize().background(LocalPalette.current.ground)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(LocalPalette.current.ground)
+                        // The search key of a remote that has one.
+                        .onKeyEvent { event ->
+                            val asked = event.key == Key.Search && event.type == KeyEventType.KeyUp
+                            if (asked) chrome.go(Place.Search)
+                            asked
+                        },
+                ) {
                     // What the account chose to draw behind its pages, once
                     // its choice is known.
                     chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
@@ -163,6 +188,7 @@ fun Inside(
                             Place.Home -> HomeScreen(comebacks)
                             is Place.Shelf -> LibraryScreen(here.library, comebacks)
                             is Place.Opened -> WorkScreen(here.work, comebacks)
+                            Place.Search -> SearchScreen(comebacks)
                             // The film is always shown dark, as the web's player is.
                             is Place.Playing -> key(here.play) {
                                 TvLook(paletteOf(chosenAccent, light = false)) {
