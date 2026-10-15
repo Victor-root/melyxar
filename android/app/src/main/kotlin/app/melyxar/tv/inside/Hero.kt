@@ -34,7 +34,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -155,31 +155,32 @@ private fun Modifier.onKey(key: Key, action: () -> Unit) = onPreviewKeyEvent { e
 @Composable
 private fun Backdrop(work: WithCard<HeroMore>) {
     val palette = LocalPalette.current
-    Box(Modifier.fillMaxSize().drawWithContent {
-        drawContent()
+    Box(Modifier.fillMaxSize().drawWithCache {
         // The picture fades into the page at its foot, and to its left
         // where the words stand.
-        drawRect(
-            Brush.verticalGradient(
-                0.66f to Color.Transparent,
-                0.78f to palette.ground.copy(alpha = 0.12f),
-                0.87f to palette.ground.copy(alpha = 0.44f),
-                0.94f to palette.ground.copy(alpha = 0.76f),
-                1f to palette.ground,
-            ),
+        val foot = Brush.verticalGradient(
+            0.66f to Color.Transparent,
+            0.78f to palette.ground.copy(alpha = 0.12f),
+            0.87f to palette.ground.copy(alpha = 0.44f),
+            0.94f to palette.ground.copy(alpha = 0.76f),
+            1f to palette.ground,
         )
         // Shaded enough on the left to read the words over, never so much
         // that the picture looks pushed aside: a solid edge reads as a hole.
-        drawRect(
-            Brush.horizontalGradient(
-                0f to palette.ground.copy(alpha = 0.8f),
-                0.18f to palette.ground.copy(alpha = 0.6f),
-                0.38f to palette.ground.copy(alpha = 0.3f),
-                0.56f to palette.ground.copy(alpha = 0.08f),
-                0.7f to Color.Transparent,
-            ),
+        val words = Brush.horizontalGradient(
+            0f to palette.ground.copy(alpha = 0.8f),
+            0.18f to palette.ground.copy(alpha = 0.6f),
+            0.38f to palette.ground.copy(alpha = 0.3f),
+            0.56f to palette.ground.copy(alpha = 0.08f),
+            0.7f to Color.Transparent,
         )
-        drawRect(Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground))
+        val below = Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground)
+        onDrawWithContent {
+            drawContent()
+            drawRect(foot)
+            drawRect(words)
+            drawRect(below)
+        }
     }) {
         ServerPicture(
             work.more.backdrop.ifEmpty { work.card.wide },

@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -120,17 +121,23 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
             .grows({ lit }, 1.035f)
             .glow(CardShape, palette.accent, 22.dp) { 0.35f + 0.65f * lit }
             .clip(CardShape)
-            .drawBehind {
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(Color(mix(front, palette.surfaceRaised.toArgb(), 0.24f)), palette.ground),
-                    ),
+            // Laid out once for the tile; only the halo behind the fan is
+            // drawn again as it lights.
+            .drawWithCache {
+                val ground = Brush.verticalGradient(
+                    listOf(Color(mix(front, palette.surfaceRaised.toArgb(), 0.24f)), palette.ground),
                 )
-                glowAt(Offset(size.width * 0.17f, size.height * 0.09f), size.width * 0.84f, palette.accent.copy(alpha = 0.30f * force))
-                glowAt(Offset(size.width * 0.89f, size.height * 0.13f), size.width * 0.72f, Color(front).copy(alpha = 0.52f * force))
-                glowAt(Offset(size.width * 0.5f, size.height * 0.97f), size.width * 0.78f, palette.accentDim.copy(alpha = 0.24f * force))
-                // The halo behind the fan.
-                glowAt(Offset(size.width * 0.5f, size.height * 0.5f), size.width * 0.5f, palette.accent.copy(alpha = 0.30f * lit))
+                val pools = listOf(
+                    glowAt(Offset(size.width * 0.17f, size.height * 0.09f), size.width * 0.84f, palette.accent.copy(alpha = 0.30f * force)),
+                    glowAt(Offset(size.width * 0.89f, size.height * 0.13f), size.width * 0.72f, Color(front).copy(alpha = 0.52f * force)),
+                    glowAt(Offset(size.width * 0.5f, size.height * 0.97f), size.width * 0.78f, palette.accentDim.copy(alpha = 0.24f * force)),
+                )
+                val halo = glowAt(Offset(size.width * 0.5f, size.height * 0.5f), size.width * 0.5f, palette.accent.copy(alpha = 0.30f))
+                onDrawBehind {
+                    drawRect(ground)
+                    pools.forEach { drawRect(it) }
+                    drawRect(halo, alpha = lit)
+                }
             }
             .clickable(interaction, indication = null, onClick = onClick),
     ) {
@@ -143,14 +150,13 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
         Fan(fan, { lit })
         // The foot of the tile sinks into the ground, under the name.
         Box(
-            Modifier.fillMaxSize().drawBehind {
-                drawRect(
-                    Brush.verticalGradient(
-                        0.70f to Color.Transparent,
-                        0.80f to palette.ground.copy(alpha = 0.55f),
-                        0.87f to palette.ground,
-                    ),
+            Modifier.fillMaxSize().drawWithCache {
+                val foot = Brush.verticalGradient(
+                    0.70f to Color.Transparent,
+                    0.80f to palette.ground.copy(alpha = 0.55f),
+                    0.87f to palette.ground,
                 )
+                onDrawBehind { drawRect(foot) }
             },
         )
         Row(
@@ -209,16 +215,15 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
             ) {
                 ServerPicture(card.poster, across, Modifier.fillMaxSize())
                 Box(
-                    Modifier.fillMaxSize().drawBehind {
+                    Modifier.fillMaxSize().drawWithCache {
                         // The sheen across each poster.
-                        drawRect(
-                            Brush.linearGradient(
-                                0f to palette.text.copy(alpha = 0.11f),
-                                0.34f to Color.Transparent,
-                                start = Offset(0f, 0f),
-                                end = Offset(size.width * 0.4f, size.height),
-                            ),
+                        val sheen = Brush.linearGradient(
+                            0f to palette.text.copy(alpha = 0.11f),
+                            0.34f to Color.Transparent,
+                            start = Offset(0f, 0f),
+                            end = Offset(size.width * 0.4f, size.height),
                         )
+                        onDrawBehind { drawRect(sheen) }
                     },
                 )
             }
@@ -226,6 +231,5 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.glowAt(center: Offset, radius: Float, colour: Color) {
-    drawRect(Brush.radialGradient(listOf(colour, Color.Transparent), center = center, radius = radius))
-}
+private fun glowAt(center: Offset, radius: Float, colour: Color): Brush =
+    Brush.radialGradient(listOf(colour, Color.Transparent), center = center, radius = radius)

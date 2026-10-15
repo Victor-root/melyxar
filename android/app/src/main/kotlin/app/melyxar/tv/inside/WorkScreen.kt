@@ -31,7 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -150,16 +150,18 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
 @Composable
 private fun Backdrop(work: Work) {
     val palette = LocalPalette.current
-    Box(Modifier.fillMaxSize().drawWithContent {
-        drawContent()
-        drawRect(
-            Brush.horizontalGradient(
-                0.18f to palette.ground,
-                0.55f to palette.ground.copy(alpha = 0.7f),
-                1f to palette.ground.copy(alpha = 0.4f),
-            ),
+    Box(Modifier.fillMaxSize().drawWithCache {
+        val words = Brush.horizontalGradient(
+            0.18f to palette.ground,
+            0.55f to palette.ground.copy(alpha = 0.7f),
+            1f to palette.ground.copy(alpha = 0.4f),
         )
-        drawRect(Brush.verticalGradient(0.4f to Color.Transparent, 1f to palette.ground))
+        val foot = Brush.verticalGradient(0.4f to Color.Transparent, 1f to palette.ground)
+        onDrawWithContent {
+            drawContent()
+            drawRect(words)
+            drawRect(foot)
+        }
     }) {
         ServerPicture(work.backdrop, 960.dp, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
     }

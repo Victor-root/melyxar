@@ -21,7 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -199,15 +199,17 @@ private fun NoPicture(card: Card, across: Dp) {
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
-            .drawBehind {
-                drawRect(Brush.verticalGradient(listOf(Color(mix(own, ground, 0.6f)), Color(mix(own, ground, 0.25f)))))
-                drawRect(
-                    Brush.radialGradient(
-                        listOf(palette.accent.copy(alpha = 0.16f), Color.Transparent),
-                        center = Offset(size.width / 2, 0f),
-                        radius = size.width * 1.2f,
-                    ),
+            .drawWithCache {
+                val fade = Brush.verticalGradient(listOf(Color(mix(own, ground, 0.6f)), Color(mix(own, ground, 0.25f))))
+                val light = Brush.radialGradient(
+                    listOf(palette.accent.copy(alpha = 0.16f), Color.Transparent),
+                    center = Offset(size.width / 2, 0f),
+                    radius = size.width * 1.2f,
                 )
+                onDrawBehind {
+                    drawRect(fade)
+                    drawRect(light)
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
