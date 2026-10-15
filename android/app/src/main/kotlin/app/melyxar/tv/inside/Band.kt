@@ -59,7 +59,6 @@ import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
-import app.melyxar.tv.look.shadowCard
 import app.melyxar.tv.look.shadowRaised
 
 /** A tile of the band. */
@@ -183,7 +182,9 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
 /**
  * The way into the library, as the web's `.band-arrow`: a round of the
  * accent at 20% ringed by it at 45% and lit round, filled with the accent
- * as the tile lights.
+ * as the tile lights. Its sizes are the web's measured against a tile of a
+ * large screen, 340 points across, scaled to this one: the web's own 30
+ * points on a tile this small stood over the posters.
  */
 @Composable
 private fun Arrow(lit: () -> Float) {
@@ -191,25 +192,28 @@ private fun Arrow(lit: () -> Float) {
     val shown = lit() > 0.5f
     Box(
         Modifier
-            .size(30.dp)
+            .size(30.dp * ARROW_SCALE)
             .boxShadow(
                 CircleShape,
                 BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 0.dp, spread = 1.dp),
-                BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp),
+                BoxShadow(palette.accentGlow, blur = 14.dp * ARROW_SCALE, spread = 2.dp * ARROW_SCALE),
             ) { 1f - lit() }
             .boxShadow(
                 CircleShape,
                 BoxShadow(palette.accent, blur = 0.dp, spread = 1.dp),
-                BoxShadow(palette.accentGlow, blur = 22.dp, spread = 4.dp),
+                BoxShadow(palette.accentGlow, blur = 22.dp * ARROW_SCALE, spread = 4.dp * ARROW_SCALE),
                 shown = lit,
             )
             .clip(CircleShape)
             .drawBehind { drawRect(palette.accent.copy(alpha = 0.2f + 0.8f * lit())) },
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(Icons.ChevronRight, if (shown) palette.accentContrast else palette.accentBright, 16.dp)
+        Glyph(Icons.ChevronRight, if (shown) palette.accentContrast else palette.accentBright, 18.dp * ARROW_SCALE)
     }
 }
+
+/** The tile of a large screen the web's arrow is drawn for, against this one. */
+private val ARROW_SCALE = TileWidth / 340.dp
 
 /** The fan of posters, standing on a line at 69% of the tile. */
 @Composable
@@ -236,7 +240,10 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                     }
                     // The front poster stands raised, with a brighter edge and
                     // the air of the accent just off it; the others lie on
-                    // the tile with a fainter edge.
+                    // the tile with a fainter edge and no shadow of their
+                    // own. They lean as the fan opens, and the graphics card
+                    // works the blur of a leaning box out afresh at every
+                    // frame of it, which a television cannot keep up with.
                     .then(
                         if (at == 0) {
                             Modifier.boxShadow(
@@ -246,7 +253,7 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                                 BoxShadow(palette.accentGlow, blur = 38.dp, spread = (-6).dp),
                             )
                         } else {
-                            Modifier.boxShadow(shape, palette.shadowCard, BoxShadow(palette.text.copy(alpha = 0.14f), blur = 0.dp, spread = 1.dp))
+                            Modifier.boxShadow(shape, BoxShadow(palette.text.copy(alpha = 0.14f), blur = 0.dp, spread = 1.dp))
                         },
                     )
                     .clip(shape),
