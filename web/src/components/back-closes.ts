@@ -118,7 +118,8 @@ async function takeOut(entry: Entry): Promise<void> {
  * `onBack` is told when the back key was pressed, and answers true when what
  * it stands for is still there and the key should be waited for again: a
  * panel that went back to the one it came from. Nothing is done while
- * `enabled` is false.
+ * `enabled` is false. A new `key` while it is enabled is something new in the
+ * same place, the next episode in the player: a step of its own.
  *
  * Returns what leaves the history for any other way of shutting: it takes the
  * entry out and then does what it is given, at once when there is none.
@@ -126,6 +127,7 @@ async function takeOut(entry: Entry): Promise<void> {
 export function useBackClosesIt(
   onBack: () => boolean | void,
   enabled = true,
+  key: string | null = null,
 ): (then: () => void) => void {
   const mine = useRef<Entry | null>(null);
   const backRef = useRef(onBack);
@@ -160,7 +162,7 @@ export function useBackClosesIt(
       window.removeEventListener("popstate", moved);
       inTurn(() => takeOut(entry));
     };
-  }, [enabled]);
+  }, [enabled, key]);
 
   return useCallback((then: () => void) => {
     const entry = mine.current;

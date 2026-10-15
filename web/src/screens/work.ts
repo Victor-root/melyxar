@@ -20,6 +20,7 @@ import { useMarks } from "../marks";
 import type { Trailer } from "../components/trailer";
 import { embedOf } from "../trailers";
 import { forgetTheQueue, movedTo, theQueue, whatComesNext } from "../queue";
+import { afterTheOverlays, useBackClosesIt } from "../components/back-closes";
 
 /**
  * What the address says when a page is meant to start playing by itself.
@@ -395,7 +396,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      goes, whether it now counts as seen. Read again without emptying the
      screen, which is still the same film. */
   const { look } = asked;
-  const stopPlaying = useCallback(() => {
+  const stopThePlayer = useCallback(() => {
     // Leaving the film ends the sitting, and what was to follow it with it.
     forgetTheQueue();
     setPlaying(null);
@@ -406,6 +407,15 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     }
     look();
   }, [look, navigate]);
+  /* The film is a step of its own in the history, over the page it was
+     started from: the back key of a phone shuts it, as the player's own way
+     out does, rather than leaving the page under it, or the app. The next
+     episode is a new step, in the place of the last. */
+  const leaveThePlayer = useBackClosesIt(stopThePlayer, playing !== null, id ?? null);
+  const stopPlaying = useCallback(
+    () => leaveThePlayer(stopThePlayer),
+    [leaveThePlayer, stopThePlayer],
+  );
   const watchTrailer = useCallback((wanted: Trailer) => setTrailer(wanted), []);
   const stopTrailer = useCallback(() => setTrailer(null), []);
 
@@ -417,13 +427,15 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      episodes watched one after the other are one sitting, and the way back
      leads out of it rather than through each of them. */
   const stepTo = useCallback(
-    (next: Playable) => {
-      stepping.current = true;
-      navigate(`/work/${next.id}`, { replace: true });
-      if (next.source_id) {
-        setPlaying({ source: next.source_id, fromTheStart: false });
-      }
-    },
+    (next: Playable) =>
+      // The page is the one replaced, so the film's own step is out first.
+      afterTheOverlays(() => {
+        stepping.current = true;
+        navigate(`/work/${next.id}`, { replace: true });
+        if (next.source_id) {
+          setPlaying({ source: next.source_id, fromTheStart: false });
+        }
+      }),
     [navigate],
   );
 
@@ -446,10 +458,12 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
       stepTo(nextUp);
       return;
     }
-    if (queue) {
-      movedTo(queue, following);
-    }
-    navigate(`/work/${following}?${START_AT_ONCE}`, { replace: true });
+    afterTheOverlays(() => {
+      if (queue) {
+        movedTo(queue, following);
+      }
+      navigate(`/work/${following}?${START_AT_ONCE}`, { replace: true });
+    });
   }, [following, nextUp, queue, stepTo, navigate]);
 
   return {
