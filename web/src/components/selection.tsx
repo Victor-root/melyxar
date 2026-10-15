@@ -25,6 +25,7 @@ import { howMany } from "../readable";
 import { IN_THE_BANNER, marksThemAll, pressed } from "../selecting";
 import { useSettings } from "../settings";
 import { DeleteDialog } from "./deletion";
+import { useBackClosesIt } from "./back-closes";
 import { COLLECTIONS, PLAYLISTS, PutInListsDialog } from "./lists";
 
 interface Selection {
@@ -81,6 +82,9 @@ export function Selecting({ items, children }: { items: Card[]; children: ReactN
     setChosen(new Set());
     setFrom(null);
   }, []);
+
+  // The back key of a phone lets go of what is chosen, as it does anywhere.
+  useBackClosesIt(letGo, selecting);
 
   useEffect(() => {
     if (!selecting) {

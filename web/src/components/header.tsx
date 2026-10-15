@@ -73,6 +73,7 @@ import {
 } from "../icons";
 import { ServerMark } from "./server-mark";
 import { sayTheBarIsOut } from "../bar-room";
+import { useBackClosesIt } from "./back-closes";
 import { music } from "../music/api";
 import { useNowPlayingPage } from "../music/player/opening";
 import { musicScopeOf, quickLinesOf } from "../music/search";
@@ -517,6 +518,16 @@ export function Header({
 
   const quickOpen =
     looking && words !== "" && (area !== null || quickResults !== null) && !quickDismissed;
+
+  /* The back key of a phone puts away the few results first, then the field
+     opened by hand. Not a field open because the address is a search: that
+     is the page, and the back key leaves it. */
+  useBackClosesIt(() => {
+    field.current?.blur();
+    setLooking(false);
+    setQuery("");
+  }, looking && !parameters.has("search"));
+  useBackClosesIt(() => setQuickDismissed(true), quickOpen);
 
   /* Measured against the bar rather than against the field: the field grows
      while somebody watches, and a panel chasing that growth would jump under
