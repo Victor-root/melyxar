@@ -47,6 +47,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
 import app.melyxar.server.NextEpisode
+import app.melyxar.tv.inside.LocalMarks
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
 import app.melyxar.tv.inside.rememberLoaded
@@ -74,10 +75,11 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val context = LocalContext.current
     val api = LocalServer.current
     val scope = rememberCoroutineScope()
+    val marks = LocalMarks.current
     val source = play.source
     val work = rememberLoaded("work:${play.work}") { work(play.work) }.value.ready
     val playback = remember(play) {
-        source?.let { Playback(context, api, play.work, it, play.from, scope, onStopped = onDone) }
+        source?.let { Playback(context, api, play.work, it, play.from, scope, onStopped = onDone, onLeft = marks::rowsHaveMoved) }
     }
     DisposableEffect(playback) { onDispose { playback?.leave() } }
     if (playback == null) {

@@ -28,12 +28,13 @@ enum class Shortlist { Favourites, WatchLater }
 
 /**
  * The account's favourites, or what it set aside to watch later, in a grid
- * as the web's pages show them. Read again on coming back, so a work taken
- * off the list on its page has left it.
+ * as the web's pages show them: a work taken off the list has left it at
+ * once, and the list is read again on coming back.
  */
 @Composable
 fun ShortlistScreen(list: Shortlist, comebacks: Int) {
     val chrome = LocalChrome.current
+    val marks = LocalMarks.current
     val palette = LocalPalette.current
     val memory = rememberFocusMemory()
     val first = remember { FocusRequester() }
@@ -52,6 +53,12 @@ fun ShortlistScreen(list: Shortlist, comebacks: Int) {
         grid = rememberLazyGridState(),
         onOpen = { chrome.go(Place.Opened(it.id)) },
         firstCard = first,
+        belongs = {
+            when (list) {
+                Shortlist.Favourites -> marks.favourite(it)
+                Shortlist.WatchLater -> marks.watchLater(it)
+            }
+        },
     ) {
         Column {
             // The grid keeps the page's margin already.

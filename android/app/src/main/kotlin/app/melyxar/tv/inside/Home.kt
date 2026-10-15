@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.dp
 import app.melyxar.R
 import app.melyxar.server.Card
 import app.melyxar.server.Home
-import app.melyxar.tv.howFarIn
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.Icons
 
@@ -34,6 +33,7 @@ import app.melyxar.tv.look.Icons
 @Composable
 fun HomeScreen(comebacks: Int) {
     val chrome = LocalChrome.current
+    val marks = LocalMarks.current
     var tries by remember { mutableIntStateOf(0) }
     val loaded = rememberLoaded("home", comebacks, tries) { home() }.value
     val memory = rememberFocusMemory()
@@ -50,7 +50,7 @@ fun HomeScreen(comebacks: Int) {
                             if (home.hero.isNotEmpty()) {
                                 Hero(
                                     items = home.hero,
-                                    onPlay = { chrome.play(Play(it.card.id, it.card.source, it.card.resumeFromSeconds?.toDouble())) },
+                                    onPlay = { chrome.play(Play(it.card.id, it.card.source, marks.whereabouts(it.card).resume?.toDouble())) },
                                     onOpen = { chrome.go(Place.Opened(it)) },
                                     first = first,
                                 )
@@ -85,15 +85,13 @@ private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: Foc
             section == "carry_on" -> section(section, home.carryOn) {
                 CardRow(stringResource(R.string.tv_carry_on), Icons.Eye, home.carryOn, key = { it.card.id }) { row ->
                     val card = row.card
-                    val length = lengthOfAPlay(card)
-                    val at = card.resumeFromSeconds?.toDouble() ?: 0.0
+                    val at = LocalMarks.current.whereabouts(card).resume?.toDouble() ?: 0.0
                     WorkCard(
                         card = card,
                         lying = true,
                         title = row.more.seriesTitle ?: card.title,
                         note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, card.title),
-                        trailing = whatIsLeft(at, length),
-                        progress = howFarIn(at, length),
+                        trailing = whatIsLeft(at, lengthOfAPlay(card)),
                         onClick = { open(card) },
                         modifier = Modifier.remembered(memory, "carry/${card.id}"),
                     )

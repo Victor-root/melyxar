@@ -25,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +47,6 @@ import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Child
 import app.melyxar.server.Credit
-import app.melyxar.server.Refusal
 import app.melyxar.server.Work
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.lengthOfAPlay
@@ -58,7 +56,6 @@ import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
@@ -69,13 +66,7 @@ import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
-import java.io.IOException
 import java.util.Locale
-import kotlinx.coroutines.launch
-
-/** What an account has said of a work, as the page shows it: changed at
- *  once on a press, and put back if the server refuses. */
-private data class Marks(val watched: Boolean, val favourite: Boolean, val watchLater: Boolean)
 
 /**
  * A work's page, as the web's: its picture behind everything, its poster,
@@ -216,8 +207,10 @@ private fun Top(work: Work, first: FocusRequester) {
             }
             Facts(work)
             Actions(work, first)
-            work.card?.resumeFromSeconds?.takeIf { work.kind != "series" }?.let { at ->
-                Progress(at.toDouble(), work.card.let(::lengthOfAPlay), width = 300.dp)
+            work.card?.takeIf { work.kind != "series" }?.let { card ->
+                LocalMarks.current.whereabouts(card).resume?.let { at ->
+                    Progress(at.toDouble(), lengthOfAPlay(card), width = 300.dp)
+                }
             }
             work.overview?.let { Synopsis(it, title = work.title, maxLines = 5) }
         }
@@ -281,33 +274,9 @@ private fun RatingMark(site: String, value: Double, fill: Brush, ink: Color) {
 @Composable
 private fun Actions(work: Work, first: FocusRequester) {
     val chrome = LocalChrome.current
-    val api = LocalServer.current
-    val signedOut = LocalSignedOut.current
-    val scope = rememberCoroutineScope()
+    val marks = LocalMarks.current
     val card = work.card
-    var marks by remember(card) {
-        mutableStateOf(Marks(card?.seen == "watched", card?.favourite == true, card?.watchLater == true))
-    }
-
-    fun mark(mark: String, to: Marks) {
-        val before = marks
-        marks = to
-        scope.launch {
-            try {
-                val on = when (mark) {
-                    "watched" -> to.watched
-                    "favourite" -> to.favourite
-                    else -> to.watchLater
-                }
-                api.mark(work.id, mark, on)
-            } catch (refused: Refusal) {
-                marks = before
-                if (refused.signedOut) signedOut()
-            } catch (_: IOException) {
-                marks = before
-            }
-        }
-    }
+    val whereabouts = card?.let(marks::whereabouts)
 
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -318,7 +287,7 @@ private fun Actions(work: Work, first: FocusRequester) {
         val source = work.versions.firstOrNull()?.id ?: card?.source
         when {
             work.kind == "series" || work.kind == "season" -> next?.let { episode ->
-                val started = card?.seen == "in_progress"
+                val started = whereabouts?.seen == "in_progress"
                 AccentButton(
                     stringResource(
                         if (started) R.string.tv_carry_on_at else R.string.tv_start_series,
@@ -330,7 +299,7 @@ private fun Actions(work: Work, first: FocusRequester) {
                 )
             }
             source != null -> {
-                val resumeAt = card?.resumeFromSeconds
+                val resumeAt = whereabouts?.resume
                 AccentButton(
                     stringResource(if (resumeAt != null) R.string.tv_resume else R.string.tv_play),
                     onClick = { chrome.play(Play(work.id, source, resumeAt?.toDouble() ?: 0.0)) },
@@ -345,28 +314,31 @@ private fun Actions(work: Work, first: FocusRequester) {
                 }
             }
         }
-        if (card?.watchedMarks != false) {
+        // Marks belong to a work the server sent a card for.
+        card ?: return@Row
+        if (card.watchedMarks) {
+            val watched = whereabouts?.seen == "watched"
             RoundMark(
                 Icons.Tick,
                 label = stringResource(R.string.tv_mark_watched),
-                on = marks.watched,
-                // Watched takes a work off the list to watch later, as the
-                // server does.
-                onClick = { mark("watched", marks.copy(watched = !marks.watched, watchLater = marks.watchLater && marks.watched)) },
+                on = watched,
+                onClick = { marks.setWatched(card, !watched) },
                 modifier = if (next == null && source == null) Modifier.focusRequester(first) else Modifier,
             )
         }
+        val favourite = marks.favourite(card)
         RoundMark(
-            if (marks.favourite) Icons.HeartFull else Icons.Heart,
+            if (favourite) Icons.HeartFull else Icons.Heart,
             label = stringResource(R.string.tv_favourites),
-            on = marks.favourite,
-            onClick = { mark("favourite", marks.copy(favourite = !marks.favourite)) },
+            on = favourite,
+            onClick = { marks.setFavourite(card, !favourite) },
         )
+        val later = marks.watchLater(card)
         RoundMark(
             Icons.Clock,
             label = stringResource(R.string.tv_watch_later),
-            on = marks.watchLater,
-            onClick = { mark("watch-later", marks.copy(watchLater = !marks.watchLater)) },
+            on = later,
+            onClick = { marks.setWatchLater(card, !later) },
         )
     }
 }
@@ -438,6 +410,7 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
 @Composable
 private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory) {
     val chrome = LocalChrome.current
+    val marks = LocalMarks.current
     CardRow(title, null, episodes, key = { it.card.id }) { episode ->
         val card = episode.card
         WorkCard(
@@ -445,7 +418,7 @@ private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory)
             lying = true,
             title = listOfNotNull(episode.number?.let { "$it." }, episode.title ?: card.title).joinToString(" "),
             note = card.runtimeMinutes?.takeIf { it > 0 }?.let { howLong(it) },
-            onClick = { chrome.play(Play(card.id, card.source, card.resumeFromSeconds?.toDouble())) },
+            onClick = { chrome.play(Play(card.id, card.source, marks.whereabouts(card).resume?.toDouble())) },
             modifier = Modifier.remembered(memory, "episode/${card.id}"),
         )
     }

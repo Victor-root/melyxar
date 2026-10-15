@@ -12,6 +12,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -112,14 +113,20 @@ fun Inside(
     var comebacks by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { comebacks += 1 }
 
+    val scope = rememberCoroutineScope()
     CompositionLocalProvider(
         LocalServer provides api,
         LocalPictures provides rememberPictures(api),
         LocalSignedOut provides onSignedOut,
         LocalAnswers provides remember(api) { HashMap() },
+        LocalMarks provides remember(api) { Marks(api, scope, onSignedOut) },
     ) {
         val chosen = rememberLoaded("preferences", comebacks) { preferences() }.value.ready
         val libraries = rememberLoaded("libraries", comebacks) { libraries() }.value.ready
+        val marks = LocalMarks.current
+        // What the libraries hold moved: every screen, the libraries above
+        // them included, reads again what it shows.
+        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved)
         val deviceIsDark = isSystemInDarkTheme()
         val chosenAccent = chosen?.accentColor?.let(::parseHex) ?: USUAL_ACCENT
         val palette = remember(chosen, branding.defaultTheme, deviceIsDark) {
