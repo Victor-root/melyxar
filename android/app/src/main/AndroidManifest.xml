@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The music keeps playing with the screen off or the application left,
+         from a service in the foreground, without letting the phone sleep
+         in the middle of a song it is still fetching. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Plain http is let through by the system because a server at home
          answers on it; the application itself refuses it outside the home
@@ -34,5 +41,20 @@
             android:exported="false"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true" />
+
+        <!-- Open to the phone's own controllers, the lock screen, a headset,
+             a car, which is what a session of music is for: none of them
+             holds a permission it could be asked for, and the session itself
+             only ever hands their presses to the page. -->
+        <service
+            android:name=".music.MusicService"
+            android:exported="true"
+            tools:ignore="ExportedService"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
