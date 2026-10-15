@@ -28,6 +28,7 @@ import type {
   Work,
 } from "../api";
 import type { Appearance } from "./appearance";
+import { appPlayer } from "./app-player";
 import type { Arrangement, Control, Zone } from "./arrangement";
 import { chapterStep } from "./chapters";
 import { asClock } from "../clock";
@@ -880,7 +881,7 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       );
 
     case "corner":
-      if (!("requestPictureInPicture" in HTMLVideoElement.prototype)) {
+      if (!appPlayer && !("requestPictureInPicture" in HTMLVideoElement.prototype)) {
         return null;
       }
       return (

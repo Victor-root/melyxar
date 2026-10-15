@@ -159,6 +159,26 @@
   background: #000;
 }
 
+/* Inside the application, the film is drawn beneath this page by the
+   application's own player, and has to be seen through it: the player and
+   everything under it in the page go see-through, and the rest of the page,
+   which the player covers anyway, is not drawn at all. The veil below stays
+   as it is, since covering the picture is still its whole point. */
+body:has(melyxar-picture) {
+  background: transparent;
+  visibility: hidden;
+}
+
+body:has(melyxar-picture) .player {
+  visibility: visible;
+}
+
+.player:has(melyxar-picture),
+.player:has(melyxar-picture) .player-stage,
+melyxar-picture.player-video {
+  background: transparent;
+}
+
 /* Laid over the picture while it is kept covered, the same black as the
    stage around it. */
 .player-veil {
