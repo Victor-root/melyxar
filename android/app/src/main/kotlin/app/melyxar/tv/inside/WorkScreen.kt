@@ -82,6 +82,9 @@ fun WorkScreen(id: String, comebacks: Int) {
     val first = remember { FocusRequester() }
     Box(Modifier.fillMaxSize()) {
         when {
+            // What somebody filmed or photographed is not shown as a film.
+            work?.kind == "photo" -> PhotoViewer(work.id)
+            work?.kind == "folder" -> FolderPage(work, memory, first)
             work != null -> Page(work, memory, first)
             loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
             else -> TopBar()
@@ -162,7 +165,7 @@ private fun Backdrop(work: Work) {
 @Composable
 private fun Top(work: Work, first: FocusRequester) {
     val palette = LocalPalette.current
-    val lying = work.kind == "episode"
+    val lying = work.kind == "episode" || work.kind == "video"
     Row(
         modifier = Modifier.padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 34.dp),
         horizontalArrangement = Arrangement.spacedBy(36.dp),
