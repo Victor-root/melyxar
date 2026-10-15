@@ -353,7 +353,7 @@ input[type="radio"]:disabled {
   box-shadow: var(--focus-rim);
 }
 
-.picker-open svg {
+.picker-open .picker-arrow {
   transform: rotate(180deg);
 }
 

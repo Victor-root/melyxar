@@ -435,7 +435,7 @@ export function Door({
           other, the last things read on this screen. */}
       <footer className="door-foot">
         <div className="door-settings">
-          <LanguagePicker />
+          <LanguagePicker quiet />
           <ThemeToggle />
         </div>
 
