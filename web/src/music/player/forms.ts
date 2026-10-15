@@ -1,7 +1,10 @@
 /*
  * The forms of sound this browser plays, asked of the browser itself, and
- * sent with every song so the server knows what can go out as it is.
+ * sent with every song so the server knows what can go out as it is. Inside
+ * the Android application, the engine says what the device decodes.
  */
+
+import { appMusic } from "./app-music";
 
 /** What the browser is asked, form by form. */
 const ASKED: [string, string][] = [
@@ -18,6 +21,9 @@ let known: string | null = null;
 
 /** The forms this browser plays, as the server reads them: `mp3,aac,flac`. */
 export function formsPlayedHere(): string {
+  if (known === null && appMusic) {
+    known = appMusic.forms();
+  }
   if (known === null) {
     const probe = document.createElement("audio");
     known = ASKED.filter(([, type]) => probe.canPlayType(type) !== "")
