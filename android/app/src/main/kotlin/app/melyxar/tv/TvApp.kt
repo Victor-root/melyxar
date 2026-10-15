@@ -28,7 +28,7 @@ private sealed interface Stage {
 }
 
 @Composable
-fun TvApp(servers: KnownServers, sessions: Sessions, onLeave: () -> Unit) {
+fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened: () -> Unit, onLeave: () -> Unit) {
     var stage by remember {
         mutableStateOf(servers.current()?.let { Stage.AtTheDoor(it) } ?: Stage.ChoosingServer)
     }
@@ -53,6 +53,8 @@ fun TvApp(servers: KnownServers, sessions: Sessions, onLeave: () -> Unit) {
             api = now.api,
             account = now.account,
             branding = now.branding,
+            opening = opening,
+            onOpened = onOpened,
             onChangeProfile = { stage = Stage.AtTheDoor(now.server) },
             onSignedOut = {
                 sessions.forget(now.api.origin, now.account.name)

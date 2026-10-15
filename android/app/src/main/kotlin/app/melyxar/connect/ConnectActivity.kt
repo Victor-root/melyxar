@@ -71,7 +71,13 @@ class ConnectActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (isTelevision()) {
-            startActivity(Intent(this, TvActivity::class.java))
+            // What the system's row asked to open goes along, to the
+            // television already open when it is.
+            startActivity(
+                Intent(this, TvActivity::class.java)
+                    .putExtras(intent)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            )
             finish()
             return
         }

@@ -61,6 +61,15 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- The pictures of the works in the television's own Continue
+             watching row, read by its home screen, which cannot read the
+             server's: only those, and only to read. -->
+        <provider
+            android:name=".tv.WatchNextPictures"
+            android:authorities="${applicationId}.watchnext"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
         <!-- Turning the phone, changing its theme or putting the film in a
              window of its own must not reload the interface: the page keeps
              where it is and what it plays. -->

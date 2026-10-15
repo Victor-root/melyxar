@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -14,12 +15,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.melyxar.R
 import app.melyxar.server.Card
 import app.melyxar.server.Home
+import app.melyxar.tv.WatchNext
 import app.melyxar.tv.lengthOfAPlay
+import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.Icons
 
 /**
@@ -39,6 +43,12 @@ fun HomeScreen(comebacks: Int) {
     val memory = rememberFocusMemory()
     val first = remember { FocusRequester() }
     val home = loaded.ready
+    val context = LocalContext.current
+    val api = LocalServer.current
+    // The system's own row follows Melyxar's, whenever home is read.
+    LaunchedEffect(home) {
+        home?.let { WatchNext(context).show(api, it.carryOn) }
+    }
     val open = { card: Card -> chrome.go(Place.Opened(card.id)) }
     val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
