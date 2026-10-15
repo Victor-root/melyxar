@@ -12,6 +12,7 @@ import type { Quality } from "./quality";
 import { storedCalibration } from "../calibration/run";
 import { whatToTellTheServer } from "../calibration/judge";
 import type { DeviceCalibration } from "../api";
+import { appPlayer } from "./app-player";
 
 /** One thing the server will ask about. */
 interface Probe {
@@ -360,6 +361,16 @@ export function forgetMeasuredCapabilities(): void {
 }
 
 export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
+  // Inside the application, what this device decodes is measured by the
+  // application itself, which reads the device's own decoders rather than
+  // what a browser lets a page ask.
+  if (appPlayer) {
+    return {
+      ...(JSON.parse(appPlayer.profile()) as ClientProfile),
+      max_height: asked?.height ?? null,
+      max_bitrate: asked?.bitrate ?? null,
+    };
+  }
   const probe = document.createElement("video");
   // "probably" and "maybe" are the two answers that mean yes; only an empty
   // string is a no, and a browser says "maybe" when it will not commit.

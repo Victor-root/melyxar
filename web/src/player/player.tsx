@@ -36,7 +36,9 @@ import { appearanceClasses, rememberAppearance, storedAppearance } from "./appea
 import type { Appearance } from "./appearance";
 import { storedArrangement } from "./arrangement";
 import { trackName } from "./describe";
+import { appPlayer } from "./app-player";
 import { canBePlayedAsItIs, usePlayback } from "./engine";
+import "./native-picture";
 import { PlaybackFacts } from "./facts";
 import { SegmentsWindow } from "./segments";
 import { useFullscreen } from "./fullscreen";
@@ -259,6 +261,32 @@ function Film({
     [t, language],
   );
 
+  const pictureClass = `player-video player-video-${shape}${turn === 0 ? "" : ` player-video-turned player-video-turned-${turn}`}`;
+  /* The picture itself starts and stops the film, the way every player does
+     it: the button is a long way from where the eyes are. Twice puts it
+     fullscreen, which is the other thing every player does and the reason a
+     single click is held for a moment before it acts. */
+  const pictureClick = (event: React.MouseEvent) => {
+    /* A click on the picture with a panel open shuts the panel and does
+       nothing else. It is what a hand reaching away from a menu means, and it
+       is what stands in for the cross the panels used to carry in their
+       corner. */
+    if (panel) {
+      setPanel(null);
+      return;
+    }
+    /* A finger on the picture brings the controls and sends them away again,
+       which the controls see to: a touch that also started and stopped the
+       film did it by accident as often as not. */
+    if ((event.nativeEvent as PointerEvent).pointerType !== "touch") {
+      playback.pictureClicked(false);
+    }
+  };
+  const pictureDoubleClick = () => {
+    playback.pictureClicked(true);
+    fullscreen.toggle();
+  };
+
   return (
     <>
       {/* One element for both, told apart by its key: a film handed over as
@@ -266,51 +294,46 @@ function Film({
           and switching between the two has to start from a fresh element
           rather than from one still holding the other's address. */}
       {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
-        <video
-          key={pictureKey ?? undefined}
-          ref={holdThePicture}
-          className={`player-video player-video-${shape}${turn === 0 ? "" : ` player-video-turned player-video-turned-${turn}`}`}
-          src={canBePlayedAsItIs(plan) ? plan.url : undefined}
-          autoPlay
-          /* The picture itself starts and stops the film, the way every
-             player does it: the button is a long way from where the eyes
-             are. Twice puts it fullscreen, which is the other thing every
-             player does and the reason a single click is held for a moment
-             before it acts. */
-          onClick={(event) => {
-            /* A click on the picture with a panel open shuts the panel and
-               does nothing else. It is what a hand reaching away from a
-               menu means, and it is what stands in for the cross the panels
-               used to carry in their corner. */
-            if (panel) {
-              setPanel(null);
-              return;
-            }
-            /* A finger on the picture brings the controls and sends them
-               away again, which the controls see to: a touch that also
-               started and stopped the film did it by accident as often as
-               not. */
-            if ((event.nativeEvent as PointerEvent).pointerType !== "touch") {
-              playback.pictureClicked(false);
-            }
-          }}
-          onDoubleClick={() => {
-            playback.pictureClicked(true);
-            fullscreen.toggle();
-          }}
-        >
-          {shownSubtitle?.url && (
-            <track
-              key={shownSubtitle.id}
-              ref={holdTheWords}
-              kind="subtitles"
-              src={shownSubtitle.url}
-              srcLang={shownSubtitle.language ?? undefined}
-              label={naming(shownSubtitle)}
-              default
-            />
-          )}
-        </video>
+        appPlayer ? (
+          /* Inside the application, the film is drawn by its own player
+             beneath this page, and this element stands in its place. */
+          <melyxar-picture
+            key={pictureKey ?? undefined}
+            ref={holdThePicture}
+            className={pictureClass}
+            src={canBePlayedAsItIs(plan) ? plan.url : undefined}
+            fit={shape}
+            turn={turn}
+            onClick={pictureClick}
+            onDoubleClick={pictureDoubleClick}
+          >
+            {shownSubtitle?.url && (
+              <melyxar-words key={shownSubtitle.id} ref={holdTheWords} src={shownSubtitle.url} />
+            )}
+          </melyxar-picture>
+        ) : (
+          <video
+            key={pictureKey ?? undefined}
+            ref={holdThePicture}
+            className={pictureClass}
+            src={canBePlayedAsItIs(plan) ? plan.url : undefined}
+            autoPlay
+            onClick={pictureClick}
+            onDoubleClick={pictureDoubleClick}
+          >
+            {shownSubtitle?.url && (
+              <track
+                key={shownSubtitle.id}
+                ref={holdTheWords}
+                kind="subtitles"
+                src={shownSubtitle.url}
+                srcLang={shownSubtitle.language ?? undefined}
+                label={naming(shownSubtitle)}
+                default
+              />
+            )}
+          </video>
+        )
       )}
 
       {/* Over the picture until it is seen moving, so its first picture never

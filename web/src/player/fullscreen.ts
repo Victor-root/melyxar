@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { appPlayer } from "./app-player";
 
 export interface Fullscreen {
   /** Whether the screen is filled right now. */
@@ -30,12 +31,20 @@ export function useFullscreen(stage: React.RefObject<HTMLDivElement | null>): Fu
   }, []);
 
   const toggle = useCallback(() => {
+    // Inside the application, the page already fills its window: what is
+    // left to fill is the room of the phone's own bars, which only the
+    // application can take.
+    if (appPlayer) {
+      appPlayer.fillScreen(!filling);
+      setFilling(!filling);
+      return;
+    }
     if (document.fullscreenElement) {
       void document.exitFullscreen();
     } else {
       void stage.current?.requestFullscreen?.();
     }
-  }, [stage]);
+  }, [stage, filling]);
 
   return { filling, toggle };
 }
