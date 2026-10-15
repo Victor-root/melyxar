@@ -4,10 +4,7 @@ import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
-import androidx.core.graphics.ColorUtils
-import androidx.core.graphics.toColorInt
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import kotlinx.serialization.Serializable
@@ -19,16 +16,10 @@ import kotlinx.serialization.json.Json
  * app is told by its browser (see the page's `app-window.ts`). Said by the
  * application rather than left to the web view, which only learnt to say it
  * in its recent versions. The keyboard lifts the whole page above it.
- *
- * In return the page gives the colour of its window, and the bars' icons are
- * drawn dark or light from it, as a browser draws them; light over a film,
- * whatever the page is.
  */
 class PageWindow(private val activity: ComponentActivity, holder: View, private val page: WebView) {
     @Volatile
     private var edges = Json.encodeToString(Edges(0f, 0f, 0f, 0f))
-    private var pageIsLight = false
-    private var film = false
 
     init {
         ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
@@ -62,39 +53,6 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
 
     @JavascriptInterface
     fun edges(): String = edges
-
-    /** Any frame of the page can call this, so a colour that cannot be read
-     *  is left aside rather than trusted. */
-    @JavascriptInterface
-    fun colour(colour: String) {
-        val read = try {
-            colour.toColorInt()
-        } catch (_: IllegalArgumentException) {
-            return
-        }
-        val light = ColorUtils.calculateLuminance(read) > HALF_LIGHT
-        activity.runOnUiThread {
-            pageIsLight = light
-            showBars()
-        }
-    }
-
-    fun filmShown(shown: Boolean) {
-        film = shown
-        showBars()
-    }
-
-    private fun showBars() {
-        WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
-            isAppearanceLightStatusBars = pageIsLight && !film
-            isAppearanceLightNavigationBars = pageIsLight && !film
-        }
-    }
-
-    private companion object {
-        /** Lighter than this, the bars' icons are drawn dark. */
-        const val HALF_LIGHT = 0.5
-    }
 }
 
 /** The room taken at each edge, in the page's pixels. */
