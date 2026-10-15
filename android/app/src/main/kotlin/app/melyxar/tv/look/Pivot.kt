@@ -8,11 +8,16 @@ import androidx.compose.foundation.gestures.BringIntoViewSpec
  * Where a row or a page scrolls the piece the remote comes to: always to the
  * same place, [lead] points plus a [share] of the way in, as every
  * television interface does, rather than just inside the nearest edge, where
- * the eye would have to chase it.
+ * the eye would have to chase it. Nowhere while [stays] says the remote is in
+ * a part of the page that is shown whole.
  */
-class Pivot(private val lead: Float, private val share: Float = 0f) : BringIntoViewSpec {
+class Pivot(
+    private val lead: Float,
+    private val share: Float = 0f,
+    private val stays: () -> Boolean = { false },
+) : BringIntoViewSpec {
     override val scrollAnimationSpec: AnimationSpec<Float> = tween(360, easing = Ease)
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
-        offset - (lead + containerSize * share)
+        if (stays()) 0f else offset - (lead + containerSize * share)
 }
