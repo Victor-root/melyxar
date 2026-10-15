@@ -69,6 +69,17 @@ sealed interface TrackChoice {
     data class Painted(val id: String) : TrackChoice
 }
 
+/** What a player asks of a film: what the device plays, within the limits
+ *  chosen, the tracks chosen, and what to do with its HDR for this film
+ *  alone, the account's own choice when nothing is said. */
+data class Asked(
+    val profile: JsonElement,
+    val audio: String?,
+    val subtitle: TrackChoice,
+    /** automatic, always_convert or never_convert. */
+    val wideGamut: String?,
+)
+
 @Serializable
 private data class SignIn(val name: String, val password: String, val remember: Boolean, val client: String)
 
@@ -172,14 +183,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
      * How the server will hand this file over to a device that plays what
      * [profile] says, with these tracks, said by a player about to show it.
      */
-    suspend fun plan(source: String, profile: JsonElement, audio: String?, subtitle: TrackChoice): Plan =
-        post("/api/v1/playback/$source/plan", watched(profile, audio, subtitle), Plan.serializer())
+    suspend fun plan(source: String, asked: Asked): Plan =
+        post("/api/v1/playback/$source/plan", watched(asked), Plan.serializer())
 
     /** Opens a film the server rebuilds, starting at [from] seconds. */
-    suspend fun openStream(source: String, profile: JsonElement, audio: String?, subtitle: TrackChoice, from: Double): StreamSession =
+    suspend fun openStream(source: String, asked: Asked, from: Double): StreamSession =
         post(
             "/api/v1/playback/$source/session",
-            JsonObject(watched(profile, audio, subtitle) + ("start_at_seconds" to JsonPrimitive(from))),
+            JsonObject(watched(asked) + ("start_at_seconds" to JsonPrimitive(from))),
             StreamSession.serializer(),
         )
 
@@ -224,16 +235,17 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         )
     }
 
-    private fun watched(profile: JsonElement, audio: String?, subtitle: TrackChoice): JsonObject =
+    private fun watched(asked: Asked): JsonObject =
         buildJsonObject {
-            put("profile", profile)
+            put("profile", asked.profile)
             put("watching", true)
-            audio?.let { put("audio_track_id", it) }
-            when (subtitle) {
+            asked.audio?.let { put("audio_track_id", it) }
+            when (asked.subtitle) {
                 TrackChoice.Off -> put("subtitles_off", true)
-                is TrackChoice.Painted -> put("subtitle_track_id", subtitle.id)
+                is TrackChoice.Painted -> put("subtitle_track_id", asked.subtitle.id)
                 TrackChoice.Unsaid -> Unit
             }
+            asked.wideGamut?.let { put("wide_gamut", it) }
         }
 
     private suspend fun <T> post(path: String, body: JsonObject, answer: DeserializationStrategy<T>): T =

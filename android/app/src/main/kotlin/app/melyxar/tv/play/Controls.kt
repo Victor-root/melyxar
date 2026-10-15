@@ -48,22 +48,16 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.melyxar.R
 import app.melyxar.server.Thumbnails
-import app.melyxar.server.Track
 import app.melyxar.server.Work
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.whichEpisode
-import app.melyxar.tv.languageName
-import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
@@ -72,8 +66,6 @@ import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.shadowRaised
-import app.melyxar.tv.soundName
-import app.melyxar.tv.speakersName
 import kotlinx.coroutines.delay
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -99,6 +91,7 @@ fun Controls(
     work: Work?,
     playing: Boolean,
     first: FocusRequester,
+    buttons: FocusRequester,
     onMenu: (Menu) -> Unit,
     onNext: (() -> Unit)?,
 ) {
@@ -153,7 +146,9 @@ fun Controls(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.focusRestorer(first),
+                // Asked for, the row gives the remote back to the button it
+                // was last on: the one that opened a list, once it closes.
+                modifier = Modifier.focusRequester(buttons).focusRestorer(first),
             ) {
                 PlayerButton(Icons.Restart, onClick = { playback.withStep(-10) })
                 PlayerButton(
@@ -171,6 +166,7 @@ fun Controls(
                 if (playback.plan?.subtitles?.isNotEmpty() == true) {
                     PlayerButton(Icons.Subtitles, onClick = { onMenu(Menu.Subtitles) })
                 }
+                PlayerButton(Icons.Gear, onClick = { onMenu(Menu.Settings) })
             }
         }
     }
@@ -312,42 +308,4 @@ private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modif
         )
         Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, if (large) 34.dp else 27.dp)
     }
-}
-
-/** The list of the film's audio tracks or subtitles, the one playing ticked. */
-@Composable
-fun TrackMenu(menu: Menu, playback: Playback, onClose: () -> Unit, modifier: Modifier) {
-    val plan = playback.plan ?: return
-    when (menu) {
-        Menu.Audio -> ChoiceList(
-            title = stringResource(R.string.tv_audio),
-            choices = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) },
-            chosen = plan.audio.indexOfFirst { it.id == playback.audio }.takeIf { it >= 0 },
-            onChoose = { playback.chooseAudio(plan.audio[it]) },
-            onClose = onClose,
-            modifier = modifier.padding(end = Gutter, bottom = 124.dp),
-        )
-        Menu.Subtitles -> ChoiceList(
-            title = stringResource(R.string.tv_subtitles),
-            choices = listOf(stringResource(R.string.tv_subtitles_off)) +
-                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) },
-            chosen = if (playback.subtitle == null) 0 else plan.subtitles.indexOfFirst { it.id == playback.subtitle } + 1,
-            onChoose = { playback.chooseSubtitle(if (it == 0) null else plan.subtitles[it - 1]) },
-            onClose = onClose,
-            modifier = modifier.padding(end = Gutter, bottom = 124.dp),
-        )
-    }
-}
-
-/** A track as a viewer tells it apart: its language, then what the sound is
- *  made of, then its own title. */
-@Composable
-private fun trackName(track: Track, at: Int, withSound: Boolean): String {
-    val shownIn = LocalConfiguration.current.locales[0]
-    val parts = listOfNotNull(
-        languageName(track.language, shownIn),
-        if (withSound) listOfNotNull(soundName(track.codec), speakersName(track.channels)).joinToString(" ").ifBlank { null } else null,
-        track.title?.takeIf { it.isNotBlank() },
-    )
-    return parts.joinToString(" · ").ifEmpty { stringResource(R.string.tv_track_unnamed, at + 1) }
 }

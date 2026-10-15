@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -56,6 +57,7 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** How long the controls stay up once the remote stops. */
 private const val CONTROLS_FOR_MS = 4_000L
@@ -89,10 +91,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     var shown by remember { mutableStateOf(true) }
     var nudges by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf<Menu?>(null) }
+    var left by remember { mutableStateOf<Menu?>(null) }
     var playing by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
     val quiet = remember { FocusRequester() }
     val controls = remember { FocusRequester() }
+    val buttons = remember { FocusRequester() }
 
     DisposableEffect(playback) {
         val heard = object : Player.Listener {
@@ -128,6 +132,19 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     fun nudge() {
         nudges += 1
         shown = true
+    }
+
+    /** Opens a list over the film, or closes the one open, the remote then
+     *  back on the button that opened it. */
+    fun openMenu(next: Menu?) {
+        left = menu
+        menu = next
+        if (next == null) {
+            scope.launch {
+                withFrameNanos {}
+                buttons.requestFocus()
+            }
+        }
     }
 
     // An open list of tracks takes the key first, and closes.
@@ -183,7 +200,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 work = work,
                 playing = playing,
                 first = controls,
-                onMenu = { menu = it },
+                buttons = buttons,
+                onMenu = ::openMenu,
                 onNext = work?.carryOnWith?.takeIf { it.sourceId != null }?.let { next ->
                     { onNext(Play(next.id, next.sourceId, null)) }
                 },
@@ -191,7 +209,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         }
         Skip(playback, Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp))
         menu?.let { open ->
-            TrackMenu(open, playback, onClose = { menu = null }, Modifier.align(Alignment.BottomEnd))
+            PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
         }
         if (playback.failed) {
             CannotPlay(onDone)
@@ -275,6 +293,3 @@ private fun CannotPlay(onDone: () -> Unit) {
     }
     LaunchedEffect(Unit) { back.requestFocus() }
 }
-
-/** Which list of tracks is open over the film. */
-enum class Menu { Audio, Subtitles }

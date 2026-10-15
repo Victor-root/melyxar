@@ -1,0 +1,59 @@
+package app.melyxar.tv.play
+
+import android.content.Context
+import androidx.core.content.edit
+import java.util.Locale
+
+/**
+ * One rung of what the picture can be held to, as the web's ladder: a height
+ * and a rate together, the film as it is first. The choice travels to the
+ * server inside the profile; a film already below it is handed over as it is.
+ */
+data class Quality(
+    /** Its name in storage, never on screen. */
+    val key: String,
+    /** Tallest picture accepted; nothing for the film as it is. */
+    val height: Int?,
+    /** Rate accepted, in bits per second; nothing for the film as it is. */
+    val bitrate: Long?,
+)
+
+/** The rungs, best first, the same as the web's. */
+val QUALITIES = listOf(
+    Quality("auto", null, null),
+    Quality("1080p-20", 1080, 20_000_000),
+    Quality("1080p-10", 1080, 10_000_000),
+    Quality("1080p-6", 1080, 6_000_000),
+    Quality("720p-4", 720, 4_000_000),
+    Quality("720p-2", 720, 2_000_000),
+    Quality("480p-1.5", 480, 1_500_000),
+    Quality("360p-0.7", 360, 700_000),
+)
+
+/** The film as it was written, which a player starts on. */
+val AS_IT_IS = QUALITIES.first()
+
+/** The rung by that name, or the film as it is when the name means nothing. */
+fun qualityCalled(key: String?): Quality = QUALITIES.firstOrNull { it.key == key } ?: AS_IT_IS
+
+/** A rung as it reads on screen, built from its own numbers as the web's:
+ *  "1080p" and a rate are the same words in every language. */
+fun Quality.name(asItIs: String): String {
+    val rate = (bitrate ?: return asItIs) / 1_000_000.0
+    val written = if (rate % 1.0 == 0.0) "${rate.toLong()}" else String.format(Locale.ROOT, "%.1f", rate)
+    return "${height}p · $written Mb/s"
+}
+
+/** The rung this television was left on, kept on it as the browser keeps
+ *  its own: set once rather than for every film. */
+class KeptQuality(context: Context) {
+    private val kept = context.getSharedPreferences("player", Context.MODE_PRIVATE)
+
+    fun read(): Quality = qualityCalled(kept.getString(QUALITY, null))
+
+    fun keep(quality: Quality) = kept.edit { putString(QUALITY, quality.key) }
+
+    private companion object {
+        const val QUALITY = "quality"
+    }
+}

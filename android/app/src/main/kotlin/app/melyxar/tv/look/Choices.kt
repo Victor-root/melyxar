@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,11 @@ private val TALLEST = 360.dp
  * ticked, as the web's menus: the remote starts on the one in force and
  * stays in the list until it chooses, which closes it, or until the back
  * key does.
+ *
+ * A list of settings rather than of choices says what each is on in
+ * [values], starts where the remote last left it, [startAt], and stays open
+ * when one is chosen, [leadsOn], since choosing it opens its own list. A
+ * [note] says what the choices are for; a list with none says only that.
  */
 @Composable
 fun ChoiceList(
@@ -51,17 +57,21 @@ fun ChoiceList(
     onChoose: (Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    values: List<String> = emptyList(),
+    note: String? = null,
+    startAt: Int = chosen ?: 0,
+    leadsOn: Boolean = false,
 ) {
     val palette = LocalPalette.current
     val start = remember { FocusRequester() }
     val shape = RoundedCornerShape(10.dp)
-    val first = (chosen ?: 0).coerceIn(0, (choices.size - 1).coerceAtLeast(0))
+    val first = startAt.coerceIn(0, (choices.size - 1).coerceAtLeast(0))
     BackHandler(onBack = onClose)
     Column(
         modifier = modifier
-            .width(320.dp)
+            .width(if (values.isEmpty()) 320.dp else 420.dp)
             .focusProperties { onExit = { cancelFocusChange() } }
-            .focusGroup()
+            .then(if (choices.isEmpty()) Modifier.focusRequester(start).focusable() else Modifier.focusGroup())
             .boxShadow(shape, palette.shadowRaised)
             .clip(shape)
             .background(palette.surfaceRaised)
@@ -77,6 +87,15 @@ fun ChoiceList(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
         )
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
+        note?.let {
+            Text(
+                it,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = palette.textSoft,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+            )
+        }
         LazyColumn(
             state = rememberLazyListState(initialFirstVisibleItemIndex = first),
             modifier = Modifier.heightIn(max = TALLEST),
@@ -84,10 +103,11 @@ fun ChoiceList(
             itemsIndexed(choices) { at, name ->
                 Choice(
                     name,
+                    value = values.getOrNull(at),
                     chosen = at == chosen,
                     onClick = {
                         onChoose(at)
-                        onClose()
+                        if (!leadsOn) onClose()
                     },
                     modifier = if (at == first) Modifier.focusRequester(start) else Modifier,
                 )
@@ -98,7 +118,7 @@ fun ChoiceList(
 }
 
 @Composable
-private fun Choice(name: String, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun Choice(name: String, value: String?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -114,8 +134,11 @@ private fun Choice(name: String, chosen: Boolean, onClick: () -> Unit, modifier:
             .padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
-            if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
+        // A setting says what it is on rather than being ticked.
+        if (value == null) {
+            Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
+                if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
+            }
         }
         Text(
             name,
@@ -123,6 +146,17 @@ private fun Choice(name: String, chosen: Boolean, onClick: () -> Unit, modifier:
             color = if (lit > 0.5f) palette.accentBright else palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        value?.let {
+            Text(
+                it,
+                fontSize = 13.sp,
+                color = palette.textFaint,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 12.dp),
+            )
+            Glyph(Icons.ChevronRight, palette.textFaint, 16.dp, Modifier.padding(start = 4.dp))
+        }
     }
 }
