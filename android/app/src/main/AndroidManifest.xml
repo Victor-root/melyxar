@@ -13,11 +13,20 @@
          the lock screen only for an application allowed to notify. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- The same application on a television, driven by its remote. -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
     <!-- Plain http is let through by the system because a server at home
          answers on it; the application itself refuses it outside the home
          network (see server/Address.kt). -->
     <application
         android:allowBackup="false"
+        android:banner="@drawable/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -32,8 +41,16 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The whole of the application on a television, every screen of it
+             drawn natively. -->
+        <activity
+            android:name=".tv.TvActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|screenLayout|smallestScreenSize|density"
+            android:exported="false" />
 
         <!-- Turning the phone, changing its theme or putting the film in a
              window of its own must not reload the interface: the page keeps
