@@ -6,15 +6,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -129,14 +126,29 @@ class Playback(
     var speed by mutableFloatStateOf(1f)
         private set
 
+    /** The subtitle of words shown, laid out in time; empty when none is. */
+    var words by mutableStateOf<List<Stretch>>(emptyList())
+        private set
+
+    /** How many seconds later the words come than the file says, earlier
+     *  below nought, as the web's subtitle sync. */
+    var wordsOffset by mutableFloatStateOf(0f)
+        private set
+
+    /** Where the words shown were read from. */
+    private var wordsFrom: String? = null
+    private var reading: Job? = null
+
     private var stream: StreamSession? = null
     private var reporting: Job? = null
     private var keeping: Job? = null
 
     init {
+        // The words are read and drawn by Melyxar, which can move them.
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
         player.addListener(object : Player.Listener {
-            override fun onTracksChanged(tracks: Tracks) = showTheSubtitle()
-
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 scope.launch { report(leaving = false) }
             }
@@ -183,19 +195,10 @@ class Playback(
         } else {
             api.openStream(source, asked(paintedChoice), at).also { stream = it }.let { api.address(it.playlistUrl) }
         }
+        readTheWords()
         val item = MediaItem.Builder()
             .setUri(address)
             .apply { if (plan.method != "direct_play") setMimeType(MimeTypes.APPLICATION_M3U8) }
-            .setSubtitleConfigurations(
-                plan.subtitles.filter { !it.burnsIn && it.url != null }.map { track ->
-                    MediaItem.SubtitleConfiguration.Builder(api.address(track.url!!).toUri())
-                        .setMimeType(MimeTypes.TEXT_VTT)
-                        .setLanguage(track.language)
-                        .setId(track.id)
-                        .setLabel(track.id)
-                        .build()
-                },
-            )
             .build()
         player.setMediaItem(item, (at * 1000).toLong())
         player.prepare()
@@ -258,8 +261,12 @@ class Playback(
         when {
             track?.burnsIn == true -> again(TrackChoice.Painted(track.id))
             wasPainted -> again(if (track == null) TrackChoice.Off else TrackChoice.Unsaid)
-            else -> showTheSubtitle()
+            else -> readTheWords()
         }
+    }
+
+    fun chooseWordsOffset(seconds: Float) {
+        wordsOffset = seconds
     }
 
     private fun remember() {
@@ -272,26 +279,26 @@ class Playback(
         }
     }
 
-    /** Shows the subtitle of words chosen among those beside the film, and
-     *  none of what the film itself carries: those are the server's to name. */
-    private fun showTheSubtitle() {
-        val wanted = subtitle?.takeIf { painted == null }
-        val group = wanted?.let { id ->
-            player.currentTracks.groups.firstOrNull { group ->
-                group.type == C.TRACK_TYPE_TEXT && (0 until group.length).any {
-                    val format = group.getTrackFormat(it)
-                    format.label == id || format.id?.endsWith(id) == true
-                }
+    /** Reads the subtitle of words chosen, unless it is the one shown: a
+     *  subtitle of pictures is the server's to paint. */
+    private fun readTheWords() {
+        val from = plan?.subtitles?.firstOrNull { it.id == subtitle && !it.burnsIn }?.url
+        if (from == wordsFrom) {
+            return
+        }
+        wordsFrom = from
+        reading?.cancel()
+        words = emptyList()
+        from ?: return
+        reading = scope.launch {
+            words = try {
+                val file = api.file(from)
+                withContext(Dispatchers.Default) { wordsOf(file) }
+            } catch (_: IOException) {
+                // The film plays on without them, as it would with none.
+                emptyList()
             }
         }
-        val parameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT)
-        if (group == null) {
-            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-        } else {
-            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .addOverride(TrackSelectionOverride(group.mediaTrackGroup, 0))
-        }
-        player.trackSelectionParameters = parameters.build()
     }
 
     private fun keepTheStream() {

@@ -93,6 +93,8 @@
     <string name="tv_wide_gamut_why">Pour ce film seulement. Gardez le HDR sur un écran qui l’affiche, et convertissez si les couleurs paraissent délavées.</string>
     <string name="tv_wide_gamut_imposed_converted">Converti quel que soit le choix fait ici : l’image est refaite pour une autre raison, ou ce format HDR ne peut pas être affiché tel quel.</string>
     <string name="tv_wide_gamut_imposed_kept">Conservé quel que soit le choix fait ici : le serveur est réglé pour ne jamais convertir le HDR.</string>
+    <string name="tv_words_offset">Synchronisation des sous-titres</string>
+    <string name="tv_words_offset_why">Ajustez le décalage des sous-titres s’ils sont en avance ou en retard sur la vidéo.</string>
     <string name="tv_search">Rechercher</string>
     <string name="tv_search_placeholder">Rechercher un titre</string>
     <string name="tv_search_none">Aucun titre ne correspond.</string>

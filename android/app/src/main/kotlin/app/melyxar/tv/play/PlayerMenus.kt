@@ -11,6 +11,7 @@ import app.melyxar.server.Track
 import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Gutter
+import app.melyxar.tv.offsetName
 import app.melyxar.tv.soundName
 import app.melyxar.tv.speakersName
 import app.melyxar.tv.speedName
@@ -23,7 +24,12 @@ enum class Menu(val from: Menu? = null) {
     Speed(Settings),
     Quality(Settings),
     WideGamut(Settings),
+    WordsOffset(Settings),
 }
+
+/** How far the words can be moved, half a second at a time, as the web
+ *  moves them. */
+private val OFFSETS = (-30..30).map { it * 0.5f }
 
 /** What can be done with a film's HDR for this film alone, the account's
  *  own choice first, as the web offers it. */
@@ -71,6 +77,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
                 wideGamut?.let {
                     Menu.WideGamut to stringResource(if (it.converted) R.string.tv_wide_gamut_converted else R.string.tv_wide_gamut_kept)
                 },
+                Menu.WordsOffset to offsetName(playback.wordsOffset),
             )
             ChoiceList(
                 title = stringResource(R.string.tv_settings),
@@ -99,6 +106,15 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             onChoose = { playback.chooseQuality(QUALITIES[it]) },
             onClose = back,
             modifier = placed,
+        )
+        Menu.WordsOffset -> ChoiceList(
+            title = settingName(menu),
+            choices = OFFSETS.map(::offsetName),
+            chosen = OFFSETS.indexOf(playback.wordsOffset),
+            onChoose = { playback.chooseWordsOffset(OFFSETS[it]) },
+            onClose = back,
+            modifier = placed,
+            note = stringResource(R.string.tv_words_offset_why),
         )
         Menu.WideGamut -> {
             val handling = plan.wideGamut
@@ -136,6 +152,7 @@ private fun settingName(menu: Menu): String = stringResource(
     when (menu) {
         Menu.Quality -> R.string.tv_quality
         Menu.WideGamut -> R.string.tv_wide_gamut
+        Menu.WordsOffset -> R.string.tv_words_offset
         else -> R.string.tv_speed
     },
 )

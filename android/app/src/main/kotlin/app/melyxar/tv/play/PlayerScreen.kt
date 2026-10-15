@@ -42,11 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.res.ResourcesCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
 import app.melyxar.tv.inside.Play
@@ -193,6 +191,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             },
     ) {
         Picture(playback)
+        WordsOverFilm(playback, raised = shown, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().focusRequester(quiet).focusable())
         AnimatedVisibility(shown, enter = fadeIn(), exit = fadeOut()) {
             Controls(
@@ -217,7 +216,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     }
 }
 
-/** The film, drawn by Media3, its subtitles in Melyxar's letters. */
+/** The film, drawn by Media3. */
 @OptIn(UnstableApi::class)
 @Composable
 private fun Picture(playback: Playback) {
@@ -228,16 +227,6 @@ private fun Picture(playback: Playback) {
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 setKeepContentOnPlayerReset(true)
-                subtitleView?.setStyle(
-                    CaptionStyleCompat(
-                        android.graphics.Color.WHITE,
-                        android.graphics.Color.TRANSPARENT,
-                        android.graphics.Color.TRANSPARENT,
-                        CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW,
-                        android.graphics.Color.BLACK,
-                        ResourcesCompat.getFont(context, R.font.inter_semibold),
-                    ),
-                )
                 // Nothing of the view is chosen with the remote.
                 isFocusable = false
                 descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
