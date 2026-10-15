@@ -45,6 +45,9 @@ fun measuredProfile(context: Context, sound: AudioAttributes): ClientProfile {
     return profileOf(decoders, shownCurves(context), playedSound)
 }
 
+/** The forms of sound the page's player of music can be sent as they are. */
+fun measuredMusicForms(): String = musicFormsOf(decoders().map { it.mime }.toSet())
+
 private fun decoders(): List<Decoder> = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
     .filter { info -> !info.isEncoder && !info.name.endsWith(".secure") && !isAlias(info) }
     .flatMap { info ->

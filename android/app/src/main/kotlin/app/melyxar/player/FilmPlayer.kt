@@ -9,7 +9,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Rational
 import android.view.View
-import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
@@ -25,9 +24,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.effect.ScaleAndRotateTransformation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -69,18 +65,7 @@ class FilmPlayer(
     /** Measured once: what the device decodes does not change while it runs. */
     private val measured by lazy { Json.encodeToString(measuredProfile(activity, sound)) }
 
-    /** Everything is fetched as the page fetches it, signed in with its
-     *  cookie and named as it is. */
-    private val fetching: DataSource.Factory = ResolvingDataSource.Factory(
-        DefaultHttpDataSource.Factory()
-            .setUserAgent(page.settings.userAgentString)
-            .setConnectTimeoutMs(SEGMENT_PATIENCE_MS)
-            .setReadTimeoutMs(SEGMENT_PATIENCE_MS),
-    ) { asked ->
-        CookieManager.getInstance().getCookie(asked.uri.toString())
-            ?.let { asked.withAdditionalHeaders(mapOf("Cookie" to it)) }
-            ?: asked
-    }
+    private val fetching = serverFetching(page.settings.userAgentString)
 
     val picture = PlayerView(activity).apply {
         useController = false
@@ -429,10 +414,6 @@ class FilmPlayer(
 
     private companion object {
         const val TELL_EVERY_MS = 250L
-
-        /** Above the server's own patience with a piece of film it is
-         *  rebuilding, as the page's own player is. */
-        const val SEGMENT_PATIENCE_MS = 40_000
 
         val READ = Json { ignoreUnknownKeys = true }
     }

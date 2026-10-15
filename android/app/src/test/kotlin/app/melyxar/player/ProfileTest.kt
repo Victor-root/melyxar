@@ -157,4 +157,10 @@ class ProfileTest {
             Json.encodeToString(profile),
         )
     }
+
+    @Test
+    fun namesTheFormsOfMusicTheDeviceDecodes() {
+        assertEquals("mp3,flac,wav", musicFormsOf(setOf("audio/mpeg", "audio/flac", "video/avc")))
+        assertEquals("wav", musicFormsOf(emptySet()))
+    }
 }

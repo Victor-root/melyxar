@@ -252,6 +252,17 @@ val SOUND_DECODERS = mapOf(
     "truehd" to "audio/true-hd",
 )
 
+/** The forms the page's player of music asks the server for, by name. */
+private val MUSIC_FORMS = listOf("mp3", "aac", "flac", "opus", "vorbis", "alac")
+
+/**
+ * The forms of sound the page's player of music is told the device plays, as
+ * the server reads them: those it has a decoder for, and plain wave sound,
+ * which needs none.
+ */
+fun musicFormsOf(decoded: Set<String>): String =
+    (MUSIC_FORMS.filter { SOUND_DECODERS[it] in decoded } + "wav").joinToString(",")
+
 /** Sound carried as it is, which the player hands on without decoding. */
 private val PLAIN_SOUND = listOf("pcm_s16le", "pcm_s24le")
 

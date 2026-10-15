@@ -93,6 +93,7 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.effect)
     implementation(libs.media3.ui)
+    implementation(libs.media3.session)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
