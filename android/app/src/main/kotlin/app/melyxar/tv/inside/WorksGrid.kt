@@ -159,6 +159,8 @@ fun WorksGrid(
     onOpen: (Card) -> Unit,
     modifier: Modifier = Modifier,
     firstCard: FocusRequester? = null,
+    /** Told of the card the remote comes to. */
+    onReach: (Card) -> Unit = {},
     top: @Composable (PageHead) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -196,7 +198,10 @@ fun WorksGrid(
                             .remembered(memory, card.id)
                             .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
                             .onFocusChanged {
-                                if (it.isFocused) reached = at
+                                if (it.isFocused) {
+                                    reached = at
+                                    onReach(card)
+                                }
                                 // The first line of cards is part of the head,
                                 // the line under what the grid is.
                                 val line = grid.layoutInfo.visibleItemsInfo.firstOrNull { item -> item.key == card.id }?.row

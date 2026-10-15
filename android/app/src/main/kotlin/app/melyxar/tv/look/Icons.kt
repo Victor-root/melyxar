@@ -83,6 +83,8 @@ object Icons {
     val Clock = outlined("clock", paths = arrayOf(circle(12f, 12f, 8.6f), "M12 7.4V12l3 1.8"))
     val Info = outlined("info", paths = arrayOf(circle(12f, 12f, 8.8f), "M12 11v5.4", "M12 7.8h.01"))
     val Search = outlined("search", paths = arrayOf(circle(10.6f, 10.6f, 6.8f), "M15.6 15.6 20.6 20.6"))
+    val ArrowUp = outlined("arrow-up", paths = arrayOf("M12 19V5", "m6 11 6-6 6 6"))
+    val ArrowDown = outlined("arrow-down", paths = arrayOf("M12 5v14", "m6 13 6 6 6-6"))
     val Microphone = outlined(
         "microphone",
         paths = arrayOf(

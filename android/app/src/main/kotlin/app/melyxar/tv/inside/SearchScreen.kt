@@ -126,6 +126,7 @@ private fun Listen(onHeard: (String) -> Unit) {
     val prompt = stringResource(R.string.tv_search_voice)
     RoundMark(
         Icons.Microphone,
+        label = prompt,
         on = false,
         onClick = {
             try {

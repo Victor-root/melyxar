@@ -89,4 +89,22 @@
     <string name="tv_favourites_empty">Aucun favori pour le moment. Choisissez le cœur sur une fiche pour l’ajouter ici.</string>
     <string name="tv_watch_later">À voir plus tard</string>
     <string name="tv_watch_later_empty">Rien de mis de côté pour l’instant. Choisissez l’horloge sur une fiche pour l’ajouter ici. Un titre quitte cette liste une fois que vous l’avez vu.</string>
+    <string name="tv_sort">Trier</string>
+    <string name="tv_sorted_by">Trier : %1$s</string>
+    <string name="tv_sort_title">Titre</string>
+    <string name="tv_sort_added_at">Date d’ajout</string>
+    <string name="tv_sort_release_year">Année</string>
+    <string name="tv_sort_community_rating">Note</string>
+    <string name="tv_sort_runtime">Durée</string>
+    <string name="tv_ascending">Ordre croissant</string>
+    <string name="tv_descending">Ordre décroissant</string>
+    <string name="tv_genre">Genre</string>
+    <string name="tv_genre_is">Genre : %1$s</string>
+    <string name="tv_decade">Décennie</string>
+    <string name="tv_decade_is">Décennie : %1$s</string>
+    <string name="tv_decade_name">Années %1$d</string>
+    <string name="tv_filter_any">Tous</string>
+    <string name="tv_counted">%1$s (%2$d)</string>
+    <string name="tv_letters">Aller à une lettre</string>
+    <string name="tv_mark_watched">Vu</string>
 </resources>

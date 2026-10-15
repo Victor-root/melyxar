@@ -301,3 +301,19 @@ data class StreamSession(val id: String, val playlistUrl: String)
 
 @Serializable
 data class Heard(val stop: Boolean = false)
+
+/** What a library's grid can be narrowed by, and the letters its titles
+ *  start with, each with how many works it holds. */
+@Serializable
+data class Filters(
+    val genres: List<Counted> = emptyList(),
+    val decades: List<CountedDecade> = emptyList(),
+    /** Only the letters titles really start with, "#" first. */
+    val initials: List<Counted> = emptyList(),
+)
+
+@Serializable
+data class Counted(val name: String, val works: Int = 0)
+
+@Serializable
+data class CountedDecade(val decade: Int, val works: Int = 0)

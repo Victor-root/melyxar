@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,7 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +57,7 @@ import app.melyxar.server.Work
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.whichEpisode
 import app.melyxar.tv.languageName
+import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
@@ -241,77 +240,25 @@ private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modif
 /** The list of the film's audio tracks or subtitles, the one playing ticked. */
 @Composable
 fun TrackMenu(menu: Menu, playback: Playback, onClose: () -> Unit, modifier: Modifier) {
-    val palette = LocalPalette.current
     val plan = playback.plan ?: return
-    val first = remember { FocusRequester() }
-    val shape = RoundedCornerShape(10.dp)
-    val lines: List<Pair<String, Boolean>>
-    val choose: (Int) -> Unit
     when (menu) {
-        Menu.Audio -> {
-            lines = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) to (track.id == playback.audio) }
-            choose = { playback.chooseAudio(plan.audio[it]) }
-        }
-        Menu.Subtitles -> {
-            lines = listOf(stringResource(R.string.tv_subtitles_off) to (playback.subtitle == null)) +
-                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) to (track.id == playback.subtitle) }
-            choose = { playback.chooseSubtitle(if (it == 0) null else plan.subtitles[it - 1]) }
-        }
-    }
-    Column(
-        modifier = modifier
-            .padding(end = Gutter, bottom = 124.dp)
-            .width(320.dp)
-            .clip(shape)
-            .background(palette.surfaceRaised)
-            .background(palette.accent.copy(alpha = 0.14f))
-            .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
-            .padding(6.dp),
-    ) {
-        Text(
-            stringResource(if (menu == Menu.Audio) R.string.tv_audio else R.string.tv_subtitles),
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = palette.text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        Menu.Audio -> ChoiceList(
+            title = stringResource(R.string.tv_audio),
+            choices = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) },
+            chosen = plan.audio.indexOfFirst { it.id == playback.audio }.takeIf { it >= 0 },
+            onChoose = { playback.chooseAudio(plan.audio[it]) },
+            onClose = onClose,
+            modifier = modifier.padding(end = Gutter, bottom = 124.dp),
         )
-        Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
-        lines.forEachIndexed { at, (name, chosen) ->
-            MenuLine(
-                name,
-                chosen,
-                onClick = {
-                    choose(at)
-                    onClose()
-                },
-                modifier = if (chosen) Modifier.focusRequester(first) else Modifier,
-            )
-        }
-    }
-    LaunchedEffect(menu) { first.requestFocus() }
-}
-
-@Composable
-private fun MenuLine(name: String, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
-    val palette = LocalPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val lit by litBy(interaction)
-    val shape = RoundedCornerShape(8.dp)
-    Row(
-        modifier = modifier
-            .padding(top = 2.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .background(palette.accent.copy(alpha = 0.26f * lit))
-            .border(1.dp, palette.accent.copy(alpha = 0.45f * lit), shape)
-            .clickable(interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.width(26.dp).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-            if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
-        }
-        Text(name, fontSize = 14.sp, color = if (lit > 0.5f) palette.accentBright else palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Menu.Subtitles -> ChoiceList(
+            title = stringResource(R.string.tv_subtitles),
+            choices = listOf(stringResource(R.string.tv_subtitles_off)) +
+                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) },
+            chosen = if (playback.subtitle == null) 0 else plan.subtitles.indexOfFirst { it.id == playback.subtitle } + 1,
+            onChoose = { playback.chooseSubtitle(if (it == 0) null else plan.subtitles[it - 1]) },
+            onClose = onClose,
+            modifier = modifier.padding(end = Gutter, bottom = 124.dp),
+        )
     }
 }
 
