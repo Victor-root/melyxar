@@ -918,6 +918,17 @@
     transition: opacity 200ms var(--ease) 120ms;
   }
 
+  /* Few enough to fit, they stand in the middle of the bubble. Margins
+     rather than centring the row: they fall to nothing once it overflows,
+     so the first one can still be scrolled back to. */
+  .music-tabs-track > :first-child {
+    margin-left: auto;
+  }
+
+  .music-tabs-track > :last-child {
+    margin-right: auto;
+  }
+
   .music-bubble {
     position: absolute;
     inset: 0;
