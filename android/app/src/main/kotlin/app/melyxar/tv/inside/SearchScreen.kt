@@ -33,10 +33,15 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Browse
+import app.melyxar.server.searchMusic
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.TvField
+import app.melyxar.tv.music.GridSpot
+import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.music.foundMusic
+import app.melyxar.tv.music.foundNames
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 
@@ -64,13 +69,23 @@ fun SearchScreen(comebacks: Int) {
     val memory = rememberFocusMemory()
     val field = remember { FocusRequester() }
     val works = rememberWorks(Browse(search = asked), comebacks, asking = asked.isNotEmpty())
+    // What the words find in the music, above the works, as on the web.
+    val music = asked.takeIf { it.isNotEmpty() }?.let { words ->
+        rememberLoaded("music:search:$words", comebacks) { searchMusic(words) }.value.ready
+    }
+    val names = foundNames()
+    val listening = LocalListening.current
+    val grid = rememberLazyGridState()
     WorksGrid(
         works = works,
         lying = false,
         empty = stringResource(R.string.tv_search_none),
         memory = memory,
-        grid = rememberLazyGridState(),
+        grid = grid,
         onOpen = { chrome.go(Place.Opened(it.id)) },
+        besides = { head ->
+            music?.let { foundMusic(it, names, empty = null, GridSpot(grid, head, memory), chrome.go, listening) }
+        },
     ) {
         Column {
             // The grid keeps the page's margin already.

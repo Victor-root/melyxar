@@ -56,6 +56,7 @@ import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.OrderButtons
 import app.melyxar.tv.inside.PageHead
 import app.melyxar.tv.inside.Place
+import app.melyxar.tv.inside.RowHead
 import app.melyxar.tv.inside.RestoreFocus
 import app.melyxar.tv.inside.ScrollingPage
 import app.melyxar.tv.inside.TopBar
@@ -161,7 +162,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
                         )
                     }
                 }
-                content(this, Spot(grid, head, memory))
+                content(this, GridSpot(grid, head, memory))
             }
         }
         if (picking && ordering != null) {
@@ -215,7 +216,7 @@ fun GenreScreen(library: Library, genre: String, comebacks: Int) {
                     )
                 }
             }
-            content(this, Spot(grid, head, memory, first))
+            content(this, GridSpot(grid, head, memory, first))
         }
     }
     RestoreFocus(memory, first, ready = list.items != null)
@@ -232,10 +233,10 @@ private data class Ordering(
     val name: String = "",
 )
 
-/** Where the pieces of a tab stand: the grid they are in, its head, the
+/** Where the pieces of a grid of music stand: the grid, its head, the
  *  remote's memory, and what the first tile is given, for a screen that
  *  starts the remote there. */
-private class Spot(val grid: LazyGridState, val head: PageHead, val memory: FocusMemory, val firstTile: FocusRequester? = null)
+class GridSpot(val grid: LazyGridState, val head: PageHead, val memory: FocusMemory, val firstTile: FocusRequester? = null)
 
 /** The library's name, its tabs, and the buttons over what the tab holds. */
 @Composable
@@ -299,7 +300,7 @@ private fun tabContent(
     albumsDescending: Boolean,
     songOrder: String,
     songsDescending: Boolean,
-): LazyGridScope.(Spot) -> Unit {
+): LazyGridScope.(GridSpot) -> Unit {
     val chrome = LocalChrome.current
     val listening = LocalListening.current
     val id = library.id
@@ -349,8 +350,10 @@ private fun tabContent(
         "favourites" -> {
             val found = rememberLoaded("music:favourites:$id", comebacks) { musicFavourites(id) }.value.ready
             val empty = stringResource(R.string.tv_music_no_favourite)
-            val playingNow = listening.queue.current?.id
-            hearted(found, empty, playingNow, openAlbum, openArtist) { songs, at -> listening.play(songs, at) }
+            val names = foundNames()
+            ({ spot ->
+                found?.let { foundMusic(it, names, empty, spot, chrome.go, listening) }
+            })
         }
         else -> {
             val newest = rememberLoaded("music:newest:$id", comebacks) { albums(id, "added", true, Slice(0, NEWEST_SHOWN)).items }.value.ready
@@ -395,7 +398,7 @@ private fun <T> paged(
     empty: String,
     key: (T) -> String,
     tile: @Composable (T, Modifier) -> Unit,
-): LazyGridScope.(Spot) -> Unit {
+): LazyGridScope.(GridSpot) -> Unit {
     var reached by remember(list) { mutableIntStateOf(0) }
     LaunchedEffect(list, reached, list.items) { list.reachedTo(reached) }
     if (list.failed) {
@@ -415,7 +418,7 @@ private fun pagedSongs(
     empty: String,
     playingNow: String?,
     onPlay: (List<Song>, Int) -> Unit,
-): LazyGridScope.(Spot) -> Unit {
+): LazyGridScope.(GridSpot) -> Unit {
     var reached by remember(list) { mutableIntStateOf(0) }
     LaunchedEffect(list, reached, list.items) { list.reachedTo(reached) }
     if (list.failed) {
@@ -427,34 +430,39 @@ private fun pagedSongs(
     }
 }
 
-/** What the account hearted: albums and artists in rows, songs in lines. */
-private fun hearted(
-    found: FoundMusic?,
-    empty: String,
-    playingNow: String?,
-    openAlbum: (String) -> Unit,
-    openArtist: (String) -> Unit,
-    onPlay: (List<Song>, Int) -> Unit,
-): LazyGridScope.(Spot) -> Unit = { spot ->
-    if (found != null) {
-        if (found.albums.isEmpty() && found.artists.isEmpty() && found.songs.isEmpty()) {
-            wide("empty") { Empty(empty) }
-        }
-        if (found.albums.isNotEmpty()) {
-            wide("albums") {
-                CardRow(tabName("albums"), Icons.Music, found.albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { album ->
-                    AlbumTile(album, onClick = { openAlbum(album.id) }, modifier = Modifier.remembered(spot.memory, "album/${album.id}"))
-                }
+/** The headings of what was found: albums, artists and songs. */
+class FoundNames(val albums: String, val artists: String, val songs: String)
+
+@Composable
+fun foundNames() = FoundNames(tabName("albums"), tabName("artists"), tabName("songs"))
+
+/**
+ * Music found, by a search or among the account's hearts, as the web draws
+ * it: albums and artists in rows, songs in lines, a press on one playing
+ * them all from there; [empty] said when nothing was, if anything is to be.
+ */
+fun LazyGridScope.foundMusic(found: FoundMusic, names: FoundNames, empty: String?, spot: GridSpot, go: (Place) -> Unit, listening: Listening) {
+    if (found.albums.isEmpty() && found.artists.isEmpty() && found.songs.isEmpty()) {
+        empty?.let { wide("music/empty") { Empty(it) } }
+        return
+    }
+    if (found.albums.isNotEmpty()) {
+        wide("music/albums") {
+            CardRow(names.albums, Icons.Music, found.albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { album ->
+                AlbumTile(album, onClick = { go(Place.Album(album.id)) }, modifier = Modifier.remembered(spot.memory, "album/${album.id}"))
             }
         }
-        if (found.artists.isNotEmpty()) {
-            wide("artists") {
-                CardRow(tabName("artists"), Icons.People, found.artists, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { artist ->
-                    ArtistTile(artist, onClick = { openArtist(artist.id) }, modifier = Modifier.remembered(spot.memory, "artist/${artist.id}"))
-                }
+    }
+    if (found.artists.isNotEmpty()) {
+        wide("music/artists") {
+            CardRow(names.artists, Icons.People, found.artists, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { artist ->
+                ArtistTile(artist, onClick = { go(Place.Artist(artist.id)) }, modifier = Modifier.remembered(spot.memory, "artist/${artist.id}"))
             }
         }
-        songLines(found.songs.takeIf { it.isNotEmpty() }, empty = null, playingNow, spot, onPlay = onPlay)
+    }
+    if (found.songs.isNotEmpty()) {
+        wide("music/songs") { RowHead(names.songs, Icons.Music, Modifier.toTheEdges(Gutter)) }
+        songLines(found.songs, empty = null, listening.queue.current?.id, spot) { songs, at -> listening.play(songs, at) }
     }
 }
 
@@ -462,7 +470,7 @@ private fun hearted(
 private fun <T> LazyGridScope.tiles(
     items: List<T>?,
     empty: String,
-    spot: Spot,
+    spot: GridSpot,
     key: (T) -> String,
     onReach: (Int) -> Unit = {},
     tile: @Composable (T, Modifier) -> Unit,
@@ -492,7 +500,7 @@ private fun LazyGridScope.songLines(
     songs: List<Song>?,
     empty: String?,
     playingNow: String?,
-    spot: Spot,
+    spot: GridSpot,
     onReach: (Int) -> Unit = {},
     onPlay: (List<Song>, Int) -> Unit,
 ) {
