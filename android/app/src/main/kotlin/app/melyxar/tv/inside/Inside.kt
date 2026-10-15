@@ -29,6 +29,7 @@ import app.melyxar.theme.wantsLight
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.PageBackdrop
 import app.melyxar.tv.look.TvLook
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.play.PlayerScreen
@@ -157,6 +158,9 @@ fun Inside(
         TvLook(palette) {
             CompositionLocalProvider(LocalChrome provides chrome) {
                 Box(Modifier.fillMaxSize().background(LocalPalette.current.ground)) {
+                    // What the account chose to draw behind its pages, once
+                    // its choice is known.
+                    chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
                     kept.SaveableStateProvider(here.key) {
                         when (here) {
                             Place.Home -> HomeScreen(comebacks)
