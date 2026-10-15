@@ -21,3 +21,22 @@ class Pivot(
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float =
         if (stays()) 0f else offset - (lead + containerSize * share)
 }
+
+/**
+ * Where a row scrolls the piece the remote comes to when the row is short
+ * enough to be read at a glance: only as far as it takes to show it whole,
+ * [margin] points from the edge, and not at all while it is.
+ */
+class Nearest(private val margin: Float) : BringIntoViewSpec {
+    override val scrollAnimationSpec: AnimationSpec<Float> = tween(360, easing = Ease)
+
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val before = offset - margin
+        val after = offset + size - (containerSize - margin)
+        return when {
+            before < 0f -> before
+            after > 0f -> minOf(after, before)
+            else -> 0f
+        }
+    }
+}

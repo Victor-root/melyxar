@@ -48,7 +48,7 @@ import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.Pivot
+import app.melyxar.tv.look.Nearest
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.glow
@@ -83,10 +83,10 @@ private val FAN = listOf(
 fun Band(shelves: List<Shelf>, libraries: List<Library>, order: List<String>, onOpen: (Library) -> Unit, memory: FocusMemory) {
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
     val lead = with(LocalDensity.current) { Gutter.toPx() }
-    val pivot = remember(lead) { Pivot(lead) }
+    val nearest = remember(lead) { Nearest(lead) }
     // Coming into the band lands on the tile it left, or on the first.
     val first = remember { FocusRequester() }
-    CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
+    CompositionLocalProvider(LocalBringIntoViewSpec provides nearest) {
         LazyRow(
             contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 20.dp, bottom = SectionGap),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
