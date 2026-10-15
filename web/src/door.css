@@ -995,6 +995,38 @@ img.door-mark {
   gap: var(--gap);
 }
 
+/* The language, taken down to a word beside the theme's button and drawn
+   the same: few people ever change it, so it reads no louder than that. */
+.door-settings .picker,
+.door-settings .picker:hover:not(:disabled),
+.door-settings .picker-open {
+  min-width: 0;
+  height: auto;
+  gap: 6px;
+  padding: 5px 12px;
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  transition:
+    color var(--quick) var(--ease),
+    background var(--quick) var(--ease);
+}
+
+.door-settings .picker:hover:not(:disabled),
+.door-settings .picker-open {
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 60%, transparent);
+}
+
+.door-settings .picker svg {
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
 .door-credits {
   text-align: right;
 }
@@ -1184,10 +1216,5 @@ img.door-mark {
 
   :root[data-whole-screen][data-edge-room] .door-or {
     margin: 6px 0;
-  }
-
-  :root[data-whole-screen][data-edge-room] .door-foot .picker {
-    min-width: 0;
-    max-width: 180px;
   }
 }
