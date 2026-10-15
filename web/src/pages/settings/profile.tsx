@@ -1,6 +1,7 @@
 /*
- * Who this account is: the picture it wears, its name, its password, whether
- * the door offers its name, and the devices it is signed in on.
+ * Who this account is: the picture it wears, its name, its password, its
+ * code for televisions, whether the door offers its name, and the devices it
+ * is signed in on.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -45,6 +46,7 @@ export function MyProfile() {
       <div className="panels">
         <Name />
         <Password onChanged={devices.look} />
+        <TvCode />
         {preferences.kept && (
           <Panel icon={EnterIcon} title={t("settings.door")} lead={t("settings.door_why")}>
             <Setting label={t("settings.door_hide_me")} why={t("settings.door_hide_me_why")}>
@@ -281,6 +283,76 @@ function Password({ onChanged }: { onChanged: () => void }) {
             disabled={told.busy || !current || !wanted || wanted !== again}
           >
             {t("me.password_change")}
+          </button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+/**
+ * The code that opens this profile again on a television where it already
+ * signed in with its password: set, changed or taken off here.
+ */
+function TvCode() {
+  const { t } = useSettings();
+  const asked = useAsked((signal) => api.tvCode(signal));
+  const [set, setSet] = useState<boolean | null>(null);
+  const [code, setCode] = useState("");
+  const [said, setSaid] = useState<string | null>(null);
+  const isSet = set ?? asked.answer?.set ?? false;
+  const told = useTold(async (wanted: string | null) => {
+    const answer = await api.setTvCode(wanted);
+    setSet(answer.set);
+    setCode("");
+    setSaid(t(answer.set ? "me.tv_code_saved" : "me.tv_code_removed"));
+  });
+  const whole = /^\d{4}$/.test(code);
+
+  return (
+    <Panel icon={DeviceIcon} title={t("me.tv_code")} lead={t("me.tv_code_lead")}>
+      <form
+        className="account-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSaid(null);
+          void told.tell(code);
+        }}
+      >
+        <p className="panel-notice">{t(isSet ? "me.tv_code_set" : "me.tv_code_none")}</p>
+        <input
+          type="password"
+          className="field-line"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={4}
+          placeholder={t("me.tv_code_new")}
+          aria-label={t("me.tv_code_new")}
+          value={code}
+          onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+        />
+        {told.failure && (
+          <p className="panel-notice panel-notice-trouble">
+            {t(refusalAbout(told.failure, "account"), figuresOf(told.failure))}
+          </p>
+        )}
+        {said && <p className="panel-notice panel-notice-ok">{said}</p>}
+        <div className="panel-foot">
+          {isSet && (
+            <button
+              type="button"
+              className="button"
+              disabled={told.busy}
+              onClick={() => {
+                setSaid(null);
+                void told.tell(null);
+              }}
+            >
+              {t("me.tv_code_remove")}
+            </button>
+          )}
+          <button type="submit" className="button button-accent" disabled={told.busy || !whole}>
+            {t("me.tv_code_save")}
           </button>
         </div>
       </form>

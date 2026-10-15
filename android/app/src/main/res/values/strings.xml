@@ -30,6 +30,9 @@
         <item quantity="other">Too many failed attempts. Try again in %d seconds.</item>
     </plurals>
     <string name="tv_refused_generic">Sign-in failed. Please try again.</string>
+    <string name="tv_code_of">%1$s, enter your code</string>
+    <string name="tv_code_wrong">Incorrect code.</string>
+    <string name="tv_code_erase">Erase</string>
     <string name="tv_change_server">Change server</string>
     <string name="tv_back">Back</string>
     <string name="tv_carry_on">Carry on watching</string>

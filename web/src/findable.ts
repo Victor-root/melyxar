@@ -43,6 +43,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.avatar", "settings.avatar_why"],
       ["me.name", "me.name_lead"],
       ["me.password", "me.password_lead"],
+      ["me.tv_code", "me.tv_code_lead"],
       ["me.devices", "me.devices_lead"],
     ],
   },

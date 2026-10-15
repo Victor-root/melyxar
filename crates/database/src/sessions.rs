@@ -443,6 +443,28 @@ impl Database {
             .await?;
         Ok(())
     }
+
+    /// Sets, changes or takes away the stored form of an account's code for
+    /// its televisions. As with the password, what is written is what the
+    /// layer above made of it.
+    pub async fn set_tv_code(&self, user_id: UserId, stored: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE users SET tv_code_hash = ? WHERE id = ?")
+            .bind(stored)
+            .bind(user_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
+    /// The stored form of an account's code for its televisions, when it
+    /// has given itself one.
+    pub async fn tv_code(&self, user_id: UserId) -> Result<Option<String>> {
+        let stored: Option<Option<String>> = sqlx::query_scalar("SELECT tv_code_hash FROM users WHERE id = ?")
+            .bind(user_id.to_db_string())
+            .fetch_optional(self.reader())
+            .await?;
+        Ok(stored.flatten())
+    }
 }
 
 #[cfg(test)]
@@ -461,6 +483,22 @@ mod tests {
             .await
             .expect("account created");
         (database, user.id)
+    }
+
+    #[tokio::test]
+    async fn an_account_keeps_its_television_code_until_it_takes_it_off() {
+        let (database, user) = a_server_with_one_account().await;
+        assert_eq!(database.tv_code(user).await.expect("read"), None);
+        database.set_tv_code(user, Some("a stored code")).await.expect("set");
+        assert_eq!(database.tv_code(user).await.expect("read").as_deref(), Some("a stored code"));
+        database.set_tv_code(user, None).await.expect("taken off");
+        assert_eq!(database.tv_code(user).await.expect("read"), None);
+    }
+
+    #[tokio::test]
+    async fn an_account_that_is_gone_has_no_television_code() {
+        let (database, _) = a_server_with_one_account().await;
+        assert_eq!(database.tv_code(UserId::new()).await.expect("read"), None);
     }
 
     #[tokio::test]

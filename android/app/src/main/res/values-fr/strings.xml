@@ -30,6 +30,9 @@
         <item quantity="other">Trop de tentatives de connexion. Réessayez dans %d secondes.</item>
     </plurals>
     <string name="tv_refused_generic">Échec de la connexion. Réessayez.</string>
+    <string name="tv_code_of">%1$s, entrez votre code</string>
+    <string name="tv_code_wrong">Code incorrect.</string>
+    <string name="tv_code_erase">Effacer</string>
     <string name="tv_change_server">Changer de serveur</string>
     <string name="tv_back">Retour</string>
     <string name="tv_carry_on">Continuer la lecture</string>

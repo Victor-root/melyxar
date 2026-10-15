@@ -30,6 +30,8 @@ use sha2::{Digest, Sha256};
 pub enum AuthError {
     #[error("a password of fewer than {SHORTEST_PASSWORD} characters")]
     PasswordTooShort,
+    #[error("a code for the televisions that is not {TV_CODE_DIGITS} digits")]
+    NotATvCode,
     #[error("the password could not be hashed: {0}")]
     CouldNotHash(String),
     #[error("the machine would not give any randomness: {0}")]
@@ -45,6 +47,9 @@ pub type Result<T> = std::result::Result<T, AuthError>;
 /// is weaker than the long ordinary phrase they would have picked on their
 /// own.
 pub const SHORTEST_PASSWORD: usize = 8;
+
+/// How many digits the code an account gives its televisions holds.
+pub const TV_CODE_DIGITS: usize = 4;
 
 /// How many bytes of randomness a session token carries.
 ///
@@ -65,9 +70,22 @@ pub fn hash_password(password: &str) -> Result<String> {
     if password.chars().count() < SHORTEST_PASSWORD {
         return Err(AuthError::PasswordTooShort);
     }
+    stored_form(password)
+}
 
+/// Turns the code an account gives its televisions into the form that is
+/// stored, as a password is: four digits are few, but never written down as
+/// they were typed. Checked as a password is, by [`password_matches`].
+pub fn hash_tv_code(code: &str) -> Result<String> {
+    if code.len() != TV_CODE_DIGITS || !code.bytes().all(|digit| digit.is_ascii_digit()) {
+        return Err(AuthError::NotATvCode);
+    }
+    stored_form(code)
+}
+
+fn stored_form(secret: &str) -> Result<String> {
     Argon2::default()
-        .hash_password(password.as_bytes())
+        .hash_password(secret.as_bytes())
         .map(|hashed| hashed.to_string())
         .map_err(|error| AuthError::CouldNotHash(error.to_string()))
 }
@@ -153,6 +171,17 @@ mod tests {
     use super::*;
 
     const A_PASSWORD: &str = "quiet harbour";
+
+    #[test]
+    fn a_television_code_is_four_digits_and_kept_as_a_password_is() {
+        let stored = hash_tv_code("0427").expect("hashed");
+        assert!(stored.starts_with("$argon2"), "{stored}");
+        assert!(password_matches("0427", &stored));
+        assert!(!password_matches("0428", &stored));
+        for wrong in ["427", "04270", "04a7", "０４２７", ""] {
+            assert!(matches!(hash_tv_code(wrong), Err(AuthError::NotATvCode)), "{wrong}");
+        }
+    }
 
     #[test]
     fn a_password_is_never_stored_as_it_was_typed() {

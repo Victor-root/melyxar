@@ -2,12 +2,14 @@ package app.melyxar.tv.door
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,14 +98,7 @@ fun Knock(
                     else -> generic
                 }
                 password.clearText()
-                shake.animateTo(
-                    0f,
-                    keyframes {
-                        durationMillis = 240
-                        -4f at 60
-                        2f at 160
-                    },
-                )
+                shake.shakeTheHead()
             } catch (_: IOException) {
                 refusal = generic
             } finally {
@@ -112,12 +107,62 @@ fun Knock(
         }
     }
 
+    DoorPanel(shake) {
+        if (known != null) {
+            Face(known, avatar, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
+            Text(
+                stringResource(R.string.tv_password_of, known),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.text,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            TvField(
+                state = name,
+                placeholder = stringResource(R.string.tv_name),
+                onDone = {},
+                modifier = Modifier.focusRequester(first),
+            )
+        }
+        TvField(
+            state = password,
+            placeholder = stringResource(R.string.tv_password),
+            onDone = ::signIn,
+            onTyped = { refusal = null },
+            secret = true,
+            enabled = !asking,
+            modifier = if (known != null) Modifier.focusRequester(first) else Modifier,
+        )
+        refusal?.let { Text(it, color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
+        AccentButton(
+            text = stringResource(if (asking) R.string.tv_signing_in else R.string.tv_sign_in),
+            onClick = ::signIn,
+            icon = null,
+        )
+        Text(
+            stringResource(R.string.tv_password_once),
+            fontSize = 13.sp,
+            color = palette.textFaint,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    LaunchedEffect(Unit) { first.requestFocus() }
+}
+
+/**
+ * A panel over the door, as the web's: the remote stays in it until it is
+ * closed, and it shakes its head at a refusal by [shake].
+ */
+@Composable
+fun DoorPanel(shake: Animatable<Float, AnimationVector1D>, content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalPalette.current
     AboveKeyboard(Modifier.background(palette.ground.copy(alpha = 0.72f))) {
         val shape = RoundedCornerShape(18.dp)
         Column(
             modifier = Modifier
                 .width(440.dp)
-                // The remote stays in the panel until it is closed.
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
@@ -129,47 +174,19 @@ fun Knock(
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            if (known != null) {
-                Face(known, avatar, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
-                Text(
-                    stringResource(R.string.tv_password_of, known),
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.text,
-                    textAlign = TextAlign.Center,
-                )
-            } else {
-                TvField(
-                    state = name,
-                    placeholder = stringResource(R.string.tv_name),
-                    onDone = {},
-                    modifier = Modifier.focusRequester(first),
-                )
-            }
-            TvField(
-                state = password,
-                placeholder = stringResource(R.string.tv_password),
-                onDone = ::signIn,
-                onTyped = { refusal = null },
-                secret = true,
-                enabled = !asking,
-                modifier = if (known != null) Modifier.focusRequester(first) else Modifier,
-            )
-            refusal?.let { Text(it, color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
-            AccentButton(
-                text = stringResource(if (asking) R.string.tv_signing_in else R.string.tv_sign_in),
-                onClick = ::signIn,
-                icon = null,
-            )
-            Text(
-                stringResource(R.string.tv_password_once),
-                fontSize = 13.sp,
-                color = palette.textFaint,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
+            content = content,
+        )
     }
-    LaunchedEffect(Unit) { first.requestFocus() }
+}
+
+/** A panel's head shaken, as at a refusal. */
+suspend fun Animatable<Float, AnimationVector1D>.shakeTheHead() {
+    animateTo(
+        0f,
+        keyframes {
+            durationMillis = 240
+            -4f at 60
+            2f at 160
+        },
+    )
 }

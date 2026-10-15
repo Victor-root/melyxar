@@ -2391,6 +2391,11 @@ export const api = {
   /* Changing it signs every other device out and keeps this one going. */
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),
+  /* Whether the account has a code for its televisions, which only ever
+     opens a profile again where it already signed in with its password. */
+  tvCode: (signal?: AbortSignal) => get<{ set: boolean }>("/api/v1/me/tv-code", signal),
+  /* Four digits, or nothing to take the code off. */
+  setTvCode: (code: string | null) => put<{ set: boolean }>("/api/v1/me/tv-code", { code }),
   /* Answers the account under its new name; every device stays signed in. */
   rename: (name: string) => put<Account>("/api/v1/me/name", { name }),
   accounts: (signal?: AbortSignal) => get<ManagedAccount[]>("/api/v1/accounts", signal),
