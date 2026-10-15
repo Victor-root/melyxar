@@ -160,6 +160,9 @@ fun Controls(
                 PlayerButton(Icons.StepOn, onClick = { playback.withStep(30) })
                 onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it) }
                 Spacer(Modifier.weight(1f))
+                if (chaptersOf(playback.plan?.chapters.orEmpty(), length).isNotEmpty()) {
+                    PlayerButton(Icons.Chapters, onClick = { onMenu(Menu.Chapters) })
+                }
                 if ((playback.plan?.audio?.size ?: 0) > 1) {
                     PlayerButton(Icons.Audio, onClick = { onMenu(Menu.Audio) })
                 }

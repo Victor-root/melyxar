@@ -1,5 +1,6 @@
 package app.melyxar.tv.play
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import app.melyxar.tv.speedName
 enum class Menu(val from: Menu? = null) {
     Audio,
     Subtitles,
+    Chapters,
     Settings,
     Speed(Settings),
     Quality(Settings),
@@ -69,6 +71,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             onClose = back,
             modifier = placed,
         )
+        Menu.Chapters -> ChapterStrip(playback, onClose = back, modifier = modifier.fillMaxWidth())
         Menu.Settings -> {
             val wideGamut = plan.wideGamut
             val lines = listOfNotNull(

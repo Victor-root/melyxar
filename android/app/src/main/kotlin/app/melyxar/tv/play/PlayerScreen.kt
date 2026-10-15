@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -55,7 +54,6 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /** How long the controls stay up once the remote stops. */
 private const val CONTROLS_FOR_MS = 4_000L
@@ -132,17 +130,16 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         shown = true
     }
 
-    /** Opens a list over the film, or closes the one open, the remote then
-     *  back on the button that opened it. */
+    /** Opens a list over the film, or closes the one open. */
     fun openMenu(next: Menu?) {
         left = menu
         menu = next
-        if (next == null) {
-            scope.launch {
-                withFrameNanos {}
-                buttons.requestFocus()
-            }
-        }
+    }
+
+    // Once a list closes, the remote goes back to the button that opened it,
+    // the controls being there again by then.
+    LaunchedEffect(menu) {
+        if (menu == null && left != null) buttons.requestFocus()
     }
 
     // An open list of tracks takes the key first, and closes.
@@ -193,7 +190,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         Picture(playback)
         WordsOverFilm(playback, raised = shown, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().focusRequester(quiet).focusable())
-        AnimatedVisibility(shown, enter = fadeIn(), exit = fadeOut()) {
+        // The chapters take the foot of the film the controls stand in.
+        AnimatedVisibility(shown && menu != Menu.Chapters, enter = fadeIn(), exit = fadeOut()) {
             Controls(
                 playback = playback,
                 work = work,
