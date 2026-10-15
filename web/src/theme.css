@@ -357,48 +357,54 @@ body {
  *
  * So the standard properties are said only where the pieces below do not
  * exist, which is Firefox, and the pieces are used everywhere else.
+ *
+ * Only where a mouse moves the page. A screen touched with a finger has its
+ * own thin bar that shows while the page moves and fades away, which is the
+ * one its owner expects; drawn over it, a desktop's bar looked out of place.
  */
-@supports not selector(::-webkit-scrollbar) {
-  * {
-    scrollbar-color: var(--accent) transparent;
-    scrollbar-width: thin;
+@media (pointer: fine) {
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-color: var(--accent) transparent;
+      scrollbar-width: thin;
+    }
   }
-}
 
-*::-webkit-scrollbar {
-  width: var(--scrollbar-width);
-  height: var(--scrollbar-width);
-  background: transparent;
-}
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+    background: transparent;
+  }
 
-/* No stepper at either end. Nobody has pressed one of those since the wheel
-   was invented, and two little squares of a different shade at the ends are
-   what makes a bar look like it came from another decade. */
-*::-webkit-scrollbar-button,
-*::-webkit-scrollbar-button:start,
-*::-webkit-scrollbar-button:end {
-  display: none;
-  width: 0;
-  height: 0;
-}
+  /* No stepper at either end. Nobody has pressed one of those since the wheel
+     was invented, and two little squares of a different shade at the ends are
+     what makes a bar look like it came from another decade. */
+  *::-webkit-scrollbar-button,
+  *::-webkit-scrollbar-button:start,
+  *::-webkit-scrollbar-button:end {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 
-/* The accent itself, not a shade of it: a bar in a slightly different red
-   next to a button in the real one reads as a mistake. */
-*::-webkit-scrollbar-thumb {
-  background: var(--accent);
-  border-radius: var(--radius-pill);
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
+  /* The accent itself, not a shade of it: a bar in a slightly different red
+     next to a button in the real one reads as a mistake. */
+  *::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: var(--radius-pill);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
 
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-bright);
-  background-clip: content-box;
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-bright);
+    background-clip: content-box;
+  }
 }
 
 /*

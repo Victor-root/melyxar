@@ -778,21 +778,24 @@ button.seen-mark:not(.seen-mark-on):hover {
   --scrollbar-width: 6px;
 }
 
-@supports not selector(::-webkit-scrollbar) {
-  .card-menu {
-    scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent;
+/* Where a mouse moves the page only, as the bar it changes (see theme.css). */
+@media (pointer: fine) {
+  @supports not selector(::-webkit-scrollbar) {
+    .card-menu {
+      scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent;
+    }
   }
-}
 
-.card-menu::-webkit-scrollbar-thumb {
-  border-width: 1px;
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
-  background-clip: content-box;
-}
+  .card-menu::-webkit-scrollbar-thumb {
+    border-width: 1px;
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    background-clip: content-box;
+  }
 
-.card-menu::-webkit-scrollbar-thumb:hover {
-  background: var(--accent);
-  background-clip: content-box;
+  .card-menu::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+    background-clip: content-box;
+  }
 }
 
 /* The name, and at its right what a row of half watched films is read for.
