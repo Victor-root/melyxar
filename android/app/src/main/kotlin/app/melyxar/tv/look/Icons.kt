@@ -127,6 +127,7 @@ object Icons {
                 "a1.5 1.5 0 0 0-1.37.9Z",
         ),
     )
+    val Chapters = outlined("chapters", paths = arrayOf(rect(2.8f, 6.4f, 8f, 11.2f, 1.6f), rect(13.2f, 6.4f, 8f, 11.2f, 1.6f)))
     val Audio = outlined("audio", paths = arrayOf("M4 9.6v4.8M8 6.6v10.8M12 4v16M16 7.4v9.2M20 10.4v3.2"))
     val NextEpisode = solid(
         "next-episode",

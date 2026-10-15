@@ -95,6 +95,9 @@
     <string name="tv_wide_gamut_imposed_kept">Conservé quel que soit le choix fait ici : le serveur est réglé pour ne jamais convertir le HDR.</string>
     <string name="tv_words_offset">Synchronisation des sous-titres</string>
     <string name="tv_words_offset_why">Ajustez le décalage des sous-titres s’ils sont en avance ou en retard sur la vidéo.</string>
+    <string name="tv_chapters">Chapitres</string>
+    <string name="tv_chapter_number">Chapitre %1$d</string>
+    <string name="tv_playing_now">Lecture en cours</string>
     <string name="tv_search">Rechercher</string>
     <string name="tv_search_placeholder">Rechercher un titre</string>
     <string name="tv_search_none">Aucun titre ne correspond.</string>

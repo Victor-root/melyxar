@@ -94,6 +94,9 @@
     <string name="tv_wide_gamut_imposed_kept">Kept whatever is chosen here: the server is set never to convert HDR.</string>
     <string name="tv_words_offset">Subtitle sync</string>
     <string name="tv_words_offset_why">Adjust subtitle timing if it is ahead of or behind the video.</string>
+    <string name="tv_chapters">Chapters</string>
+    <string name="tv_chapter_number">Chapter %1$d</string>
+    <string name="tv_playing_now">Playing now</string>
     <string name="tv_search">Search</string>
     <string name="tv_search_placeholder">Search for a title</string>
     <string name="tv_search_none">No title matches.</string>
