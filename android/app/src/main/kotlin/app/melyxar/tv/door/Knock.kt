@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,8 +45,8 @@ import app.melyxar.server.Refusal
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
-import kotlinx.coroutines.launch
 import java.io.IOException
+import kotlinx.coroutines.launch
 
 /**
  * The password of a profile, typed once on this television: from then on the
@@ -60,8 +62,8 @@ fun Knock(
     onClose: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    var name by remember { mutableStateOf(known ?: "") }
-    var password by remember { mutableStateOf("") }
+    val name = rememberTextFieldState(known ?: "")
+    val password = rememberTextFieldState()
     var asking by remember { mutableStateOf(false) }
     var refusal by remember { mutableStateOf<String?>(null) }
     val shake = remember { Animatable(0f) }
@@ -74,14 +76,14 @@ fun Knock(
     val resources = LocalResources.current
 
     fun signIn() {
-        if (asking || name.isBlank() || password.isEmpty()) {
+        if (asking || name.text.isBlank() || password.text.isEmpty()) {
             return
         }
         asking = true
         refusal = null
         scope.launch {
             try {
-                val (account, token) = api.signIn(name.trim(), password, client)
+                val (account, token) = api.signIn(name.text.trim().toString(), password.text.toString(), client)
                 // Only a nicer line in the list of devices: not worth failing for.
                 runCatching { api.signedInAs(token).nameTheDevice() }
                 onIn(KeptSession(account.name, token), account)
@@ -92,7 +94,7 @@ fun Knock(
                     refused.signedOut -> wrong
                     else -> generic
                 }
-                password = ""
+                password.clearText()
                 shake.animateTo(
                     0f,
                     keyframes {
@@ -145,21 +147,17 @@ fun Knock(
                 )
             } else {
                 TvField(
-                    value = name,
-                    onValueChange = { name = it },
+                    state = name,
                     placeholder = stringResource(R.string.tv_name),
                     onDone = {},
                     modifier = Modifier.focusRequester(first),
                 )
             }
             TvField(
-                value = password,
-                onValueChange = {
-                    password = it
-                    refusal = null
-                },
+                state = password,
                 placeholder = stringResource(R.string.tv_password),
                 onDone = ::signIn,
+                onTyped = { refusal = null },
                 secret = true,
                 enabled = !asking,
                 modifier = if (known != null) Modifier.focusRequester(first) else Modifier,

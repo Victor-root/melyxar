@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -48,7 +49,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack: () -> Unit) {
-    var typed by remember { mutableStateOf("") }
+    val typed = rememberTextFieldState()
     var asking by remember { mutableStateOf(false) }
     var refusal by remember { mutableStateOf<Int?>(null) }
     val known = remember { servers.all() }
@@ -57,7 +58,7 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
     BackHandler(onBack = onBack)
 
     fun connect() {
-        when (val reading = readAddress(typed)) {
+        when (val reading = readAddress(typed.text.toString())) {
             Reading.NotAnAddress -> refusal = R.string.connect_not_address
             Reading.OpenOverInternet -> refusal = R.string.connect_open_over_internet
             is Reading.Usable -> {
@@ -108,13 +109,10 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
                     textAlign = TextAlign.Center,
                 )
                 TvField(
-                    value = typed,
-                    onValueChange = {
-                        typed = it
-                        refusal = null
-                    },
+                    state = typed,
                     placeholder = stringResource(R.string.connect_address),
                     onDone = ::connect,
+                    onTyped = { refusal = null },
                     keyboard = KeyboardType.Uri,
                     enabled = !asking,
                     modifier = Modifier
@@ -124,7 +122,7 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
                 refusal?.let { Text(stringResource(it), color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
                 AccentButton(
                     text = stringResource(if (asking) R.string.tv_signing_in else R.string.connect_go),
-                    onClick = { if (!asking && typed.isNotBlank()) connect() },
+                    onClick = { if (!asking && typed.text.isNotBlank()) connect() },
                     icon = null,
                 )
                 if (known.isNotEmpty()) {
