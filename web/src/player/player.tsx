@@ -180,6 +180,7 @@ function Film({
   });
   const {
     video,
+    holdThePicture,
     plan,
     stream,
     rebuilt,
@@ -267,7 +268,7 @@ function Film({
       {plan && !failed && (canBePlayedAsItIs(plan) || stream) && (
         <video
           key={pictureKey ?? undefined}
-          ref={video}
+          ref={holdThePicture}
           className={`player-video player-video-${shape}${turn === 0 ? "" : ` player-video-turned player-video-turned-${turn}`}`}
           src={canBePlayedAsItIs(plan) ? plan.url : undefined}
           autoPlay

@@ -15,6 +15,7 @@
 import { api, type HowItMoved, type Reading } from "../api";
 import { followTheOpening } from "./opening";
 import { followTheSubtitles } from "./subtitleWatch";
+import type { Picture } from "./picture";
 
 /** How still the clock has to be before the film counts as stopped. */
 const STOPPED_AFTER_MS = 1_000;
@@ -72,7 +73,7 @@ const CLOSE_ENOUGH_TO_THE_LANDING_MS = 250;
 const SAY_HOW_IT_STARTED_AFTER_MS = 5_000;
 
 /** The stretch the browser holds around one moment, and how many it holds. */
-function whatIsHeldAround(element: HTMLVideoElement, moment: number) {
+function whatIsHeldAround(element: Picture, moment: number) {
   const held = element.buffered;
   for (let index = 0; index < held.length; index += 1) {
     if (held.start(index) <= moment && moment <= held.end(index)) {
@@ -87,7 +88,7 @@ function whatIsHeldAround(element: HTMLVideoElement, moment: number) {
 }
 
 /** Seconds of film the browser holds in all. */
-function allThatIsHeld(element: HTMLVideoElement): number {
+function allThatIsHeld(element: Picture): number {
   const held = element.buffered;
   let seconds = 0;
   for (let index = 0; index < held.length; index += 1) {
@@ -103,7 +104,7 @@ function pageMemoryMb(): number | null {
 }
 
 /** Pictures the browser says it has shown, when it counts them. */
-function picturesShown(element: HTMLVideoElement): number {
+function picturesShown(element: Picture): number {
   const quality = element.getVideoPlaybackQuality?.();
   return quality ? quality.totalVideoFrames : 0;
 }
@@ -115,7 +116,7 @@ function picturesShown(element: HTMLVideoElement): number {
  * producing pictures and refusing them, which is one fault; standing still, it
  * is producing none at all, which is another.
  */
-function picturesDropped(element: HTMLVideoElement): number {
+function picturesDropped(element: Picture): number {
   const quality = element.getVideoPlaybackQuality?.();
   return quality ? quality.droppedVideoFrames : 0;
 }
@@ -159,7 +160,7 @@ export interface Watching {
 /**
  * Follows one film and reports what the server cannot see.
  */
-export function watchTheReading(element: HTMLVideoElement, reading: Reading): Watching {
+export function watchTheReading(element: Picture, reading: Reading): Watching {
   const tell = (said: Parameters<typeof api.tellTheJournal>[0]) => {
     // Nothing waits on a line in a journal, and a film that plays matters
     // more than knowing how it played.
@@ -471,8 +472,9 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
   let behindSum = 0;
   let behindWorst = 0;
   let behindCount = 0;
+  const nextPicture = element.requestVideoFrameCallback?.bind(element);
   const weigh = (now: number, picture: VideoFrameCallbackMetadata) => {
-    weighing = element.requestVideoFrameCallback(weigh);
+    weighing = nextPicture?.(weigh) ?? null;
     if (element.paused || element.seeking) {
       weighedSince = now;
       behindSum = 0;
@@ -508,8 +510,8 @@ export function watchTheReading(element: HTMLVideoElement, reading: Reading): Wa
       behindCount = 0;
     }
   };
-  if (element.requestVideoFrameCallback) {
-    weighing = element.requestVideoFrameCallback(weigh);
+  if (nextPicture) {
+    weighing = nextPicture(weigh);
   }
 
   /* The opening seconds picture by picture, which is the only way a stutter
