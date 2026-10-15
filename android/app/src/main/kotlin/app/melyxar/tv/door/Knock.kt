@@ -43,7 +43,7 @@ import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
-import app.melyxar.tv.look.glow
+import app.melyxar.tv.look.halo
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -119,7 +119,7 @@ fun Knock(
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
-                .glow(shape, palette.accent, 12.dp)
+                .halo(shape, palette.accentGlow, 12.dp)
                 .clip(shape)
                 .background(palette.surfaceRaised)
                 .background(palette.accent.copy(alpha = 0.10f))

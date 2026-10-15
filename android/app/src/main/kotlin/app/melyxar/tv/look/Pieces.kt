@@ -47,7 +47,7 @@ fun AccentButton(
         modifier = modifier
             .grows({ lit }, 1.05f)
             // Always a little lit, as the web's accent button glows at rest.
-            .glow(ControlShape, palette.accent, 22.dp) { 0.35f + 0.65f * lit }
+            .halo(ControlShape, palette.accent) { 0.3f + 0.7f * lit }
             .clip(ControlShape)
             .background(palette.accent)
             .rim(ControlShape, palette.accentContrast, 2.5.dp) { lit }
@@ -144,7 +144,7 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
 fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
     val palette = LocalPalette.current
     return this
-        .glow(shape, palette.accent, 8.dp)
+        .halo(shape, palette.accentGlow, 12.dp)
         .clip(shape)
         .background(palette.surfaceRaised.copy(alpha = 0.55f))
         .background(palette.accent.copy(alpha = 0.22f))

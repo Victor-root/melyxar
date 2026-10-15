@@ -7,11 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -39,27 +42,33 @@ fun Modifier.grows(lit: () -> Float, growth: Float = FOCUS_GROWTH) = graphicsLay
 }
 
 /**
- * A glow of [color] round the piece, as high as [elevation] times
- * [strength]: drawn by the graphics card from the piece's outline, as the
- * system draws its shadows, so nothing is blurred on the thread that draws
- * the screen and nothing is drawn again while the strength eases. A blurred
- * shadow is painted into a picture of its own on that thread, three for each
- * piece the remote came to, which a television's processor cannot keep up
- * with.
+ * A soft light of [color] round the piece, [reach] wide, as strong as [lit]
+ * says, as the web's halo on hover: rings of the piece's own shape, each a
+ * little wider and faint, drawn over one another so the light thickens
+ * towards the edge. Laid out once per size, drawn by the graphics card, and
+ * nothing at all while unlit; never a blurred shadow, which is painted into
+ * a picture of its own on the thread that draws the screen.
  */
-fun Modifier.glow(shape: Shape, color: Color, elevation: Dp, strength: () -> Float = { 1f }) = graphicsLayer {
-    shadowElevation = elevation.toPx() * strength()
-    this.shape = shape
-    clip = false
-    ambientShadowColor = color
-    spotShadowColor = color
+fun Modifier.halo(shape: Shape, color: Color, reach: Dp = HALO_REACH, lit: () -> Float = { 1f }) = drawWithCache {
+    val rings = (1..HALO_RINGS).map { ring ->
+        val spread = reach.toPx() * ring / HALO_RINGS
+        spread to shape.createOutline(Size(size.width + 2 * spread, size.height + 2 * spread), layoutDirection, this)
+    }
+    onDrawBehind {
+        val shown = lit()
+        if (shown > 0f) {
+            rings.forEach { (spread, outline) ->
+                translate(-spread, -spread) { drawOutline(outline, color, alpha = HALO_RING_ALPHA * shown) }
+            }
+        }
+    }
 }
 
-/** The web's halo of a card, in the accent, as lit as the piece is. */
-fun Modifier.halo(shape: Shape, accent: Color, lit: () -> Float) = glow(shape, accent, HALO_HEIGHT, lit)
-
-/** How high the halo of a lit piece stands. */
-private val HALO_HEIGHT = 22.dp
+/** How far the halo of a lit piece reaches, in how many rings, each how
+ *  strong: about half the colour at the piece's edge, fading out from it. */
+private val HALO_REACH = 16.dp
+private const val HALO_RINGS = 8
+private const val HALO_RING_ALPHA = 0.075f
 
 /** A rim drawn inside the piece's edge, as the web's inset ring. */
 fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithContent {

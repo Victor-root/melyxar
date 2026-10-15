@@ -52,8 +52,8 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.Nearest
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
-import app.melyxar.tv.look.glow
 import app.melyxar.tv.look.grows
+import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 
@@ -119,7 +119,7 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
         modifier = modifier
             .size(TileWidth, TileHeight)
             .grows({ lit }, 1.035f)
-            .glow(CardShape, palette.accent, 22.dp) { 0.35f + 0.65f * lit }
+            .halo(CardShape, palette.accent) { 0.3f + 0.7f * lit }
             .clip(CardShape)
             // Laid out once for the tile; only the halo behind the fan is
             // drawn again as it lights.
@@ -169,7 +169,7 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
             Box(
                 Modifier
                     .size(26.dp)
-                    .glow(CircleShape, palette.accent, 6.dp)
+                    .halo(CircleShape, palette.accentGlow, 8.dp)
                     .clip(CircleShape)
                     .drawBehind { drawRect(if (lit > 0.5f) palette.accent else palette.accent.copy(alpha = 0.2f)) },
                 contentAlignment = Alignment.Center,
@@ -206,7 +206,7 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                     }
                     .then(
                         if (at == 0) {
-                            Modifier.glow(shape, palette.accent, 14.dp)
+                            Modifier.halo(shape, palette.accentGlow, 16.dp)
                         } else {
                             Modifier
                         },
