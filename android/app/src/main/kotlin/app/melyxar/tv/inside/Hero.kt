@@ -168,7 +168,17 @@ private fun Backdrop(work: WithCard<HeroMore>) {
                 1f to palette.ground,
             ),
         )
-        drawRect(Brush.horizontalGradient(0.06f to palette.ground, 0.62f to Color.Transparent))
+        // Shaded enough on the left to read the words over, never so much
+        // that the picture looks pushed aside: a solid edge reads as a hole.
+        drawRect(
+            Brush.horizontalGradient(
+                0f to palette.ground.copy(alpha = 0.8f),
+                0.18f to palette.ground.copy(alpha = 0.6f),
+                0.38f to palette.ground.copy(alpha = 0.3f),
+                0.56f to palette.ground.copy(alpha = 0.08f),
+                0.7f to Color.Transparent,
+            ),
+        )
         drawRect(Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground))
     }) {
         ServerPicture(
