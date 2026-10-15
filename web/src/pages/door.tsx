@@ -138,22 +138,20 @@ export function Door({
           picks. */}
       <div className="door-stage" aria-hidden="true" />
 
-      {/* The way back to the accounts, alone at the top: the server's mark
-          and name stand in the middle, over the greeting. */}
-      <header className="door-top">
-        {/* Only ever on the form, and only when there is a list to go back
-            to: on a server that offers no names it would go nowhere. */}
-        {onTheForm && door.names.length > 0 && (
-          <button
-            type="button"
-            className="door-back"
-            onClick={() => turnTo({ the: "accounts" })}
-          >
-            <BackIcon size={18} />
-            {t("door.back")}
-          </button>
-        )}
-      </header>
+      {/* The way back to the accounts, an arrow alone in the corner. Only ever
+          on the form, and only when there is a list to go back to: on a server
+          that offers no names it would go nowhere. */}
+      {onTheForm && door.names.length > 0 && (
+        <button
+          type="button"
+          className="door-back"
+          aria-label={t("door.back")}
+          title={t("door.back")}
+          onClick={() => turnTo({ the: "accounts" })}
+        >
+          <BackIcon size={20} />
+        </button>
+      )}
 
       {/* No card around any of it: the accounts stand in the open in the middle
           of the screen, and the form takes their place once one is pressed. */}

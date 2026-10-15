@@ -24,7 +24,7 @@
   overflow-x: hidden;
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   justify-items: center;
   gap: var(--gap-wide);
   padding: calc(clamp(18px, 2.6vw, 40px) + var(--safe-top)) calc(clamp(18px, 3vw, 56px) + var(--safe-right)) calc(clamp(16px, 2.4vw, 36px) + var(--safe-bottom)) calc(clamp(18px, 3vw, 56px) + var(--safe-left));
@@ -297,25 +297,19 @@
  * The corner
  * ------------------------------------------------------------------------ */
 
-.door-top {
-  grid-row: 1;
-  justify-self: stretch;
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 40px;
-}
-
-/* Back to the accounts, in the corner a back arrow takes on any screen. */
+/* Back to the accounts, in the corner a back arrow takes on any screen, as far
+   from the top as from the side. */
 .door-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 13px 7px 9px;
-  border-radius: var(--radius-pill);
-  font-size: 13.5px;
+  --door-corner: clamp(16px, 2.6vw, 40px);
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--door-corner) + var(--safe-top));
+  left: calc(var(--door-corner) + var(--safe-left));
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   color: var(--text-soft);
   transition:
     color var(--quick) var(--ease),
@@ -348,7 +342,7 @@
   --door-read: clamp(14px, 1.7vh, 16.5px);
   --door-type: 15px;
 
-  grid-row: 2;
+  grid-row: 1;
   align-self: center;
   position: relative;
   z-index: 1;
@@ -948,7 +942,7 @@ img.door-greeting-mark {
 .door-foot {
   /* Always the bottom row, even while the middle is not drawn yet, so the
      foot does not sit at the top for a moment on arrival. */
-  grid-row: 3;
+  grid-row: 2;
   justify-self: stretch;
   position: relative;
   z-index: 1;
@@ -1095,15 +1089,6 @@ img.door-greeting-mark {
 
   .door-stage::after {
     display: none;
-  }
-
-  .door-top {
-    min-height: 0;
-  }
-
-  /* Held off the very top of a phone, where it would sit against the edge. */
-  .door-back {
-    margin-top: 12px;
   }
 
   .door-greeting-mark {
