@@ -19,12 +19,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.melyxar.R
+import app.melyxar.server.Album
 import app.melyxar.server.Card
 import app.melyxar.server.Home
+import app.melyxar.server.Slice
+import app.melyxar.server.albums
 import app.melyxar.tv.WatchNext
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.Icons
+
+/** How many of the newest albums are asked for, for the tile of music to
+ *  find covers among. */
+private const val COVERS_ASKED = 10
 
 /**
  * The home screen, as the web's: the banner, the band of libraries, and the
@@ -43,6 +50,12 @@ fun HomeScreen(comebacks: Int) {
     val memory = rememberFocusMemory()
     val first = remember { FocusRequester() }
     val home = loaded.ready
+    // The covers the tile of music fans out, which the server's shelves do
+    // not hold: the newest albums of every library of music, as on the web.
+    val musicLibraries = chrome.libraries.filter { it.kind == "music" }.map { it.id }
+    val newestAlbums = rememberLoaded("music:band:$musicLibraries", comebacks) {
+        inTurn(musicLibraries.map { albums(it, "added", false, Slice(0, COVERS_ASKED)).items }, COVERS_ASKED)
+    }.value.ready.orEmpty()
     val context = LocalContext.current
     val api = LocalServer.current
     // The system's own row follows Melyxar's, whenever home is read.
@@ -73,7 +86,7 @@ fun HomeScreen(comebacks: Int) {
                     // The band is part of the head only where it stands right
                     // under the banner.
                     val band = if (home.sections.firstOrNull() == "band") Modifier.head(head, "band") else Modifier
-                    sections(home, open, memory, band)
+                    sections(home, newestAlbums, open, memory, band)
                 }
             }
             loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
@@ -83,13 +96,13 @@ fun HomeScreen(comebacks: Int) {
     RestoreFocus(memory, first, ready = home != null)
 }
 
-private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: FocusMemory, band: Modifier) {
+private fun LazyListScope.sections(home: Home, newestAlbums: List<Album>, open: (Card) -> Unit, memory: FocusMemory, band: Modifier) {
     home.sections.forEach { section ->
         when {
             section == "band" -> item("band") {
                 val chrome = LocalChrome.current
                 Box(band) {
-                    Band(home.shelves, chrome.libraries, home.kindOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory)
+                    Band(home.shelves, newestAlbums, chrome.libraries, home.kindOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory)
                 }
             }
             section == "carry_on" -> section(section, home.carryOn) {
