@@ -39,8 +39,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -122,6 +125,7 @@ fun Hero(
             targetState = at,
             transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
             label = "hero",
+            modifier = Modifier.fillMaxSize().fadesIntoThePage(),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }
@@ -156,15 +160,6 @@ private fun Modifier.onKey(key: Key, action: () -> Unit) = onPreviewKeyEvent { e
 private fun Backdrop(work: WithCard<HeroMore>) {
     val palette = LocalPalette.current
     Box(Modifier.fillMaxSize().drawWithCache {
-        // The picture fades into the page at its foot, and to its left
-        // where the words stand.
-        val foot = Brush.verticalGradient(
-            0.66f to Color.Transparent,
-            0.78f to palette.ground.copy(alpha = 0.12f),
-            0.87f to palette.ground.copy(alpha = 0.44f),
-            0.94f to palette.ground.copy(alpha = 0.76f),
-            1f to palette.ground,
-        )
         // Shaded enough on the left to read the words over, never so much
         // that the picture looks pushed aside: a solid edge reads as a hole.
         val words = Brush.horizontalGradient(
@@ -177,7 +172,6 @@ private fun Backdrop(work: WithCard<HeroMore>) {
         val below = Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground)
         onDrawWithContent {
             drawContent()
-            drawRect(foot)
             drawRect(words)
             drawRect(below)
         }
@@ -190,6 +184,27 @@ private fun Backdrop(work: WithCard<HeroMore>) {
         )
     }
 }
+
+/**
+ * The web's `--hero-fade`: the banner, its picture and its shades together,
+ * made clear towards its foot, so the page's own ground shows through it
+ * rather than a band of plain colour.
+ */
+private fun Modifier.fadesIntoThePage() = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithCache {
+        val clear = Brush.verticalGradient(
+            0.66f to Color.Black,
+            0.78f to Color.Black.copy(alpha = 0.88f),
+            0.87f to Color.Black.copy(alpha = 0.56f),
+            0.94f to Color.Black.copy(alpha = 0.24f),
+            1f to Color.Transparent,
+        )
+        onDrawWithContent {
+            drawContent()
+            drawRect(clear, blendMode = BlendMode.DstIn)
+        }
+    }
 
 @Composable
 private fun Words(
