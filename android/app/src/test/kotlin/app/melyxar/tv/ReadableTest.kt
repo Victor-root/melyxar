@@ -90,4 +90,11 @@ class ReadableTest {
         }
         assertEquals("2026-01-05", todayOf(day))
     }
+
+    @Test
+    fun writesASpeedAsTheWebDoes() {
+        assertEquals("1×", speedName(1f))
+        assertEquals("0.75×", speedName(0.75f))
+        assertEquals("2×", speedName(2f))
+    }
 }

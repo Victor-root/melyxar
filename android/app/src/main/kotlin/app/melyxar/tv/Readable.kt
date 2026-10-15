@@ -107,6 +107,9 @@ fun clock(seconds: Double): String {
     }
 }
 
+/** A speed of play as the web's player writes it: "1×", "1.25×". */
+fun speedName(speed: Float): String = "${if (speed % 1f == 0f) speed.toInt().toString() else speed.toString()}×"
+
 /** The older names of languages files still carry, as the ones a device
  *  reads. */
 private val TERMINOLOGY = mapOf(

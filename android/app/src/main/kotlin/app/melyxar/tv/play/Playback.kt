@@ -3,6 +3,7 @@ package app.melyxar.tv.play
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.net.toUri
@@ -23,6 +24,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
 import app.melyxar.player.measuredProfile
 import app.melyxar.server.Api
+import app.melyxar.server.Asked
 import app.melyxar.server.Plan
 import app.melyxar.server.Refusal
 import app.melyxar.server.StreamSession
@@ -38,7 +40,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import java.io.IOException
 
 /** How often the server is told where the film is, as the web tells it. */
@@ -46,6 +50,9 @@ private const val REPORT_EVERY_MS = 10_000L
 
 /** How often a film the server rebuilds is said to be still watched. */
 private const val STILL_HERE_EVERY_MS = 30_000L
+
+/** The speeds a film can be played at, as the web's player offers them. */
+val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 private val sound = AudioAttributes.Builder()
     .setUsage(C.USAGE_MEDIA)
@@ -56,12 +63,20 @@ private val sound = AudioAttributes.Builder()
  *  change while it runs. What the sound goes through is read by Media3 at
  *  each film. Asking every decoder what it reads takes long enough to freeze
  *  the screen, so it is asked away from the thread that draws it. */
-private var measured: JsonElement? = null
+private var measured: JsonObject? = null
 
-private suspend fun profileOf(context: Context): JsonElement = measured
-    ?: withContext(Dispatchers.Default) {
-        Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound))
-    }.also { measured = it }
+/** What the device plays, held to [quality] as the web's page holds it. */
+private suspend fun profileOf(context: Context, quality: Quality): JsonObject {
+    val device = measured
+        ?: withContext(Dispatchers.Default) {
+            Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound)).jsonObject
+        }.also { measured = it }
+    val ceiling = listOfNotNull(
+        quality.height?.let { "max_height" to JsonPrimitive(it) },
+        quality.bitrate?.let { "max_bitrate" to JsonPrimitive(it) },
+    )
+    return JsonObject(device + ceiling)
+}
 
 /**
  * One film played on the television: asked of the server, played by Media3
@@ -100,6 +115,20 @@ class Playback(
     var failed by mutableStateOf(false)
         private set
 
+    private val keptQuality = KeptQuality(context)
+
+    /** What the picture is held to, as this television was left. */
+    var quality by mutableStateOf(keptQuality.read())
+        private set
+
+    /** What to do with the film's HDR for this film alone: automatic,
+     *  always_convert or never_convert, or the account's own choice. */
+    var wideGamut by mutableStateOf<String?>(null)
+        private set
+
+    var speed by mutableFloatStateOf(1f)
+        private set
+
     private var stream: StreamSession? = null
     private var reporting: Job? = null
     private var keeping: Job? = null
@@ -118,7 +147,7 @@ class Playback(
         })
         scope.launch {
             try {
-                val first = api.plan(source, profileOf(context), audio = null, TrackChoice.Unsaid)
+                val first = api.plan(source, asked(TrackChoice.Unsaid))
                 audio = first.chosenAudioId
                 subtitle = first.chosenSubtitleId
                 open(first, from ?: first.resumeFromSeconds ?: 0.0)
@@ -139,6 +168,11 @@ class Playback(
 
     private val painted: Track? get() = plan?.subtitles?.firstOrNull { it.id == subtitle && it.burnsIn }
 
+    /** The subtitle the server paints into the film, if any. */
+    private val paintedChoice: TrackChoice get() = painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid
+
+    private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, quality), audio, subtitle, wideGamut)
+
     /** Plays a plan from [at] seconds: the file itself, or a film rebuilt
      *  from there. */
     private suspend fun open(plan: Plan, at: Double) {
@@ -147,8 +181,7 @@ class Playback(
         val address = if (plan.method == "direct_play") {
             api.address(plan.url)
         } else {
-            val choice = painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid
-            api.openStream(source, profileOf(context), audio, choice, at).also { stream = it }.let { api.address(it.playlistUrl) }
+            api.openStream(source, asked(paintedChoice), at).also { stream = it }.let { api.address(it.playlistUrl) }
         }
         val item = MediaItem.Builder()
             .setUri(address)
@@ -177,7 +210,7 @@ class Playback(
         val at = seconds
         scope.launch {
             try {
-                open(api.plan(source, profileOf(context), audio, subtitleChoice), at)
+                open(api.plan(source, asked(subtitleChoice)), at)
             } catch (_: IOException) {
                 failed = true
             }
@@ -190,7 +223,30 @@ class Playback(
         }
         audio = track.id
         remember()
-        again(painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid)
+        again(paintedChoice)
+    }
+
+    /** Holds the picture to [chosen] from here, kept for the films after. */
+    fun chooseQuality(chosen: Quality) {
+        if (chosen == quality) {
+            return
+        }
+        quality = chosen
+        keptQuality.keep(chosen)
+        again(paintedChoice)
+    }
+
+    fun chooseWideGamut(choice: String?) {
+        if (choice == wideGamut) {
+            return
+        }
+        wideGamut = choice
+        again(paintedChoice)
+    }
+
+    fun chooseSpeed(chosen: Float) {
+        speed = chosen
+        player.setPlaybackSpeed(chosen)
     }
 
     /** A subtitle of words is only shown or hidden; one of pictures, or
