@@ -21,7 +21,6 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -54,6 +53,7 @@ import app.melyxar.player.FilmPlayer
 import app.melyxar.server.KnownServer
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
+import app.melyxar.theme.drawUnderTheBars
 
 /**
  * The interface of a server, as its own web pages draw it.
@@ -86,7 +86,7 @@ class WebActivity : ComponentActivity() {
             origin = requireNotNull(intent.getStringExtra(ORIGIN)),
             name = intent.getStringExtra(NAME).orEmpty(),
         )
-        enableEdgeToEdge()
+        drawUnderTheBars()
 
         val holder = FrameLayout(this)
         page = interfacePage()

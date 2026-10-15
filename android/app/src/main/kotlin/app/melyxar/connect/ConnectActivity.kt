@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,6 +53,7 @@ import app.melyxar.server.askBranding
 import app.melyxar.server.readAddress
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
+import app.melyxar.theme.drawUnderTheBars
 import app.melyxar.web.WebActivity
 import kotlinx.coroutines.launch
 
@@ -71,7 +71,7 @@ class ConnectActivity : ComponentActivity() {
             open(current)
             return
         }
-        enableEdgeToEdge()
+        drawUnderTheBars()
         setContent {
             MelyxarTheme {
                 ConnectScreen(servers, onOpen = { server ->
