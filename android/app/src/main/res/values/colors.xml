@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The ground of the web interface's dark theme, for what the system draws
+         before a screen does: the window, the launcher icon. -->
+    <color name="ground">#0C0D10</color>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect_title">Connexion à votre serveur</string>
+    <string name="connect_lead">Saisissez l’adresse de votre serveur Melyxar, par exemple 192.168.1.20:2100.</string>
+    <string name="connect_address">Adresse du serveur</string>
+    <string name="connect_go">Se connecter</string>
+    <string name="connect_not_address">Ce n’est pas une adresse de serveur.</string>
+    <string name="connect_open_over_internet">Hors de votre réseau domestique, l’adresse doit commencer par https:// pour que votre mot de passe ne circule jamais en clair.</string>
+    <string name="connect_unreachable">Aucun serveur Melyxar ne répond à cette adresse.</string>
+    <string name="connect_known">Vos serveurs</string>
+    <string name="connect_forget">Oublier</string>
+    <string name="unreachable_title">Serveur injoignable</string>
+    <string name="unreachable_lead">%1$s ne répond pas. Vérifiez qu’il est allumé et que cet appareil est sur le bon réseau.</string>
+    <string name="unreachable_retry">Réessayer</string>
+    <string name="unreachable_change">Changer de serveur</string>
+</resources>
