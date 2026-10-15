@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
@@ -41,11 +43,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.ViewCompat
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.core.view.updatePadding
 import app.melyxar.BuildConfig
 import app.melyxar.R
 import app.melyxar.connect.ConnectActivity
@@ -69,6 +71,7 @@ class WebActivity : ComponentActivity() {
     private lateinit var notice: ComposeView
     private lateinit var film: FilmPlayer
     private val chrome = InterfaceChrome()
+    private val bars = Bars()
 
     /** The page waiting for files somebody picks, while the picker is open. */
     private var picking: ValueCallback<Array<Uri>>? = null
@@ -90,8 +93,9 @@ class WebActivity : ComponentActivity() {
 
         val holder = FrameLayout(this)
         page = interfacePage()
-        film = FilmPlayer(this, page, Melyxar.ground.toArgb(), ::isTheServers)
+        film = FilmPlayer(this, page, Melyxar.ground.toArgb(), ::isTheServers, bars::filmShown)
         page.addJavascriptInterface(film, "MelyxarPlayer")
+        page.addJavascriptInterface(bars, "MelyxarWindow")
         holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))
         holder.addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
         notice = ComposeView(this).apply {
@@ -113,17 +117,9 @@ class WebActivity : ComponentActivity() {
             }
         }
         holder.addView(notice, FrameLayout.LayoutParams(MATCH, MATCH))
-        // Until the interface draws under the bars itself, it is kept between
-        // them, the way a browser shows it, and clear of the camera.
-        ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
-            val bars = insets.getInsets(
-                WindowInsetsCompat.Type.systemBars() or
-                    WindowInsetsCompat.Type.displayCutout() or
-                    WindowInsetsCompat.Type.ime(),
-            )
-            view.updatePadding(left = bars.left, top = bars.top, right = bars.right, bottom = bars.bottom)
-            WindowInsetsCompat.CONSUMED
-        }
+        // The page is drawn under the phone's bars and the camera and makes
+        // room for them itself, from what the web view tells it; the keyboard
+        // shrinks what the web view shows of it.
         setContentView(holder)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -238,6 +234,42 @@ class WebActivity : ComponentActivity() {
         }
     }
 
+    /** The icons of the phone's bars, dark or light: chosen from the colour
+     *  the page gives its window, as a browser chooses them, and light over a
+     *  film whatever the page is. */
+    private inner class Bars {
+        private var pageIsLight = false
+        private var film = false
+
+        /** Any frame of the page can call this, so a colour that cannot be
+         *  read is left aside rather than trusted. */
+        @JavascriptInterface
+        fun colour(colour: String) {
+            val read = try {
+                colour.toColorInt()
+            } catch (_: IllegalArgumentException) {
+                return
+            }
+            val light = ColorUtils.calculateLuminance(read) > HALF_LIGHT
+            runOnUiThread {
+                pageIsLight = light
+                show()
+            }
+        }
+
+        fun filmShown(shown: Boolean) {
+            film = shown
+            show()
+        }
+
+        private fun show() {
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                isAppearanceLightStatusBars = pageIsLight && !film
+                isAppearanceLightNavigationBars = pageIsLight && !film
+            }
+        }
+    }
+
     private inner class InterfaceChrome : WebChromeClient() {
         override fun onShowFileChooser(
             view: WebView,
@@ -278,6 +310,9 @@ class WebActivity : ComponentActivity() {
         private const val NAME = "name"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 
+        /** Lighter than this, the bars' icons are drawn dark. */
+        private const val HALF_LIGHT = 0.5
+
         fun opening(context: Context, server: KnownServer) = Intent(context, WebActivity::class.java)
             .putExtra(ORIGIN, server.origin)
             .putExtra(NAME, server.name)
@@ -289,7 +324,7 @@ class WebActivity : ComponentActivity() {
 private fun Unreachable(name: String, onRetry: () -> Unit, onChange: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = Melyxar.ground) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         ) {

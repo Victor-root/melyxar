@@ -1137,29 +1137,30 @@ img.door-mark {
 
 /* An installed app drawn edge to edge gives up the bars of the system at its
    top and bottom, so the sign in is a little tighter on a phone there.
-   Only in an installed app, so a browser tab keeps its layout. */
-@media (display-mode: standalone) and (max-width: 760px) {
-  :root[data-edge-room] .door {
+   Only where the page has the whole screen, so a browser tab keeps its
+   layout. */
+@media (max-width: 760px) {
+  :root[data-whole-screen][data-edge-room] .door {
     gap: 8px;
   }
 
-  :root[data-edge-room] .door-forwhom {
+  :root[data-whole-screen][data-edge-room] .door-forwhom {
     margin-bottom: 14px;
   }
 
-  :root[data-edge-room] .door-forwhom-face {
+  :root[data-whole-screen][data-edge-room] .door-forwhom-face {
     --door-tile: 80px;
   }
 
-  :root[data-edge-room] .door-box {
+  :root[data-whole-screen][data-edge-room] .door-box {
     margin-bottom: 8px;
   }
 
-  :root[data-edge-room] .door-or {
+  :root[data-whole-screen][data-edge-room] .door-or {
     margin: 6px 0;
   }
 
-  :root[data-edge-room] .door-foot .picker {
+  :root[data-whole-screen][data-edge-room] .door-foot .picker {
     min-width: 0;
     max-width: 180px;
   }

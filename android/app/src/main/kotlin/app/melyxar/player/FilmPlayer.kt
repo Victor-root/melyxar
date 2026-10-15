@@ -58,6 +58,8 @@ class FilmPlayer(
     private val ground: Int,
     /** Whether an address is the server's: nothing else is played. */
     private val isTheServers: (String) -> Boolean,
+    /** Said when a film comes under the page and when it goes. */
+    private val onShown: (Boolean) -> Unit,
 ) {
     private val sound = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)
@@ -246,6 +248,7 @@ class FilmPlayer(
             player.prepare()
             picture.visibility = View.VISIBLE
             page.setBackgroundColor(Color.TRANSPARENT)
+            onShown(true)
             tellNow()
         }
     }
@@ -334,6 +337,7 @@ class FilmPlayer(
         player.clearMediaItems()
         picture.visibility = View.GONE
         page.setBackgroundColor(ground)
+        onShown(false)
         fill(false)
         shapeTheWindow()
     }
