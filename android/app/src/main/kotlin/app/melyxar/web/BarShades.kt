@@ -13,7 +13,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import kotlin.math.pow
+import app.melyxar.theme.relativeLight
 
 /**
  * Whether the icons of the phone's bars are drawn dark or light, from what is
@@ -142,12 +142,4 @@ fun wantsDarkIcons(points: IntArray): Boolean {
     val againstWhite = 1.05 / (light + 0.05)
     val againstBlack = (light + 0.05) / 0.05
     return againstBlack > againstWhite
-}
-
-private fun relativeLight(point: Int): Double =
-    0.2126 * linear(point shr 16) + 0.7152 * linear(point shr 8) + 0.0722 * linear(point)
-
-private fun linear(channel: Int): Double {
-    val value = (channel and 0xff) / 255.0
-    return if (value <= 0.04045) value / 12.92 else ((value + 0.055) / 1.055).pow(2.4)
 }
