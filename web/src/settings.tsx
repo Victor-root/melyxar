@@ -106,6 +106,11 @@ interface Settings {
   /** The theme on a phone, chosen apart from the larger screens. */
   phoneTheme: PhoneTheme;
   setPhoneTheme: (theme: PhoneTheme) => void;
+  /** The theme this screen shows: the phone's own on a phone that has one,
+   *  the larger screens' otherwise. */
+  shownTheme: ThemeChoice;
+  /** Changes whichever of the two this screen shows. */
+  setShownTheme: (theme: ThemeChoice) => void;
   /** The library a phone opens on in place of the home page, or nothing. */
   startLibraryOnPhone: string | null;
   setStartLibraryOnPhone: (library: string | null) => void;
@@ -225,7 +230,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
   const [adopted, setAdopted] = useState(false);
   const onAPhone = useMediaQuery(ON_A_PHONE);
-  const shown: ThemeChoice = onAPhone && phoneTheme !== "same" ? phoneTheme : theme;
+  const phoneHasItsOwn = onAPhone && phoneTheme !== "same";
+  const shown: ThemeChoice = phoneHasItsOwn ? phoneTheme : theme;
   useEffect(() => {
     if (branding) {
       safeWrite(STORED_SERVER_THEME, serverThemeOf(branding.default_theme));
@@ -354,6 +360,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setPhoneThemeState(next);
     tellTheServer({ theme_mode_phone: next === "same" ? "" : next });
   }, []);
+
+  const setShownTheme = useCallback(
+    (next: ThemeChoice) => (phoneHasItsOwn ? setPhoneTheme(next) : setTheme(next)),
+    [phoneHasItsOwn, setPhoneTheme, setTheme],
+  );
 
   const setStartLibraryOnPhone = useCallback((library: string | null) => {
     safeWrite(STORED_START_LIBRARY_PHONE, library ?? "");
@@ -512,6 +523,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setTheme,
       phoneTheme,
       setPhoneTheme,
+      shownTheme: shown,
+      setShownTheme,
       startLibraryOnPhone,
       setStartLibraryOnPhone,
       accent,
@@ -554,6 +567,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setTheme,
       phoneTheme,
       setPhoneTheme,
+      shown,
+      setShownTheme,
       startLibraryOnPhone,
       setStartLibraryOnPhone,
       accent,

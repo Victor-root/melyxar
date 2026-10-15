@@ -5,21 +5,23 @@
  * Every press changes what is on the screen. It used to go round automatic,
  * light and dark, and automatic always looks like one of the other two, so one
  * press in three did nothing anybody could see and the button looked broken.
- * Going back to automatic is in the settings.
+ * Going back to automatic is in the settings. On a phone with a theme of its
+ * own, it is that one that turns: turning the larger screens' changed nothing
+ * there either.
  */
 
 import { themeSeen, useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
 export function ThemeToggle() {
-  const { t, theme, setTheme } = useSettings();
+  const { t, shownTheme, setShownTheme } = useSettings();
   return (
     <button
       type="button"
       className="theme-toggle"
-      onClick={() => setTheme(themeSeen(theme) === "light" ? "dark" : "light")}
+      onClick={() => setShownTheme(themeSeen(shownTheme) === "light" ? "dark" : "light")}
     >
-      <ThemeIcon theme={theme} />
+      <ThemeIcon theme={shownTheme} />
       {t("door.theme_toggle")}
     </button>
   );
