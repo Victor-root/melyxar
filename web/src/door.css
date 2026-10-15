@@ -421,6 +421,11 @@ img.door-mark {
   text-align: center;
 }
 
+/* Only on a phone, where it takes the place of the corner. */
+.door-greeting-mark {
+  display: none;
+}
+
 .door-welcome {
   margin: 0;
   font-family: "Melyxar Display", "Inter", sans-serif;
@@ -1086,13 +1091,34 @@ img.door-mark {
     display: none;
   }
 
-  .door-name {
-    font-size: 14px;
+  /* The corner keeps only the way back to the accounts: the mark moves over
+     the greeting, which already says the server's name. */
+  .door-crown {
+    display: none;
   }
 
-  .door-mark {
-    width: 28px;
-    height: 28px;
+  .door-top {
+    min-height: 0;
+  }
+
+  .door-greeting-mark {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto clamp(16px, 2.6vh, 24px);
+    object-fit: contain;
+    filter: drop-shadow(0 8px 24px var(--accent-glow));
+  }
+
+  /* The administrator's own logo at the same height and in its own shape. */
+  img.door-greeting-mark {
+    width: auto;
+    max-width: min(240px, 70vw);
+  }
+
+  /* The name on a line of its own, under the words that lead to it. */
+  .door-welcome-name {
+    display: block;
   }
 
   .door-hall {

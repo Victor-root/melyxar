@@ -170,6 +170,9 @@ export function Door({
               the eye reads past on the way to the password. */}
           {forWhom === null && (
             <div className="door-greeting">
+              {/* On a phone the corner goes and the mark stands over the
+                  greeting instead: the server's name said once, not twice. */}
+              <ServerMark branding={branding} size={64} className="door-greeting-mark" />
               <h1 className="door-welcome">
                 {t("door.welcome_before")}
                 <span className="door-welcome-name">{branding.server_name}</span>
