@@ -9,6 +9,7 @@
  * the session's cookie.
  */
 
+import { appWindow } from "./app-window";
 import { tabWearsTheLogo } from "./mark";
 
 /** Where the manifest and the icons are served. */
@@ -110,12 +111,5 @@ export function colourTheWindow(): void {
     return made;
   });
   meta.content = `#${colour}`;
-  window.MelyxarWindow?.colour(`#${colour}`);
-}
-
-declare global {
-  interface Window {
-    /** The phone's bars, in Melyxar's Android application. */
-    MelyxarWindow?: { colour(colour: string): void };
-  }
+  appWindow?.colour(`#${colour}`);
 }
