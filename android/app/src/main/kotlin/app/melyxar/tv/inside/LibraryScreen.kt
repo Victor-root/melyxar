@@ -1,7 +1,5 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +14,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,7 +40,6 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
-import app.melyxar.tv.look.Pivot
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.WideWidth
 import java.io.IOException
@@ -63,7 +59,6 @@ private const val AHEAD = 18
  * A library, its works in a grid as the web shows them, read a page at a
  * time as the remote goes down, well before it gets there.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryScreen(library: Library, comebacks: Int) {
     val chrome = LocalChrome.current
@@ -105,20 +100,20 @@ fun LibraryScreen(library: Library, comebacks: Int) {
         }
     }
 
-    val pivot = remember { Pivot(0f, 0.3f) }
+    val grid = rememberLazyGridState()
     Box(Modifier.fillMaxSize()) {
         when {
-            shown != null -> CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
+            shown != null -> ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
                 LazyVerticalGrid(
                     columns = GridCells.FixedSize(if (lying) WideWidth else PosterWidth),
-                    state = rememberLazyGridState(),
+                    state = grid,
                     contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                     horizontalArrangement = Arrangement.spacedBy(CardGap),
                     verticalArrangement = Arrangement.spacedBy(22.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
-                        Column {
+                        Column(Modifier.head(head, "top")) {
                             TopBar()
                             Row(
                                 modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
@@ -144,7 +139,13 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                             modifier = Modifier
                                 .remembered(memory, card.id)
                                 .then(if (at == 0) Modifier.focusRequester(first) else Modifier)
-                                .onFocusChanged { if (it.isFocused) reached = at },
+                                .onFocusChanged {
+                                    if (it.isFocused) reached = at
+                                    // The first line of cards is part of the head,
+                                    // the line under the name of the library.
+                                    val line = grid.layoutInfo.visibleItemsInfo.firstOrNull { item -> item.key == card.id }?.row
+                                    head.hold(card.id, it.isFocused && line == 1)
+                                },
                         )
                     }
                 }
