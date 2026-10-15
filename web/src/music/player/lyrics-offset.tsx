@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "../../account";
 import { refusalOf } from "../../asking";
+import { useBackClosesIt } from "../../components/back-closes";
 import { BottomSheet } from "../../components/bottom-sheet";
 import { refusalKey } from "../../i18n";
 import { PHONE, useMediaQuery } from "../../media-query";
@@ -54,6 +55,8 @@ function ShiftPanel({ song, onClose }: { song: string; onClose: () => void }) {
   const { t } = useSettings();
   const toast = useToast();
   const onAPhone = useMediaQuery(PHONE);
+  // The sheet on a phone answers the back key itself.
+  useBackClosesIt(onClose, !onAPhone);
   const { lyricsAt, lyricsShift, shiftLyrics } = useMusicMarks();
   // What the server holds, and whether the song has stamped lines at all.
   const [saved, setSaved] = useState<{ offsetMs: number; stamped: boolean } | null>(null);

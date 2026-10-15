@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { PHONE, PHONE_SIDEWAYS, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { BottomSheet } from "./bottom-sheet";
+import { useBackClosesIt } from "./back-closes";
 
 /** One line of a menu. */
 export interface MenuEntry {
@@ -89,6 +90,7 @@ function FloatingMenu({
 }) {
   const holder = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  useBackClosesIt(onClose);
 
   // Placed once it has been drawn, since where it fits depends on how tall it
   // came out: above the button when there is no room under it, and pulled

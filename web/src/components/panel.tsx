@@ -17,6 +17,7 @@ import type { IconProps } from "../icons";
 import { insideTheRange } from "../readable";
 import { useSettings } from "../settings";
 import { useSection } from "./sectioned";
+import { useBackClosesIt } from "./back-closes";
 
 /**
  * The head of a page: what it is, and what it is for.
@@ -344,6 +345,7 @@ export function Picker<T extends string>({
   const list = useRef<HTMLDivElement>(null);
   const [under, setUnder] = useState<Placed>({ left: 0, width: 0, room: 0 });
   const listId = useId();
+  const leaveHistory = useBackClosesIt(() => setOpen(false), open);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -473,8 +475,11 @@ export function Picker<T extends string>({
                   onClick={() => {
                     setOpen(false);
                     field.current?.focus();
+                    // Chosen once the list is out of the history: a choice
+                    // that rewrites the address in place rewrites the page's
+                    // own, not the list's.
                     if (!chosen) {
-                      onPick(option);
+                      leaveHistory(() => onPick(option));
                     }
                   }}
                 >
