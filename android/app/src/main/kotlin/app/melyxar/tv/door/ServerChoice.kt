@@ -34,6 +34,7 @@ import app.melyxar.server.askBranding
 import app.melyxar.server.readAddress
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.paletteOf
+import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.MelyxarMark
@@ -80,62 +81,62 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
     TvLook(paletteOf()) {
         val palette = LocalPalette.current
         StageLight {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .width(520.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                MelyxarMark(84.dp)
-                Text(
-                    text = stringResource(R.string.app_name).uppercase(),
-                    fontFamily = MelyxarDisplay,
-                    fontSize = 28.sp,
-                    letterSpacing = 0.18.em,
-                    color = palette.text,
-                )
-                Text(
-                    stringResource(R.string.connect_title),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.text,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-                Text(
-                    stringResource(R.string.connect_lead),
-                    fontSize = 15.sp,
-                    color = palette.textSoft,
-                    textAlign = TextAlign.Center,
-                )
-                TvField(
-                    state = typed,
-                    placeholder = stringResource(R.string.connect_address),
-                    onDone = ::connect,
-                    onTyped = { refusal = null },
-                    keyboard = KeyboardType.Uri,
-                    enabled = !asking,
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .focusRequester(first),
-                )
-                refusal?.let { Text(stringResource(it), color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
-                AccentButton(
-                    text = stringResource(if (asking) R.string.tv_signing_in else R.string.connect_go),
-                    onClick = { if (!asking && typed.text.isNotBlank()) connect() },
-                    icon = null,
-                )
-                if (known.isNotEmpty()) {
+            AboveKeyboard {
+                Column(
+                    modifier = Modifier.width(520.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    MelyxarMark(84.dp)
                     Text(
-                        stringResource(R.string.connect_known),
-                        color = palette.textFaint,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.08.em,
-                        modifier = Modifier.padding(top = 18.dp),
+                        text = stringResource(R.string.app_name).uppercase(),
+                        fontFamily = MelyxarDisplay,
+                        fontSize = 28.sp,
+                        letterSpacing = 0.18.em,
+                        color = palette.text,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        known.forEach { server -> PlainButton(server.name, onClick = { onChosen(server) }) }
+                    Text(
+                        stringResource(R.string.connect_title),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = palette.text,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                    Text(
+                        stringResource(R.string.connect_lead),
+                        fontSize = 15.sp,
+                        color = palette.textSoft,
+                        textAlign = TextAlign.Center,
+                    )
+                    TvField(
+                        state = typed,
+                        placeholder = stringResource(R.string.connect_address),
+                        onDone = ::connect,
+                        onTyped = { refusal = null },
+                        keyboard = KeyboardType.Uri,
+                        enabled = !asking,
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .focusRequester(first),
+                    )
+                    refusal?.let { Text(stringResource(it), color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
+                    AccentButton(
+                        text = stringResource(if (asking) R.string.tv_signing_in else R.string.connect_go),
+                        onClick = { if (!asking && typed.text.isNotBlank()) connect() },
+                        icon = null,
+                    )
+                    if (known.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.connect_known),
+                            color = palette.textFaint,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.08.em,
+                            modifier = Modifier.padding(top = 18.dp),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            known.forEach { server -> PlainButton(server.name, onClick = { onChosen(server) }) }
+                        }
                     }
                 }
             }

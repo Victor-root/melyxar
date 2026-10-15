@@ -50,7 +50,8 @@
         <activity
             android:name=".tv.TvActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|screenLayout|smallestScreenSize|density"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- Turning the phone, changing its theme or putting the film in a
              window of its own must not reload the interface: the page keeps
