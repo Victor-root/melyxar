@@ -361,6 +361,13 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
   5. **Le lecteur vidéo** : le lecteur web pilote l'image native comme sur l'application de bureau ; position de reprise et vus par les mêmes appels qu'aujourd'hui.
   6. **Côté serveur**, l'application déclare ce qu'elle lit, et le moteur de décision choisit la lecture directe de lui-même.
   7. **Nom, logo et identifiant de chacun** : la refabrication par script et le guide restent valables (voir le README des décisions).
+- **Application télévision, native** (voir le README des décisions), dans le dossier `android/`, sur la même base que l'application téléphone. Étapes, dans l'ordre :
+  1. **Ce que l'appareil sait lire**, mesuré au lancement (décodeurs, écran, HDR) et au moment de lire (son accepté par la sortie), annoncé au serveur ; côté serveur, le moteur de décision s'en sert.
+  2. **Connexion** : choix du serveur, choix du compte et mot de passe, à la télécommande.
+  3. **Habillage du serveur et du compte** : nom et logo dans la barre du haut, couleur d'accentuation et thème, suivis en direct.
+  4. **Accueil et ses rangées, médiathèques, fiche d'un film ou d'une série**, copie fidèle de l'ordinateur adaptée à la télécommande.
+  5. **Lecture** : lecture directe autant que possible, reprise de la position, pistes audio, sous-titres, son envoyé tel quel quand la sortie l'accepte ; positions et vus par les mêmes appels que le web.
+  6. Ensuite : musique et photos. L'administration reste sur le web.
 - **Application de bureau pour Windows 11, hybride** (voir le README des décisions) : l'interface web telle qu'elle est, dans une coque Tauri (moteur web de Windows, WebView2), et la vidéo jouée par mpv (libmpv) au lieu du lecteur du navigateur. Le but est la lecture directe de ce que le navigateur refuse : son TrueHD ou DTS, sous-titres en images, HDR affiché tel quel, MKV et HEVC 10 bits, sans rien transcoder. Constaté sur un film 4K HDR avec son TrueHD 7.1 et sous-titres Blu-ray : tout ce qui forçait sa reconstruction venait du navigateur, pas du film. Étapes, dans l'ordre :
   1. **Prototype de superposition**, avant tout le reste : la vidéo de mpv dans la fenêtre, l'interface web transparente par-dessus, fluide en plein écran et sur un écran à 125 %. C'est la seule vraie inconnue ; s'il ne tient pas, le reste ne se construit pas.
   2. **Le lecteur de l'interface pilote mpv** quand il tourne dans l'application (lecture, pause, aller à, pistes, sous-titres, volume) et garde ses propres commandes, posées sur la vidéo. Position de reprise, vus et magasin partagé passent par les mêmes appels qu'aujourd'hui.
