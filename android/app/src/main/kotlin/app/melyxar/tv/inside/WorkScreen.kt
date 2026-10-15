@@ -2,7 +2,6 @@ package app.melyxar.tv.inside
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +63,7 @@ import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
+import app.melyxar.tv.look.Synopsis
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
@@ -120,7 +120,7 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             }
             section("cast", work.cast) {
                 CardRow(stringResource(R.string.tv_cast), Icons.People, work.cast, key = { it.personId + it.role }) { credit ->
-                    Person(credit, Modifier.remembered(memory, "cast/${credit.personId}"))
+                    CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}"))
                 }
             }
             work.saga?.let { saga ->
@@ -219,9 +219,7 @@ private fun Top(work: Work, first: FocusRequester) {
             work.card?.resumeFromSeconds?.takeIf { work.kind != "series" }?.let { at ->
                 Progress(at.toDouble(), work.card.let(::lengthOfAPlay), width = 300.dp)
             }
-            work.overview?.let {
-                Text(it, fontSize = 15.5.sp, lineHeight = 25.sp, color = palette.textSoft, maxLines = 5, overflow = TextOverflow.Ellipsis)
-            }
+            work.overview?.let { Synopsis(it, title = work.title, maxLines = 5) }
         }
     }
 }
@@ -453,13 +451,19 @@ private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory)
     }
 }
 
-/** Somebody of the cast: their photo, their name and their part. */
+/** Somebody of the cast: their photo, their name and their part, which
+ *  opens their page. */
 @Composable
-private fun Person(credit: Credit, modifier: Modifier) {
+private fun CastMember(credit: Credit, modifier: Modifier) {
+    val chrome = LocalChrome.current
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    Column(modifier.width(PosterWidth * 0.8f).focusable(interactionSource = interaction)) {
+    Column(
+        modifier
+            .width(PosterWidth * 0.8f)
+            .clickable(interaction, indication = null) { chrome.go(Place.Person(credit.personId)) },
+    ) {
         Box(
             Modifier
                 .size(PosterWidth * 0.8f, PosterWidth * 1.2f)

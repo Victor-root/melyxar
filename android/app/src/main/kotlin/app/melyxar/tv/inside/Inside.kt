@@ -57,6 +57,10 @@ sealed interface Place {
         override val key = "work:$work"
     }
 
+    data class Person(val id: String) : Place {
+        override val key = "person:$id"
+    }
+
     data object Search : Place {
         override val key = "search"
     }
@@ -151,7 +155,7 @@ fun Inside(
                         backTo(1)
                         trail.add(place)
                     }
-                    is Place.Opened, is Place.Playing, is Place.Listed -> trail.add(place)
+                    is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed -> trail.add(place)
                     // One search at a time: going to it again comes back to
                     // the one already open.
                     Place.Search -> {
@@ -192,6 +196,7 @@ fun Inside(
                             Place.Home -> HomeScreen(comebacks)
                             is Place.Shelf -> LibraryScreen(here.library, comebacks)
                             is Place.Opened -> WorkScreen(here.work, comebacks)
+                            is Place.Person -> PersonScreen(here.id, comebacks)
                             Place.Search -> SearchScreen(comebacks)
                             is Place.Listed -> ShortlistScreen(here.list, comebacks)
                             // The film is always shown dark, as the web's player is.

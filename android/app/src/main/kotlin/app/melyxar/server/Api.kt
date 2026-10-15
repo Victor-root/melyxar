@@ -133,6 +133,8 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
 
+    suspend fun person(id: String): Person = get("/api/v1/people/$id", Person.serializer())
+
     suspend fun filters(library: String): Filters = get("/api/v1/libraries/$library/filters", Filters.serializer())
 
     /** A page of the grid [browse] asks for, from after the card [after]. */

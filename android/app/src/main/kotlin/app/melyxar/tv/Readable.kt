@@ -1,7 +1,10 @@
 package app.melyxar.tv
 
 import app.melyxar.server.Card
+import java.text.DateFormat
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -127,3 +130,32 @@ fun languageName(code: String?, shownIn: Locale): String? {
     val name = Locale.forLanguageTag(TWO_LETTERS[three] ?: three).getDisplayLanguage(shownIn)
     return name.takeIf { it.isNotBlank() && it != three }?.replaceFirstChar { it.titlecase(shownIn) }
 }
+
+/** A day as the server writes it, year, month and day. */
+private val A_DAY = Regex("""^(\d{4})-(\d{2})-(\d{2})$""")
+
+/** The whole years from one day to another, both written year, month and
+ *  day: how old somebody is, or was. */
+fun yearsBetween(from: String, to: String): Int? {
+    val start = A_DAY.matchEntire(from)?.destructured ?: return null
+    val end = A_DAY.matchEntire(to)?.destructured ?: return null
+    val (fromYear, fromMonth, fromDay) = start.toList().map { it.toInt() }
+    val (toYear, toMonth, toDay) = end.toList().map { it.toInt() }
+    val beforeTheBirthday = toMonth < fromMonth || (toMonth == fromMonth && toDay < fromDay)
+    return toYear - fromYear - if (beforeTheBirthday) 1 else 0
+}
+
+/** A day written as people of [locale] write it, its month in words. */
+fun readableDay(day: String, locale: Locale): String? {
+    val (year, month, date) = A_DAY.matchEntire(day)?.destructured?.toList()?.map { it.toInt() } ?: return null
+    val utc = TimeZone.getTimeZone("UTC")
+    val calendar = Calendar.getInstance(utc).apply {
+        clear()
+        set(year, month - 1, date)
+    }
+    return DateFormat.getDateInstance(DateFormat.LONG, locale).apply { timeZone = utc }.format(calendar.time)
+}
+
+/** Today, written year, month and day, on the reader's own calendar. */
+fun todayOf(now: Calendar): String =
+    String.format(Locale.ROOT, "%04d-%02d-%02d", now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH))

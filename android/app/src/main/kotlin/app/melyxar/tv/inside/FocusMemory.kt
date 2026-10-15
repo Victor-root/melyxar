@@ -7,6 +7,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -46,22 +47,27 @@ fun Modifier.remembered(memory: FocusMemory, key: String): Modifier = this
 
 /**
  * Once the screen is drawn, puts the remote back on its last piece, or on
- * [first] when the screen is new or that piece has gone.
+ * [first] when the screen is new or that piece has gone, or on [orElse] when
+ * [first] cannot take it.
  */
 @Composable
-fun RestoreFocus(memory: FocusMemory, first: FocusRequester, ready: Boolean) {
+fun RestoreFocus(memory: FocusMemory, first: FocusRequester, ready: Boolean, orElse: FocusRequester? = null) {
     LaunchedEffect(ready) {
         if (!ready) {
             return@LaunchedEffect
         }
         // The rows are laid out a frame after the screen is composed.
         withFrameNanos {}
-        if (!memory.restore()) {
-            try {
-                first.requestFocus()
-            } catch (_: IllegalStateException) {
-                // Nothing focusable came: the screen shows nothing to choose.
-            }
+        if (!memory.restore() && !takes(first)) {
+            orElse?.let(::takes)
         }
     }
+}
+
+/** Puts the remote on [requester]; false when nothing there can take it. */
+private fun takes(requester: FocusRequester): Boolean = try {
+    requester.requestFocus(FocusDirection.Enter)
+} catch (_: IllegalStateException) {
+    // Nothing focusable came: the screen shows nothing to choose.
+    false
 }

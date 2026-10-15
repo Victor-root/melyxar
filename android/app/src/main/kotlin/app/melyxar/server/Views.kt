@@ -317,3 +317,18 @@ data class Counted(val name: String, val works: Int = 0)
 
 @Serializable
 data class CountedDecade(val decade: Int, val works: Int = 0)
+
+/** Somebody of a cast or a crew, and what of theirs the library holds,
+ *  newest first. */
+@Serializable
+data class Person(
+    val id: String,
+    val name: String,
+    val biography: String? = null,
+    /** Days written year, month and day. */
+    val bornOn: String? = null,
+    val diedOn: String? = null,
+    val birthplace: String? = null,
+    val photo: List<Picture> = emptyList(),
+    val works: List<Card> = emptyList(),
+)
