@@ -1,0 +1,338 @@
+package app.melyxar.tv.play
+
+import android.content.Context
+import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.core.net.toUri
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import app.melyxar.player.ClientProfile
+import app.melyxar.player.measuredProfile
+import app.melyxar.server.Api
+import app.melyxar.server.Plan
+import app.melyxar.server.Refusal
+import app.melyxar.server.StreamSession
+import app.melyxar.server.Track
+import app.melyxar.server.TrackChoice
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import java.io.IOException
+
+/** How often the server is told where the film is, as the web tells it. */
+private const val REPORT_EVERY_MS = 10_000L
+
+/** How often a film the server rebuilds is said to be still watched. */
+private const val STILL_HERE_EVERY_MS = 30_000L
+
+private val sound = AudioAttributes.Builder()
+    .setUsage(C.USAGE_MEDIA)
+    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+    .build()
+
+/** What the device plays, measured once: its decoders and its screen do not
+ *  change while it runs. What the sound goes through is read by Media3 at
+ *  each film. */
+private var measured: JsonElement? = null
+
+private fun profileOf(context: Context): JsonElement =
+    measured ?: Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound)).also { measured = it }
+
+/**
+ * One film played on the television: asked of the server, played by Media3
+ * from the file itself or from what the server rebuilds, and where it stands
+ * told to the server as the web player tells it.
+ */
+@OptIn(UnstableApi::class)
+class Playback(
+    private val context: Context,
+    private val api: Api,
+    private val work: String,
+    private val source: String,
+    /** Where to start, or nothing for where the server has it stopped. */
+    private val from: Double?,
+    private val scope: CoroutineScope,
+    /** An administrator asked the film to stop. */
+    private val onStopped: () -> Unit,
+) {
+    val player: ExoPlayer = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
+        .setAudioAttributes(sound, true)
+        .setHandleAudioBecomingNoisy(true)
+        .build()
+
+    var plan by mutableStateOf<Plan?>(null)
+        private set
+
+    /** The audio track playing, by the server's name for it. */
+    var audio by mutableStateOf<String?>(null)
+        private set
+
+    /** The subtitle shown, by the server's name for it, or nothing. */
+    var subtitle by mutableStateOf<String?>(null)
+        private set
+
+    var failed by mutableStateOf(false)
+        private set
+
+    private var stream: StreamSession? = null
+    private var reporting: Job? = null
+    private var keeping: Job? = null
+
+    init {
+        player.addListener(object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) = showTheSubtitle()
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                scope.launch { report(leaving = false) }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                failed = true
+            }
+        })
+        scope.launch {
+            try {
+                val first = api.plan(source, profileOf(context), audio = null, TrackChoice.Unsaid)
+                audio = first.chosenAudioId
+                subtitle = first.chosenSubtitleId
+                open(first, from ?: first.resumeFromSeconds ?: 0.0)
+            } catch (_: IOException) {
+                failed = true
+            }
+        }
+    }
+
+    /** Where the film is, in seconds. */
+    val seconds: Double get() = player.currentPosition / 1000.0
+
+    /** How long the film lasts, as the server knows it, the player's own
+     *  count of a film still being rebuilt being only what is made so far. */
+    val length: Double?
+        get() = plan?.durationMinutes?.let { it * 60 }
+            ?: player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 }
+
+    private val painted: Track? get() = plan?.subtitles?.firstOrNull { it.id == subtitle && it.burnsIn }
+
+    /** Plays a plan from [at] seconds: the file itself, or a film rebuilt
+     *  from there. */
+    private suspend fun open(plan: Plan, at: Double) {
+        this.plan = plan
+        closeTheStream()
+        val address = if (plan.method == "direct_play") {
+            api.address(plan.url)
+        } else {
+            val choice = painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid
+            api.openStream(source, profileOf(context), audio, choice, at).also { stream = it }.let { api.address(it.playlistUrl) }
+        }
+        val item = MediaItem.Builder()
+            .setUri(address)
+            .apply { if (plan.method != "direct_play") setMimeType(MimeTypes.APPLICATION_M3U8) }
+            .setSubtitleConfigurations(
+                plan.subtitles.filter { !it.burnsIn && it.url != null }.map { track ->
+                    MediaItem.SubtitleConfiguration.Builder(api.address(track.url!!).toUri())
+                        .setMimeType(MimeTypes.TEXT_VTT)
+                        .setLanguage(track.language)
+                        .setId(track.id)
+                        .setLabel(track.id)
+                        .build()
+                },
+            )
+            .build()
+        player.setMediaItem(item, (at * 1000).toLong())
+        player.prepare()
+        player.play()
+        keepTheStream()
+        reportEveryNowAndThen()
+    }
+
+    /** Plays it again from where it is, as the server now has it for these
+     *  tracks. */
+    private fun again(subtitleChoice: TrackChoice) {
+        val at = seconds
+        scope.launch {
+            try {
+                open(api.plan(source, profileOf(context), audio, subtitleChoice), at)
+            } catch (_: IOException) {
+                failed = true
+            }
+        }
+    }
+
+    fun chooseAudio(track: Track) {
+        if (track.id == audio) {
+            return
+        }
+        audio = track.id
+        remember()
+        again(painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid)
+    }
+
+    /** A subtitle of words is only shown or hidden; one of pictures, or
+     *  leaving one, has the server paint the film again. */
+    fun chooseSubtitle(track: Track?) {
+        val wasPainted = painted != null
+        subtitle = track?.id
+        remember()
+        when {
+            track?.burnsIn == true -> again(TrackChoice.Painted(track.id))
+            wasPainted -> again(if (track == null) TrackChoice.Off else TrackChoice.Unsaid)
+            else -> showTheSubtitle()
+        }
+    }
+
+    private fun remember() {
+        scope.launch {
+            try {
+                api.rememberTracks(work, source, audio, subtitle)
+            } catch (_: IOException) {
+                // Only the next film's first choice: not worth a word.
+            }
+        }
+    }
+
+    /** Shows the subtitle of words chosen among those beside the film, and
+     *  none of what the film itself carries: those are the server's to name. */
+    private fun showTheSubtitle() {
+        val wanted = subtitle?.takeIf { painted == null }
+        val group = wanted?.let { id ->
+            player.currentTracks.groups.firstOrNull { group ->
+                group.type == C.TRACK_TYPE_TEXT && (0 until group.length).any {
+                    val format = group.getTrackFormat(it)
+                    format.label == id || format.id?.endsWith(id) == true
+                }
+            }
+        }
+        val parameters = player.trackSelectionParameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        if (group == null) {
+            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+        } else {
+            parameters.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .addOverride(TrackSelectionOverride(group.mediaTrackGroup, 0))
+        }
+        player.trackSelectionParameters = parameters.build()
+    }
+
+    private fun keepTheStream() {
+        keeping?.cancel()
+        val kept = stream ?: return
+        keeping = scope.launch {
+            while (isActive) {
+                delay(STILL_HERE_EVERY_MS)
+                val alive = try {
+                    api.keepStream(kept.id)
+                } catch (_: IOException) {
+                    // One that did not arrive says nothing: the next carries
+                    // the same news.
+                    true
+                }
+                if (!alive) {
+                    // Swept away while paused, or the server started again:
+                    // another from where the viewer stands.
+                    stream = null
+                    plan?.let { open(it, seconds) }
+                    return@launch
+                }
+            }
+        }
+    }
+
+    private fun reportEveryNowAndThen() {
+        reporting?.cancel()
+        reporting = scope.launch {
+            while (isActive) {
+                delay(REPORT_EVERY_MS)
+                report(leaving = false)
+            }
+        }
+    }
+
+    private suspend fun report(leaving: Boolean) {
+        if (plan == null) {
+            return
+        }
+        try {
+            val heard = api.report(work, seconds, paused = !player.isPlaying, leaving = leaving)
+            if (heard.stop && !leaving) {
+                onStopped()
+            }
+        } catch (_: Refusal) {
+            // A position refused is one older than the server already has.
+        } catch (_: IOException) {
+            // The next report carries the same news.
+        }
+    }
+
+    private suspend fun closeTheStream() {
+        keeping?.cancel()
+        val closing = stream ?: return
+        stream = null
+        try {
+            api.closeStream(closing.id)
+        } catch (_: IOException) {
+            // Swept away by the server on its own soon after.
+        }
+    }
+
+    /**
+     * The viewer leaves the film: where it was is said one last time, and
+     * what the server was rebuilding for it stops. Done whatever becomes of
+     * the screen, which is going away.
+     */
+    @kotlin.OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+    fun leave() {
+        reporting?.cancel()
+        keeping?.cancel()
+        val at = seconds
+        val paused = !player.isPlaying
+        player.release()
+        val closing = stream
+        GlobalScope.launch(Dispatchers.IO + NonCancellable) {
+            try {
+                if (plan != null) {
+                    api.report(work, at, paused, leaving = true)
+                }
+                closing?.let { api.closeStream(it.id) }
+            } catch (_: IOException) {
+                // The server notices on its own that nobody is watching.
+            }
+        }
+    }
+
+    fun withStep(seconds: Int) {
+        val to = (player.currentPosition + seconds * 1000L).coerceAtLeast(0)
+        player.seekTo(length?.let { to.coerceAtMost((it * 1000).toLong()) } ?: to)
+    }
+
+    fun toggle() {
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            if (player.playbackState == Player.STATE_ENDED) {
+                player.seekTo(0)
+            }
+            player.play()
+        }
+    }
+}

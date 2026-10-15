@@ -1,0 +1,324 @@
+package app.melyxar.tv.play
+
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.melyxar.R
+import app.melyxar.server.Track
+import app.melyxar.server.Work
+import app.melyxar.tv.clock
+import app.melyxar.tv.languageName
+import app.melyxar.tv.soundName
+import app.melyxar.tv.speakersName
+import app.melyxar.tv.inside.whichEpisode
+import app.melyxar.tv.look.Glyph
+import app.melyxar.tv.look.Gutter
+import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.grows
+import app.melyxar.tv.look.litBy
+import kotlinx.coroutines.delay
+
+/** How often the clock and the bar move while the controls are up. */
+private const val TICK_MS = 250L
+
+/** Every number of the player keeps its width as it changes. */
+private val Times = TextStyle(
+    fontSize = 15.sp,
+    fontWeight = FontWeight.SemiBold,
+    fontFeatureSettings = "tnum",
+    shadow = Shadow(Color.Black.copy(alpha = 0.8f), Offset.Zero, 12f),
+)
+
+@Composable
+fun Controls(
+    playback: Playback,
+    work: Work?,
+    playing: Boolean,
+    first: FocusRequester,
+    onMenu: (Menu) -> Unit,
+    onNext: (() -> Unit)?,
+) {
+    val palette = LocalPalette.current
+    var at by remember { mutableDoubleStateOf(playback.seconds) }
+    LaunchedEffect(playback) {
+        while (true) {
+            at = playback.seconds
+            delay(TICK_MS)
+        }
+    }
+    val length = playback.length
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)))
+                .padding(start = Gutter, end = Gutter, top = 24.dp, bottom = 56.dp),
+        ) {
+            work?.let {
+                val series = it.ancestry.firstOrNull { above -> above.kind == "series" }?.title
+                Text(
+                    series ?: it.title,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset.Zero, 16f)),
+                )
+                if (series != null) {
+                    val season = it.ancestry.firstOrNull { above -> above.kind == "season" }?.number
+                    whichEpisode(season, it.number, it.title)?.let { line ->
+                        Text(line, fontSize = 15.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f))))
+                .padding(start = Gutter, end = Gutter, top = 90.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(clock(at), style = Times, color = palette.text)
+                SeekBar(at, length, playback, Modifier.weight(1f))
+                Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PlayerButton(Icons.Restart, onClick = { playback.withStep(-10) })
+                PlayerButton(
+                    if (playing) Icons.Pause else Icons.Play,
+                    onClick = playback::toggle,
+                    large = true,
+                    modifier = Modifier.focusRequester(first),
+                )
+                PlayerButton(Icons.StepOn, onClick = { playback.withStep(30) })
+                onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it) }
+                Spacer(Modifier.weight(1f))
+                if ((playback.plan?.audio?.size ?: 0) > 1) {
+                    PlayerButton(Icons.Audio, onClick = { onMenu(Menu.Audio) })
+                }
+                if (playback.plan?.subtitles?.isNotEmpty() == true) {
+                    PlayerButton(Icons.Subtitles, onClick = { onMenu(Menu.Subtitles) })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Where the film is, the remote's arrows stepping it back and on while the
+ * remote is on the bar.
+ */
+@Composable
+private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val lit by litBy(interaction)
+    val thick by animateDpAsState(if (lit > 0.5f) 14.dp else 10.dp, label = "bar")
+    val done = length?.takeIf { it > 0 }?.let { (at / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+    val buffered = length?.takeIf { it > 0 }?.let { (playback.player.bufferedPosition / 1000.0 / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+    Box(
+        modifier = modifier
+            .height(32.dp)
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                when (event.key) {
+                    Key.DirectionLeft -> playback.withStep(-10)
+                    Key.DirectionRight -> playback.withStep(10)
+                    else -> return@onPreviewKeyEvent false
+                }
+                true
+            }
+            .focusable(interactionSource = interaction)
+            .drawBehind {
+                val line = thick.toPx()
+                val top = (size.height - line) / 2
+                val round = CornerRadius(line / 2)
+                drawRoundRect(Color.White.copy(alpha = 0.2f), Offset(0f, top), Size(size.width, line), round)
+                drawRoundRect(Color.White.copy(alpha = 0.32f), Offset(0f, top), Size(size.width * buffered, line), round)
+                drawRoundRect(palette.accent, Offset(0f, top), Size(size.width * done, line), round)
+                if (lit > 0f) {
+                    val handle = Size(8.dp.toPx(), 18.dp.toPx() * 1.5f * lit)
+                    drawRoundRect(
+                        Color.White.copy(alpha = lit),
+                        Offset(size.width * done - handle.width / 2, (size.height - handle.height) / 2),
+                        handle,
+                        CornerRadius(2.dp.toPx()),
+                    )
+                }
+            },
+    )
+}
+
+/** A button of the player: its icon alone, lit in the accent when the remote
+ *  is on it. */
+@Composable
+private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, large: Boolean = false) {
+    val palette = LocalPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val lit by litBy(interaction)
+    val side = if (large) 58.dp else 48.dp
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = modifier
+            .size(side)
+            .grows({ lit }, 1.06f)
+            .clickable(interaction, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(5.dp)
+                .clip(shape)
+                .background(palette.accent.copy(alpha = 0.16f * lit))
+                .border(2.dp, palette.accent.copy(alpha = lit), shape),
+        )
+        Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, if (large) 34.dp else 27.dp)
+    }
+}
+
+/** The list of the film's audio tracks or subtitles, the one playing ticked. */
+@Composable
+fun TrackMenu(menu: Menu, playback: Playback, onClose: () -> Unit, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val plan = playback.plan ?: return
+    val first = remember { FocusRequester() }
+    val shape = RoundedCornerShape(10.dp)
+    val lines: List<Pair<String, Boolean>>
+    val choose: (Int) -> Unit
+    when (menu) {
+        Menu.Audio -> {
+            lines = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) to (track.id == playback.audio) }
+            choose = { playback.chooseAudio(plan.audio[it]) }
+        }
+        Menu.Subtitles -> {
+            lines = listOf(stringResource(R.string.tv_subtitles_off) to (playback.subtitle == null)) +
+                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) to (track.id == playback.subtitle) }
+            choose = { playback.chooseSubtitle(if (it == 0) null else plan.subtitles[it - 1]) }
+        }
+    }
+    Column(
+        modifier = modifier
+            .padding(end = Gutter, bottom = 124.dp)
+            .width(320.dp)
+            .clip(shape)
+            .background(palette.surfaceRaised)
+            .background(palette.accent.copy(alpha = 0.14f))
+            .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+            .padding(6.dp),
+    ) {
+        Text(
+            stringResource(if (menu == Menu.Audio) R.string.tv_audio else R.string.tv_subtitles),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = palette.text,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+        Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
+        lines.forEachIndexed { at, (name, chosen) ->
+            MenuLine(
+                name,
+                chosen,
+                onClick = {
+                    choose(at)
+                    onClose()
+                },
+                modifier = if (chosen) Modifier.focusRequester(first) else Modifier,
+            )
+        }
+    }
+    LaunchedEffect(menu) { first.requestFocus() }
+}
+
+@Composable
+private fun MenuLine(name: String, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val lit by litBy(interaction)
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = modifier
+            .padding(top = 2.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .background(palette.accent.copy(alpha = 0.26f * lit))
+            .border(1.dp, palette.accent.copy(alpha = 0.45f * lit), shape)
+            .clickable(interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(26.dp).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+            if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
+        }
+        Text(name, fontSize = 14.sp, color = if (lit > 0.5f) palette.accentBright else palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A track as a viewer tells it apart: its language, then what the sound is
+ *  made of, then its own title. */
+@Composable
+private fun trackName(track: Track, at: Int, withSound: Boolean): String {
+    val shownIn = LocalConfiguration.current.locales[0]
+    val parts = listOfNotNull(
+        languageName(track.language, shownIn),
+        if (withSound) listOfNotNull(soundName(track.codec), speakersName(track.channels)).joinToString(" ").ifBlank { null } else null,
+        track.title?.takeIf { it.isNotBlank() },
+    )
+    return parts.joinToString(" · ").ifEmpty { stringResource(R.string.tv_track_unnamed, at + 1) }
+}

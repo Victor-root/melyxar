@@ -1,0 +1,221 @@
+package app.melyxar.tv.inside
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.GenericShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.melyxar.server.Card
+import app.melyxar.theme.MelyxarDisplay
+import app.melyxar.theme.mix
+import app.melyxar.theme.parseHex
+import app.melyxar.tv.howFarIn
+import app.melyxar.tv.lengthOfAPlay
+import app.melyxar.tv.look.CardShape
+import app.melyxar.tv.look.Glyph
+import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.PosterWidth
+import app.melyxar.tv.look.ServerPicture
+import app.melyxar.tv.look.WideWidth
+import app.melyxar.tv.look.grows
+import app.melyxar.tv.look.halo
+import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rim
+
+/** The corner a watched card folds over, as a triangle. */
+private val Corner = GenericShape { size, _ ->
+    moveTo(0f, 0f)
+    lineTo(size.width, 0f)
+    lineTo(size.width, size.height)
+    close()
+}
+
+/**
+ * A work in a row or a grid, as the web draws it: its poster standing, or
+ * its still lying down for what is told apart by the still, with how far in
+ * somebody is and whether it was watched. The remote coming to it lights it
+ * as the pointer does on the web.
+ */
+@Composable
+fun WorkCard(
+    card: Card,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    lying: Boolean = false,
+    title: String = card.title,
+    note: String? = card.year?.toString(),
+    trailing: String? = null,
+    /** How far in, from 0 to 1, when the row says it rather than the card. */
+    progress: Float? = card.resumeFromSeconds?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) },
+) {
+    val palette = LocalPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val lit by litBy(interaction)
+    val glowing by remember { derivedStateOf { lit > 0.001f } }
+    val across = if (lying) WideWidth else PosterWidth
+    val down = if (lying) across * 9 / 16 else across * 3 / 2
+    Column(
+        modifier = modifier
+            .width(across)
+            .clickable(interaction, indication = null, onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(across, down)
+                .grows({ lit })
+                .then(if (glowing) Modifier.halo(CardShape, palette.accent) { lit } else Modifier)
+                .clip(CardShape)
+                .background(card.color?.let(::parseHex)?.let(::Color) ?: palette.surfaceRaised)
+                .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
+        ) {
+            val pictures = if (lying && card.wide.isNotEmpty()) card.wide else card.poster
+            if (pictures.isEmpty()) {
+                NoPicture(card, across)
+            } else {
+                ServerPicture(pictures, across, Modifier.matchParentSize())
+            }
+            progress?.takeIf { it > 0f }?.let { done ->
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(if (glowing) Color.Transparent else Color.Black.copy(alpha = 0.55f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(done)
+                            .background(if (glowing) palette.accentBright else palette.accent),
+                    )
+                }
+            }
+            if (card.watchedMarks) {
+                SeenCorner(card, Modifier.align(Alignment.TopEnd))
+            }
+        }
+        Text(
+            title,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            lineHeight = 18.sp,
+            color = if (glowing) palette.text else palette.text.copy(alpha = 0.92f),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Row {
+            note?.let {
+                Text(
+                    it,
+                    fontSize = 12.sp,
+                    color = palette.textFaint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+            trailing?.let {
+                Text(
+                    it,
+                    fontSize = 12.sp,
+                    color = palette.textFaint,
+                    maxLines = 1,
+                    modifier = Modifier.padding(start = if (note != null) 8.dp else 0.dp),
+                )
+            }
+        }
+    }
+}
+
+/** How many episodes are left, or a tick once a work is watched. */
+@Composable
+private fun SeenCorner(card: Card, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val counting = card.episodes > 0 && card.unwatched > 0
+    if (!counting && card.seen != "watched") {
+        return
+    }
+    val written = if (counting) card.unwatched.toString() else ""
+    val side = when {
+        written.length > 3 -> 56.dp
+        written.length > 2 -> 48.dp
+        else -> 40.dp
+    }
+    Box(modifier.size(side).clip(Corner).background(palette.accent)) {
+        if (counting) {
+            Text(
+                written,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = palette.accentContrast,
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 6.dp),
+            )
+        } else {
+            Glyph(
+                Icons.Tick,
+                palette.accentContrast,
+                13.dp,
+                Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 5.dp),
+            )
+        }
+    }
+}
+
+/** A work with no picture: its letter, large, over its own colour. */
+@Composable
+private fun NoPicture(card: Card, across: Dp) {
+    val palette = LocalPalette.current
+    val own = card.color?.let(::parseHex) ?: palette.surfaceRaised.toArgb()
+    val ground = palette.ground.toArgb()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight()
+            .drawBehind {
+                drawRect(Brush.verticalGradient(listOf(Color(mix(own, ground, 0.6f)), Color(mix(own, ground, 0.25f)))))
+                drawRect(
+                    Brush.radialGradient(
+                        listOf(palette.accent.copy(alpha = 0.16f), Color.Transparent),
+                        center = Offset(size.width / 2, 0f),
+                        radius = size.width * 1.2f,
+                    ),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            card.initial.ifEmpty { card.title.take(1) }.uppercase(),
+            fontFamily = MelyxarDisplay,
+            fontSize = (across.value * 0.31f).sp,
+            color = palette.text.copy(alpha = 0.3f),
+        )
+    }
+}
