@@ -83,7 +83,6 @@ private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: Foc
                 }
             }
             section == "carry_on" -> section(section, home.carryOn) {
-                val chrome = LocalChrome.current
                 CardRow(stringResource(R.string.tv_carry_on), Icons.Eye, home.carryOn, key = { it.card.id }) { row ->
                     val card = row.card
                     val length = lengthOfAPlay(card)
@@ -95,8 +94,7 @@ private fun LazyListScope.sections(home: Home, open: (Card) -> Unit, memory: Foc
                         note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, card.title),
                         trailing = whatIsLeft(at, length),
                         progress = howFarIn(at, length),
-                        // What was left halfway goes on at once.
-                        onClick = { chrome.play(Play(card.id, card.source, at)) },
+                        onClick = { open(card) },
                         modifier = Modifier.remembered(memory, "carry/${card.id}"),
                     )
                 }
