@@ -7,6 +7,7 @@ import androidx.media3.datasource.DataSourceBitmapLoader
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import app.melyxar.BuildConfig
 import app.melyxar.R
 
 /**
@@ -21,9 +22,11 @@ import app.melyxar.R
 @OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
     private var session: MediaSession? = null
+    private val probe = if (BuildConfig.DEBUG) LockScreenProbe(this) { session } else null
 
     override fun onCreate() {
         super.onCreate()
+        probe?.start()
         val engine = MusicEngine.ifMade() ?: return
         // Melyxar's own mark in the status bar, rather than a player's.
         setMediaNotificationProvider(DefaultMediaNotificationProvider(this).apply { setSmallIcon(R.drawable.ic_launcher_monochrome) })
@@ -40,9 +43,15 @@ class MusicService : MediaSessionService() {
             .build()
     }
 
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        super.onUpdateNotification(session, startInForegroundRequired)
+        probe?.report("card updated, foreground=$startInForegroundRequired")
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        probe?.stop()
         session?.release()
         session = null
         super.onDestroy()
