@@ -64,8 +64,8 @@ import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
-import app.melyxar.tv.look.glow
 import app.melyxar.tv.look.grows
+import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import java.io.IOException
@@ -179,7 +179,7 @@ private fun Top(work: Work, first: FocusRequester) {
         Box(
             Modifier
                 .width(across)
-                .glow(CardShape, Color.Black, 24.dp)
+                .halo(CardShape, Color.Black.copy(alpha = 0.6f), 24.dp)
                 .clip(CardShape)
                 .background(palette.surfaceRaised),
         ) {

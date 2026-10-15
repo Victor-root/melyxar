@@ -78,7 +78,6 @@ import app.melyxar.tv.look.MelyxarMark
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.TvLook
-import app.melyxar.tv.look.glow
 import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberPictures
@@ -366,7 +365,7 @@ fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifie
 fun ServerMark(branding: Branding, size: Dp) {
     val palette = LocalPalette.current
     val logo = branding.logo
-    val glow = Modifier.glow(RoundedCornerShape(size / 2), palette.accent, 12.dp)
+    val glow = Modifier.halo(RoundedCornerShape(size / 2), palette.accentGlow, 14.dp)
     if (logo != null) {
         ServerPicture(listOf(Picture(logo)), size, glow.size(size), contentScale = ContentScale.Fit)
     } else {

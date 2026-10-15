@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,8 +43,9 @@ import app.melyxar.tv.look.rim
 
 /**
  * The bar at the top of every screen, as the web's less its tabs, which the
- * band of the home screen stands for on a television: the way back and the
- * server's logo and name, which lead home, and whose profile this is. It
+ * band of the home screen stands for on a television: an arrow saying the
+ * back key leads somewhere, the server's logo and name, which lead home, and
+ * whose profile this is. It
  * scrolls away with the screen, and the remote finds it again going up.
  * [first] is where the remote starts on a screen with nothing else to start
  * on; [edges] is how far it stands from the sides of what holds it, less on
@@ -67,31 +66,14 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            // Off the home screen only: there is nowhere to come back from
-            // there, and the brand beside it already leads home.
-            chrome.back?.let { back -> WayBack(back) }
+            // Off the home screen only, saying the back key leads somewhere:
+            // there is nowhere to come back to from home.
+            if (chrome.canGoBack) {
+                Glyph(Icons.Back, LocalPalette.current.textSoft, 22.dp, Modifier.padding(start = 8.dp, end = 4.dp))
+            }
             Brand(onClick = { chrome.go(Place.Home) })
         }
         Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
-    }
-}
-
-/** The way back one screen, as the web's arrow at the start of the bar. */
-@Composable
-private fun WayBack(onClick: () -> Unit) {
-    val palette = LocalPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val lit by litBy(interaction)
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(palette.accent.copy(alpha = 0.22f * lit))
-            .rim(CircleShape, palette.accentBright, 2.dp) { lit }
-            .clickable(interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Glyph(Icons.Back, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
     }
 }
 
