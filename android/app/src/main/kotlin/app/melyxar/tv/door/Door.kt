@@ -4,9 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -81,9 +82,9 @@ import app.melyxar.tv.look.TvLook
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.look.rim
+import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.IOException
 
 /** What the door knows of its server, once it has answered. */
 private sealed interface Answer {
@@ -233,7 +234,7 @@ private fun Profiles(
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(36.dp),
-                modifier = Modifier.drawBehind {
+                modifier = Modifier.focusRestorer(first).drawBehind {
                     // The pool of light the tiles stand in.
                     val across = maxOf(size.width, TILE.toPx() * 4)
                     val center = Offset(size.width / 2, TILE.toPx() * 1.0f)
@@ -253,7 +254,9 @@ private fun Profiles(
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // Coming down to the foot lands on the button left, or on its first.
+        val foot = remember { FocusRequester() }
+        Row(modifier = Modifier.fillMaxWidth().focusRestorer(foot), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(palette.ok))
             Text(
                 "${server.name} · ${server.origin.substringAfter("://")}",
@@ -262,9 +265,13 @@ private fun Profiles(
                 modifier = Modifier.padding(start = 10.dp).weight(1f),
             )
             if (profiles.isNotEmpty()) {
-                PlainButton(stringResource(R.string.tv_by_hand), onByHand, Modifier.padding(end = 12.dp))
+                PlainButton(stringResource(R.string.tv_by_hand), onByHand, Modifier.padding(end = 12.dp).focusRequester(foot))
             }
-            PlainButton(stringResource(R.string.tv_change_server), onChangeServer)
+            PlainButton(
+                stringResource(R.string.tv_change_server),
+                onChangeServer,
+                if (profiles.isEmpty()) Modifier.focusRequester(foot) else Modifier,
+            )
         }
     }
     LaunchedEffect(quiet) {
@@ -406,7 +413,7 @@ private fun Unreachable(name: String, onRetry: () -> Unit, onChangeServer: () ->
             modifier = Modifier.padding(top = 8.dp, bottom = 26.dp).width(520.dp),
             textAlign = TextAlign.Center,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.focusRestorer(first)) {
             AccentButton(
                 stringResource(R.string.unreachable_retry),
                 onRetry,

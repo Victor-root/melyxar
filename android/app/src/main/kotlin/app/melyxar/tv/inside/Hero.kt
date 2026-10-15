@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -242,7 +243,7 @@ private fun Words(
         // One accent button whatever the work, so the remote stays on it
         // as the banner turns: it plays what can be played, and opens the
         // rest.
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp).focusRestorer(first)) {
             val back = Modifier.focusRequester(first).onKey(Key.DirectionLeft) { onStep(-1) }
             AccentButton(
                 text = stringResource(

@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -134,8 +135,16 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
                             letterSpacing = 0.08.em,
                             modifier = Modifier.padding(top = 18.dp),
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            known.forEach { server -> PlainButton(server.name, onClick = { onChosen(server) }) }
+                        // Coming down to them lands on the one left, or on the first.
+                        val firstKnown = remember { FocusRequester() }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.focusRestorer(firstKnown)) {
+                            known.forEachIndexed { at, server ->
+                                PlainButton(
+                                    server.name,
+                                    onClick = { onChosen(server) },
+                                    modifier = if (at == 0) Modifier.focusRequester(firstKnown) else Modifier,
+                                )
+                            }
                         }
                     }
                 }

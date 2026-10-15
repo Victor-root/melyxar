@@ -3,6 +3,7 @@ package app.melyxar.tv.inside
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -46,8 +49,8 @@ fun RowHead(title: String, icon: ImageVector?, modifier: Modifier = Modifier) {
 
 /**
  * A heading and its cards side by side, scrolled so the card the remote is
- * on stands where the first one did. Coming back into the row from above or
- * below returns to the card it left.
+ * on stands where the first one did. Coming into the row from above or below
+ * lands on the card it left, or on the first card the first time.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,6 +64,7 @@ fun <T> CardRow(
 ) {
     val lead = with(LocalDensity.current) { Gutter.toPx() }
     val pivot = remember(lead) { Pivot(lead) }
+    val first = remember { FocusRequester() }
     Column(modifier.padding(bottom = SectionGap)) {
         title?.let { RowHead(it, icon) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
@@ -68,9 +72,11 @@ fun <T> CardRow(
                 state = rememberLazyListState(),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = 18.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                modifier = Modifier.focusRestorer(),
+                modifier = Modifier.focusRestorer(first),
             ) {
-                items(items.size, key = { key(items[it]) }) { card(items[it]) }
+                items(items.size, key = { key(items[it]) }) { at ->
+                    Box(if (at == 0) Modifier.focusRequester(first) else Modifier) { card(items[at]) }
+                }
             }
         }
     }

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -84,19 +86,23 @@ fun Band(shelves: List<Shelf>, libraries: List<Library>, order: List<String>, on
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
     val lead = with(LocalDensity.current) { Gutter.toPx() }
     val pivot = remember(lead) { Pivot(lead) }
+    // Coming into the band lands on the tile it left, or on the first.
+    val first = remember { FocusRequester() }
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
         LazyRow(
             contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 20.dp, bottom = SectionGap),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.focusRestorer(),
+            modifier = Modifier.focusRestorer(first),
         ) {
-            items(kinds, key = { it }) { kind ->
+            itemsIndexed(kinds, key = { _, kind -> kind }) { at, kind ->
                 val library = libraries.first { it.kind == kind }
                 BandTile(
                     kind = kind,
                     fan = shelves.firstOrNull { it.kind == kind }?.fan.orEmpty(),
                     onClick = { onOpen(library) },
-                    modifier = Modifier.remembered(memory, "band/$kind"),
+                    modifier = Modifier
+                        .remembered(memory, "band/$kind")
+                        .then(if (at == 0) Modifier.focusRequester(first) else Modifier),
                 )
             }
         }
