@@ -84,4 +84,8 @@
     <string name="tv_search_none">No title matches.</string>
     <string name="tv_search_voice">Search by voice</string>
     <string name="tv_search_lead">Type or say the title of a film, a series or a video.</string>
+    <string name="tv_favourites">Favourites</string>
+    <string name="tv_favourites_empty">No favourites yet. Choose the heart on a title to add it here.</string>
+    <string name="tv_watch_later">Watch later</string>
+    <string name="tv_watch_later_empty">Nothing set aside yet. Choose the clock on a title to add it here. A title leaves this list once you have watched it.</string>
 </resources>

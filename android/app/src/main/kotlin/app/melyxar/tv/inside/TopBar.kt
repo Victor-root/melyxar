@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -76,7 +77,9 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             Brand(onClick = { chrome.go(Place.Home) })
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SearchButton()
+            BarButton(Icons.Search) { chrome.go(Place.Search) }
+            BarButton(Icons.Heart) { chrome.go(Place.Listed(Shortlist.Favourites)) }
+            BarButton(Icons.Clock) { chrome.go(Place.Listed(Shortlist.WatchLater)) }
             Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
         }
     }
@@ -124,10 +127,10 @@ private fun Brand(onClick: () -> Unit) {
     }
 }
 
-/** The way to the search, as the magnifier of the web's bar. */
+/** A way somewhere from the bar, as the web's: the search, the favourites,
+ *  the list to watch later. */
 @Composable
-private fun SearchButton() {
-    val chrome = LocalChrome.current
+private fun BarButton(icon: ImageVector, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -136,10 +139,10 @@ private fun SearchButton() {
             .size(46.dp)
             .glassPiece(CircleShape)
             .rim(CircleShape, palette.accentBright, 2.dp) { lit }
-            .clickable(interaction, indication = null, onClick = { chrome.go(Place.Search) }),
+            .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(Icons.Search, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
+        Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
     }
 }
 
