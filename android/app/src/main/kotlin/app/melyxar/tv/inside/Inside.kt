@@ -66,6 +66,8 @@ class Chrome(
     val account: Account,
     val libraries: List<Library>,
     val go: (Place) -> Unit,
+    /** The way back one screen, or nothing on the home screen. */
+    val back: (() -> Unit)?,
     val changeProfile: () -> Unit,
 ) {
     fun play(play: Play) = go(Place.Playing(play))
@@ -136,6 +138,11 @@ fun Inside(
                     }
                     is Place.Opened, is Place.Playing -> trail.add(place)
                 }
+            },
+            back = if (trail.size > 1) {
+                { backTo(trail.size - 1) }
+            } else {
+                null
             },
             changeProfile = onChangeProfile,
         )
