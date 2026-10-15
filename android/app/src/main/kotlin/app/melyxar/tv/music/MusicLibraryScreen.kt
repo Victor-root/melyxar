@@ -356,7 +356,7 @@ private fun tabContent(
             })
         }
         else -> {
-            val newest = rememberLoaded("music:newest:$id", comebacks) { albums(id, "added", true, Slice(0, NEWEST_SHOWN)).items }.value.ready
+            val newest = rememberLoaded("music:newest:$id", comebacks) { albums(id, "added", false, Slice(0, NEWEST_SHOWN)).items }.value.ready
             val lately = rememberLoaded("music:lately:$id", comebacks) { listened(id, "lately") }.value.ready
             val most = rememberLoaded("music:most:$id", comebacks) { listened(id, "most") }.value.ready
             val rows = listOf(

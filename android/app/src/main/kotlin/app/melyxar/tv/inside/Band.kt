@@ -39,8 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.melyxar.server.Card
+import app.melyxar.server.Album
 import app.melyxar.server.Library
+import app.melyxar.server.Picture
 import app.melyxar.server.Shelf
 import app.melyxar.theme.mix
 import app.melyxar.theme.parseHex
@@ -61,9 +62,24 @@ import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
 
+/** As many covers as the other tiles fan out posters. */
+private const val IN_A_FAN = 5
+
+/** What the tile of music fans out: the newest albums with a cover first,
+ *  as the other tiles put their posters ahead of the holes. */
+fun coversOf(albums: List<Album>): List<Album> = albums.sortedBy { it.cover.isEmpty() }.take(IN_A_FAN)
+
+/** The newest albums of every library of music, one from each in turn, as
+ *  the web's home takes them. */
+fun <T> inTurn(lists: List<List<T>>, most: Int): List<T> =
+    (0 until (lists.maxOfOrNull { it.size } ?: 0)).flatMap { at -> lists.mapNotNull { it.getOrNull(at) } }.take(most)
+
 /** A tile of the band. */
 private val TileWidth = 208.dp
 private val TileHeight = TileWidth * 9 / 16
+
+/** A picture of a fan: a poster standing, or a square cover of music. */
+private class Leafed(val pictures: List<Picture>, val color: String?)
 
 /** Each poster of a fan, from the front one out: its height in the tile, how
  *  far it stands from the middle in its own widths, how far it leans, and how
@@ -81,11 +97,19 @@ private val FAN = listOf(
 /**
  * The band under the banner, as the web's: a tile for each kind of library,
  * a fan of its newest posters standing in the accent's light, opening when
- * the remote comes to it.
+ * the remote comes to it. Music, which the server's shelves know nothing of,
+ * fans out the covers of its newest [albums], square as a cover is.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Band(shelves: List<Shelf>, libraries: List<Library>, order: List<String>, onOpen: (Library) -> Unit, memory: FocusMemory) {
+fun Band(
+    shelves: List<Shelf>,
+    albums: List<Album>,
+    libraries: List<Library>,
+    order: List<String>,
+    onOpen: (Library) -> Unit,
+    memory: FocusMemory,
+) {
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
     val lead = with(LocalDensity.current) { Gutter.toPx() }
     val nearest = remember(lead) { Nearest(lead) }
@@ -101,7 +125,12 @@ fun Band(shelves: List<Shelf>, libraries: List<Library>, order: List<String>, on
                 val library = libraries.first { it.kind == kind }
                 BandTile(
                     kind = kind,
-                    fan = shelves.firstOrNull { it.kind == kind }?.fan.orEmpty(),
+                    fan = if (kind == "music") {
+                        coversOf(albums).map { Leafed(it.cover, it.color) }
+                    } else {
+                        shelves.firstOrNull { it.kind == kind }?.fan.orEmpty().map { Leafed(it.poster, it.color) }
+                    },
+                    square = kind == "music",
                     onClick = { onOpen(library) },
                     modifier = Modifier
                         .remembered(memory, "band/$kind")
@@ -113,7 +142,7 @@ fun Band(shelves: List<Shelf>, libraries: List<Library>, order: List<String>, on
 }
 
 @Composable
-private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifier: Modifier) {
+private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -154,7 +183,7 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
             TileHeight * 0.9f,
             Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp),
         )
-        Fan(fan, { lit })
+        Fan(fan, square, { lit })
         // The foot of the tile sinks into the ground, under the name.
         Box(
             Modifier.fillMaxSize().drawWithCache {
@@ -215,17 +244,18 @@ private fun Arrow(lit: () -> Float) {
 /** The tile of a large screen the web's arrow is drawn for, against this one. */
 private val ARROW_SCALE = TileWidth / 340.dp
 
-/** The fan of posters, standing on a line at 69% of the tile. */
+/** The fan of posters, or of square covers, standing on a line at 69% of
+ *  the tile. */
 @Composable
-private fun Fan(fan: List<Card>, open: () -> Float) {
+private fun Fan(fan: List<Leafed>, square: Boolean, open: () -> Float) {
     val palette = LocalPalette.current
     val shape = RoundedCornerShape(8.dp)
     Box(Modifier.fillMaxSize()) {
         // The outer leaves first, so the front one is drawn over them.
         FAN.withIndex().reversed().forEach { (at, leaf) ->
-            val card = fan.getOrNull(at) ?: return@forEach
+            val shown = fan.getOrNull(at) ?: return@forEach
             val down: Dp = TileHeight * leaf.height
-            val across = down * 2 / 3
+            val across = if (square) down else down * 2 / 3
             Box(
                 Modifier
                     .align(Alignment.TopCenter)
@@ -258,7 +288,7 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                     )
                     .clip(shape),
             ) {
-                ServerPicture(card.poster, across, Modifier.fillMaxSize())
+                ServerPicture(shown.pictures, across, Modifier.fillMaxSize())
                 Box(
                     Modifier.fillMaxSize().drawWithCache {
                         // The sheen across each poster.
