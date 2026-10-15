@@ -1,28 +1,28 @@
 /*
- * The theme, turned with one press: automatic, light, dark. Offered wherever
+ * The theme, turned with one press: light to dark and back. Offered wherever
  * somebody is before the settings are in reach: the door and the first steps.
+ *
+ * Every press changes what is on the screen. It used to go round automatic,
+ * light and dark, and automatic always looks like one of the other two, so one
+ * press in three did nothing anybody could see and the button looked broken.
+ * Going back to automatic is in the settings.
  */
 
-import { useSettings } from "../settings";
+import { themeSeen, useSettings } from "../settings";
 import type { ThemeChoice } from "../settings";
 
 export function ThemeToggle() {
   const { t, theme, setTheme } = useSettings();
   return (
-    <button type="button" className="theme-toggle" onClick={() => setTheme(nextTheme(theme))}>
+    <button
+      type="button"
+      className="theme-toggle"
+      onClick={() => setTheme(themeSeen(theme) === "light" ? "dark" : "light")}
+    >
       <ThemeIcon theme={theme} />
       {t("door.theme_toggle")}
     </button>
   );
-}
-
-/** What the theme becomes the next time this is pressed. Cycling rather than
- *  a plain switch, because there are three of them: automatic first, since
- *  that is what a server nobody has told otherwise stays at. */
-const THEME_ORDER: readonly ThemeChoice[] = ["system", "light", "dark"];
-
-function nextTheme(current: ThemeChoice): ThemeChoice {
-  return THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
 }
 
 /** The theme in force, drawn rather than named: a sun, a moon, or the two

@@ -19,12 +19,28 @@ const MADE_VIVID = 1.35;
 /** How light the colour under the relief is, the lightness it was fitted to. */
 const LIGHTNESS = 0.45;
 
-/** The relief the tab is drawn from: the tab is never larger than this. */
-const RELIEF = "/melyxar-shade-64.png";
 
 /** Where the last icon drawn for the tab is kept, for the page to put up
  *  before the interface starts (see index.html). */
 const STORED_TAB = "melyxar.tab";
+
+/** The reliefs the page carries, smallest first, by their width. */
+const RELIEFS = [
+  { width: 64, path: "/melyxar-shade-64.png" },
+  { width: 512, path: "/melyxar-shade-512.png" },
+];
+
+/** The smallest relief that has a pixel for every pixel of the screen the
+ *  mark covers, at this size and on a screen this dense: a phone puts three
+ *  of its own under each pixel of the page, so even a small mark needs more
+ *  than it looks. */
+export function reliefFor(size: number, density: number): string {
+  const needed = size * density;
+  return (RELIEFS.find((relief) => relief.width >= needed) ?? RELIEFS[RELIEFS.length - 1]).path;
+}
+
+/** The relief the tab is drawn from: the tab is never larger than it. */
+const RELIEF = RELIEFS[0].path;
 
 /** The colour the logo is drawn in for an accent: its hue, made vivid. */
 export function vividOf(accent: string): string {

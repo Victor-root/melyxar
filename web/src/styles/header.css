@@ -174,9 +174,6 @@
   object-fit: contain;
 }
 
-/* Served at sixty four pixels for a square of twenty eight: that is what
-   keeps it sharp on a dense screen, where one pixel of the page is two of the
-   screen. */
 /* The mark of Melyxar in the accent, cut to the logo's shape, under the
    logo's own light and shade: hard light keeps the colour beneath where the
    relief is a middle grey and lightens or darkens it from there. See mark.ts
