@@ -41,6 +41,7 @@ import { ThemeToggle } from "../components/theme-toggle";
 import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
+import { useBackClosesIt } from "../components/back-closes";
 
 /**
  * What the screen is showing.
@@ -130,6 +131,11 @@ export function Door({
     setTurnedTo(next);
   };
 
+  /* The form for one account is a step on from the accounts, so the back key
+     of a phone takes it back to them rather than out of the interface. */
+  const backToTheAccounts = () => turnTo({ the: "accounts" });
+  const leaveTheForm = useBackClosesIt(backToTheAccounts, onTheForm && door.names.length > 0);
+
   return (
     <main className="door">
       <DoorBackground branding={branding} />
@@ -147,7 +153,7 @@ export function Door({
           className="door-back"
           aria-label={t("door.back")}
           title={t("door.back")}
-          onClick={() => turnTo({ the: "accounts" })}
+          onClick={() => leaveTheForm(backToTheAccounts)}
         >
           <BackIcon size={20} />
         </button>
