@@ -133,11 +133,23 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
 
-    suspend fun works(library: String, after: String?, limit: Int): CardPage {
+    /** A page of the grid [browse] asks for, from after the card [after]. */
+    suspend fun works(browse: Browse, after: String?, limit: Int): CardPage {
         val url = address("/api/v1/works").toHttpUrl().newBuilder()
-            .addQueryParameter("library", library)
+            .apply {
+                browse.library?.let { addQueryParameter("library", it) }
+                browse.kind?.let { addQueryParameter("kind", it) }
+                addQueryParameter("order", browse.order)
+                if (browse.descending) addQueryParameter("descending", "true")
+                browse.genre?.let { addQueryParameter("genre", it) }
+                browse.decade?.let { addQueryParameter("decade", it.toString()) }
+                browse.initial?.let { addQueryParameter("initial", it) }
+                browse.search?.let { addQueryParameter("search", it) }
+                if (browse.favourites) addQueryParameter("favourites", "true")
+                if (browse.watchLater) addQueryParameter("watch_later", "true")
+                after?.let { addQueryParameter("after", it) }
+            }
             .addQueryParameter("limit", limit.toString())
-            .apply { after?.let { addQueryParameter("after", it) } }
             .build()
         return get(url.toString(), CardPage.serializer())
     }

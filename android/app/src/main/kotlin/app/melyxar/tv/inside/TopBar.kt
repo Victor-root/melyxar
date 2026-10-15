@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,7 +75,10 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             }
             Brand(onClick = { chrome.go(Place.Home) })
         }
-        Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SearchButton()
+            Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
+        }
     }
 }
 
@@ -116,6 +121,25 @@ private fun Brand(onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 220.dp),
         )
+    }
+}
+
+/** The way to the search, as the magnifier of the web's bar. */
+@Composable
+private fun SearchButton() {
+    val chrome = LocalChrome.current
+    val palette = LocalPalette.current
+    val interaction = remember { MutableInteractionSource() }
+    val lit by litBy(interaction)
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .glassPiece(CircleShape)
+            .rim(CircleShape, palette.accentBright, 2.dp) { lit }
+            .clickable(interaction, indication = null, onClick = { chrome.go(Place.Search) }),
+        contentAlignment = Alignment.Center,
+    ) {
+        Glyph(Icons.Search, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
     }
 }
 

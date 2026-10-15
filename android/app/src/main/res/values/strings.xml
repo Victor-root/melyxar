@@ -79,4 +79,9 @@
     <string name="tv_skip_outro">Skip the credits</string>
     <string name="tv_cannot_play">This film cannot be played here.</string>
     <string name="tv_track_unnamed">Track %1$d</string>
+    <string name="tv_search">Search</string>
+    <string name="tv_search_placeholder">Search for a title</string>
+    <string name="tv_search_none">No title matches.</string>
+    <string name="tv_search_voice">Search by voice</string>
+    <string name="tv_search_lead">Type or say the title of a film, a series or a video.</string>
 </resources>

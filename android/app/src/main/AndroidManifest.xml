@@ -13,6 +13,14 @@
          the lock screen only for an application allowed to notify. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Whether the device has something to listen with, for searching by
+         voice: since Android 11 an application sees only what it names. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <!-- The same application on a television, driven by its remote. -->
     <uses-feature
         android:name="android.software.leanback"
