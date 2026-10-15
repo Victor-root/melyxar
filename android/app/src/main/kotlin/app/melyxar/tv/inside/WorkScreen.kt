@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -68,9 +69,9 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
-import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 /** What an account has said of a work, as the page shows it: changed at
  *  once on a press, and put back if the server refuses. */
@@ -315,7 +316,7 @@ private fun Actions(work: Work, first: FocusRequester) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = 6.dp),
+        modifier = Modifier.padding(top = 6.dp).focusRestorer(first),
     ) {
         val next = work.carryOnWith
         val source = work.versions.firstOrNull()?.id ?: card?.source
@@ -381,9 +382,11 @@ private fun Seasons(work: Work, memory: FocusMemory) {
     var chosen by remember(work.id) {
         mutableStateOf(work.children.firstOrNull { it.number == playing }?.card?.id ?: work.children.first().card.id)
     }
+    // Coming into the tabs lands on the one left, or on the season shown.
+    val shown = remember { FocusRequester() }
     Column {
         Row(
-            modifier = Modifier.padding(start = Gutter, bottom = 4.dp),
+            modifier = Modifier.padding(start = Gutter, bottom = 4.dp).focusRestorer(shown),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             work.children.forEach { season ->
@@ -393,7 +396,9 @@ private fun Seasons(work: Work, memory: FocusMemory) {
                     } ?: "",
                     active = season.card.id == chosen,
                     onChoose = { chosen = season.card.id },
-                    modifier = Modifier.remembered(memory, "season/${season.card.id}"),
+                    modifier = Modifier
+                        .remembered(memory, "season/${season.card.id}")
+                        .then(if (season.card.id == chosen) Modifier.focusRequester(shown) else Modifier),
                 )
             }
         }

@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -56,16 +57,16 @@ import app.melyxar.R
 import app.melyxar.server.Track
 import app.melyxar.server.Work
 import app.melyxar.tv.clock
-import app.melyxar.tv.languageName
-import app.melyxar.tv.soundName
-import app.melyxar.tv.speakersName
 import app.melyxar.tv.inside.whichEpisode
+import app.melyxar.tv.languageName
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.soundName
+import app.melyxar.tv.speakersName
 import kotlinx.coroutines.delay
 
 /** How often the clock and the bar move while the controls are up. */
@@ -136,7 +137,11 @@ fun Controls(
                 SeekBar(at, length, playback, Modifier.weight(1f))
                 Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.focusRestorer(first),
+            ) {
                 PlayerButton(Icons.Restart, onClick = { playback.withStep(-10) })
                 PlayerButton(
                     if (playing) Icons.Pause else Icons.Play,
