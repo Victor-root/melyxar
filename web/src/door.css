@@ -1101,6 +1101,11 @@ img.door-greeting-mark {
     min-height: 0;
   }
 
+  /* Held off the very top of a phone, where it would sit against the edge. */
+  .door-back {
+    margin-top: 12px;
+  }
+
   .door-greeting-mark {
     --door-mark: clamp(84px, 24vw, 104px);
   }
