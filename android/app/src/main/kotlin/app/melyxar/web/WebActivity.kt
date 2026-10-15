@@ -121,10 +121,15 @@ class WebActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                // Every step the page takes, a window or a panel it opens
+                // included, is a step in its history; with none left, the
+                // application goes behind the others as every one does from
+                // Android 12, and comes back where it was rather than loaded
+                // again from the start.
                 when {
                     fullScreen != null -> chrome.onHideCustomView()
                     page.canGoBack() -> page.goBack()
-                    else -> finish()
+                    else -> moveTaskToBack(true)
                 }
             }
         })
