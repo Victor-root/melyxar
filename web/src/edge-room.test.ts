@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasTheWholeScreen, leavesRoom } from "./edge-room";
+import { leavesRoom, roomsOf } from "./edge-room";
 
 describe("leavesRoom", () => {
   it("finds no room where the browser reads none", () => {
@@ -17,18 +17,10 @@ describe("leavesRoom", () => {
   });
 });
 
-describe("hasTheWholeScreen", () => {
-  const BROWSER = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/150.0 Mobile Safari/537.36";
-
-  it("is the whole screen in an installed app", () => {
-    expect(hasTheWholeScreen(true, BROWSER)).toBe(true);
-  });
-
-  it("is the whole screen in Melyxar's own application", () => {
-    expect(hasTheWholeScreen(false, `${BROWSER} MelyxarApp/0.1.0`)).toBe(true);
-  });
-
-  it("is not in a browser tab", () => {
-    expect(hasTheWholeScreen(false, BROWSER)).toBe(false);
+describe("roomsOf", () => {
+  it("writes what the application says in the order the sides are read", () => {
+    const rooms = roomsOf({ top: 32.5, bottom: 48, left: 0, right: 12 });
+    expect(rooms).toEqual(["32.5px", "48px", "0px", "12px"]);
+    expect(leavesRoom(rooms)).toBe(true);
   });
 });
