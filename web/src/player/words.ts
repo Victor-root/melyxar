@@ -9,6 +9,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
+import type { Picture, WordsHolder } from "./picture";
 
 /**
  * The lines to draw for the cues on screen, one entry per line.
@@ -23,7 +24,7 @@ export function linesOf(cues: string[]): string[] {
 }
 
 /** The words of the film playing in `video`, and what a viewer does to them. */
-export function useWords(video: RefObject<HTMLVideoElement | null>) {
+export function useWords(video: RefObject<Picture | null>) {
   /* Whether the words are still on their way, and whether they never came.
      Pulling a subtitle out of a film means reading the whole file through,
      because the words are interleaved with the picture from end to end:
@@ -32,7 +33,7 @@ export function useWords(video: RefObject<HTMLVideoElement | null>) {
   const [words, setWords] = useState<"coming" | "refused" | null>(null);
   /* The element carrying the words, so the moment they finish being read can
      be waited for. */
-  const subtitleTrack = useRef<HTMLTrackElement | null>(null);
+  const subtitleTrack = useRef<WordsHolder | null>(null);
   /* The words on screen at this instant, one entry per cue active at once,
      which is almost always none or one. Read from the track rather than drawn
      by the browser, because where they are drawn is not the browser's to
@@ -115,7 +116,7 @@ export function useWords(video: RefObject<HTMLVideoElement | null>) {
      the browser: the browser only knows the picture, not the strip of
      controls standing over the bottom of it. */
   const holdTheWords = useCallback(
-    (element: HTMLTrackElement | null) => {
+    (element: WordsHolder | null) => {
       const held = subtitleTrack.current;
       held?.removeEventListener("load", wereRead);
       held?.removeEventListener("error", neverCame);

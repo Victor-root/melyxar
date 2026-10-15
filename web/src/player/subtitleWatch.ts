@@ -12,6 +12,7 @@
  */
 
 import type { PageFact, SubtitleCue } from "../api";
+import type { Picture, WordsTrack } from "./picture";
 
 type Fact = Extract<PageFact, { saw: "subtitles_read" | "subtitles_on_screen" }>;
 
@@ -25,7 +26,7 @@ const GIVE_UP_AFTER_MS = 10_000;
 const MOST_CUES_TOLD = 6;
 
 /** The cues of a track, as plain numbers and words. */
-export function cuesOf(track: TextTrack): SubtitleCue[] {
+export function cuesOf(track: WordsTrack): SubtitleCue[] {
   return Array.from(track.cues ?? []).map((cue) => ({
     start_second: cue.startTime,
     end_second: cue.endTime,
@@ -66,12 +67,12 @@ export function expectedAt(cues: SubtitleCue[], second: number): SubtitleCue[] {
  * stops it.
  */
 export function followTheSubtitles(
-  element: HTMLVideoElement,
+  element: Picture,
   say: (fact: Fact) => void,
 ): () => void {
-  const followed = new Map<TextTrack, () => void>();
+  const followed = new Map<WordsTrack, () => void>();
 
-  const sayWhatIsShown = (track: TextTrack, why: "changed" | "jumped") => {
+  const sayWhatIsShown = (track: WordsTrack, why: "changed" | "jumped") => {
     const cues = cuesOf(track);
     const shown = Array.from(track.activeCues ?? []).map((cue) => ({
       start_second: cue.startTime,
@@ -88,7 +89,7 @@ export function followTheSubtitles(
     });
   };
 
-  const follow = (track: TextTrack) => {
+  const follow = (track: WordsTrack) => {
     if (followed.has(track) || (track.kind !== "subtitles" && track.kind !== "captions")) {
       return;
     }
@@ -110,8 +111,8 @@ export function followTheSubtitles(
     });
   };
 
-  const added = (event: TrackEvent) => {
-    if (event.track instanceof TextTrack) {
+  const added = (event: Event) => {
+    if (event instanceof TrackEvent && event.track instanceof TextTrack) {
       follow(event.track);
     }
   };

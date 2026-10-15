@@ -16,6 +16,7 @@
  */
 
 import type { HitchKind, OpeningSeconds, PageChange, PageChangeKind } from "../api";
+import type { Picture } from "./picture";
 
 /** One picture as the browser says it reached the screen. */
 export interface Presented {
@@ -196,17 +197,17 @@ const CHANGES_SAID = 80;
 
 /** Where each film being followed takes note of what the player changed
  *  around it, which only the player knows it did. */
-const noting = new WeakMap<HTMLVideoElement, (what: PageChangeKind) => void>();
+const noting = new WeakMap<Picture, (what: PageChangeKind) => void>();
 
 /** Tells the opening being followed for this film, if any, that the player
  *  changed something around it. Nothing when no opening is being followed. */
-export function markTheOpening(element: HTMLVideoElement | null, what: PageChangeKind) {
+export function markTheOpening(element: Picture | null, what: PageChangeKind) {
   if (element) {
     noting.get(element)?.(what);
   }
 }
 
-function droppedSoFar(element: HTMLVideoElement): number {
+function droppedSoFar(element: Picture): number {
   return element.getVideoPlaybackQuality?.().droppedVideoFrames ?? 0;
 }
 
@@ -216,7 +217,7 @@ function droppedSoFar(element: HTMLVideoElement): number {
  * stops it.
  */
 export function followTheOpening(
-  element: HTMLVideoElement,
+  element: Picture,
   say: (opening: OpeningSeconds) => void,
 ): () => void {
   const filmsBeforeThis = filmsBefore;
@@ -224,6 +225,7 @@ export function followTheOpening(
   if (!element.requestVideoFrameCallback) {
     return () => {};
   }
+  const nextPicture = element.requestVideoFrameCallback.bind(element);
 
   const pictures: Presented[] = [];
   const busy: BusySpell[] = [];
@@ -358,9 +360,9 @@ export function followTheOpening(
       finish();
       return;
     }
-    pending = element.requestVideoFrameCallback(onPicture);
+    pending = nextPicture(onPicture);
   };
-  pending = element.requestVideoFrameCallback(onPicture);
+  pending = nextPicture(onPicture);
 
   const readTheClock = () => {
     clock.push({ at: performance.now(), clock: element.currentTime });

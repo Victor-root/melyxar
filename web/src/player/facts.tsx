@@ -30,6 +30,7 @@ import {
   soundHeld,
 } from "./describe";
 import { PlayerWindow } from "./window";
+import type { Picture } from "./picture";
 
 /** How often what the browser says is read again. */
 const LOOK_EVERY_MS = 1_000;
@@ -45,7 +46,7 @@ interface WhatTheBrowserSays {
   heldTo: number | null;
 }
 
-function readTheElement(element: HTMLVideoElement): WhatTheBrowserSays {
+function readTheElement(element: Picture): WhatTheBrowserSays {
   const quality = element.getVideoPlaybackQuality?.();
   const held = element.buffered;
   let heldTo: number | null = null;
@@ -89,7 +90,7 @@ function Line({
 
 interface Props {
   plan: PlaybackPlan;
-  video: React.RefObject<HTMLVideoElement | null>;
+  video: React.RefObject<Picture | null>;
   /** The session producing the film, when one is. Nothing for a film played
    *  as it lies on the disk, where no tool is at work to ask. */
   session: string | null;

@@ -41,6 +41,7 @@ import { sayHowItDecodes } from "./card";
 import { useLoading } from "./loading";
 import { useWords } from "./words";
 import type { Watching } from "./watch";
+import type { Picture, WordsHolder } from "./picture";
 
 /** The library itself, as the dynamic import hands it over. */
 type HlsLibrary = Awaited<typeof import("hls.js")>["default"];
@@ -108,7 +109,7 @@ const STILL_HERE_EVERY = 30_000;
 const A_SEAM_IS_WORTH_HOPPING = 0.5;
 
 /** Whether the browser is already holding the film around one moment. */
-function isHeldAround(element: HTMLVideoElement, moment: number): boolean {
+function isHeldAround(element: Picture, moment: number): boolean {
   const held = element.buffered;
   for (let index = 0; index < held.length; index += 1) {
     if (held.start(index) <= moment && moment < held.end(index)) {
@@ -155,7 +156,9 @@ export interface Playback {
    *  exists, and React only started admitting that in its nineteenth
    *  version. Nothing here changes, every reader already looked before
    *  touching it. */
-  video: React.RefObject<HTMLVideoElement | null>;
+  video: React.RefObject<Picture | null>;
+  /** Put on the element the player draws, to hand it over. */
+  holdThePicture: (element: Picture | null) => void;
   /** What the server decided, once it has answered. */
   plan: PlaybackPlan | null;
   /** The session a rebuilt film is fed from, when there is one. */
@@ -233,7 +236,7 @@ export interface Playback {
   wordsOffset: number;
   setWordsOffset: (seconds: number) => void;
   /** Put on the element carrying the words, whenever there is one. */
-  holdTheWords: (element: HTMLTrackElement | null) => void;
+  holdTheWords: (element: WordsHolder | null) => void;
   /** Puts the picture in a corner of the screen, where the browser allows it. */
   intoTheCorner: () => void;
 }
@@ -263,7 +266,10 @@ export function usePlayback({
   /** Told once when an administrator asked for this film to stop. */
   onStopped?: () => void;
 }): Playback {
-  const video = useRef<HTMLVideoElement>(null);
+  const video = useRef<Picture | null>(null);
+  const holdThePicture = useCallback((element: Picture | null) => {
+    video.current = element;
+  }, []);
   const [plan, setPlan] = useState<PlaybackPlan | null>(null);
   /* The film the server was last told is being watched on this device, which
      it only learns from a plan asked for by the player. */
@@ -669,6 +675,21 @@ export function usePlayback({
        the room it did not make. Only the first says anything. */
     let gaveUp = false;
 
+    const leave = () => {
+      gone = true;
+      whileTheViewerMoves.current = null;
+      watching.current = null;
+      stopWatching();
+      feed?.destroy();
+    };
+
+    /* The application's own player reads the playlist itself, the way it
+       reads a file, and needs none of the library: it is handed the address. */
+    if (!(element instanceof HTMLMediaElement)) {
+      element.src = stream.playlist_url;
+      return leave;
+    }
+
     /* Fetched only now, and only by the viewer who needs it. Most films play
        as they are and never touch this, so carrying it in every page would
        slow the whole interface for the few that do. */
@@ -857,13 +878,7 @@ export function usePlayback({
       feed.attachMedia(element);
     });
 
-    return () => {
-      gone = true;
-      whileTheViewerMoves.current = null;
-      watching.current = null;
-      stopWatching();
-      feed?.destroy();
-    };
+    return leave;
   }, [stream]);
 
   /* The same watch over a film handed over as it lies on the disk. The server
@@ -1352,6 +1367,7 @@ export function usePlayback({
       element.addEventListener("playing", uncover, { once: true });
       return () => element.removeEventListener("playing", uncover);
     }
+    const nextPicture = element.requestVideoFrameCallback.bind(element);
     const onPicture = (_now: number, picture: VideoFrameCallbackMetadata) => {
       pending = null;
       if (previous === null) {
@@ -1366,9 +1382,9 @@ export function usePlayback({
         return;
       }
       previous = picture.mediaTime;
-      pending = element.requestVideoFrameCallback(onPicture);
+      pending = nextPicture(onPicture);
     };
-    pending = element.requestVideoFrameCallback(onPicture);
+    pending = nextPicture(onPicture);
     return () => {
       window.clearTimeout(atMost);
       if (pending !== null) {
@@ -1379,6 +1395,7 @@ export function usePlayback({
 
   return {
     video,
+    holdThePicture,
     plan,
     stream,
     rebuilt,
