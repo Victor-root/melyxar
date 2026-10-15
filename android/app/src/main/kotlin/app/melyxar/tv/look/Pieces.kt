@@ -13,15 +13,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -35,13 +31,6 @@ import androidx.compose.ui.unit.sp
  * for the remote: what the web shows on hover is what the remote shows on the
  * piece it is on.
  */
-
-/** The halo of a lit piece, only made while it is lit or fading out. */
-@Composable
-private fun Modifier.haloWhenLit(shape: Shape, accent: Color, lit: () -> Float): Modifier {
-    val glowing by remember { derivedStateOf { lit() > 0.001f } }
-    return if (glowing) halo(shape, accent, lit) else this
-}
 
 /** The large accent button, the one the hand goes to: Play, Resume. */
 @Composable
@@ -57,12 +46,8 @@ fun AccentButton(
     Row(
         modifier = modifier
             .grows({ lit }, 1.05f)
-            .dropShadow(ControlShape) {
-                radius = 16.dp.toPx()
-                offset = Offset(0f, 4.dp.toPx())
-                color = palette.accentGlow
-            }
-            .haloWhenLit(ControlShape, palette.accent) { lit }
+            // Always a little lit, as the web's accent button glows at rest.
+            .glow(ControlShape, palette.accent, 22.dp) { 0.35f + 0.65f * lit }
             .clip(ControlShape)
             .background(palette.accent)
             .rim(ControlShape, palette.accentContrast, 2.5.dp) { lit }
@@ -90,7 +75,7 @@ fun PlainButton(
     Row(
         modifier = modifier
             .grows({ lit }, 1.05f)
-            .haloWhenLit(ControlShape, palette.accent) { lit }
+            .halo(ControlShape, palette.accent) { lit }
             .clip(ControlShape)
             .background(if (lit > 0.5f) palette.surfaceHover else palette.surfaceRaised)
             .border(1.dp, palette.border, ControlShape)
@@ -120,7 +105,7 @@ fun RoundMark(
         modifier = modifier
             .size(48.dp)
             .grows({ lit }, 1.1f)
-            .haloWhenLit(CircleShape, palette.accent) { lit }
+            .halo(CircleShape, palette.accent) { lit }
             .clip(CircleShape)
             .background(palette.surfaceRaised.copy(alpha = 0.74f))
             .border(1.dp, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, CircleShape)
@@ -159,11 +144,7 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
 fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
     val palette = LocalPalette.current
     return this
-        .dropShadow(shape) {
-            radius = 14.dp.toPx()
-            spread = 2.dp.toPx()
-            color = palette.accentGlow
-        }
+        .glow(shape, palette.accent, 8.dp)
         .clip(shape)
         .background(palette.surfaceRaised.copy(alpha = 0.55f))
         .background(palette.accent.copy(alpha = 0.22f))

@@ -4,4 +4,11 @@
         <item name="android:windowBackground">@color/ground</item>
         <item name="android:colorBackground">@color/ground</item>
     </style>
+
+    <!-- The television's glows are the system's shadows in the accent, far
+         fainter than the web's halos at the system's own strength. -->
+    <style name="Theme.Melyxar.Tv">
+        <item name="android:ambientShadowAlpha">0.3</item>
+        <item name="android:spotShadowAlpha">0.6</item>
+    </style>
 </resources>

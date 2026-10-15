@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -44,6 +43,7 @@ import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
+import app.melyxar.tv.look.glow
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -119,11 +119,7 @@ fun Knock(
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
-                .dropShadow(shape) {
-                    radius = 14.dp.toPx()
-                    spread = 2.dp.toPx()
-                    color = palette.accentGlow
-                }
+                .glow(shape, palette.accent, 12.dp)
                 .clip(shape)
                 .background(palette.surfaceRaised)
                 .background(palette.accent.copy(alpha = 0.10f))

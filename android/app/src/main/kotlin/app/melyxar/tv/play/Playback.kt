@@ -36,6 +36,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import java.io.IOException
@@ -53,11 +54,14 @@ private val sound = AudioAttributes.Builder()
 
 /** What the device plays, measured once: its decoders and its screen do not
  *  change while it runs. What the sound goes through is read by Media3 at
- *  each film. */
+ *  each film. Asking every decoder what it reads takes long enough to freeze
+ *  the screen, so it is asked away from the thread that draws it. */
 private var measured: JsonElement? = null
 
-private fun profileOf(context: Context): JsonElement =
-    measured ?: Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound)).also { measured = it }
+private suspend fun profileOf(context: Context): JsonElement = measured
+    ?: withContext(Dispatchers.Default) {
+        Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound))
+    }.also { measured = it }
 
 /**
  * One film played on the television: asked of the server, played by Media3

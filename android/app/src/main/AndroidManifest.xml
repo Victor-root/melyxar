@@ -49,6 +49,7 @@
              drawn natively. -->
         <activity
             android:name=".tv.TvActivity"
+            android:theme="@style/Theme.Melyxar.Tv"
             android:configChanges="keyboard|keyboardHidden|navigation|uiMode|screenSize|screenLayout|smallestScreenSize|density"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />

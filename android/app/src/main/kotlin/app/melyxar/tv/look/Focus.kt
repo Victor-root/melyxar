@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -40,27 +39,27 @@ fun Modifier.grows(lit: () -> Float, growth: Float = FOCUS_GROWTH) = graphicsLay
 }
 
 /**
- * The web's halo of a card: `0 0 8px accent 55%, 0 0 26px 2px accent 30%`,
- * with the raised shadow under it.
+ * A glow of [color] round the piece, as high as [elevation] times
+ * [strength]: drawn by the graphics card from the piece's outline, as the
+ * system draws its shadows, so nothing is blurred on the thread that draws
+ * the screen and nothing is drawn again while the strength eases. A blurred
+ * shadow is painted into a picture of its own on that thread, three for each
+ * piece the remote came to, which a television's processor cannot keep up
+ * with.
  */
-fun Modifier.halo(shape: Shape, accent: Color, lit: () -> Float) = this
-    .dropShadow(shape) {
-        radius = 40.dp.toPx()
-        offset = androidx.compose.ui.geometry.Offset(0f, 14.dp.toPx())
-        color = Color.Black
-        alpha = 0.45f * lit()
-    }
-    .dropShadow(shape) {
-        radius = 26.dp.toPx()
-        spread = 2.dp.toPx()
-        color = accent
-        alpha = 0.30f * lit()
-    }
-    .dropShadow(shape) {
-        radius = 8.dp.toPx()
-        color = accent
-        alpha = 0.55f * lit()
-    }
+fun Modifier.glow(shape: Shape, color: Color, elevation: Dp, strength: () -> Float = { 1f }) = graphicsLayer {
+    shadowElevation = elevation.toPx() * strength()
+    this.shape = shape
+    clip = false
+    ambientShadowColor = color
+    spotShadowColor = color
+}
+
+/** The web's halo of a card, in the accent, as lit as the piece is. */
+fun Modifier.halo(shape: Shape, accent: Color, lit: () -> Float) = glow(shape, accent, HALO_HEIGHT, lit)
+
+/** How high the halo of a lit piece stands. */
+private val HALO_HEIGHT = 22.dp
 
 /** A rim drawn inside the piece's edge, as the web's inset ring. */
 fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithContent {

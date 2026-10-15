@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -79,6 +78,8 @@ import app.melyxar.tv.look.MelyxarMark
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.TvLook
+import app.melyxar.tv.look.glow
+import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.look.rim
@@ -330,19 +331,7 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
         Box(
             Modifier
                 .size(TILE)
-                .dropShadow(shape) {
-                    radius = 30.dp.toPx()
-                    spread = (-2).dp.toPx()
-                    color = palette.accent
-                    alpha = 0.6f * lit
-                }
-                .dropShadow(shape) {
-                    radius = 60.dp.toPx()
-                    offset = Offset(0f, 16.dp.toPx())
-                    spread = (-12).dp.toPx()
-                    color = palette.accentDim
-                    alpha = 0.7f * lit
-                }
+                .halo(shape, palette.accent) { lit }
                 .clip(shape)
                 .rim(shape, palette.text.copy(alpha = 0.1f), 1.dp)
                 .rim(shape, palette.accentBright, 2.dp) { lit },
@@ -377,11 +366,7 @@ fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifie
 fun ServerMark(branding: Branding, size: Dp) {
     val palette = LocalPalette.current
     val logo = branding.logo
-    val glow = Modifier.dropShadow(RoundedCornerShape(size / 2)) {
-        radius = 24.dp.toPx()
-        offset = Offset(0f, 8.dp.toPx())
-        color = palette.accentGlow
-    }
+    val glow = Modifier.glow(RoundedCornerShape(size / 2), palette.accent, 12.dp)
     if (logo != null) {
         ServerPicture(listOf(Picture(logo)), size, glow.size(size), contentScale = ContentScale.Fit)
     } else {

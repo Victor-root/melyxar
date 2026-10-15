@@ -18,14 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -53,8 +51,8 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.Pivot
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
+import app.melyxar.tv.look.glow
 import app.melyxar.tv.look.grows
-import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 
@@ -114,20 +112,13 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    val glowing by remember { derivedStateOf { lit > 0.001f } }
     val front = fan.firstOrNull()?.color?.let(::parseHex) ?: palette.accent.toArgb()
     val force = if (palette.light) 0.34f else 1f
     Box(
         modifier = modifier
             .size(TileWidth, TileHeight)
             .grows({ lit }, 1.035f)
-            .dropShadow(CardShape) {
-                radius = 22.dp.toPx()
-                spread = (-8).dp.toPx()
-                color = palette.accent
-                alpha = 0.45f * (1 - lit)
-            }
-            .then(if (glowing) Modifier.halo(CardShape, palette.accent) { lit } else Modifier)
+            .glow(CardShape, palette.accent, 22.dp) { 0.35f + 0.65f * lit }
             .clip(CardShape)
             .drawBehind {
                 drawRect(
@@ -172,11 +163,7 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
             Box(
                 Modifier
                     .size(26.dp)
-                    .dropShadow(CircleShape) {
-                        radius = 14.dp.toPx()
-                        spread = 2.dp.toPx()
-                        color = palette.accentGlow
-                    }
+                    .glow(CircleShape, palette.accent, 6.dp)
                     .clip(CircleShape)
                     .drawBehind { drawRect(if (lit > 0.5f) palette.accent else palette.accent.copy(alpha = 0.2f)) },
                 contentAlignment = Alignment.Center,
@@ -213,11 +200,7 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                     }
                     .then(
                         if (at == 0) {
-                            Modifier.dropShadow(shape) {
-                                radius = 38.dp.toPx()
-                                spread = (-6).dp.toPx()
-                                color = palette.accentGlow
-                            }
+                            Modifier.glow(shape, palette.accent, 14.dp)
                         } else {
                             Modifier
                         },
