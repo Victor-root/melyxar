@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -48,7 +47,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
-import app.melyxar.server.Card
 import app.melyxar.server.Child
 import app.melyxar.server.Credit
 import app.melyxar.server.Refusal
@@ -66,6 +64,7 @@ import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
+import app.melyxar.tv.look.glow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
@@ -178,11 +177,7 @@ private fun Top(work: Work, first: FocusRequester) {
         Box(
             Modifier
                 .width(across)
-                .dropShadow(CardShape) {
-                    radius = 40.dp.toPx()
-                    color = Color.Black
-                    alpha = 0.45f
-                }
+                .glow(CardShape, Color.Black, 24.dp)
                 .clip(CardShape)
                 .background(palette.surfaceRaised),
         ) {
