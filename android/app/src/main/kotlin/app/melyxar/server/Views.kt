@@ -339,6 +339,10 @@ data class StreamSession(val id: String, val playlistUrl: String)
 @Serializable
 data class Heard(val stop: Boolean = false)
 
+/** Whether an account gave itself a code for its televisions. */
+@Serializable
+data class TvCode(val set: Boolean = false)
+
 /** What a library's grid can be narrowed by, and the letters its titles
  *  start with, each with how many works it holds. */
 @Serializable

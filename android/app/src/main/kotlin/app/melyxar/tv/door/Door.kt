@@ -100,7 +100,8 @@ private sealed interface Answer {
 /**
  * "Who is watching?": the accounts of the server, each a tile, as the web's
  * door draws them. A profile already signed in on this television opens at
- * once; any other asks for its password, once.
+ * once, or once its code is typed when it gave itself one; any other asks
+ * for its password, once.
  */
 @Composable
 fun Door(
@@ -115,6 +116,8 @@ fun Door(
     var tries by remember { mutableIntStateOf(0) }
     /** The profile asking for its password, or "" for a name typed by hand. */
     var knocking by remember { mutableStateOf<String?>(null) }
+    /** The profile signed in here asking for its code before it opens. */
+    var locked by remember { mutableStateOf<Locked?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(tries) {
@@ -133,8 +136,9 @@ fun Door(
         onIn(api.signedInAs(session.token), account, branding)
     }
 
-    /** A profile already signed in here opens straight away; one whose
-     *  session has ended asks for its password again. */
+    /** A profile already signed in here opens straight away, or once its
+     *  code is typed; one whose session has ended asks for its password
+     *  again. */
     fun open(name: String, branding: Branding) {
         val kept = sessions.of(api.origin).firstOrNull { it.name == name }
         if (kept == null) {
@@ -143,7 +147,13 @@ fun Door(
         }
         scope.launch {
             try {
-                signedIn(kept, api.signedInAs(kept.token).me(), branding)
+                val theirs = api.signedInAs(kept.token)
+                val account = theirs.me()
+                if (theirs.hasTvCode()) {
+                    locked = Locked(kept, account)
+                } else {
+                    signedIn(kept, account, branding)
+                }
             } catch (refused: Refusal) {
                 if (refused.signedOut) {
                     sessions.forget(api.origin, name)
@@ -173,7 +183,7 @@ fun Door(
                         onPick = { open(it, now.branding) },
                         onByHand = { knocking = "" },
                         onChangeServer = onChangeServer,
-                        quiet = knocking != null,
+                        quiet = knocking != null || locked != null,
                     )
                 }
                 val asking = knocking
@@ -187,11 +197,24 @@ fun Door(
                         onClose = { knocking = null },
                     )
                 }
+                val asked = locked
+                if (asked != null && open != null) {
+                    CodeLock(
+                        api = api.signedInAs(asked.session.token),
+                        name = asked.session.name,
+                        avatar = open.profiles.firstOrNull { it.name == asked.session.name }?.avatar,
+                        onOpen = { signedIn(asked.session, asked.account, open.branding) },
+                        onClose = { locked = null },
+                    )
+                }
             }
         }
     }
-    BackHandler(enabled = knocking == null, onBack = onBack)
+    BackHandler(enabled = knocking == null && locked == null, onBack = onBack)
 }
+
+/** A profile signed in here, waiting on its code. */
+private class Locked(val session: KeptSession, val account: Account)
 
 @Composable
 private fun Profiles(

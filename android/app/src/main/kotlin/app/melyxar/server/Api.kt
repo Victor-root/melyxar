@@ -31,6 +31,7 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.io.IOException
+import java.net.HttpURLConnection
 import java.util.concurrent.TimeUnit
 
 /** The server said no, or did not answer as a Melyxar server does. */
@@ -292,6 +293,21 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         val line = EventSources.createFactory(http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build())
             .newEventSource(request("/api/v1/system/live").header("Accept", "text/event-stream").build(), listening)
         awaitClose { line.cancel() }
+    }
+
+    /** Whether this account gave itself a code for its televisions; a
+     *  server from before the codes has none to ask for. */
+    suspend fun hasTvCode(): Boolean = try {
+        get("/api/v1/me/tv-code", TvCode.serializer()).set
+    } catch (refused: Refusal) {
+        if (refused.status != HttpURLConnection.HTTP_NOT_FOUND) throw refused
+        false
+    }
+
+    /** Checks the code typed to open this account again on the television;
+     *  a wrong one is a [Refusal] of 403, too many of them one of 429. */
+    suspend fun checkTvCode(code: String) {
+        send("POST", "/api/v1/me/tv-code/check", buildJsonObject { put("code", code) })
     }
 
     /** A file the server hands over as it is, the words of a subtitle. */

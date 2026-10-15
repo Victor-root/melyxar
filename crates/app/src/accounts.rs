@@ -68,6 +68,8 @@ pub enum Refused {
     /// otherwise: a letter of another alphabet, or one nobody can see.
     NameLooksTaken,
     PasswordTooShort,
+    /// A code for the televisions that is not four digits.
+    NotATvCode,
     /// Afterwards nobody would be an administrator of this server.
     LastAdministrator,
     /// Not something an administrator does to their own account from the
@@ -86,6 +88,7 @@ impl Refused {
             Self::NameTaken => "name_taken",
             Self::NameLooksTaken => "name_looks_taken",
             Self::PasswordTooShort => "password_too_short",
+            Self::NotATvCode => "not_a_tv_code",
             Self::LastAdministrator => "last_administrator",
             Self::NotYourself => "not_yourself",
             Self::NoSuchLibrary => "no_such_library",
@@ -529,6 +532,66 @@ pub async fn change_password(
         )
         .await?;
     Ok(PasswordChange::Changed(token))
+}
+
+/// Whether an account has given itself a code for its televisions.
+pub async fn has_tv_code(state: &AppState, who: &User) -> Result<bool> {
+    Ok(state.database().tv_code(who.id).await?.is_some())
+}
+
+/// Gives an account a code for its televisions, or takes it off with none.
+pub async fn set_tv_code(state: &AppState, who: &User, code: Option<&str>) -> std::result::Result<(), Trouble> {
+    let stored = match code {
+        Some(code) => Some(match state.passwords().hash_tv_code(code).await {
+            Ok(hashed) => hashed,
+            Err(AuthError::NotATvCode) => return Err(Trouble::Refused(Refused::NotATvCode)),
+            Err(other) => return Err(Trouble::Failed(AppError::Auth(other))),
+        }),
+        None => None,
+    };
+    state.database().set_tv_code(who.id, stored.as_deref()).await?;
+    tracing::info!(account = %who.name, set = stored.is_some(), "changed the code of the televisions");
+    Ok(())
+}
+
+/// What a code typed on a television to open a profile again comes to.
+#[derive(Debug, PartialEq, Eq)]
+pub enum TvCodeTyped {
+    Right,
+    Wrong,
+    /// The account has no code: there was nothing to type.
+    NoCode,
+    /// Too many wrong tries from this address, as with passwords.
+    HeldBack { seconds: i64 },
+}
+
+/// Checks the code typed on a television where the account is already signed
+/// in. It opens nothing of its own, the session being there already: it is
+/// the television's lock on it, braked by address like a password, so four
+/// digits are not guessed one after the other.
+pub async fn check_tv_code(
+    state: &AppState,
+    who: &User,
+    code: &str,
+    device_name: &str,
+    address: Option<IpAddr>,
+) -> Result<TvCodeTyped> {
+    let Some(stored) = state.database().tv_code(who.id).await? else {
+        return Ok(TvCodeTyped::NoCode);
+    };
+    let from = Origin::of(address);
+    let holds_back = match turn_from(state, from, now()).await? {
+        Turn::HeldBack(left) => return Ok(TvCodeTyped::HeldBack { seconds: seconds_of(left) }),
+        Turn::Checked { holds_back } => holds_back,
+    };
+    if !state.passwords().matches(code, &stored).await {
+        if holds_back {
+            held_back_from_now(state, &who.name, device_name, address).await;
+        }
+        return Ok(TvCodeTyped::Wrong);
+    }
+    state.wrong_answers().forget(from);
+    Ok(TvCodeTyped::Right)
 }
 
 /// Gives somebody's account the name they asked for.
@@ -1471,6 +1534,47 @@ mod tests {
             a_session(&state, "victor", "quiet harbour", "a browser").await.is_some(),
             "nothing was changed while it was held back"
         );
+    }
+
+    #[tokio::test]
+    async fn a_television_code_is_four_digits_and_opens_nothing_wrong() {
+        let (_directory, state) = a_server_with_an_account().await;
+        let opened = a_session(&state, "victor", "quiet harbour", "a television")
+            .await
+            .expect("signed in");
+        let who = &opened.user;
+        assert!(!has_tv_code(&state, who).await.expect("asked"));
+        assert_eq!(check_tv_code(&state, who, "0427", "a television", here()).await.expect("asked"), TvCodeTyped::NoCode);
+
+        assert!(matches!(set_tv_code(&state, who, Some("42")).await, Err(Trouble::Refused(Refused::NotATvCode))));
+        set_tv_code(&state, who, Some("0427")).await.expect("set");
+        assert!(has_tv_code(&state, who).await.expect("asked"));
+        assert_eq!(check_tv_code(&state, who, "0427", "a television", here()).await.expect("asked"), TvCodeTyped::Right);
+        assert_eq!(check_tv_code(&state, who, "1234", "a television", here()).await.expect("asked"), TvCodeTyped::Wrong);
+
+        set_tv_code(&state, who, None).await.expect("taken off");
+        assert!(!has_tv_code(&state, who).await.expect("asked"));
+    }
+
+    #[tokio::test]
+    async fn a_television_code_is_braked_like_a_password() {
+        // Four digits are ten thousand guesses: the same brake as passwords
+        // keeps them from being tried one after the other.
+        let (_directory, state) = a_server_with_an_account().await;
+        let opened = a_session(&state, "victor", "quiet harbour", "a television")
+            .await
+            .expect("signed in");
+        set_tv_code(&state, &opened.user, Some("0427")).await.expect("set");
+        for _ in 0..ALLOWED_TRIES {
+            assert_eq!(
+                check_tv_code(&state, &opened.user, "9999", "a television", here()).await.expect("asked"),
+                TvCodeTyped::Wrong
+            );
+        }
+        assert!(matches!(
+            check_tv_code(&state, &opened.user, "0427", "a television", here()).await.expect("asked"),
+            TvCodeTyped::HeldBack { .. }
+        ));
     }
 
     #[tokio::test]

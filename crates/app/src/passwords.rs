@@ -47,7 +47,17 @@ impl Default for Passwords {
 impl Passwords {
     /// The stored form of a password, or the rule it breaks.
     pub(crate) async fn hash(&self, password: &str) -> Result<String, AuthError> {
-        let password = password.to_string();
+        self.stored_by(password, melyxar_auth::hash_password).await
+    }
+
+    /// The stored form of an account's code for its televisions, or the rule
+    /// it breaks. Checked as a password is, by [`Self::matches`].
+    pub(crate) async fn hash_tv_code(&self, code: &str) -> Result<String, AuthError> {
+        self.stored_by(code, melyxar_auth::hash_tv_code).await
+    }
+
+    async fn stored_by(&self, secret: &str, storing: fn(&str) -> Result<String, AuthError>) -> Result<String, AuthError> {
+        let secret = secret.to_string();
         let turn = self
             .turns
             .clone()
@@ -56,7 +66,7 @@ impl Passwords {
             .map_err(|error| AuthError::CouldNotHash(error.to_string()))?;
         tokio::task::spawn_blocking(move || {
             let _turn = turn;
-            melyxar_auth::hash_password(&password)
+            storing(&secret)
         })
         .await
         .map_err(|error| AuthError::CouldNotHash(error.to_string()))?

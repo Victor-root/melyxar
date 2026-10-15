@@ -26,7 +26,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use melyxar_app::accounts::{
-    OpenedSession, PasswordChange, Remembered, SessionToken, SignedIn, SignedInOrNot,
+    OpenedSession, PasswordChange, Remembered, SessionToken, SignedIn, SignedInOrNot, TvCodeTyped,
 };
 use melyxar_app::AppState;
 use melyxar_core::user::User;
@@ -65,6 +65,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/me/password", axum::routing::put(change_password))
         .route("/api/v1/me/name", axum::routing::put(rename))
         .route("/api/v1/me/browser", axum::routing::put(name_the_browser))
+        .route("/api/v1/me/tv-code", axum::routing::get(tv_code).put(set_tv_code))
+        .route("/api/v1/me/tv-code/check", axum::routing::post(check_tv_code))
         .route(
             "/api/v1/me/avatar",
             axum::routing::put(choose_avatar)
@@ -534,6 +536,54 @@ async fn change_password(
 #[derive(Debug, Deserialize)]
 struct NameBody {
     name: String,
+}
+
+/// Whether this account has a code for its televisions.
+async fn tv_code(State(state): State<AppState>, Viewer(user): Viewer) -> Result<Json<serde_json::Value>> {
+    let set = melyxar_app::accounts::has_tv_code(&state, &user).await?;
+    Ok(Json(serde_json::json!({ "set": set })))
+}
+
+#[derive(Debug, Deserialize)]
+struct TvCodeBody {
+    /// Four digits, or nothing to take the code off.
+    code: Option<String>,
+}
+
+/// Gives this account a code for its televisions, or takes it off.
+async fn set_tv_code(
+    State(state): State<AppState>,
+    Viewer(user): Viewer,
+    Json(asked): Json<TvCodeBody>,
+) -> Result<Json<serde_json::Value>> {
+    melyxar_app::accounts::set_tv_code(&state, &user, asked.code.as_deref()).await?;
+    Ok(Json(serde_json::json!({ "set": asked.code.is_some() })))
+}
+
+#[derive(Debug, Deserialize)]
+struct TypedCode {
+    code: String,
+}
+
+/// The code typed on a television where this account is signed in already,
+/// before its profile is opened again. A wrong one is refused without the
+/// session being touched, which is the television's to keep.
+async fn check_tv_code(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Viewer(user): Viewer,
+    Caller { address, .. }: Caller,
+    Json(typed): Json<TypedCode>,
+) -> Result<Json<serde_json::Value>> {
+    match melyxar_app::accounts::check_tv_code(&state, &user, &typed.code, &what_asked(&headers), address).await? {
+        TvCodeTyped::Right | TvCodeTyped::NoCode => Ok(Json(serde_json::json!({ "opened": true }))),
+        TvCodeTyped::Wrong => Err(ServerError::new(
+            axum::http::StatusCode::FORBIDDEN,
+            melyxar_core::error::ErrorCode::Forbidden,
+            "that is not the code of the televisions",
+        )),
+        TvCodeTyped::HeldBack { seconds } => Err(held_back(seconds)),
+    }
 }
 
 /// Gives this account the name asked for, and answers the account wearing it.
