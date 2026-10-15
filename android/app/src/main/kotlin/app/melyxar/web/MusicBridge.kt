@@ -3,6 +3,7 @@ package app.melyxar.web
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
+import app.melyxar.music.DeckTold
 import app.melyxar.music.Described
 import app.melyxar.music.MusicEngine
 import kotlinx.serialization.json.Json
@@ -85,8 +86,8 @@ class MusicBridge(
     @JavascriptInterface
     fun forms(): String = forms.invoke()
 
-    override fun told(told: String) {
-        page.evaluateJavascript("window.melyxarMusicTold && window.melyxarMusicTold($told)", null)
+    override fun told(told: DeckTold) {
+        page.evaluateJavascript("window.melyxarMusicTold && window.melyxarMusicTold(${Json.encodeToString(told)})", null)
     }
 
     override fun asked(asked: String, seconds: Double) {

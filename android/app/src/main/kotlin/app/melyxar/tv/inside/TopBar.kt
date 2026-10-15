@@ -43,6 +43,7 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
+import app.melyxar.tv.music.LocalListening
 
 /**
  * The bar at the top of every screen, as the web's less its tabs, which the
@@ -77,6 +78,10 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             Brand(onClick = { chrome.go(Place.Home) })
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // The song playing, while one is.
+            if (LocalListening.current.queue.current != null) {
+                BarButton(Icons.Music) { chrome.go(Place.NowPlaying) }
+            }
             BarButton(Icons.Search) { chrome.go(Place.Search) }
             BarButton(Icons.Heart) { chrome.go(Place.Listed(Shortlist.Favourites)) }
             BarButton(Icons.Clock) { chrome.go(Place.Listed(Shortlist.WatchLater)) }

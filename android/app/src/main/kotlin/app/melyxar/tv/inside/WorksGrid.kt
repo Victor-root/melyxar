@@ -239,18 +239,21 @@ fun CardGrid(
                         modifier = Modifier
                             .remembered(memory, card.id)
                             .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
-                            .onFocusChanged {
-                                if (it.isFocused) {
-                                    onReach(at, card)
-                                }
-                                // The first line of cards is part of the head,
-                                // the line under what the grid is.
-                                val line = grid.layoutInfo.visibleItemsInfo.firstOrNull { item -> item.key == card.id }?.row
-                                head.hold(card.id, it.isFocused && line == 1)
-                            },
+                            .onFocusChanged { if (it.isFocused) onReach(at, card) }
+                            .firstLineHoldsTheHead(grid, head, card.id),
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * A piece of a grid whose head is its first item: on the first line under
+ * the head, the piece is part of the head, which stays shown whole while the
+ * remote is on it.
+ */
+fun Modifier.firstLineHoldsTheHead(grid: LazyGridState, head: PageHead, key: String): Modifier = onFocusChanged {
+    val line = grid.layoutInfo.visibleItemsInfo.firstOrNull { item -> item.key == key }?.row
+    head.hold(key, it.isFocused && line == 1)
 }

@@ -178,6 +178,31 @@ object Icons {
             "M14 14l1-1c.93-.9 2.07-.9 3 0l3 3",
         ),
     )
+    val NextSong = solid("next-song", 2.2f, "M6.2 6.6 14.4 12l-8.2 5.4Z", "M17.8 6.4v11.2")
+    val PreviousSong = solid("previous-song", 2.2f, "M17.8 6.6 9.6 12l8.2 5.4Z", "M6.2 6.4v11.2")
+    val Shuffle = outlined(
+        "shuffle",
+        paths = arrayOf(
+            "M3.6 7.2h3.2c2.2 0 3.4 1.1 4.6 3.4l1.2 2.8c1.2 2.3 2.4 3.4 4.6 3.4h3.2",
+            "M3.6 16.8h3.2c1.5 0 2.5-.5 3.4-1.5M13.8 8.7c.9-1 1.9-1.5 3.4-1.5h3.2",
+            "m18 4.9 2.4 2.3L18 9.5M18 14.5l2.4 2.3-2.4 2.3",
+        ),
+    )
+    val Repeat = outlined(
+        "repeat",
+        paths = arrayOf(
+            "M4.4 11.2V9.6a2.8 2.8 0 0 1 2.8-2.8h12.2M17 4.4l2.4 2.4L17 9.2",
+            "M19.6 12.8v1.6a2.8 2.8 0 0 1-2.8 2.8H4.6M7 19.6l-2.4-2.4L7 14.8",
+        ),
+    )
+    val RepeatOne = outlined(
+        "repeat-one",
+        paths = arrayOf(
+            "M4.4 11.2V9.6a2.8 2.8 0 0 1 2.8-2.8h12.2M17 4.4l2.4 2.4L17 9.2",
+            "M19.6 12.8v1.6a2.8 2.8 0 0 1-2.8 2.8H4.6M7 19.6l-2.4-2.4L7 14.8",
+            "M11.2 10.6 12.4 9.8v4.6",
+        ),
+    )
     val Music = outlined(
         "music",
         paths = arrayOf("M9.4 18.2V5.6l10-2v12.2", circle(6.8f, 18.2f, 2.6f), circle(16.8f, 15.8f, 2.6f)),

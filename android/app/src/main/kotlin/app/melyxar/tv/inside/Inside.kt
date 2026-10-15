@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -23,6 +24,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.melyxar.server.Account
@@ -39,6 +41,16 @@ import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PageBackdrop
 import app.melyxar.tv.look.TvLook
 import app.melyxar.tv.look.rememberPictures
+import app.melyxar.tv.music.AlbumScreen
+import app.melyxar.tv.music.ArtistScreen
+import app.melyxar.tv.music.GenreScreen
+import app.melyxar.tv.music.Hearts
+import app.melyxar.tv.music.Listening
+import app.melyxar.tv.music.LocalHearts
+import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.music.MusicLibraryScreen
+import app.melyxar.tv.music.NowPlayingScreen
+import app.melyxar.tv.music.PlaylistScreen
 import app.melyxar.tv.play.PlayerScreen
 
 /** A screen of the inside, as the trail of screens holds it. */
@@ -73,6 +85,27 @@ sealed interface Place {
 
     data class Playing(val play: Play) : Place {
         override val key = "playing"
+    }
+
+    data class Album(val id: String) : Place {
+        override val key = "album:$id"
+    }
+
+    data class Artist(val id: String) : Place {
+        override val key = "artist:$id"
+    }
+
+    data class Playlist(val id: String) : Place {
+        override val key = "playlist:$id"
+    }
+
+    data class Genre(val library: Library, val name: String) : Place {
+        override val key = "genre:${library.id}:$name"
+    }
+
+    /** The song playing and what comes after it. */
+    data object NowPlaying : Place {
+        override val key = "now-playing"
     }
 }
 
@@ -118,12 +151,19 @@ fun Inside(
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { comebacks += 1 }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val listening = remember(api) { Listening(context, api, scope) }
+    // The music is this account's: it stops when somebody else comes in, or
+    // when the television leaves the application.
+    DisposableEffect(listening) { onDispose { listening.leave() } }
     CompositionLocalProvider(
         LocalServer provides api,
         LocalPictures provides rememberPictures(api),
         LocalSignedOut provides onSignedOut,
         LocalAnswers provides remember(api) { HashMap() },
         LocalMarks provides remember(api) { Marks(api, scope, onSignedOut) },
+        LocalListening provides listening,
+        LocalHearts provides remember(api) { Hearts(api, scope, onSignedOut) },
     ) {
         val chosen = rememberLoaded("preferences", comebacks) { preferences() }.value.ready
         val libraries = rememberLoaded("libraries", comebacks) { libraries() }.value.ready
@@ -131,6 +171,11 @@ fun Inside(
         // What the libraries hold moved: every screen, the libraries above
         // them included, reads again what it shows.
         FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved)
+        val hearts = LocalHearts.current
+        LaunchedEffect(api, comebacks, marks.rowsMoved) {
+            hearts.read()
+            listening.readPreferences()
+        }
         val deviceIsDark = isSystemInDarkTheme()
         val chosenAccent = chosen?.accentColor?.let(::parseHex) ?: USUAL_ACCENT
         val palette = remember(chosen, branding.defaultTheme, deviceIsDark) {
@@ -166,11 +211,13 @@ fun Inside(
                         backTo(1)
                         trail.add(place)
                     }
-                    is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed -> trail.add(place)
-                    // One search at a time: going to it again comes back to
-                    // the one already open.
-                    Place.Search -> {
-                        val open = trail.indexOf(Place.Search)
+                    is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed,
+                    is Place.Album, is Place.Artist, is Place.Playlist, is Place.Genre,
+                    -> trail.add(place)
+                    // One search and one song playing at a time: going to
+                    // either again comes back to the one already open.
+                    Place.Search, Place.NowPlaying -> {
+                        val open = trail.indexOf(place)
                         if (open >= 0) backTo(open + 1) else trail.add(place)
                     }
                 }
@@ -199,11 +246,23 @@ fun Inside(
                     Modifier
                         .fillMaxSize()
                         .background(LocalPalette.current.ground)
-                        // The search key of a remote that has one.
+                        // The search key of a remote that has one, and its keys
+                        // of music while a song is queued. A film's own
+                        // player answers them first.
                         .onKeyEvent { event ->
-                            val asked = event.key == Key.Search && event.type == KeyEventType.KeyUp
-                            if (asked) chrome.go(Place.Search)
-                            asked
+                            if (event.type != KeyEventType.KeyUp) {
+                                return@onKeyEvent false
+                            }
+                            val music = listening.queue.current != null
+                            when {
+                                event.key == Key.Search -> chrome.go(Place.Search)
+                                !music -> return@onKeyEvent false
+                                event.key == Key.MediaPlayPause -> listening.toggle()
+                                event.key == Key.MediaNext -> listening.next()
+                                event.key == Key.MediaPrevious -> listening.previous()
+                                else -> return@onKeyEvent false
+                            }
+                            true
                         },
                 ) {
                     // What the account chose to draw behind its pages, once
@@ -212,11 +271,20 @@ fun Inside(
                     kept.SaveableStateProvider(here.key) {
                         when (here) {
                             Place.Home -> HomeScreen(comebacks)
-                            is Place.Shelf -> LibraryScreen(here.library, comebacks)
+                            is Place.Shelf -> if (here.library.kind == "music") {
+                                MusicLibraryScreen(here.library, comebacks)
+                            } else {
+                                LibraryScreen(here.library, comebacks)
+                            }
                             is Place.Opened -> WorkScreen(here.work, comebacks)
                             is Place.Person -> PersonScreen(here.id, comebacks)
                             Place.Search -> SearchScreen(comebacks)
                             is Place.Listed -> ShortlistScreen(here.list, comebacks)
+                            is Place.Album -> AlbumScreen(here.id, comebacks)
+                            is Place.Artist -> ArtistScreen(here.id, comebacks)
+                            is Place.Playlist -> PlaylistScreen(here.id, comebacks)
+                            is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
+                            Place.NowPlaying -> NowPlayingScreen()
                             // The film is always shown dark, as the web's player is.
                             is Place.Playing -> key(here.play) {
                                 TvLook(paletteOf(chosenAccent, light = false)) {

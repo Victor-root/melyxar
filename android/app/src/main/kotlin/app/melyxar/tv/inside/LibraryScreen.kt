@@ -43,7 +43,6 @@ import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PlainButton
-import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.litBy
 import java.io.IOException
 import kotlinx.coroutines.launch
@@ -210,18 +209,7 @@ private fun SortAndFilters(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        PlainButton(
-            stringResource(R.string.tv_sorted_by, orderName(order)),
-            onClick = { onPick(Picking.Order) },
-            modifier = Modifier.remembered(memory, "order"),
-        )
-        RoundMark(
-            if (descending) Icons.ArrowDown else Icons.ArrowUp,
-            label = stringResource(if (descending) R.string.tv_descending else R.string.tv_ascending),
-            on = descending,
-            onClick = onTurn,
-            modifier = Modifier.remembered(memory, "direction"),
-        )
+        OrderButtons(orderName(order), descending, memory, onPick = { onPick(Picking.Order) }, onTurn = onTurn)
         if (filters != null && filters.genres.isNotEmpty()) {
             PlainButton(
                 stringResource(R.string.tv_genre_is, genre ?: any),
