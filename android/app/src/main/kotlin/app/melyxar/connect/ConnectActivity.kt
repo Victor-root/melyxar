@@ -54,6 +54,8 @@ import app.melyxar.server.readAddress
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
 import app.melyxar.theme.drawUnderTheBars
+import app.melyxar.tv.TvActivity
+import app.melyxar.tv.isTelevision
 import app.melyxar.web.WebActivity
 import kotlinx.coroutines.launch
 
@@ -61,10 +63,18 @@ import kotlinx.coroutines.launch
  * The one screen before any server: where its address is typed, and where the
  * servers already known are offered again. Opening the application goes
  * straight to the last one, unless this screen was asked for to change.
+ *
+ * On a television, the application is the television's own instead, which
+ * keeps its own choice of server.
  */
 class ConnectActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (isTelevision()) {
+            startActivity(Intent(this, TvActivity::class.java))
+            finish()
+            return
+        }
         val servers = KnownServers(this)
         val current = servers.current()
         if (current != null && !intent.getBooleanExtra(CHOOSING, false)) {

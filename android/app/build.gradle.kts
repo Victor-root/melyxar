@@ -94,6 +94,11 @@ dependencies {
     implementation(libs.media3.effect)
     implementation(libs.media3.ui)
     implementation(libs.media3.session)
+    implementation(libs.media3.datasource.okhttp)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
