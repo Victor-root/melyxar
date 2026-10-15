@@ -31,6 +31,7 @@ pub mod mark;
 pub mod marks;
 pub mod measures;
 pub mod music;
+pub mod neighbours;
 pub mod online_subtitles;
 pub mod openings;
 pub mod notifications;
