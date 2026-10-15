@@ -21,6 +21,7 @@
  */
 
 import type { LibraryKind } from "./api";
+import { reliefFor } from "./mark";
 
 export interface IconProps {
   /** Drawn at the size of the text around it unless told otherwise. */
@@ -768,7 +769,7 @@ export function LanguagesIcon(props: IconProps) {
  *  ribbon in whatever colour the accent is. The larger copy is taken once the
  *  small one would be blown up. */
 export function MelyxarMark({ size = 22, className }: IconProps) {
-  const relief = size > 64 ? "/melyxar-shade-512.png" : "/melyxar-shade-64.png";
+  const relief = reliefFor(size, window.devicePixelRatio);
   return (
     <span
       className={`melyxar-mark${className ? ` ${className}` : ""}`}

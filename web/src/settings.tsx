@@ -38,6 +38,15 @@ import { THE_USUAL_STEP_BACK, THE_USUAL_STEP_ON } from "./player/steps";
 
 export type ThemeChoice = "dark" | "light" | "system";
 
+/** The theme a choice shows right now: automatic is whichever the system is
+ *  set to. */
+export function themeSeen(choice: ThemeChoice): "dark" | "light" {
+  if (choice !== "system") {
+    return choice;
+  }
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
 /** What an account holds: a theme it chose, or nothing chosen yet, which
  *  follows the server's. */
 type HeldTheme = ThemeChoice | "server";
@@ -264,10 +273,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     const apply = () => {
-      const system = window.matchMedia("(prefers-color-scheme: light)").matches
-        ? "light"
-        : "dark";
-      root.dataset.theme = shown === "system" ? system : shown;
+      root.dataset.theme = themeSeen(shown);
       colourTheWindow();
     };
     apply();
