@@ -41,9 +41,11 @@ import app.melyxar.server.KeptSession
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
+import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
-import app.melyxar.tv.look.halo
+import app.melyxar.tv.look.boxShadow
+import app.melyxar.tv.look.shadowCard
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -119,7 +121,7 @@ fun Knock(
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
-                .halo(shape, palette.accentGlow, 12.dp)
+                .boxShadow(shape, palette.shadowCard, BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp))
                 .clip(shape)
                 .background(palette.surfaceRaised)
                 .background(palette.accent.copy(alpha = 0.10f))

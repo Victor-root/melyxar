@@ -44,6 +44,7 @@ import app.melyxar.server.Library
 import app.melyxar.server.Shelf
 import app.melyxar.theme.mix
 import app.melyxar.theme.parseHex
+import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
@@ -52,10 +53,14 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.Nearest
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
+import app.melyxar.tv.look.accentAir
+import app.melyxar.tv.look.accentBloom
+import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
-import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
+import app.melyxar.tv.look.shadowCard
+import app.melyxar.tv.look.shadowRaised
 
 /** A tile of the band. */
 private val TileWidth = 208.dp
@@ -119,7 +124,10 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
         modifier = modifier
             .size(TileWidth, TileHeight)
             .grows({ lit }, 1.035f)
-            .halo(CardShape, palette.accent) { 0.3f + 0.7f * lit }
+            // At rest `0 0 22px -8px` of the accent at 45%, giving way to the
+            // halo of a card as the tile lights.
+            .boxShadow(CardShape, BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 22.dp, spread = (-8).dp)) { 1f - lit }
+            .boxShadow(CardShape, accentAir(palette.accent), accentBloom(palette.accent)) { lit }
             .clip(CardShape)
             // Laid out once for the tile; only the halo behind the fan is
             // drawn again as it lights.
@@ -166,18 +174,40 @@ private fun BandTile(kind: String, fan: List<Card>, onClick: () -> Unit, modifie
         ) {
             Glyph(Icons.ofKind(kind), palette.accentBright, 17.dp)
             Text(kindName(kind), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1, modifier = Modifier.weight(1f))
-            Box(
-                Modifier
-                    .size(26.dp)
-                    .halo(CircleShape, palette.accentGlow, 8.dp)
-                    .clip(CircleShape)
-                    .drawBehind { drawRect(if (lit > 0.5f) palette.accent else palette.accent.copy(alpha = 0.2f)) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Glyph(Icons.ChevronRight, if (lit > 0.5f) palette.accentContrast else palette.accentBright, 16.dp)
-            }
+            Arrow({ lit })
         }
         Box(Modifier.fillMaxSize().rim(CardShape, palette.accent.copy(alpha = 0.62f), 1.dp).rim(CardShape, palette.accentBright, 1.5.dp) { lit })
+    }
+}
+
+/**
+ * The way into the library, as the web's `.band-arrow`: a round of the
+ * accent at 20% ringed by it at 45% and lit round, filled with the accent
+ * as the tile lights.
+ */
+@Composable
+private fun Arrow(lit: () -> Float) {
+    val palette = LocalPalette.current
+    val shown = lit() > 0.5f
+    Box(
+        Modifier
+            .size(30.dp)
+            .boxShadow(
+                CircleShape,
+                BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 0.dp, spread = 1.dp),
+                BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp),
+            ) { 1f - lit() }
+            .boxShadow(
+                CircleShape,
+                BoxShadow(palette.accent, blur = 0.dp, spread = 1.dp),
+                BoxShadow(palette.accentGlow, blur = 22.dp, spread = 4.dp),
+                shown = lit,
+            )
+            .clip(CircleShape)
+            .drawBehind { drawRect(palette.accent.copy(alpha = 0.2f + 0.8f * lit())) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Glyph(Icons.ChevronRight, if (shown) palette.accentContrast else palette.accentBright, 16.dp)
     }
 }
 
@@ -204,11 +234,19 @@ private fun Fan(fan: List<Card>, open: () -> Float) {
                         translationY = if (at == 0) -0.04f * size.height * opened else 0f
                         rotationZ = leaf.tilt + leaf.tiltsBy * opened
                     }
+                    // The front poster stands raised, with a brighter edge and
+                    // the air of the accent just off it; the others lie on
+                    // the tile with a fainter edge.
                     .then(
                         if (at == 0) {
-                            Modifier.halo(shape, palette.accentGlow, 16.dp)
+                            Modifier.boxShadow(
+                                shape,
+                                palette.shadowRaised,
+                                BoxShadow(palette.text.copy(alpha = 0.20f), blur = 0.dp, spread = 1.dp),
+                                BoxShadow(palette.accentGlow, blur = 38.dp, spread = (-6).dp),
+                            )
                         } else {
-                            Modifier
+                            Modifier.boxShadow(shape, palette.shadowCard, BoxShadow(palette.text.copy(alpha = 0.14f), blur = 0.dp, spread = 1.dp))
                         },
                     )
                     .clip(shape),

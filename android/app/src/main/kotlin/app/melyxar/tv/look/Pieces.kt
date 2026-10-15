@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.sp
  * piece it is on.
  */
 
+/** How much a button grows under the remote, as `.button:hover`. */
+private const val BUTTON_GROWTH = 1.04f
+
 /** The large accent button, the one the hand goes to: Play, Resume. */
 @Composable
 fun AccentButton(
@@ -45,9 +48,9 @@ fun AccentButton(
     val lit by litBy(interaction)
     Row(
         modifier = modifier
-            .grows({ lit }, 1.05f)
-            // Always a little lit, as the web's accent button glows at rest.
-            .halo(ControlShape, palette.accent) { 0.3f + 0.7f * lit }
+            .grows({ lit }, BUTTON_GROWTH)
+            // `0 4px 16px var(--accent-glow)`, lit or not.
+            .boxShadow(ControlShape, BoxShadow(palette.accentGlow, blur = 16.dp, y = 4.dp))
             .clip(ControlShape)
             .background(palette.accent)
             .rim(ControlShape, palette.accentContrast, 2.5.dp) { lit }
@@ -74,8 +77,7 @@ fun PlainButton(
     val lit by litBy(interaction)
     Row(
         modifier = modifier
-            .grows({ lit }, 1.05f)
-            .halo(ControlShape, palette.accent) { lit }
+            .grows({ lit }, BUTTON_GROWTH)
             .clip(ControlShape)
             .background(if (lit > 0.5f) palette.surfaceHover else palette.surfaceRaised)
             .border(1.dp, palette.border, ControlShape)
@@ -104,8 +106,7 @@ fun RoundMark(
     Box(
         modifier = modifier
             .size(48.dp)
-            .grows({ lit }, 1.1f)
-            .halo(CircleShape, palette.accent) { lit }
+            .grows({ lit }, 1.06f)
             .clip(CircleShape)
             .background(palette.surfaceRaised.copy(alpha = 0.74f))
             .border(1.dp, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, CircleShape)
@@ -144,7 +145,7 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
 fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
     val palette = LocalPalette.current
     return this
-        .halo(shape, palette.accentGlow, 12.dp)
+        .boxShadow(shape, palette.shadowCard, BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp))
         .clip(shape)
         .background(palette.surfaceRaised.copy(alpha = 0.55f))
         .background(palette.accent.copy(alpha = 0.22f))
