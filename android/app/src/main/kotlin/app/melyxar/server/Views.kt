@@ -53,6 +53,10 @@ data class Preferences(
     val hiddenHomeSections: List<String> = emptyList(),
     val stepBackSeconds: Int = 10,
     val stepOnSeconds: Int = 30,
+    /** What is drawn behind the pages: "light", "library" or "none". */
+    val backdrop: String = "light",
+    /** Which painting of light, from one. */
+    val backdropLight: Int = 1,
 )
 
 /** A work as every row and grid shows it. */
