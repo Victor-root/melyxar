@@ -38,6 +38,7 @@ import { RatingsPanel } from "./admin/ratings";
 import { ServerPanel } from "./admin/settings";
 import { ScheduledTasksPanel } from "./admin/tasks";
 import { CardPanel } from "./admin/transcoding";
+import { useBackClosesIt } from "../components/back-closes";
 
 type Step = "account" | "server" | "libraries" | "services" | "card" | "tasks" | "access" | "ready";
 
@@ -74,6 +75,12 @@ export function FirstSteps({
     setAt(index);
     setBehind((was) => Math.max(was, index));
   };
+  /* The back key of a phone goes back a step, as the button does, until the
+     first, rather than leaving the steps half done. */
+  useBackClosesIt(() => {
+    goTo(at - 1);
+    return at - 1 > 1;
+  }, at > 1);
 
   return (
     <div className="sectioned first-steps">
