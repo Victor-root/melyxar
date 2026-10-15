@@ -74,7 +74,9 @@ class BarShades(private val activity: ComponentActivity, private val page: View)
     private fun lookUnderTheBars() {
         val window = activity.window.decorView
         val bars = ViewCompat.getRootWindowInsets(window)?.getInsets(WindowInsetsCompat.Type.systemBars()) ?: return
-        if (window.width == 0 || window.height == 0) {
+        // Out of sight, the window has nothing to look at, and no bars of its
+        // own to colour either.
+        if (window.windowVisibility != View.VISIBLE || window.width == 0 || window.height == 0) {
             return
         }
         if (bars.top > 0) {
@@ -92,16 +94,23 @@ class BarShades(private val activity: ComponentActivity, private val page: View)
     @RequiresApi(Build.VERSION_CODES.O)
     private fun lookAt(strip: Rect, seen: (darkIcons: Boolean) -> Unit) {
         val shrunk = createBitmap(LOOK_ACROSS, LOOK_DOWN)
-        PixelCopy.request(activity.window, strip, shrunk, { result ->
-            if (result == PixelCopy.SUCCESS) {
-                val points = IntArray(LOOK_ACROSS * LOOK_DOWN)
-                shrunk.getPixels(points, 0, LOOK_ACROSS, 0, 0, LOOK_ACROSS, LOOK_DOWN)
-                if (!film) {
-                    seen(wantsDarkIcons(points))
+        try {
+            PixelCopy.request(activity.window, strip, shrunk, { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    val points = IntArray(LOOK_ACROSS * LOOK_DOWN)
+                    shrunk.getPixels(points, 0, LOOK_ACROSS, 0, 0, LOOK_ACROSS, LOOK_DOWN)
+                    if (!film) {
+                        seen(wantsDarkIcons(points))
+                    }
                 }
-            }
+                shrunk.recycle()
+            }, beat)
+        } catch (_: IllegalArgumentException) {
+            // The window let go of what it draws on as the application left
+            // the screen, between the look above and this one: nothing to
+            // see, and the next drawing looks again.
             shrunk.recycle()
-        }, beat)
+        }
     }
 
     private fun show(statusDark: Boolean? = null, navigationDark: Boolean? = null) {
