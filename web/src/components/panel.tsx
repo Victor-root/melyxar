@@ -325,6 +325,8 @@ export function Picker<T extends string>({
   onPick,
   label,
   disabled,
+  icon,
+  fieldWording,
 }: {
   value: T;
   /** Each option as it is kept, and as it is read. */
@@ -332,6 +334,10 @@ export function Picker<T extends string>({
   onPick: (value: T) => void;
   label: string;
   disabled?: boolean;
+  /** Drawn ahead of the value, for a field standing alone with no label. */
+  icon?: ReactNode;
+  /** What the shut field reads, when shorter than the line in the list. */
+  fieldWording?: string;
 }) {
   const [open, setOpen] = useState(false);
   const field = useRef<HTMLButtonElement>(null);
@@ -404,7 +410,7 @@ export function Picker<T extends string>({
     };
   }, [open]);
 
-  const shown = options.find(([option]) => option === value)?.[1] ?? "";
+  const shown = fieldWording ?? options.find(([option]) => option === value)?.[1] ?? "";
 
   /* Up and down walk the lines, the way every list anybody has used does. */
   const walk = (event: React.KeyboardEvent) => {
@@ -433,8 +439,9 @@ export function Picker<T extends string>({
         disabled={disabled}
         onClick={() => setOpen((was) => !was)}
       >
+        {icon}
         <span className="picker-value">{shown}</span>
-        <ChevronDownIcon size={16} />
+        <ChevronDownIcon size={16} className="picker-arrow" />
       </button>
       {open &&
         createPortal(

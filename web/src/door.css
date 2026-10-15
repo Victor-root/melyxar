@@ -1022,9 +1022,14 @@ img.door-mark {
 }
 
 .door-settings .picker svg {
+  width: 16px;
+  height: 16px;
+  color: inherit;
+}
+
+.door-settings .picker .picker-arrow {
   width: 14px;
   height: 14px;
-  color: inherit;
 }
 
 .door-credits {
