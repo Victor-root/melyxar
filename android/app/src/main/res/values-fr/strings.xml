@@ -107,4 +107,12 @@
     <string name="tv_counted">%1$s (%2$d)</string>
     <string name="tv_letters">Aller à une lettre</string>
     <string name="tv_mark_watched">Vu</string>
+    <string name="tv_person_born">Naissance</string>
+    <string name="tv_person_born_age">%1$s (%2$d ans)</string>
+    <string name="tv_person_died">Décès</string>
+    <string name="tv_person_died_age">%1$s (à %2$d ans)</string>
+    <string name="tv_person_birthplace">Lieu de naissance</string>
+    <string name="tv_person_no_biography">Pas encore de biographie.</string>
+    <string name="tv_person_films">Films</string>
+    <string name="tv_person_series">Séries</string>
 </resources>

@@ -66,4 +66,28 @@ class ReadableTest {
         assertNull(languageName("und", Locale.FRENCH))
         assertNull(languageName(null, Locale.FRENCH))
     }
+
+    @Test
+    fun countsTheYearsUpToTheBirthday() {
+        assertEquals(40, yearsBetween("1985-03-12", "2025-03-12"))
+        assertEquals(39, yearsBetween("1985-03-12", "2025-03-11"))
+        assertEquals(39, yearsBetween("1985-03-12", "2025-02-28"))
+        assertNull(yearsBetween("1985", "2025-03-12"))
+    }
+
+    @Test
+    fun writesADayWithItsMonthInWords() {
+        assertEquals("12 mars 1985", readableDay("1985-03-12", Locale.FRENCH))
+        assertEquals("March 12, 1985", readableDay("1985-03-12", Locale.US))
+        assertNull(readableDay("1985-3-12", Locale.FRENCH))
+    }
+
+    @Test
+    fun writesTodayAsTheServerWritesADay() {
+        val day = java.util.Calendar.getInstance().apply {
+            clear()
+            set(2026, 0, 5)
+        }
+        assertEquals("2026-01-05", todayOf(day))
+    }
 }
