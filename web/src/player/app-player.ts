@@ -56,7 +56,11 @@ export interface Told {
   duration: number | null;
   /** How far the film is held ahead, in seconds from its beginning. */
   buffered: number;
+  /** Not paused, as a video element means it: still true while it waits
+   *  for the film to arrive. */
   playing: boolean;
+  /** Whether the film is moving right now. */
+  advancing: boolean;
   ended: boolean;
   seeking: boolean;
   width: number;
@@ -69,8 +73,8 @@ export interface Told {
   /** Why it stopped, when it could not play. */
   error: string | null;
   /** What happened since it last spoke, named as a video element names it:
-   *  `loadedmetadata`, `playing`, `pause`, `seeked`, `waiting`, `ended`,
-   *  `error`. */
+   *  `loadedmetadata`, `play`, `playing`, `pause`, `seeked`, `waiting`,
+   *  `ended`, `error`. */
   events: string[];
 }
 

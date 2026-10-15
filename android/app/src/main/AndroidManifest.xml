@@ -25,11 +25,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Turning the phone or changing its theme must not reload the
-             interface: the page keeps where it is and what it plays. -->
+        <!-- Turning the phone, changing its theme or putting the film in a
+             window of its own must not reload the interface: the page keeps
+             where it is and what it plays. -->
         <activity
             android:name=".web.WebActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
-            android:exported="false" />
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true" />
     </application>
 </manifest>
