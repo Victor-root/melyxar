@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +34,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -44,14 +47,17 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
+import app.melyxar.server.Thumbnails
 import app.melyxar.server.Track
 import app.melyxar.server.Work
 import app.melyxar.tv.clock
@@ -62,14 +68,22 @@ import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.shadowRaised
 import app.melyxar.tv.soundName
 import app.melyxar.tv.speakersName
 import kotlinx.coroutines.delay
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 /** How often the clock and the bar move while the controls are up. */
 private const val TICK_MS = 250L
+
+/** How wide the picture over the bar is, and how far above it it stands. */
+private val PREVIEW_ACROSS = 240.dp
+private val PREVIEW_GAP = 10.dp
 
 /** Every number of the player keeps its width as it changes. */
 private val Times = TextStyle(
@@ -163,8 +177,10 @@ fun Controls(
 }
 
 /**
- * Where the film is, the remote's arrows stepping it back and on while the
- * remote is on the bar.
+ * Where the film is. While the remote is on the bar its arrows take it along,
+ * the film's picture there shown above it as the web shows it under the hand,
+ * and the film goes there once the remote rests or the middle button is
+ * pressed.
  */
 @Composable
 private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: Modifier) {
@@ -172,8 +188,23 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val thick by animateDpAsState(if (lit > 0.5f) 14.dp else 10.dp, label = "bar")
-    val done = length?.takeIf { it > 0 }?.let { (at / it).toFloat().coerceIn(0f, 1f) } ?: 0f
-    val buffered = length?.takeIf { it > 0 }?.let { (playback.player.bufferedPosition / 1000.0 / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+    var target by remember { mutableStateOf<Double?>(null) }
+    var moves by remember { mutableIntStateOf(0) }
+
+    fun settle() {
+        target?.let(playback::goTo)
+        target = null
+    }
+
+    LaunchedEffect(moves) {
+        if (target != null) {
+            delay(SCRUB_SETTLES_MS)
+            settle()
+        }
+    }
+    val shareOf = { seconds: Double -> length?.takeIf { it > 0 }?.let { (seconds / it).toFloat().coerceIn(0f, 1f) } ?: 0f }
+    val done = shareOf(target ?: at)
+    val buffered = shareOf(playback.player.bufferedPosition / 1000.0)
     Box(
         modifier = modifier
             .height(32.dp)
@@ -181,13 +212,21 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
                 if (event.type != KeyEventType.KeyDown) {
                     return@onPreviewKeyEvent false
                 }
-                when (event.key) {
-                    Key.DirectionLeft -> playback.withStep(-10)
-                    Key.DirectionRight -> playback.withStep(10)
+                val by = when (event.key) {
+                    Key.DirectionLeft -> -1
+                    Key.DirectionRight -> 1
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                        settle()
+                        return@onPreviewKeyEvent true
+                    }
                     else -> return@onPreviewKeyEvent false
                 }
+                val moved = (target ?: at) + by * scrubStep(event.nativeKeyEvent.repeatCount)
+                target = moved.coerceIn(0.0, length ?: moved.coerceAtLeast(0.0))
+                moves += 1
                 true
             }
+            .onFocusChanged { if (!it.isFocused) settle() }
             .focusable(interactionSource = interaction)
             .drawBehind {
                 val line = thick.toPx()
@@ -206,7 +245,45 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
                     )
                 }
             },
-    )
+    ) {
+        target?.let { Preview(it, done, playback.plan?.thumbnails, Modifier.matchParentSize()) }
+    }
+}
+
+/**
+ * The picture of the film where the bar was taken, and its time under it,
+ * standing over that place of the bar and never past either of its ends.
+ */
+@Composable
+private fun Preview(seconds: Double, share: Float, thumbnails: Thumbnails?, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val shape = RoundedCornerShape(8.dp)
+    Column(
+        modifier = modifier.layout { measurable, constraints ->
+            val shown = measurable.measure(Constraints())
+            val half = shown.width / 2
+            val along = (share * constraints.maxWidth).roundToInt().coerceIn(half, max(half, constraints.maxWidth - half))
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                shown.place(along - half, -shown.height - PREVIEW_GAP.roundToPx())
+            }
+        },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        thumbnails?.let {
+            Thumbnail(
+                it,
+                seconds,
+                PREVIEW_ACROSS,
+                Modifier
+                    .boxShadow(shape, palette.shadowRaised)
+                    .clip(shape)
+                    .background(Color.Black)
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), shape),
+            )
+        }
+        Text(clock(seconds), style = Times, color = palette.text)
+    }
 }
 
 /** A button of the player: its icon alone, lit in the accent when the remote

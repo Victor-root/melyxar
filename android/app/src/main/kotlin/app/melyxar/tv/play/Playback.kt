@@ -324,9 +324,12 @@ class Playback(
         }
     }
 
-    fun withStep(seconds: Int) {
-        val to = (player.currentPosition + seconds * 1000L).coerceAtLeast(0)
-        player.seekTo(length?.let { to.coerceAtMost((it * 1000).toLong()) } ?: to)
+    fun withStep(seconds: Int) = goTo(this.seconds + seconds)
+
+    /** Takes the film to [seconds], never before its start nor past its end. */
+    fun goTo(seconds: Double) {
+        val to = seconds.coerceAtLeast(0.0)
+        player.seekTo((length?.let { to.coerceAtMost(it) } ?: to).times(1000).toLong())
     }
 
     fun toggle() {
