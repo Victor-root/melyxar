@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -77,7 +78,13 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             }
             Brand(onClick = { chrome.go(Place.Home) })
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Everything at this end on one piece of glass, as on the web: this
+        // end is what is pressed, the other is where one is.
+        Row(
+            modifier = Modifier.height(46.dp).glassPiece().padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             // The song playing, while one is.
             if (LocalListening.current.queue.current != null) {
                 BarButton(Icons.Music) { chrome.go(Place.NowPlaying) }
@@ -85,6 +92,8 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, edges: 
             BarButton(Icons.Search) { chrome.go(Place.Search) }
             BarButton(Icons.Heart) { chrome.go(Place.Listed(Shortlist.Favourites)) }
             BarButton(Icons.Clock) { chrome.go(Place.Listed(Shortlist.WatchLater)) }
+            // A rule between who is here and everything that is not.
+            Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
             Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
         }
     }
@@ -133,7 +142,8 @@ private fun Brand(onClick: () -> Unit) {
 }
 
 /** A way somewhere from the bar, as the web's: the search, the favourites,
- *  the list to watch later. */
+ *  the list to watch later; an icon on the bar's glass, lit as the logo is
+ *  when the remote comes to it. */
 @Composable
 private fun BarButton(icon: ImageVector, onClick: () -> Unit) {
     val palette = LocalPalette.current
@@ -141,8 +151,9 @@ private fun BarButton(icon: ImageVector, onClick: () -> Unit) {
     val lit by litBy(interaction)
     Box(
         modifier = Modifier
-            .size(46.dp)
-            .glassPiece(CircleShape)
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(palette.accent.copy(alpha = 0.22f * lit))
             .rim(CircleShape, palette.accentBright, 2.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -160,11 +171,12 @@ private fun Account(modifier: Modifier) {
     val lit by litBy(interaction)
     Row(
         modifier = modifier
-            .height(46.dp)
-            .glassPiece()
+            .height(38.dp)
+            .clip(PillShape)
+            .background(palette.accent.copy(alpha = 0.22f * lit))
             .rim(PillShape, palette.accentBright, 2.dp) { lit }
             .clickable(interaction, indication = null, onClick = chrome.changeProfile)
-            .padding(start = 18.dp, end = 6.dp),
+            .padding(start = 12.dp, end = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -178,7 +190,7 @@ private fun Account(modifier: Modifier) {
             modifier = Modifier.widthIn(max = 150.dp),
         )
         Box(Modifier.clip(RoundedCornerShape(7.dp))) {
-            Face(chrome.account.name, chrome.account.avatar, 34.dp)
+            Face(chrome.account.name, chrome.account.avatar, 32.dp)
         }
     }
 }
