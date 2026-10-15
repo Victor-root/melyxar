@@ -1,0 +1,183 @@
+package app.melyxar.tv.door
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.melyxar.R
+import app.melyxar.server.Account
+import app.melyxar.server.Api
+import app.melyxar.server.KeptSession
+import app.melyxar.server.Refusal
+import app.melyxar.tv.look.AccentButton
+import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.TvField
+import kotlinx.coroutines.launch
+import java.io.IOException
+
+/**
+ * The password of a profile, typed once on this television: from then on the
+ * profile opens by choosing it. With no profile named, the name is typed too.
+ */
+@Composable
+fun Knock(
+    api: Api,
+    known: String?,
+    avatar: String?,
+    client: String,
+    onIn: (KeptSession, Account) -> Unit,
+    onClose: () -> Unit,
+) {
+    val palette = LocalPalette.current
+    var name by remember { mutableStateOf(known ?: "") }
+    var password by remember { mutableStateOf("") }
+    var asking by remember { mutableStateOf(false) }
+    var refusal by remember { mutableStateOf<String?>(null) }
+    val shake = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val first = remember { FocusRequester() }
+    BackHandler(onBack = onClose)
+
+    val wrong = stringResource(R.string.tv_refused_wrong)
+    val generic = stringResource(R.string.tv_refused_generic)
+    val resources = LocalResources.current
+
+    fun signIn() {
+        if (asking || name.isBlank() || password.isEmpty()) {
+            return
+        }
+        asking = true
+        refusal = null
+        scope.launch {
+            try {
+                val (account, token) = api.signIn(name.trim(), password, client)
+                // Only a nicer line in the list of devices: not worth failing for.
+                runCatching { api.signedInAs(token).nameTheDevice() }
+                onIn(KeptSession(account.name, token), account)
+            } catch (refused: Refusal) {
+                refusal = when {
+                    refused.waitSeconds != null ->
+                        resources.getQuantityString(R.plurals.tv_refused_held_back, refused.waitSeconds, refused.waitSeconds)
+                    refused.signedOut -> wrong
+                    else -> generic
+                }
+                password = ""
+                shake.animateTo(
+                    0f,
+                    keyframes {
+                        durationMillis = 240
+                        -4f at 60
+                        2f at 160
+                    },
+                )
+            } catch (_: IOException) {
+                refusal = generic
+            } finally {
+                asking = false
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(palette.ground.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val shape = RoundedCornerShape(18.dp)
+        Column(
+            modifier = Modifier
+                .width(440.dp)
+                // The remote stays in the panel until it is closed.
+                .focusProperties { onExit = { cancelFocusChange() } }
+                .focusGroup()
+                .graphicsLayer { translationX = shake.value.dp.toPx() }
+                .dropShadow(shape) {
+                    radius = 14.dp.toPx()
+                    spread = 2.dp.toPx()
+                    color = palette.accentGlow
+                }
+                .clip(shape)
+                .background(palette.surfaceRaised)
+                .background(palette.accent.copy(alpha = 0.10f))
+                .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+                .padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (known != null) {
+                Face(known, avatar, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
+                Text(
+                    stringResource(R.string.tv_password_of, known),
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.text,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                TvField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = stringResource(R.string.tv_name),
+                    onDone = {},
+                    modifier = Modifier.focusRequester(first),
+                )
+            }
+            TvField(
+                value = password,
+                onValueChange = {
+                    password = it
+                    refusal = null
+                },
+                placeholder = stringResource(R.string.tv_password),
+                onDone = ::signIn,
+                secret = true,
+                enabled = !asking,
+                modifier = if (known != null) Modifier.focusRequester(first) else Modifier,
+            )
+            refusal?.let { Text(it, color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
+            AccentButton(
+                text = stringResource(if (asking) R.string.tv_signing_in else R.string.tv_sign_in),
+                onClick = ::signIn,
+                icon = null,
+            )
+            Text(
+                stringResource(R.string.tv_password_once),
+                fontSize = 13.sp,
+                color = palette.textFaint,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+    LaunchedEffect(Unit) { first.requestFocus() }
+}

@@ -1,0 +1,69 @@
+package app.melyxar.tv.look
+
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.melyxar.theme.Inter
+import app.melyxar.theme.Palette
+import app.melyxar.theme.paletteOf
+
+/*
+ * How the television looks: the web interface's tokens (`theme.css`), a CSS
+ * pixel of the computer taken for a point of the television's screen, which
+ * is 960 points across. Seen from the sofa, that is the computer's interface
+ * at twice its size on a 1080p screen, which is what reads well from there.
+ */
+
+/** The account's colours, which every piece of the television reads. */
+val LocalPalette = staticCompositionLocalOf { paletteOf() }
+
+/** The way everything moves on the web: `--ease`. */
+val Ease = CubicBezierEasing(0.22f, 0.61f, 0.36f, 1f)
+
+/** `--quick`, for colours and rims. */
+fun <T> quick(): TweenSpec<T> = tween(120, easing = Ease)
+
+/** `--calm`, for sizes and fades. */
+fun <T> calm(): TweenSpec<T> = tween(240, easing = Ease)
+
+/** The margin a television keeps clear of its edges, where some screens cut. */
+val Gutter = 48.dp
+
+/** Between two cards of a row, and between two rows. */
+val CardGap = 14.dp
+val SectionGap = 34.dp
+
+/** A card standing up, 2:3, and one lying down, 16:9. */
+val PosterWidth = 132.dp
+val WideWidth = 230.dp
+
+val CardShape = RoundedCornerShape(10.dp)
+val ControlShape = RoundedCornerShape(8.dp)
+val PillShape = RoundedCornerShape(percent = 50)
+
+/** How much a chosen card or tile grows. */
+const val FOCUS_GROWTH = 1.06f
+
+@Composable
+fun TvLook(palette: Palette, content: @Composable () -> Unit) {
+    CompositionLocalProvider(
+        LocalPalette provides palette,
+        LocalTextStyle provides TextStyle(
+            fontFamily = Inter,
+            fontWeight = FontWeight.Normal,
+            fontSize = 15.sp,
+            lineHeight = 22.sp,
+            color = palette.text,
+        ),
+        content = content,
+    )
+}
