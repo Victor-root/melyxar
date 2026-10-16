@@ -6,7 +6,10 @@
  * machine is the same choice on the next.
  */
 
+import { useState } from "react";
 import type { Backdrop, HeaderButton } from "../../api";
+import { appIcon } from "../../app-icon";
+import type { AppIcon, LauncherIcon } from "../../app-icon";
 import { LanguagePicker } from "../../components/language-picker";
 import { ColourPicker } from "../../components/colour-picker";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
@@ -139,7 +142,32 @@ function OnAPhone() {
           ]}
         />
       </Setting>
+      {appIcon && <IconOfTheApp icon={appIcon} />}
     </Panel>
+  );
+}
+
+/** The icon the application shows in this phone's launcher. */
+function IconOfTheApp({ icon }: { icon: AppIcon }) {
+  const { t } = useSettings();
+  const [shown, setShown] = useState<LauncherIcon>(() => icon.current());
+
+  return (
+    <Setting label={t("settings.app_icon")} why={t("settings.app_icon_why")}>
+      <Picker<LauncherIcon>
+        label={t("settings.app_icon")}
+        value={shown}
+        onPick={(chosen) => {
+          icon.choose(chosen);
+          setShown(chosen);
+        }}
+        options={[
+          ["light", t("app_icon.light")],
+          ["dark", t("app_icon.dark")],
+          ["clear", t("app_icon.clear")],
+        ]}
+      />
+    </Setting>
   );
 }
 
