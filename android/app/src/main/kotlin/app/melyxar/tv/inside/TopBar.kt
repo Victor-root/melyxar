@@ -325,6 +325,9 @@ private fun Modifier.songPlayed(): Modifier {
  *  is: faint and wide outside, stronger close in. */
 private val GLOW = listOf(6f to 0.10f, 4f to 0.16f, 2.5f to 0.24f)
 
+/** The room round the account's menu its shadow spreads into. */
+private val MENU_SHADOW = 40.dp
+
 /** The most waiting the bell counts before it says "more". */
 private const val MOST_COUNTED = 99
 
@@ -360,7 +363,7 @@ private fun Account(modifier: Modifier) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 150.dp),
                 )
-                Clock(palette.textSoft)
+                Clock(palette.text, 14.sp, FontWeight.SemiBold)
             }
             Box(Modifier.clip(RoundedCornerShape(7.dp))) {
                 Face(chrome.account.name, chrome.account.avatar, 32.dp)
@@ -369,9 +372,11 @@ private fun Account(modifier: Modifier) {
         if (open) {
             val places = chrome.buttons.menu.mapNotNull(::barPlace)
             val close = { open = false }
+            // The window of the menu holds its shadow too, or the shadow
+            // stops square at the window's edge.
             Popup(
                 alignment = Alignment.TopEnd,
-                offset = with(LocalDensity.current) { IntOffset(0, 46.dp.roundToPx()) },
+                offset = with(LocalDensity.current) { IntOffset(MENU_SHADOW.roundToPx(), (46.dp - MENU_SHADOW).roundToPx()) },
                 onDismissRequest = close,
                 properties = PopupProperties(focusable = true),
             ) {
@@ -381,6 +386,8 @@ private fun Account(modifier: Modifier) {
                     chosen = null,
                     onChoose = { at -> places.getOrNull(at)?.press?.invoke(chrome) ?: chrome.changeProfile() },
                     onClose = close,
+                    modifier = Modifier.padding(start = MENU_SHADOW, end = MENU_SHADOW, top = MENU_SHADOW, bottom = MENU_SHADOW + 16.dp),
+                    icons = places.map { it.icon } + Icons.Leave,
                 )
             }
         }

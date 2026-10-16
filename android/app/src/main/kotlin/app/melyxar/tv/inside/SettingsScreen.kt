@@ -36,7 +36,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Opening
@@ -142,25 +141,7 @@ fun SettingsScreen(sessions: Sessions) {
             LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
                 item("top") {
                     Box(Modifier.head(head, "top")) {
-                        TopBar()
-                    }
-                }
-                item("title") {
-                    ReadingColumn(Modifier.head(head, "title")) {
-                        Row(
-                            modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Glyph(Icons.Gear, palette.accentBright, 26.dp)
-                            Text(
-                                stringResource(R.string.tv_settings),
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.02).em,
-                                color = palette.text,
-                            )
-                        }
+                        TopBar { BarTitle(Icons.Gear, stringResource(R.string.tv_settings)) }
                     }
                 }
                 if (chosen == null) {

@@ -56,7 +56,7 @@ fun AccentButton(
             .boxShadow(ControlShape, BoxShadow(palette.accentGlow, blur = 16.dp, y = 4.dp))
             .clip(ControlShape)
             .background(palette.accent)
-            .rim(ControlShape, palette.accentContrast, 2.5.dp) { lit }
+            .rim(ControlShape, palette.accentContrast, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 26.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -84,7 +84,7 @@ fun PlainButton(
             .clip(ControlShape)
             .background(if (lit > 0.5f) palette.surfaceHover else palette.surfaceRaised)
             .border(1.dp, palette.border, ControlShape)
-            .rim(ControlShape, palette.accentBright, 2.dp) { lit }
+            .rim(ControlShape, palette.accentBright, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 26.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -115,7 +115,7 @@ fun RoundMark(
             .clip(CircleShape)
             .background(palette.surfaceRaised.copy(alpha = 0.74f))
             .border(1.dp, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, CircleShape)
-            .rim(CircleShape, palette.accentBright, 2.dp) { lit }
+            .rim(CircleShape, palette.accentBright, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -145,15 +145,17 @@ fun Badge(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** The glass of the bar's pieces: the accent at 22% over the raised surface
- *  at 55%, a rim of the accent and its halo always on. */
+/** The glass of the bar's pieces: the accent at 22% over the raised
+ *  surface, a rim of the accent and its halo always on. Solid on a
+ *  television, where nothing is seen through it: what passes under the bar
+ *  no longer has to be drawn twice. */
 @Composable
 fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
     val palette = LocalPalette.current
     return this
         .boxShadow(shape, palette.shadowCard, BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp))
         .clip(shape)
-        .background(palette.surfaceRaised.copy(alpha = 0.55f))
+        .background(palette.surfaceRaised)
         .background(palette.accent.copy(alpha = 0.22f))
         .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
 }

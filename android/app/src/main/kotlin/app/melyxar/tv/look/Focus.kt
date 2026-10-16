@@ -7,10 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
@@ -37,19 +40,18 @@ fun Modifier.grows(lit: () -> Float, growth: Float = FOCUS_GROWTH) = graphicsLay
     scaleY = scale
 }
 
-/** A rim drawn inside the piece's edge, as the web's inset ring. */
-fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithContent {
-    drawContent()
-    val shown = lit()
-    if (shown > 0f) {
-        val inset = width.toPx() / 2
-        val outline = shape.createOutline(
-            size.copy(width = size.width - 2 * inset, height = size.height - 2 * inset),
-            layoutDirection,
-            this,
-        )
-        drawContext.transform.translate(inset, inset)
-        drawOutline(outline, color, alpha = shown, style = Stroke(width.toPx()))
-        drawContext.transform.translate(-inset, -inset)
+/** A rim drawn inside the piece's edge, as the web's inset ring: the edge
+ *  itself stroked twice as wide and cut to the piece, so it follows every
+ *  curve of the shape exactly. */
+fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val edge = Path().apply { addOutline(outline) }
+    val stroke = Stroke(width.toPx() * 2)
+    onDrawWithContent {
+        drawContent()
+        val shown = lit()
+        if (shown > 0f) {
+            clipPath(edge) { drawOutline(outline, color, alpha = shown, style = stroke) }
+        }
     }
 }
