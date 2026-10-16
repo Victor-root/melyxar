@@ -4,7 +4,6 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /*
  * The server's music, asked as the web's player asks it.
@@ -12,9 +11,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /** How a long list of music is read, a stretch at a time. */
 data class Slice(val offset: Int, val limit: Int)
-
-private fun Api.asking(path: String, also: HttpUrl.Builder.() -> Unit = {}): String =
-    address(path).toHttpUrl().newBuilder().apply(also).build().toString()
 
 private fun HttpUrl.Builder.slice(slice: Slice) {
     addQueryParameter("offset", slice.offset.toString())

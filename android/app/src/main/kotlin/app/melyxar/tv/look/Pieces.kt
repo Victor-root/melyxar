@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
@@ -155,4 +156,19 @@ fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
         .background(palette.surfaceRaised.copy(alpha = 0.55f))
         .background(palette.accent.copy(alpha = 0.22f))
         .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+}
+
+/** The shape of a line of a list of settings or notifications. */
+val LineShape = RoundedCornerShape(12.dp)
+
+/** A line of a list the remote moves down: on the raised surface, lit by
+ *  the accent as the remote comes to it, [lit] from nought to one. */
+@Composable
+fun Modifier.listLine(lit: () -> Float): Modifier {
+    val palette = LocalPalette.current
+    return this
+        .clip(LineShape)
+        .background(palette.surfaceRaised.copy(alpha = 0.55f))
+        .drawBehind { drawRect(palette.accent.copy(alpha = 0.08f + 0.22f * lit())) }
+        .rim(LineShape, palette.accentBright, 1.5.dp, lit)
 }

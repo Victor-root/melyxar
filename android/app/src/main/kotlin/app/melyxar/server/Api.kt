@@ -20,6 +20,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -96,6 +97,13 @@ private data class Failure(val code: String? = null, val details: Details? = nul
 
 @Serializable
 private data class Details(val seconds: Int? = null)
+
+/** Where [path] is asked, with what [also] adds to its query. */
+internal fun Api.asking(path: String, also: HttpUrl.Builder.() -> Unit = {}): String =
+    address(path).toHttpUrl().newBuilder().apply(also).build().toString()
+
+/** A word of the server's live line, and what it carries, as written. */
+data class LiveWord(val name: String, val data: String)
 
 /**
  * One server, asked as one account, or as nobody before anybody has signed
@@ -277,14 +285,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
      * What the server's live line says, word by word, its opening said as
      * "open"; over when the line closes, and failing when it breaks.
      */
-    fun live(): Flow<String> = callbackFlow {
+    fun live(): Flow<LiveWord> = callbackFlow {
         val listening = object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) {
-                trySend("open")
+                trySend(LiveWord("open", ""))
             }
 
             override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                type?.let { trySend(it) }
+                type?.let { trySend(LiveWord(it, data)) }
             }
 
             override fun onClosed(eventSource: EventSource) {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +61,7 @@ import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.notes.LocalNotes
 import java.util.Date
 import kotlinx.coroutines.delay
 
@@ -104,8 +106,9 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: 
             if (LocalListening.current.queue.current != null) {
                 BarButton(Icons.Music) { chrome.go(Place.NowPlaying) }
             }
+            val unread = LocalNotes.current.held.unread
             chrome.buttons.bar.forEach { button ->
-                barPlace(button)?.let { BarButton(it.icon) { it.press(chrome) } }
+                barPlace(button)?.let { BarButton(it.icon, if (button == "notifications") unread else 0) { it.press(chrome) } }
             }
             // A rule between who is here and everything that is not.
             Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
@@ -123,6 +126,7 @@ private fun barPlace(button: String): BarPlace? = when (button) {
     "search" -> BarPlace(Icons.Search, R.string.tv_search) { it.search() }
     "favourites" -> BarPlace(Icons.Heart, R.string.tv_favourites) { it.go(Place.Listed(Shortlist.Favourites)) }
     "watch_later" -> BarPlace(Icons.Clock, R.string.tv_watch_later) { it.go(Place.Listed(Shortlist.WatchLater)) }
+    "notifications" -> BarPlace(Icons.Bell, R.string.tv_notes) { it.go(Place.Notifications) }
     "settings" -> BarPlace(Icons.Gear, R.string.tv_settings) { it.go(Place.Settings) }
     else -> null
 }
@@ -198,24 +202,43 @@ private fun Brand() {
 
 /** A way somewhere from the bar, as the web's: the search, the favourites,
  *  the list to watch later; an icon on the bar's glass, lit as the logo is
- *  when the remote comes to it. */
+ *  when the remote comes to it, with how many are waiting when [count]
+ *  says any are. */
 @Composable
-private fun BarButton(icon: ImageVector, onClick: () -> Unit) {
+private fun BarButton(icon: ImageVector, count: Int = 0, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(palette.accent.copy(alpha = 0.22f * lit))
-            .rim(CircleShape, palette.accentBright, 2.dp) { lit }
-            .clickable(interaction, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
+    Box(Modifier.clickable(interaction, indication = null, onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(palette.accent.copy(alpha = 0.22f * lit))
+                .rim(CircleShape, palette.accentBright, 2.dp) { lit },
+            contentAlignment = Alignment.Center,
+        ) {
+            Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
+        }
+        if (count > 0) {
+            Text(
+                if (count > MOST_COUNTED) "$MOST_COUNTED+" else "$count",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = palette.accentContrast,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-2).dp)
+                    .clip(PillShape)
+                    .background(palette.accent)
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
     }
 }
+
+/** The most waiting the bell counts before it says "more". */
+private const val MOST_COUNTED = 99
 
 /** Whose profile this is; choosing it opens the account's menu: the
  *  buttons it kept off the bar, then the way back to "Who is watching?". */

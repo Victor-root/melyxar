@@ -68,6 +68,13 @@ class ReadableTest {
     }
 
     @Test
+    fun readsTheInstantsTheServerWrites() {
+        assertEquals(86_400_000L, instantOf("1970-01-02T00:00:00Z"))
+        assertEquals(1_000L, instantOf("1970-01-01T00:00:01.25Z"))
+        assertNull(instantOf("1970-01-02"))
+    }
+
+    @Test
     fun countsTheYearsUpToTheBirthday() {
         assertEquals(40, yearsBetween("1985-03-12", "2025-03-12"))
         assertEquals(39, yearsBetween("1985-03-12", "2025-03-11"))
