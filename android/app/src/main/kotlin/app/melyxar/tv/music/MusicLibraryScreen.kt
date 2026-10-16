@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -52,16 +56,16 @@ import app.melyxar.server.listened
 import app.melyxar.server.musicFavourites
 import app.melyxar.server.playlists
 import app.melyxar.server.songs
+import app.melyxar.tv.inside.BarTitle
 import app.melyxar.tv.inside.CardRow
 import app.melyxar.tv.inside.FocusMemory
 import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.OrderButtons
 import app.melyxar.tv.inside.PageHead
 import app.melyxar.tv.inside.Place
-import app.melyxar.tv.inside.RowHead
 import app.melyxar.tv.inside.RestoreFocus
+import app.melyxar.tv.inside.RowHead
 import app.melyxar.tv.inside.ScrollingPage
-import app.melyxar.tv.inside.BarTitle
 import app.melyxar.tv.inside.TopBar
 import app.melyxar.tv.inside.Trouble
 import app.melyxar.tv.inside.firstLineHoldsTheHead
@@ -70,18 +74,15 @@ import app.melyxar.tv.inside.ready
 import app.melyxar.tv.inside.rememberFocusMemory
 import app.melyxar.tv.inside.rememberLoaded
 import app.melyxar.tv.inside.remembered
-import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.GlassBar
 import app.melyxar.tv.look.GlassIcon
 import app.melyxar.tv.look.GlassRule
 import app.melyxar.tv.look.GlassTab
-import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.PlainButton
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -372,10 +373,10 @@ private fun tabContent(
             val newest = rememberLoaded("music:newest:$id", comebacks) { albums(id, "added", false, Slice(0, NEWEST_SHOWN)).items }.value.ready
             val lately = rememberLoaded("music:lately:$id", comebacks) { listened(id, "lately") }.value.ready
             val most = rememberLoaded("music:most:$id", comebacks) { listened(id, "most") }.value.ready
-            val rows = listOf(
-                stringResource(R.string.tv_music_listened_lately) to lately.orEmpty(),
-                stringResource(R.string.tv_music_listened_most) to most.orEmpty(),
-            )
+            val heard = listOf(
+                Heard(stringResource(R.string.tv_music_listened_lately), Icons.History, lately.orEmpty()),
+                Heard(stringResource(R.string.tv_music_listened_most), Icons.Flame, most.orEmpty()),
+            ).filter { it.songs.isNotEmpty() }
             val newestTitle = stringResource(R.string.tv_music_newest)
             // The remote starts on the newest albums, which stand with the
             // tabs at the top of the page: it scrolls once the remote goes
@@ -383,7 +384,7 @@ private fun tabContent(
             return TabContent(newest != null) { spot ->
                 newest?.takeIf { it.isNotEmpty() }?.let { albums ->
                     wide("newest") {
-                        CardRow(newestTitle, Icons.Music, albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter).head(spot.head, "newest")) { album ->
+                        CardRow(newestTitle, Icons.NewAlbum, albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter).head(spot.head, "newest")) { album ->
                             AlbumTile(
                                 album,
                                 onClick = { openAlbum(album.id) },
@@ -394,15 +395,13 @@ private fun tabContent(
                         }
                     }
                 }
-                rows.forEach { (title, songs) ->
-                    if (songs.isNotEmpty()) {
-                        wide("row/$title") {
-                            CardRow(title, Icons.Music, songs, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { song ->
-                                SongTile(
-                                    song,
-                                    onClick = { listening.play(songs, songs.indexOf(song)) },
-                                    modifier = Modifier.remembered(spot.memory, "$title/${song.id}"),
-                                )
+                // What was listened to lately and most, side by side, each
+                // scrolling in its own box, as the web's.
+                if (heard.isNotEmpty()) {
+                    wide("listened") {
+                        Row(Modifier.toTheEdges(Gutter).padding(end = Gutter)) {
+                            heard.forEach { one ->
+                                HeardList(one, spot.memory, onPlay = { at -> listening.play(one.songs, at) }, modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -411,6 +410,34 @@ private fun tabContent(
         }
     }
     return TabContent(true, lay)
+}
+
+/** Songs the account listened to, under their name. */
+private class Heard(val title: String, val icon: ImageVector, val songs: List<Song>)
+
+/** How tall a list of what was listened to stands: its own box, which
+ *  scrolls under the remote as the page does not. */
+private val HEARD_TALL = 430.dp
+
+/** One list of what was listened to: its name, then its songs numbered in
+ *  their order, a press playing them from the one pressed. */
+@Composable
+private fun HeardList(heard: Heard, memory: FocusMemory, onPlay: (Int) -> Unit, modifier: Modifier) {
+    Column(modifier) {
+        RowHead(heard.title, heard.icon)
+        LazyColumn(Modifier.padding(start = Gutter).height(HEARD_TALL)) {
+            itemsIndexed(heard.songs, key = { at, song -> "$at/${song.id}" }) { at, song ->
+                SongLine(
+                    song,
+                    number = "${at + 1}",
+                    playingNow = false,
+                    onClick = { onPlay(at) },
+                    modifier = Modifier.remembered(memory, "${heard.title}/$at"),
+                    withAlbum = false,
+                )
+            }
+        }
+    }
 }
 
 /** A list read a stretch at a time, as tiles, more read as the remote
