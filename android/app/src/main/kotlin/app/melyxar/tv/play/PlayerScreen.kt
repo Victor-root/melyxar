@@ -75,9 +75,11 @@ private val FILM_KEYS = setOf(
     Key.Menu, Key.Info,
 )
 
+/** Whether [event] is an arrow to the side. */
+private fun sideways(event: KeyEvent): Boolean = event.key == Key.DirectionLeft || event.key == Key.DirectionRight
+
 /** Whether [event] is an arrow to the side held down. */
-private fun held(event: KeyEvent): Boolean =
-    (event.key == Key.DirectionLeft || event.key == Key.DirectionRight) && event.nativeKeyEvent.repeatCount > 0
+private fun held(event: KeyEvent): Boolean = sideways(event) && event.nativeKeyEvent.repeatCount > 0
 
 /** What takes the foot of the film in place of the controls. */
 private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast)
@@ -114,6 +116,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     // Away until the film is on its way, so nothing invites a press while
     // it comes.
     var shown by remember { mutableStateOf(false) }
+    /** Whether only the bar is up, as when the arrows step through the film. */
+    var barOnly by remember { mutableStateOf(false) }
     var nudges by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf<Menu?>(null) }
     var left by remember { mutableStateOf<Menu?>(null) }
@@ -168,6 +172,14 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     fun nudge() {
         nudges += 1
         shown = true
+        barOnly = false
+    }
+
+    /** Brings up the bar alone, unless the whole of the controls is up. */
+    fun glimpse() {
+        nudges += 1
+        if (!shown) barOnly = true
+        shown = true
     }
 
     // The bar is drawn a frame after the controls come up: the remote is put
@@ -192,6 +204,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     LaunchedEffect(menu) {
         if (menu == null && left != null) {
             shown = true
+            barOnly = false
             withFrameNanos {}
             memory.restore()
         }
@@ -230,36 +243,39 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     // The television's own: its volume, and anything else
                     // the film has no use for.
                     !in FILM_KEYS -> false
-                    // The controls up with nothing chosen: any arrow comes to
-                    // them. What the film is opens from the buttons only.
-                    // An arrow held to the side, whether the controls are up
-                    // or not, takes the bar along with the film's pictures.
-                    else -> if (held(event) && quietHeld && menu == null && announced == null) {
-                        nudge()
-                        scrubbing = true
-                        true
-                    } else if (shown && quietHeld && menu == null && announced == null) {
-                        when (event.key) {
-                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
-                            Key.Back -> return@onPreviewKeyEvent false
-                            else -> memory.requester(PLAY).requestFocus()
-                        }
-                        nudge()
-                        true
-                    } else if (!shown && announced == null) {
-                        // The controls away, the arrows and the middle button
-                        // act on the film itself.
-                        when (event.key) {
-                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
-                            Key.DirectionLeft -> playback.withStep(-steps.back)
-                            Key.DirectionRight -> playback.withStep(steps.on)
-                            Key.Back -> return@onPreviewKeyEvent false
-                        }
-                        nudge()
-                        true
-                    } else {
+                    // Something chosen on the controls, a list or the next
+                    // episode answers its own keys.
+                    else -> if (!quietHeld || menu != null || announced != null) {
                         nudges += 1
                         false
+                    } else {
+                        when {
+                            // Held to the side, the arrow takes the bar along
+                            // with the film's pictures.
+                            held(event) -> {
+                                glimpse()
+                                scrubbing = true
+                            }
+                            // Pressed to the side with only the bar or nothing
+                            // up, it steps through the film, the bar alone
+                            // saying where it is.
+                            sideways(event) && (!shown || barOnly) -> {
+                                playback.withStep(if (event.key == Key.DirectionLeft) -steps.back else steps.on)
+                                glimpse()
+                            }
+                            event.key == Key.Back -> return@onPreviewKeyEvent false
+                            event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+                                playback.toggle()
+                                nudge()
+                            }
+                            // The controls up with nothing chosen: an arrow
+                            // comes to them; with nothing up, it brings them.
+                            else -> {
+                                if (shown && !barOnly) memory.requester(PLAY).requestFocus()
+                                nudge()
+                            }
+                        }
+                        true
                     }
                 }
             },
@@ -288,6 +304,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 work = work,
                 playing = playing,
                 steps = steps,
+                barOnly = barOnly,
                 memory = memory,
                 onMenu = ::openMenu,
                 onNext = next?.let { { playNext(it) } },
