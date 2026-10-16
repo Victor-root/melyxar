@@ -163,20 +163,6 @@ fun GenreTile(genre: Genre, onClick: () -> Unit, modifier: Modifier = Modifier) 
     modifier = modifier,
 )
 
-/** A song played on its own, as the rows of what was listened to show it:
- *  its cover, its name and its artists. */
-@Composable
-fun SongTile(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier) = Tile(
-    pictures = song.cover,
-    color = null,
-    letter = song.title.take(1),
-    shape = CardShape,
-    title = song.title,
-    under = artistsOf(song.artists),
-    onClick = onClick,
-    modifier = modifier,
-)
-
 /** How wide the cover beside a song in a list is. */
 private val LINE_COVER: Dp = 44.dp
 

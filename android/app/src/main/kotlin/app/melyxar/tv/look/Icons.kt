@@ -87,6 +87,22 @@ object Icons {
             "M13.7 19.4a2 2 0 0 1-3.4 0",
         ),
     )
+    val NewAlbum = outlined(
+        "new-album",
+        paths = arrayOf(
+            "M20.4 12.6A8.4 8.4 0 1 0 12.6 20.4",
+            "M11.1 12a.9.9 0 1 0 1.8 0a.9.9 0 1 0-1.8 0",
+            "M7.4 12a4.6 4.6 0 0 1 4.6-4.6",
+            "M18.6 15.2v6M15.6 18.2h6",
+        ),
+    )
+    val History = outlined("history", paths = arrayOf("M4.2 12a7.8 7.8 0 1 0 2.3-5.5L4.2 8.8", "M4.2 4.6v4.2h4.2M12 8v4l2.8 1.6"))
+    val Flame = outlined(
+        "flame",
+        paths = arrayOf(
+            "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.2-.3-4.3 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.4 1-3 0 1.4 1 2.5 2.5 2.5z",
+        ),
+    )
     val Leave = outlined(
         "leave",
         paths = arrayOf(
