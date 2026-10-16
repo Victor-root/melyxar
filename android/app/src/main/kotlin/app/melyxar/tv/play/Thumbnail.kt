@@ -54,10 +54,15 @@ fun Thumbnail(thumbnails: Thumbnails, seconds: Double, across: Dp, modifier: Mod
     val sheet by rememberSheet(thumbnails, spot.sheet)
     Canvas(modifier.size(across, thumbnails.heightAt(across))) {
         val drawn = sheet ?: return@Canvas
+        // The sheet as it came, which the loader shrinks when it is wider
+        // than it takes: cut in its own pixels, or the cut slides into the
+        // next picture down.
+        val kept = drawn.width.toFloat() / (thumbnails.columns * thumbnails.width)
+        val keptDown = drawn.height.toFloat() / (thumbnails.rows * thumbnails.height)
         drawImage(
             drawn,
-            srcOffset = IntOffset(spot.column * thumbnails.width, spot.row * thumbnails.height),
-            srcSize = IntSize(thumbnails.width, thumbnails.height),
+            srcOffset = IntOffset((spot.column * thumbnails.width * kept).roundToInt(), (spot.row * thumbnails.height * keptDown).roundToInt()),
+            srcSize = IntSize((thumbnails.width * kept).roundToInt(), (thumbnails.height * keptDown).roundToInt()),
             dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
         )
     }
@@ -71,6 +76,8 @@ private fun rememberSheet(thumbnails: Thumbnails, sheet: Int): State<ImageBitmap
     val pictures = LocalPictures.current
     val context = LocalContext.current
     return produceState(null, thumbnails, sheet) {
+        // The sheet before stays out: its pictures are not this one's.
+        value = null
         // Whole, since a thumbnail is cut out of it by its pixels.
         val request = ImageRequest.Builder(context)
             .data(api.address("${thumbnails.url}/$sheet.jpg"))

@@ -185,6 +185,9 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     // The bar is drawn a frame after the controls come up: the remote is put
     // on it then, and the arrow still held runs it.
     var scrubbing by remember { mutableStateOf(false) }
+    // An arrow pressed to the side steps once let go, not as it goes down:
+    // held, it runs the bar instead, without a step before.
+    var stepOnRelease by remember { mutableStateOf<Key?>(null) }
     LaunchedEffect(scrubbing) {
         if (scrubbing) {
             withFrameNanos {}
@@ -221,6 +224,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             .fillMaxSize()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyUp && event.key == stepOnRelease) {
+                    stepOnRelease = null
+                    playback.withStep(if (event.key == Key.DirectionLeft) -steps.back else steps.on)
+                    glimpse()
+                    return@onPreviewKeyEvent true
+                }
                 if (event.type != KeyEventType.KeyDown) {
                     return@onPreviewKeyEvent false
                 }
@@ -253,6 +262,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                             // Held to the side, the arrow takes the bar along
                             // with the film's pictures.
                             held(event) -> {
+                                stepOnRelease = null
                                 glimpse()
                                 scrubbing = true
                             }
@@ -260,7 +270,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                             // up, it steps through the film, the bar alone
                             // saying where it is.
                             sideways(event) && (!shown || barOnly) -> {
-                                playback.withStep(if (event.key == Key.DirectionLeft) -steps.back else steps.on)
+                                stepOnRelease = event.key
                                 glimpse()
                             }
                             event.key == Key.Back -> return@onPreviewKeyEvent false
