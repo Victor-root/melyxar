@@ -106,6 +106,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
     val scope = rememberCoroutineScope()
     val memory = rememberFocusMemory()
     val firstTab = remember { FocusRequester() }
+    val firstTile = remember { FocusRequester() }
     val tabs = TABS.filter { it !in listening.preferences.hiddenTabs }.ifEmpty { listOf("albums") }
     var chosen by rememberSaveable(library.id) { mutableStateOf(tabs.first()) }
     val tab = chosen.takeIf { it in tabs } ?: tabs.first()
@@ -169,7 +170,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
                         )
                     }
                 }
-                content(this, GridSpot(grid, head, memory))
+                content.lay(this, GridSpot(grid, head, memory, firstTile))
             }
         }
         if (picking && ordering != null) {
@@ -183,8 +184,14 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
             )
         }
     }
-    RestoreFocus(memory, firstTab, ready = true)
+    // On the first of what the tab holds when it says where that is, as the
+    // newest albums of "For you" do; on the tabs otherwise.
+    RestoreFocus(memory, firstTile, ready = content.ready, orElse = firstTab)
 }
+
+/** What a tab holds: whether it is read enough to start the remote on it,
+ *  and how it is laid in the grid. */
+private class TabContent(val ready: Boolean, val lay: LazyGridScope.(GridSpot) -> Unit)
 
 /**
  * The albums of one genre of a library, in a grid as the web shows them.
@@ -306,13 +313,13 @@ private fun tabContent(
     albumsDescending: Boolean,
     songOrder: String,
     songsDescending: Boolean,
-): LazyGridScope.(GridSpot) -> Unit {
+): TabContent {
     val chrome = LocalChrome.current
     val listening = LocalListening.current
     val id = library.id
     val openAlbum = { album: String -> chrome.go(Place.Album(album)) }
     val openArtist = { artist: String -> chrome.go(Place.Artist(artist)) }
-    return when (tab) {
+    val lay: LazyGridScope.(GridSpot) -> Unit = when (tab) {
         "albums" -> {
             val list = rememberMusicList("music:albums:$id:$albumOrder:$albumsDescending", comebacks) {
                 albums(id, albumOrder, albumsDescending, it)
@@ -370,11 +377,20 @@ private fun tabContent(
                 stringResource(R.string.tv_music_listened_most) to most.orEmpty(),
             )
             val newestTitle = stringResource(R.string.tv_music_newest)
-            ({ spot ->
+            // The remote starts on the newest albums, which stand with the
+            // tabs at the top of the page: it scrolls once the remote goes
+            // below them.
+            return TabContent(newest != null) { spot ->
                 newest?.takeIf { it.isNotEmpty() }?.let { albums ->
                     wide("newest") {
-                        CardRow(newestTitle, Icons.Music, albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter)) { album ->
-                            AlbumTile(album, onClick = { openAlbum(album.id) }, modifier = Modifier.remembered(spot.memory, "newest/${album.id}"))
+                        CardRow(newestTitle, Icons.Music, albums, key = { it.id }, modifier = Modifier.toTheEdges(Gutter).head(spot.head, "newest")) { album ->
+                            AlbumTile(
+                                album,
+                                onClick = { openAlbum(album.id) },
+                                modifier = Modifier
+                                    .remembered(spot.memory, "newest/${album.id}")
+                                    .then(if (album == albums.first() && spot.firstTile != null) Modifier.focusRequester(spot.firstTile) else Modifier),
+                            )
                         }
                     }
                 }
@@ -391,9 +407,10 @@ private fun tabContent(
                         }
                     }
                 }
-            })
+            }
         }
     }
+    return TabContent(true, lay)
 }
 
 /** A list read a stretch at a time, as tiles, more read as the remote
