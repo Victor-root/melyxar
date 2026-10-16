@@ -197,7 +197,7 @@ class Playback(
                 val asking = asked(TrackChoice.Unsaid)
                 clock.mark("device measured, asking the plan")
                 val first = api.plan(source, asking)
-                clock.mark("plan received: ${first.method}")
+                clock.mark("plan received: ${first.method}, quality held to $quality, because ${first.reasons}")
                 audio = first.chosenAudioId
                 subtitle = first.chosenSubtitleId
                 open(first, from ?: first.resumeFromSeconds ?: 0.0)
