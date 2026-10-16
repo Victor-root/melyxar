@@ -34,6 +34,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
     var stage by remember {
         mutableStateOf(servers.current()?.let { Stage.AtTheDoor(it, startsAlone = true) } ?: Stage.ChoosingServer)
     }
+    val leave = rememberLeaving(onLeave)
     when (val now = stage) {
         Stage.ChoosingServer -> ServerChoice(
             servers = servers,
@@ -41,7 +42,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
                 servers.open(server)
                 stage = Stage.AtTheDoor(server, startsAlone = false)
             },
-            onBack = { servers.current()?.let { stage = Stage.AtTheDoor(it, startsAlone = false) } ?: onLeave() },
+            onBack = { servers.current()?.let { stage = Stage.AtTheDoor(it, startsAlone = false) } ?: leave() },
         )
         is Stage.AtTheDoor -> Door(
             api = remember(now.server) { Api(ServerOrigin(now.server.origin), network, token = null) },
@@ -50,7 +51,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
             startsAlone = now.startsAlone,
             onIn = { api, account, branding -> stage = Stage.In(api, account, branding, now.server) },
             onChangeServer = { stage = Stage.ChoosingServer },
-            onBack = onLeave,
+            onBack = leave,
         )
         is Stage.In -> Inside(
             api = now.api,
@@ -64,7 +65,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
                 sessions.forget(now.api.origin, now.account.name)
                 stage = Stage.AtTheDoor(now.server, startsAlone = false)
             },
-            onLeave = onLeave,
+            onLeave = leave,
         )
     }
 }
