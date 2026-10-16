@@ -140,7 +140,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
     Box(Modifier.fillMaxSize()) {
         ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
             LazyVerticalGrid(
-                columns = GridCells.FixedSize(TileWidth),
+                columns = GridCells.Adaptive(TileWidth),
                 state = grid,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
@@ -195,7 +195,7 @@ fun GenreScreen(library: Library, genre: String, comebacks: Int) {
     }
     ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
         LazyVerticalGrid(
-            columns = GridCells.FixedSize(TileWidth),
+            columns = GridCells.Adaptive(TileWidth),
             state = grid,
             contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
@@ -205,7 +205,7 @@ fun GenreScreen(library: Library, genre: String, comebacks: Int) {
             wide("top") {
                 Column(Modifier.head(head, "top")) {
                     // The grid keeps the page's margin already.
-                    TopBar(edges = 0.dp)
+                    TopBar(inset = Gutter)
                     Text(
                         genre,
                         fontSize = 28.sp,
@@ -254,7 +254,7 @@ private fun Head(
     val palette = LocalPalette.current
     Column {
         // The grid keeps the page's margin already.
-        TopBar(edges = 0.dp)
+        TopBar(inset = Gutter)
         Row(
             modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,

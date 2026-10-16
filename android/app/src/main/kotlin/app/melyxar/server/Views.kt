@@ -57,6 +57,10 @@ data class Preferences(
     val backdrop: String = "light",
     /** Which painting of light, from one. */
     val backdropLight: Int = 1,
+    /** Every button of the bar and of the account's menu, in the order both
+     *  show them, and those shown on the bar. */
+    val headerButtons: List<String> = emptyList(),
+    val buttonsInTheBar: List<String> = listOf("search", "favourites", "watch_later", "notifications"),
 )
 
 /** A work as every row and grid shows it. */

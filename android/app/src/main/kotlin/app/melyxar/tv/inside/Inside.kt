@@ -31,6 +31,7 @@ import app.melyxar.server.Account
 import app.melyxar.server.Api
 import app.melyxar.server.Branding
 import app.melyxar.server.Library
+import app.melyxar.server.Preferences
 import app.melyxar.theme.USUAL_ACCENT
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.parseHex
@@ -123,6 +124,8 @@ class Chrome(
      *  anywhere but home. */
     val canGoBack: Boolean,
     val changeProfile: () -> Unit,
+    /** What the account chose to have on the bar and in its menu. */
+    val buttons: BarButtons,
 ) {
     fun play(play: Play) = go(Place.Playing(play))
 }
@@ -224,6 +227,7 @@ fun Inside(
             },
             canGoBack = trail.size > 1,
             changeProfile = onChangeProfile,
+            buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),
         )
         // Its page over home, as if opened from Melyxar's own row.
         LaunchedEffect(opening) {

@@ -221,7 +221,7 @@ fun CardGrid(
     Box(modifier.fillMaxSize()) {
         ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
             LazyVerticalGrid(
-                columns = GridCells.FixedSize(if (lying) WideWidth else PosterWidth),
+                columns = GridCells.Adaptive(if (lying) WideWidth else PosterWidth),
                 state = grid,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),

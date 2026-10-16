@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -89,8 +90,11 @@ fun WorkCard(
             .clickable(interaction, indication = null, onClick = onClick),
     ) {
         Box(
+            // As wide as what holds it, which a grid stretches to fill its
+            // lines as the web's does.
             modifier = Modifier
-                .size(across, down)
+                .fillMaxWidth()
+                .aspectRatio(across / down)
                 .grows({ lit })
                 // What a card rests on, giving way to its halo as it lights.
                 .boxShadow(CardShape, *palette.shadowTile) { 1f - lit }

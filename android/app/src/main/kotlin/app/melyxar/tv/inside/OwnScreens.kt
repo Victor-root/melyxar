@@ -93,7 +93,7 @@ fun FolderPage(work: Work, memory: FocusMemory, first: FocusRequester) {
     ) {
         Column {
             // The grid keeps the page's margin already.
-            TopBar(edges = 0.dp)
+            TopBar(inset = Gutter)
             Row(
                 modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,

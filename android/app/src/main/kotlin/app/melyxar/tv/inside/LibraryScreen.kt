@@ -39,6 +39,7 @@ import app.melyxar.server.Library
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
+import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
@@ -123,7 +124,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
         ) {
             Column {
                 // The grid keeps the page's margin already.
-                TopBar(edges = 0.dp)
+                TopBar(inset = Gutter)
                 Row(
                     modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
