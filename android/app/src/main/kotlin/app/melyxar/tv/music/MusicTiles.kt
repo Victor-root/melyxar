@@ -183,14 +183,15 @@ private val LINE_COVER: Dp = 44.dp
 /**
  * A song in a list, as the web's: its number or its cover, its name and its
  * artists, its album when the list is not one album's, and how long it
- * lasts; the one playing marked in the accent.
+ * lasts; the one playing marked in the accent. Without [onClick], only
+ * shown, the remote passing it by.
  */
 @Composable
 fun SongLine(
     song: Song,
     number: String?,
     playingNow: Boolean,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     withAlbum: Boolean = true,
 ) {
@@ -204,7 +205,7 @@ fun SongLine(
             .clip(shape)
             .background(palette.accent.copy(alpha = 0.16f * lit))
             .rim(shape, palette.accentBright, 1.5.dp) { lit }
-            .clickable(interaction, indication = null, onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(interaction, indication = null, onClick = onClick) else Modifier)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

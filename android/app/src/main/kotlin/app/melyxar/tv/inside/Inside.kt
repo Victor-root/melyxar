@@ -280,6 +280,10 @@ fun Inside(
             buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),
             here = here,
         )
+        // Music started anew is followed to its page, the queue beside it.
+        LaunchedEffect(listening.begun) {
+            if (listening.begun > 0) chrome.go(Place.NowPlaying)
+        }
         // Its page over home, as if opened from Melyxar's own row.
         LaunchedEffect(opening) {
             opening ?: return@LaunchedEffect

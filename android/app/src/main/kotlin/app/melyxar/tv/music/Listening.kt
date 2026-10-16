@@ -6,6 +6,7 @@ import androidx.annotation.OptIn
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -88,6 +89,11 @@ class Listening(private val context: Context, private val api: Api, private val 
 
     var preferences by mutableStateOf(MusicPreferences())
 
+    /** How many times music was started anew, from songs, an album or a
+     *  library pressed, which the screens follow to the song's page. */
+    var begun by mutableIntStateOf(0)
+        private set
+
     /** The deck the song playing is on. */
     private var deck = 0
 
@@ -146,6 +152,7 @@ class Listening(private val context: Context, private val api: Api, private val 
             return
         }
         start(playing(songs, first, shuffle, queue.repeat))
+        begun += 1
     }
 
     /** Plays a whole library, in the order of its albums or shuffled. */

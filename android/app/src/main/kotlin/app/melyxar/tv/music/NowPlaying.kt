@@ -76,7 +76,8 @@ fun NowPlayingScreen() {
     val palette = LocalPalette.current
     val song = listening.queue.current
     val first = remember { FocusRequester() }
-    var side by rememberSaveable { mutableStateOf(Side.Queue) }
+    // On the queue for music started anew, on the side left otherwise.
+    var side by rememberSaveable(listening.begun) { mutableStateOf(Side.Queue) }
     Column(Modifier.fillMaxSize()) {
         TopBar()
         if (song == null) {
@@ -139,8 +140,8 @@ private enum class Side(@param:StringRes val label: Int) {
     Lyrics(R.string.tv_music_lyrics),
 }
 
-/** The song playing and what comes after it, any of which a press plays at
- *  once. */
+/** The song playing and what comes after it, only shown: the player's
+ *  buttons are what moves along it. */
 @Composable
 private fun Coming(listening: Listening, modifier: Modifier) {
     val queue = listening.queue
@@ -151,7 +152,7 @@ private fun Coming(listening: Listening, modifier: Modifier) {
                 queue.songs[place],
                 number = if (at == 0) null else "$at",
                 playingNow = at == 0,
-                onClick = { if (at > 0) listening.jumpTo(queue.at + at) },
+                onClick = null,
             )
         }
     }
