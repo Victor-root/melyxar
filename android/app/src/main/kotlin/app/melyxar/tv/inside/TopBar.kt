@@ -2,11 +2,12 @@ package app.melyxar.tv.inside
 
 import android.text.format.DateFormat
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.MarqueeSpacing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -30,7 +32,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -57,7 +58,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -258,27 +258,22 @@ private fun BarLine(modifier: Modifier, first: FocusRequester?, title: (@Composa
 @Composable
 private fun Announced(song: Song, onMeasured: (Long) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
-    var room by remember { mutableIntStateOf(0) }
-    var wide by remember { mutableIntStateOf(0) }
+    val run = rememberScrollState()
     val speed = with(LocalDensity.current) { NAME_RUNS.toPx() }
-    LaunchedEffect(room, wide) {
-        if (room > 0 && wide > 0) onMeasured(saidForMs(wide, room, speed))
+    // Once the glass has measured the name: said for as long as it runs,
+    // then run along to its end, and left there.
+    LaunchedEffect(song.id) {
+        val beyond = snapshotFlow { run.maxValue }.first { it != Int.MAX_VALUE }
+        onMeasured(saidForMs(beyond, speed))
+        if (beyond > 0) {
+            delay(RUN_WAITS_MS)
+            run.animateScrollTo(beyond, tween(runForMs(beyond, speed).toInt(), easing = LinearEasing))
+        }
     }
     Row(modifier.padding(start = 5.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(song)
-        // Once round, and gone when it is: the glass it runs in, then the
-        // name as long as it is.
         Row(
-            Modifier
-                .padding(start = 12.dp)
-                .onSizeChanged { room = it.width }
-                .basicMarquee(
-                    iterations = 1,
-                    initialDelayMillis = RUN_WAITS_MS.toInt(),
-                    spacing = MarqueeSpacing.fractionOfContainer(RUN_GAP),
-                    velocity = NAME_RUNS,
-                )
-                .onSizeChanged { wide = it.width },
+            Modifier.padding(start = 12.dp).horizontalScroll(run, enabled = false),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(song.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1)

@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +30,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
@@ -43,7 +47,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
@@ -88,10 +92,17 @@ fun NowPlayingScreen() {
             modifier = Modifier.weight(1f).padding(start = Gutter, end = Gutter, top = 22.dp),
             horizontalArrangement = Arrangement.spacedBy(48.dp),
         ) {
-            Column(Modifier.width(COVER), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // The cover gives up its room to the words under it, which are
+            // all shown, as the web's: a long name makes it smaller.
+            Column(
+                Modifier.width(COVER).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 Box(
                     Modifier
-                        .size(COVER)
+                        .weight(1f, fill = false)
+                        .aspectRatio(1f, matchHeightConstraintsFirst = true)
                         .boxShadow(CardShape, palette.shadowRaised)
                         .clip(CardShape)
                         .background(palette.surfaceRaised),
@@ -104,12 +115,11 @@ fun NowPlayingScreen() {
                     lineHeight = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = palette.text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 12.dp),
                 )
-                Text(artistsOf(song.artists), fontSize = 16.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                song.album?.let { Text(it.name, fontSize = 14.sp, color = palette.textFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Text(artistsOf(song.artists), fontSize = 16.sp, color = palette.textSoft, textAlign = TextAlign.Center)
+                song.album?.let { Text(it.name, fontSize = 14.sp, color = palette.textFaint, textAlign = TextAlign.Center) }
             }
             Column(Modifier.weight(1f)) {
                 GlassBar {
@@ -140,23 +150,29 @@ private enum class Side(@param:StringRes val label: Int) {
     Lyrics(R.string.tv_music_lyrics),
 }
 
-/** The song playing and what comes after it, only shown: the player's
- *  buttons are what moves along it. */
+/** The whole queue, as the web's: each song by its place in it, those
+ *  played faded, the one playing in the accent and brought to the top;
+ *  only shown, the player's buttons being what moves along it. */
 @Composable
 private fun Coming(listening: Listening, modifier: Modifier) {
     val queue = listening.queue
-    val list = rememberLazyListState()
+    val list = rememberLazyListState(initialFirstVisibleItemIndex = queue.at)
+    LaunchedEffect(queue.at) { list.animateScrollToItem(queue.at) }
     LazyColumn(state = list, modifier = modifier) {
-        itemsIndexed(queue.order.drop(queue.at), key = { at, place -> "$at/$place" }) { at, place ->
+        itemsIndexed(queue.order, key = { at, place -> "$at/$place" }) { at, place ->
             SongLine(
                 queue.songs[place],
-                number = if (at == 0) null else "$at",
+                number = "${at + 1}",
                 onClick = null,
+                modifier = if (at < queue.at) Modifier.alpha(PLAYED) else Modifier,
                 afterAnother = at > 0,
             )
         }
     }
 }
+
+/** How faded a song already played stands in the queue. */
+private const val PLAYED = 0.5f
 
 /** The buttons that lead the music, laid as the phone's player lays them:
  * the large disc that plays and pauses in the middle, a step back and on
