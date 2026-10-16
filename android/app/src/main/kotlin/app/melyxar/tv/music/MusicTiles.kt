@@ -10,11 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
@@ -23,11 +23,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,6 +50,7 @@ import app.melyxar.theme.parseHex
 import app.melyxar.tv.clock
 import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.CardShape
+import app.melyxar.tv.look.ControlShape
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
@@ -54,6 +60,7 @@ import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
+import app.melyxar.tv.look.shadowCard
 import app.melyxar.tv.look.shadowTile
 
 /** How wide a tile of music is: an album, an artist, a playlist, a genre. */
@@ -219,15 +226,22 @@ fun NowDisc(now: Now, modifier: Modifier = Modifier) {
 /** How wide the disc that marks the song playing is. */
 private val NOW_DISC = 30.dp
 
-/** How wide the cover beside a song in a list is. */
+/** How tall a song's line stands at least, and how wide its button, its
+ *  number, its cover and its length are, as the web's. */
+private val LINE_TALL = 56.dp
+private val LINE_LEAD = 40.dp
+private val LINE_NUMBER = 28.dp
 private val LINE_COVER: Dp = 44.dp
+private val LINE_LENGTH = 52.dp
 
 /**
- * A song in a list, as the web's: its number or its cover, its name and its
- * artists, its album when the list is not one album's, and how long it
- * lasts; the one playing marked in the accent, its disc in the lead with
- * the bars of the song playing, or the sign of play while it is paused.
- * Without [onClick], only shown, the remote passing it by.
+ * A song in a list, as the web's full line: the button that plays it, its
+ * number, its album's cover, its name over its artists, its album when the
+ * list is not one album's, and how long it lasts; a fine line of the accent
+ * between it and the one before when [afterAnother]. The one playing wears
+ * the disc of the accent in place of the button, its bars while it plays,
+ * and its name in the accent. Without [onClick], only shown, the remote
+ * passing it by.
  */
 @Composable
 fun SongLine(
@@ -236,53 +250,88 @@ fun SongLine(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     withAlbum: Boolean = true,
+    afterAnother: Boolean = false,
 ) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    val shape = RoundedCornerShape(10.dp)
     val now = rememberNow { it.id == song.id }
+    val playing = now != Now.Other
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(palette.accent.copy(alpha = 0.16f * lit))
-            .rim(shape, palette.accentBright, 1.5.dp) { lit }
+            .heightIn(min = LINE_TALL)
+            .then(if (afterAnother) Modifier.drawBehind { lineBetween(palette.accent) } else Modifier)
+            .clip(ControlShape)
+            .background(palette.accent.copy(alpha = 0.26f * lit))
+            .rim(ControlShape, palette.accent.copy(alpha = 0.45f), 1.dp) { lit }
             .then(if (onClick != null) Modifier.clickable(interaction, indication = null, onClick = onClick) else Modifier)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(Modifier.width(LINE_COVER), contentAlignment = Alignment.Center) {
-            when {
-                now != Now.Other -> NowDisc(now)
-                number != null -> Text(number, fontSize = 14.sp, color = palette.textFaint)
-                else -> Box(Modifier.size(LINE_COVER).clip(RoundedCornerShape(6.dp)).background(palette.surfaceRaised)) {
-                    ServerPicture(song.cover, LINE_COVER, Modifier.fillMaxSize())
-                }
+        Box(Modifier.width(LINE_LEAD), contentAlignment = Alignment.Center) {
+            if (playing) {
+                NowDisc(now)
+            } else {
+                Glyph(Icons.Play, if (lit > 0.5f) palette.accentBright else palette.textSoft, 18.dp)
             }
         }
-        Column(Modifier.weight(1f)) {
+        number?.let {
+            Text(
+                it,
+                fontSize = 14.sp,
+                fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (playing) palette.accentBright else palette.textFaint,
+                modifier = Modifier.width(LINE_NUMBER),
+            )
+        }
+        Box(
+            Modifier
+                .size(LINE_COVER)
+                .boxShadow(ControlShape, palette.shadowCard)
+                .clip(ControlShape)
+                .background(palette.surfaceRaised),
+        ) {
+            ServerPicture(song.cover, LINE_COVER, Modifier.fillMaxSize())
+        }
+        Column(Modifier.weight(2f)) {
             Text(
                 song.title,
                 fontSize = 15.sp,
-                fontWeight = if (now != Now.Other) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (now != Now.Other) palette.accentBright else palette.text,
+                fontWeight = if (playing) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (playing) palette.accentBright else palette.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(artistsOf(song.artists), fontSize = 13.sp, color = palette.textFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(artistsOf(song.artists), fontSize = 13.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (withAlbum) {
             Text(
                 song.album?.name.orEmpty(),
                 fontSize = 13.sp,
-                color = palette.textFaint,
+                color = palette.textSoft,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(0.6f),
+                modifier = Modifier.weight(1.2f),
             )
         }
-        Text(song.seconds?.let { clock(it.toDouble()) }.orEmpty(), fontSize = 13.sp, color = palette.textFaint)
+        Text(
+            song.seconds?.let { clock(it.toDouble()) }.orEmpty(),
+            fontSize = 13.sp,
+            color = palette.textFaint,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(LINE_LENGTH),
+        )
     }
+}
+
+/** The fine line of the accent between two songs of a list, faded at
+ *  both ends, as the web draws it. */
+private fun DrawScope.lineBetween(accent: Color) {
+    val line = accent.copy(alpha = 0.45f)
+    drawRect(
+        Brush.horizontalGradient(0f to Color.Transparent, 0.18f to line, 0.82f to line, 1f to Color.Transparent),
+        size = Size(size.width, 1.dp.toPx()),
+    )
 }

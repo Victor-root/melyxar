@@ -336,6 +336,7 @@ private fun LazyListScope.songLines(songs: List<Song>, all: List<Song>, memory: 
             onClick = { listening.play(all, all.indexOf(song)) },
             modifier = Modifier.padding(horizontal = Gutter).remembered(memory, "song/${song.id}"),
             withAlbum = !numbered,
+            afterAnother = at > 0,
         )
     }
 }

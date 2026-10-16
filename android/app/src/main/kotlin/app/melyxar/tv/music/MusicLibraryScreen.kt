@@ -147,6 +147,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
         else -> null
     }?.let { it.copy(name = sortName(it.order)) }
     val content = tabContent(library, tab, comebacks, albumOrder, albumsDescending, songOrder, songsDescending)
+    val lined = tab == "songs"
     Box(Modifier.fillMaxSize()) {
         ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
             LazyVerticalGrid(
@@ -154,11 +155,12 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
                 state = grid,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                verticalArrangement = Arrangement.spacedBy(26.dp),
+                // The songs a line each against the next, as the web's list.
+                verticalArrangement = Arrangement.spacedBy(if (lined) 0.dp else 26.dp),
                 modifier = Modifier.fillMaxSize().focusTraced("music library"),
             ) {
                 wide("top") {
-                    Box(Modifier.head(head, "top")) {
+                    Box(Modifier.head(head, "top").padding(bottom = if (lined) 26.dp else 0.dp)) {
                         Head(
                             library = library,
                             tabs = tabs,
@@ -433,6 +435,7 @@ private fun HeardList(heard: Heard, memory: FocusMemory, onPlay: (Int) -> Unit, 
                     onClick = { onPlay(at) },
                     modifier = Modifier.remembered(memory, "${heard.title}/$at"),
                     withAlbum = false,
+                    afterAnother = at > 0,
                 )
             }
         }
@@ -560,8 +563,9 @@ private fun LazyGridScope.songLines(
     itemsIndexed(songs, key = { _, song -> "song/${song.id}" }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { at, song ->
         SongLine(
             song,
-            number = null,
+            number = "${at + 1}",
             onClick = { onPlay(songs, at) },
+            afterAnother = at > 0,
             modifier = Modifier
                 .remembered(spot.memory, "song/${song.id}")
                 .onFocusChanged { if (it.isFocused) onReach(at) }
