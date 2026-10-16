@@ -264,4 +264,40 @@
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>
     </plurals>
+    <string name="tv_notes">Notifications</string>
+    <plurals name="tv_notes_and_more">
+        <item quantity="one">%1$s and %2$d more</item>
+        <item quantity="other">%1$s and %2$d more</item>
+    </plurals>
+    <string name="tv_notes_maintenance_at">On %1$s</string>
+    <string name="tv_notes_new_film">New: %1$s</string>
+    <plurals name="tv_notes_new_films">
+        <item quantity="one">%1$d new film</item>
+        <item quantity="other">%1$d new films</item>
+    </plurals>
+    <string name="tv_notes_new_episode">New episode of %1$s</string>
+    <plurals name="tv_notes_new_episodes">
+        <item quantity="one">%1$d new episode of %2$s</item>
+        <item quantity="other">%1$d new episodes of %2$s</item>
+    </plurals>
+    <plurals name="tv_notes_new_many">
+        <item quantity="one">%1$d new title in %2$s</item>
+        <item quantity="other">%1$d new titles in %2$s</item>
+    </plurals>
+    <string name="tv_notes_unreadable">Notification</string>
+    <string name="tv_notes_request_asked">%1$s asked for %2$s</string>
+    <string name="tv_notes_request_accepted">Your request for %1$s was accepted</string>
+    <string name="tv_notes_request_refused">Your request for %1$s was declined</string>
+    <string name="tv_notes_request_added">%1$s is now available to watch</string>
+    <string name="tv_notes_removed_library">Removed from library</string>
+    <string name="tv_notes_removed_library_why">Files remain on disk.</string>
+    <string name="tv_notes_removed_disk">Deleted from library and disk</string>
+    <string name="tv_notes_removed_disk_none">Associated files were already absent from disk.</string>
+    <string name="tv_notes_mark_all_read">Mark all as read</string>
+    <string name="tv_notes_none">No notifications yet.</string>
+    <string name="tv_notes_older">Show older</string>
+    <plurals name="tv_notes_removed_disk_checked">
+        <item quantity="one">File verified after deletion: it is no longer on disk.</item>
+        <item quantity="other">Verified %d files after deletion: none remain on disk.</item>
+    </plurals>
 </resources>

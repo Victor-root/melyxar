@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -53,6 +54,10 @@ import app.melyxar.tv.music.LocalListening
 import app.melyxar.tv.music.MusicLibraryScreen
 import app.melyxar.tv.music.NowPlayingScreen
 import app.melyxar.tv.music.PlaylistScreen
+import app.melyxar.tv.notes.LocalNotes
+import app.melyxar.tv.notes.Notes
+import app.melyxar.tv.notes.NotesCorner
+import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.PlayerScreen
 
 /** A screen of the inside, as the trail of screens holds it. */
@@ -105,6 +110,11 @@ sealed interface Place {
 
     data class Genre(val library: Library, val name: String) : Place {
         override val key = "genre:${library.id}:$name"
+    }
+
+    /** The account's notifications. */
+    data object Notifications : Place {
+        override val key = "notifications"
     }
 
     /** What the account chooses for itself, and this television. */
@@ -191,6 +201,7 @@ fun Inside(
         LocalMarks provides remember(api) { Marks(api, scope, onSignedOut) },
         LocalListening provides listening,
         LocalHearts provides remember(api) { Hearts(api, scope, onSignedOut) },
+        LocalNotes provides remember(api) { Notes(api, scope, onSignedOut) },
     ) {
         val held = rememberLoaded("preferences", comebacks) { preferences() }
         val chosen = held.value.ready
@@ -199,7 +210,8 @@ fun Inside(
         val marks = LocalMarks.current
         // What the libraries hold moved: every screen, the libraries above
         // them included, reads again what it shows.
-        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved)
+        val notes = LocalNotes.current
+        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved, onWord = notes::heard)
         val hearts = LocalHearts.current
         LaunchedEffect(api, comebacks, marks.rowsMoved) {
             hearts.read()
@@ -215,6 +227,7 @@ fun Inside(
         }
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
         val here = trail.last()
+        notes.filmOnScreen = here is Place.Playing
         val kept = rememberSaveableStateHolder()
 
         /** Takes the screens above [depth] off the trail, forgetting them. */
@@ -246,7 +259,7 @@ fun Inside(
                     // One search and one song playing at a time: going to
                     // either again comes back to the one already open, the
                     // search then looking where it was asked to.
-                    is Place.Search, Place.NowPlaying, Place.Settings -> {
+                    is Place.Search, Place.NowPlaying, Place.Settings, Place.Notifications -> {
                         val open = trail.indexOfFirst { it.key == place.key }
                         if (open >= 0) {
                             backTo(open + 1)
@@ -323,6 +336,7 @@ fun Inside(
                             is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
                             Place.NowPlaying -> NowPlayingScreen()
                             Place.Settings -> SettingsScreen(sessions)
+                            Place.Notifications -> NotesScreen()
                             // The film is always shown dark, as the web's player is.
                             is Place.Playing -> key(here.play) {
                                 TvLook(paletteOf(chosenAccent, light = false)) {
@@ -335,6 +349,9 @@ fun Inside(
                             }
                         }
                     }
+                    // Over every screen, the film's included, which only
+                    // what is urgent is said over.
+                    NotesCorner(Modifier.align(Alignment.TopEnd))
                 }
             }
         }

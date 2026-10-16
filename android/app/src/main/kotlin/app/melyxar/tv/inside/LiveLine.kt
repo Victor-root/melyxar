@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import app.melyxar.server.LiveWord
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
@@ -20,13 +21,15 @@ private const val AGAIN_AFTER_MS = 5_000L
  * page holds it: told that what the libraries hold moved, a scan bringing
  * films in or a film named, every screen reads again what it shows. Opened
  * again when it breaks, after which everything is read again too, since
- * nothing was said to it meanwhile.
+ * nothing was said to it meanwhile. Every word, its opening included, is
+ * also told to [onWord], for what follows the account's notifications.
  */
 @Composable
-fun FollowTheLiveLine(onLibrariesMoved: () -> Unit) {
+fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onWord: (LiveWord) -> Unit) {
     val api = LocalServer.current
     val signedOut = LocalSignedOut.current
     val moved by rememberUpdatedState(onLibrariesMoved)
+    val told by rememberUpdatedState(onWord)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(api, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -36,10 +39,11 @@ fun FollowTheLiveLine(onLibrariesMoved: () -> Unit) {
             while (true) {
                 try {
                     api.live().collect { word ->
-                        when (word) {
+                        when (word.name) {
                             "open" -> if (opened) moved() else opened = true
                             "libraries" -> moved()
                         }
+                        told(word)
                     }
                 } catch (refused: Refusal) {
                     if (refused.signedOut) {

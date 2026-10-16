@@ -2,6 +2,11 @@ package app.melyxar.tv.inside
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -11,9 +16,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.unit.dp
+import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Pivot
+
+/** The widest a page read line by line stands, in the middle of the
+ *  screen. */
+private val ReadingWidth = 820.dp
+
+/** What stands in the middle of a page read line by line, as wide as such
+ *  a page is. */
+@Composable
+fun ReadingColumn(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = Gutter), contentAlignment = Alignment.TopCenter) {
+        Column(Modifier.widthIn(max = ReadingWidth).fillMaxWidth()) { content() }
+    }
+}
 
 /** Where the piece the remote is on stands once a page scrolls, as a share
  *  of the screen's height. */

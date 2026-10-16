@@ -269,4 +269,45 @@
         <item quantity="many">%d de secondes</item>
         <item quantity="other">%d secondes</item>
     </plurals>
+    <string name="tv_notes">Notifications</string>
+    <plurals name="tv_notes_and_more">
+        <item quantity="one">%1$s et %2$d de plus</item>
+        <item quantity="many">%1$s et %2$d de plus</item>
+        <item quantity="other">%1$s et %2$d de plus</item>
+    </plurals>
+    <string name="tv_notes_maintenance_at">Le %1$s</string>
+    <string name="tv_notes_new_film">Nouveau : %1$s</string>
+    <plurals name="tv_notes_new_films">
+        <item quantity="one">%1$d nouveau film</item>
+        <item quantity="many">%1$d de nouveaux films</item>
+        <item quantity="other">%1$d nouveaux films</item>
+    </plurals>
+    <string name="tv_notes_new_episode">Nouvel épisode de %1$s</string>
+    <plurals name="tv_notes_new_episodes">
+        <item quantity="one">%1$d nouvel épisode de %2$s</item>
+        <item quantity="many">%1$d de nouveaux épisodes de %2$s</item>
+        <item quantity="other">%1$d nouveaux épisodes de %2$s</item>
+    </plurals>
+    <plurals name="tv_notes_new_many">
+        <item quantity="one">%1$d nouveau titre dans %2$s</item>
+        <item quantity="many">%1$d de nouveaux titres dans %2$s</item>
+        <item quantity="other">%1$d nouveaux titres dans %2$s</item>
+    </plurals>
+    <string name="tv_notes_unreadable">Notification</string>
+    <string name="tv_notes_request_asked">%1$s a demandé %2$s</string>
+    <string name="tv_notes_request_accepted">Votre demande de %1$s a été acceptée</string>
+    <string name="tv_notes_request_refused">Votre demande de %1$s a été refusée</string>
+    <string name="tv_notes_request_added">%1$s est maintenant disponible pour la lecture</string>
+    <string name="tv_notes_removed_library">Retiré de la médiathèque</string>
+    <string name="tv_notes_removed_library_why">Les fichiers restent sur le disque.</string>
+    <string name="tv_notes_removed_disk">Supprimé de la médiathèque et du disque</string>
+    <string name="tv_notes_removed_disk_none">Les fichiers associés étaient déjà absents du disque.</string>
+    <string name="tv_notes_mark_all_read">Tout marquer comme lu</string>
+    <string name="tv_notes_none">Aucune notification pour l’instant.</string>
+    <string name="tv_notes_older">Afficher les plus anciennes</string>
+    <plurals name="tv_notes_removed_disk_checked">
+        <item quantity="one">%d fichier vérifié après suppression : il ne se trouve plus sur le disque.</item>
+        <item quantity="many">%d de fichiers vérifiés après suppression : aucun ne reste sur le disque.</item>
+        <item quantity="other">%d fichiers vérifiés après suppression : aucun ne reste sur le disque.</item>
+    </plurals>
 </resources>

@@ -5,19 +5,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,12 +44,11 @@ import app.melyxar.theme.parseHex
 import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
-import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.litBy
-import app.melyxar.tv.look.rim
+import app.melyxar.tv.look.listLine
 import app.melyxar.tv.music.LocalListening
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -81,9 +77,6 @@ private val REWINDS = listOf(0, 3, 5, 10, 15, 30)
 /** The lengths offered for the music's fades and steps. */
 private val CROSSFADES = listOf(0, 2, 4, 6, 8, 10, 12)
 private val MUSIC_STEPS = listOf(5, 10, 15, 30)
-
-/** The widest the settings stand, in the middle of the screen. */
-private val SETTINGS_WIDTH = 820.dp
 
 /** A setting being chosen, in its list over the page. */
 private class Asked(
@@ -150,7 +143,7 @@ fun SettingsScreen(sessions: Sessions) {
                     }
                 }
                 item("title") {
-                    Settled {
+                    ReadingColumn {
                         Row(
                             modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -368,18 +361,10 @@ private fun subtitleModeName(mode: String): Int = when (mode) {
 /** A line of the settings, under the name of its group when it opens one. */
 private fun LazyListScope.group(key: String, name: Int?, icon: ImageVector?, line: @Composable () -> Unit) {
     item(key) {
-        Settled {
+        ReadingColumn {
             name?.let { GroupHead(stringResource(it), icon) }
             line()
         }
-    }
-}
-
-/** What stands in the middle of the page, as wide as the settings are. */
-@Composable
-private fun Settled(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = Gutter), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = SETTINGS_WIDTH).fillMaxWidth()) { content() }
     }
 }
 
@@ -411,17 +396,13 @@ private fun Line(
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = Modifier
             .padding(top = 8.dp)
             .fillMaxWidth()
             .remembered(memory, key)
             .then(first?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .clip(shape)
-            .background(palette.surfaceRaised.copy(alpha = 0.55f))
-            .background(palette.accent.copy(alpha = 0.08f + 0.22f * lit))
-            .rim(shape, palette.accentBright, 1.5.dp) { lit }
+            .listLine { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
