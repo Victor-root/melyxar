@@ -11,6 +11,7 @@ import type { Backdrop, HeaderButton } from "../../api";
 import { appIcon } from "../../app-icon";
 import type { AppIcon, LauncherGround } from "../../app-icon";
 import { LanguagePicker } from "../../components/language-picker";
+import { Modal } from "../../components/modal";
 import { ColourPicker } from "../../components/colour-picker";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
@@ -147,12 +148,27 @@ function OnAPhone() {
   );
 }
 
-/** The icon the application shows in this phone's launcher: the ground
- *  under the logo, and whether the logo wears the account's accent. */
+/**
+ * The icon the application shows in this phone's launcher: the ground under
+ * the logo, and whether the logo wears the account's accent. Changing it
+ * closes the application on many phones, so nothing changes before the
+ * button is pressed and the warning agreed to.
+ */
 function IconOfTheApp({ icon }: { icon: AppIcon }) {
-  const { t } = useSettings();
+  const { t, accent } = useSettings();
   const [ground, setGround] = useState<LauncherGround>(() => icon.ground());
   const [follows, setFollows] = useState(() => icon.follows());
+  const [followed, setFollowed] = useState(follows);
+  const [warning, setWarning] = useState(false);
+  // Read again on every drawing: applying, or the accent changed above,
+  // draws this again.
+  const closes = icon.differs(ground, follows, accent);
+  const pending = closes || follows !== followed;
+  const apply = () => {
+    setWarning(false);
+    icon.apply(ground, follows, accent);
+    setFollowed(follows);
+  };
 
   return (
     <>
@@ -160,10 +176,7 @@ function IconOfTheApp({ icon }: { icon: AppIcon }) {
         <Picker<LauncherGround>
           label={t("settings.app_icon")}
           value={ground}
-          onPick={(chosen) => {
-            icon.choose(chosen, follows);
-            setGround(chosen);
-          }}
+          onPick={setGround}
           options={[
             ["light", t("app_icon.light")],
             ["dark", t("app_icon.dark")],
@@ -172,15 +185,32 @@ function IconOfTheApp({ icon }: { icon: AppIcon }) {
         />
       </Setting>
       <Setting label={t("settings.app_icon_accent")} why={t("settings.app_icon_accent_why")}>
-        <Toggle
-          label={t("settings.app_icon_accent")}
-          checked={follows}
-          onChange={(chosen) => {
-            icon.choose(ground, chosen);
-            setFollows(chosen);
-          }}
-        />
+        <Toggle label={t("settings.app_icon_accent")} checked={follows} onChange={setFollows} />
       </Setting>
+      {pending && (
+        <Setting label={t("settings.app_icon_apply")} why={t("settings.app_icon_apply_why")}>
+          <button
+            type="button"
+            className="button button-small button-accent"
+            onClick={() => (closes ? setWarning(true) : apply())}
+          >
+            {t("settings.app_icon_apply_button")}
+          </button>
+        </Setting>
+      )}
+      {warning && (
+        <Modal
+          title={t("app_icon.closes_title")}
+          onClose={() => setWarning(false)}
+          footer={
+            <button type="button" className="button button-accent" onClick={apply}>
+              {t("app_icon.closes_confirm")}
+            </button>
+          }
+        >
+          <p>{t("app_icon.closes_what")}</p>
+        </Modal>
+      )}
     </>
   );
 }
