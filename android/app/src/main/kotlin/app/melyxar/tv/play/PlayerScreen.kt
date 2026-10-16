@@ -210,12 +210,11 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     // The television's own: its volume, and anything else
                     // the film has no use for.
                     !in FILM_KEYS -> false
-                    // The controls up with nothing chosen: an arrow comes to
-                    // them, down opens what the film is.
+                    // The controls up with nothing chosen: any arrow comes to
+                    // them. What the film is opens from the buttons only.
                     else -> if (shown && quietHeld && menu == null && announced == null) {
                         when (event.key) {
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
-                            Key.DirectionDown -> if (work != null) openMenu(Menu.Info)
                             Key.Back -> return@onPreviewKeyEvent false
                             else -> memory.requester(PLAY).requestFocus()
                         }
