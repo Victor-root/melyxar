@@ -333,7 +333,6 @@ private fun LazyListScope.songLines(songs: List<Song>, all: List<Song>, memory: 
         SongLine(
             song,
             number = if (numbered) song.track?.toString() ?: "${at + 1}" else null,
-            playingNow = listening.queue.current?.id == song.id,
             onClick = { listening.play(all, all.indexOf(song)) },
             modifier = Modifier.padding(horizontal = Gutter).remembered(memory, "song/${song.id}"),
             withAlbum = !numbered,

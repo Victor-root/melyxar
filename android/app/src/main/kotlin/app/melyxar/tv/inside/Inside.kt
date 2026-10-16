@@ -47,14 +47,17 @@ import app.melyxar.tv.look.TvLook
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.music.AlbumScreen
 import app.melyxar.tv.music.ArtistScreen
+import app.melyxar.tv.music.FollowSongLevels
 import app.melyxar.tv.music.GenreScreen
 import app.melyxar.tv.music.Hearts
 import app.melyxar.tv.music.Listening
 import app.melyxar.tv.music.LocalHearts
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.music.LocalSongLevels
 import app.melyxar.tv.music.MusicLibraryScreen
 import app.melyxar.tv.music.NowPlayingScreen
 import app.melyxar.tv.music.PlaylistScreen
+import app.melyxar.tv.music.SongLevels
 import app.melyxar.tv.notes.LocalNotes
 import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
@@ -205,7 +208,9 @@ fun Inside(
         LocalListening provides listening,
         LocalHearts provides remember(api) { Hearts(api, scope, onSignedOut) },
         LocalNotes provides remember(api) { Notes(api, scope, onSignedOut) },
+        LocalSongLevels provides remember(api) { SongLevels() },
     ) {
+        FollowSongLevels(LocalSongLevels.current)
         val held = rememberLoaded("preferences", comebacks) { preferences() }
         val chosen = held.value.ready
         val preferences = remember(api, held) { AccountPreferences(api, scope, onSignedOut, held) }

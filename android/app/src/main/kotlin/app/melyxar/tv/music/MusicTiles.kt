@@ -5,9 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import app.melyxar.server.Song
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.parseHex
 import app.melyxar.tv.clock
+import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
@@ -76,10 +78,12 @@ private fun Tile(
     under: String?,
     onClick: () -> Unit,
     modifier: Modifier,
+    owns: (Song) -> Boolean = { false },
 ) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val now = rememberNow(owns)
     Column(modifier.width(TileWidth).clickable(interaction, indication = null, onClick = onClick)) {
         Box(
             // As wide as what holds it, which a grid stretches to fill its
@@ -99,6 +103,10 @@ private fun Tile(
                 Text(letter.uppercase(), fontFamily = MelyxarDisplay, fontSize = 52.sp, color = palette.text.copy(alpha = 0.3f))
             } else {
                 ServerPicture(pictures, TileWidth, Modifier.fillMaxSize())
+            }
+            // In a corner of the cover of what is playing, as the web's.
+            if (now == Now.Playing) {
+                NowDisc(now, Modifier.align(Alignment.BottomStart).padding(8.dp))
             }
         }
         Text(
@@ -124,6 +132,7 @@ fun AlbumTile(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier) 
     under = artistsOf(album.artists, album.compilation).ifEmpty { album.year?.toString() },
     onClick = onClick,
     modifier = modifier,
+    owns = { it.album?.id == album.id },
 )
 
 @Composable
@@ -136,6 +145,7 @@ fun ArtistTile(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
     under = pluralStringResource(R.plurals.tv_music_album_count, artist.albums, artist.albums),
     onClick = onClick,
     modifier = modifier,
+    owns = { song -> song.artists.any { it.id == artist.id } },
 )
 
 @Composable
@@ -163,20 +173,66 @@ fun GenreTile(genre: Genre, onClick: () -> Unit, modifier: Modifier = Modifier) 
     modifier = modifier,
 )
 
+/** Where the song playing stands for a piece of music: one of its own
+ *  playing, one of its own paused, or none of its own. */
+enum class Now { Playing, Paused, Other }
+
+/** Where the song playing stands for what [owns] songs; read so that a
+ *  song starting draws again only what it concerns. */
+@Composable
+fun rememberNow(owns: (Song) -> Boolean): Now {
+    val listening = LocalListening.current
+    val now by remember(owns) {
+        derivedStateOf {
+            val song = listening.queue.current
+            when {
+                song == null || !owns(song) -> Now.Other
+                listening.playing -> Now.Playing
+                else -> Now.Paused
+            }
+        }
+    }
+    return now
+}
+
+/** The disc of the accent that marks the song playing: its bars while it
+ *  plays, the sign of play while it is paused. */
+@Composable
+fun NowDisc(now: Now, modifier: Modifier = Modifier) {
+    val palette = LocalPalette.current
+    Box(
+        modifier
+            .size(NOW_DISC)
+            .boxShadow(CircleShape, BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 8.dp, y = 2.dp))
+            .clip(CircleShape)
+            .background(palette.accent),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (now == Now.Playing) {
+            PlayingBars(palette.accentContrast, 13.dp)
+        } else {
+            Glyph(Icons.Play, palette.accentContrast, 16.dp)
+        }
+    }
+}
+
+/** How wide the disc that marks the song playing is. */
+private val NOW_DISC = 30.dp
+
 /** How wide the cover beside a song in a list is. */
 private val LINE_COVER: Dp = 44.dp
 
 /**
  * A song in a list, as the web's: its number or its cover, its name and its
  * artists, its album when the list is not one album's, and how long it
- * lasts; the one playing marked in the accent. Without [onClick], only
- * shown, the remote passing it by.
+ * lasts; the one playing marked in the accent, its disc in the lead with
+ * the bars of the song playing, or the sign of play while it is paused.
+ * Without [onClick], only shown, the remote passing it by.
  */
 @Composable
 fun SongLine(
     song: Song,
     number: String?,
-    playingNow: Boolean,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     withAlbum: Boolean = true,
@@ -185,6 +241,7 @@ fun SongLine(
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val shape = RoundedCornerShape(10.dp)
+    val now = rememberNow { it.id == song.id }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -198,7 +255,7 @@ fun SongLine(
     ) {
         Box(Modifier.width(LINE_COVER), contentAlignment = Alignment.Center) {
             when {
-                playingNow -> Glyph(Icons.Music, palette.accentBright, 20.dp)
+                now != Now.Other -> NowDisc(now)
                 number != null -> Text(number, fontSize = 14.sp, color = palette.textFaint)
                 else -> Box(Modifier.size(LINE_COVER).clip(RoundedCornerShape(6.dp)).background(palette.surfaceRaised)) {
                     ServerPicture(song.cover, LINE_COVER, Modifier.fillMaxSize())
@@ -209,8 +266,8 @@ fun SongLine(
             Text(
                 song.title,
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (playingNow) palette.accentBright else palette.text,
+                fontWeight = if (now != Now.Other) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (now != Now.Other) palette.accentBright else palette.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
