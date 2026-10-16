@@ -228,6 +228,7 @@ fun Inside(
             )
         }
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
+        val pinned = remember { PinnedBar() }
         val here = trail.last()
         notes.filmOnScreen = here is Place.Playing
         val kept = rememberSaveableStateHolder()
@@ -294,7 +295,7 @@ fun Inside(
             }
         }
         TvLook(palette) {
-            CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences) {
+            CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences, LocalPinnedBar provides pinned) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -352,6 +353,7 @@ fun Inside(
                             }
                         }
                     }
+                    PinnedTopBar(Modifier.align(Alignment.TopCenter))
                     // Over every screen, the film's included, which only
                     // what is urgent is said over.
                     NotesCorner(Modifier.align(Alignment.TopEnd))

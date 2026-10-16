@@ -2,6 +2,10 @@ package app.melyxar.tv.inside
 
 import android.text.format.DateFormat
 import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,26 +25,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -74,12 +82,14 @@ import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.music.artistsOf
 import app.melyxar.tv.notes.LocalNotes
 import java.util.Date
 import kotlinx.coroutines.delay
 
-/** How far the bar stands from the top of the screen. */
+/** How far the bar stands from the top of the screen, and how tall it is. */
 private val BarTop = 20.dp
+private val BarHeight = 46.dp
 
 /**
  * The bar at the top of every screen, as the web's less its tabs, which the
@@ -95,17 +105,116 @@ private val BarTop = 20.dp
  */
 @Composable
 fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: Dp = 0.dp, title: (@Composable () -> Unit)? = null) {
+    if (LocalListening.current.queue.current != null) {
+        // While a song plays, the bar is where it is played from: pinned
+        // over the screen rather than scrolled away with it, holding what
+        // this screen would have put in it. Its room here is kept.
+        val pinned = LocalPinnedBar.current
+        val mine = remember { BarShown() }
+        SideEffect {
+            mine.first = first
+            mine.title = title
+        }
+        DisposableEffect(mine) {
+            pinned.shown = mine
+            onDispose { if (pinned.shown === mine) pinned.shown = null }
+        }
+        Spacer(modifier.fillMaxWidth().padding(top = BarTop).height(BarHeight))
+        return
+    }
+    BarLine(modifier.padding(start = Gutter - inset, end = Gutter - inset), first, title)
+}
+
+/** What the screen shown puts in the bar pinned over it. */
+@Stable
+class BarShown {
+    var first by mutableStateOf<FocusRequester?>(null)
+    var title by mutableStateOf<(@Composable () -> Unit)?>(null)
+}
+
+/** The bar pinned over the screens while a song plays, and what the screen
+ *  shown puts in it; nothing when no screen has a bar, as a film's. */
+@Stable
+class PinnedBar {
+    var shown by mutableStateOf<BarShown?>(null)
+}
+
+val LocalPinnedBar = staticCompositionLocalOf { PinnedBar() }
+
+/**
+ * The bar over every screen that has one while a song plays, which the
+ * song is played from, so it never scrolls away; under it for a moment,
+ * as each song starts, what is playing, so the eye finds where it went.
+ */
+@Composable
+fun PinnedTopBar(modifier: Modifier = Modifier) {
+    val shown = LocalPinnedBar.current.shown ?: return
+    if (LocalListening.current.queue.current == null) {
+        return
+    }
+    Box(modifier.fillMaxWidth()) {
+        BarLine(Modifier.padding(horizontal = Gutter), shown.first, shown.title)
+        SongNote(Modifier.align(Alignment.TopEnd).padding(top = BarTop + BarHeight + 12.dp, end = Gutter))
+    }
+}
+
+/** The bar's line: what the screen names in its middle, and its two ends. */
+@Composable
+private fun BarLine(modifier: Modifier, first: FocusRequester?, title: (@Composable () -> Unit)?) {
     val chrome = LocalChrome.current
     Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = Gutter - inset, end = Gutter - inset, top = BarTop),
+        modifier = modifier.fillMaxWidth().padding(top = BarTop),
         contentAlignment = Alignment.Center,
     ) {
         title?.invoke()
         Bar(chrome, first)
     }
 }
+
+/** The song that has just started, said for a moment under the bar. */
+@Composable
+private fun SongNote(modifier: Modifier) {
+    val palette = LocalPalette.current
+    val song = LocalListening.current.queue.current ?: return
+    var said by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(song.id) {
+        said = song.id
+        delay(SONG_NOTE_STAYS_MS)
+        said = null
+    }
+    AnimatedVisibility(
+        visible = said == song.id,
+        enter = fadeIn() + slideInVertically { -it / 2 },
+        exit = fadeOut(),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier
+                .height(BarHeight)
+                .glassPiece()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Glyph(Icons.Music, palette.accentBright, 18.dp)
+            Text(
+                song.title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 320.dp),
+            )
+            artistsOf(song.artists).takeIf { it.isNotEmpty() }?.let {
+                Text(it, fontSize = 14.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
+            }
+        }
+    }
+}
+
+/** How long a song that has just started is said under the bar. */
+private const val SONG_NOTE_STAYS_MS = 5_000L
 
 /** The bar's two ends. */
 @Composable
@@ -117,7 +226,7 @@ private fun Bar(chrome: Chrome, first: FocusRequester?) {
         // end is what is pressed, the other is where one is.
         Row(
             modifier = Modifier
-                .height(46.dp)
+                .height(BarHeight)
                 // Round the glass rather than inside it, so its glow spreads
                 // both ways from the line.
                 .then(if (LocalListening.current.queue.current != null) Modifier.songPlayed() else Modifier)
