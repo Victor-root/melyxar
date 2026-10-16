@@ -96,7 +96,9 @@ fun PlainButton(
     }
 }
 
-/** A round mark of a work: watched, favourite, watch later. */
+/** A round mark of a work: watched, favourite, watch later; [main], the
+ *  large disc of the accent the hand goes to first, as the music player's
+ *  play and pause. */
 @Composable
 fun RoundMark(
     icon: ImageVector,
@@ -105,23 +107,32 @@ fun RoundMark(
     on: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    main: Boolean = false,
 ) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Box(
         modifier = modifier
-            .size(48.dp)
+            .size(if (main) 68.dp else 48.dp)
             .grows({ lit }, 1.06f)
             .clip(CircleShape)
-            .background(palette.surfaceRaised.copy(alpha = 0.74f))
+            .background(if (main) palette.accent else palette.surfaceRaised.copy(alpha = 0.74f))
             .rim(CircleShape, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, 1.dp) { 1f - lit }
-            .rim(CircleShape, palette.accentBright, 3.dp) { lit }
+            .rim(CircleShape, if (main) palette.accentContrast else palette.accentBright, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(icon, if (on) palette.accentBright else palette.text, 22.dp)
+        Glyph(
+            icon,
+            when {
+                main -> palette.accentContrast
+                on -> palette.accentBright
+                else -> palette.text
+            },
+            if (main) 32.dp else 22.dp,
+        )
     }
 }
 

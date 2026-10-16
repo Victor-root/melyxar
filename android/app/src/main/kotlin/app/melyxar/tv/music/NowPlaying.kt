@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -127,7 +128,7 @@ fun NowPlayingScreen() {
             SongWave(Modifier.matchParentSize())
             Column(Modifier.padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 22.dp)) {
                 Rail(listening)
-                Controls(listening, song.id, first, Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))
+                Controls(listening, song.id, first, Modifier.padding(top = 8.dp))
             }
         }
     }
@@ -151,69 +152,81 @@ private fun Coming(listening: Listening, modifier: Modifier) {
                 queue.songs[place],
                 number = if (at == 0) null else "$at",
                 onClick = null,
+                afterAnother = at > 0,
             )
         }
     }
 }
 
-/** The buttons that lead the music, the remote coming into them on the one
- *  that plays and pauses it; it is left where it was as the page opens, on
- *  the bar it was opened from. */
+/** The buttons that lead the music, laid as the phone's player lays them:
+ * the large disc that plays and pauses in the middle, a step back and on
+ * either side of it, then the song before and after; the ways it plays at
+ * the left, the heart and the stop at the right, well apart. The remote
+ * comes into them on the disc; it is left where it was as the page opens,
+ * on the bar it was opened from. */
 @Composable
 private fun Controls(listening: Listening, song: String, first: FocusRequester, modifier: Modifier) {
     val chrome = LocalChrome.current
     val hearts = LocalHearts.current
     val queue = listening.queue
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.focusRestorer(first),
-    ) {
-        RoundMark(Icons.Shuffle, label = stringResource(R.string.tv_music_shuffle), on = queue.shuffle, onClick = listening::shuffle)
-        RoundMark(Icons.PreviousSong, label = stringResource(R.string.tv_music_previous), on = false, onClick = listening::previous)
-        RoundMark(
-            Icons.Restart,
-            label = stringResource(R.string.tv_music_skip_back, listening.preferences.skipBackSeconds),
-            on = false,
-            onClick = { listening.skip(on = false) },
-        )
-        RoundMark(
-            if (listening.playing) Icons.Pause else Icons.Play,
-            label = stringResource(if (listening.playing) R.string.tv_music_pause else R.string.tv_music_play),
-            on = true,
-            onClick = listening::toggle,
-            modifier = Modifier.focusRequester(first),
-        )
-        RoundMark(
-            Icons.StepOn,
-            label = stringResource(R.string.tv_music_skip_on, listening.preferences.skipOnSeconds),
-            on = false,
-            onClick = { listening.skip(on = true) },
-        )
-        RoundMark(Icons.NextSong, label = stringResource(R.string.tv_music_next), on = false, onClick = listening::next)
-        // Stopped, there is nothing left for this page to show.
-        RoundMark(
-            Icons.Stop,
-            label = stringResource(R.string.tv_music_stop),
-            on = false,
-            onClick = {
-                listening.stop()
-                chrome.back()
-            },
-        )
-        RoundMark(
-            if (queue.repeat == Repeat.One) Icons.RepeatOne else Icons.Repeat,
-            label = stringResource(
-                when (queue.repeat) {
-                    Repeat.Off -> R.string.tv_music_repeat_off
-                    Repeat.All -> R.string.tv_music_repeat_all
-                    Repeat.One -> R.string.tv_music_repeat_one
+    val skips = listening.preferences
+    Box(modifier.fillMaxWidth().focusRestorer(first)) {
+        Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            RoundMark(Icons.Shuffle, label = stringResource(R.string.tv_music_shuffle), on = queue.shuffle, onClick = listening::shuffle)
+            RoundMark(
+                if (queue.repeat == Repeat.One) Icons.RepeatOne else Icons.Repeat,
+                label = stringResource(
+                    when (queue.repeat) {
+                        Repeat.Off -> R.string.tv_music_repeat_off
+                        Repeat.All -> R.string.tv_music_repeat_all
+                        Repeat.One -> R.string.tv_music_repeat_one
+                    },
+                ),
+                on = queue.repeat != Repeat.Off,
+                onClick = listening::repeat,
+            )
+        }
+        Row(
+            Modifier.align(Alignment.Center),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RoundMark(Icons.PreviousSong, label = stringResource(R.string.tv_music_previous), on = false, onClick = listening::previous)
+            Step(Icons.Restart, skips.skipBackSeconds, stringResource(R.string.tv_music_skip_back, skips.skipBackSeconds)) { listening.skip(on = false) }
+            RoundMark(
+                if (listening.playing) Icons.Pause else Icons.Play,
+                label = stringResource(if (listening.playing) R.string.tv_music_pause else R.string.tv_music_play),
+                on = true,
+                onClick = listening::toggle,
+                modifier = Modifier.focusRequester(first),
+                main = true,
+            )
+            Step(Icons.StepOn, skips.skipOnSeconds, stringResource(R.string.tv_music_skip_on, skips.skipOnSeconds)) { listening.skip(on = true) }
+            RoundMark(Icons.NextSong, label = stringResource(R.string.tv_music_next), on = false, onClick = listening::next)
+        }
+        Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Heart(song, hearts)
+            // Stopped, there is nothing left for this page to show.
+            RoundMark(
+                Icons.Stop,
+                label = stringResource(R.string.tv_music_stop),
+                on = false,
+                onClick = {
+                    listening.stop()
+                    chrome.back()
                 },
-            ),
-            on = queue.repeat != Repeat.Off,
-            onClick = listening::repeat,
-        )
-        Heart(song, hearts)
+            )
+        }
+    }
+}
+
+/** A step back or on through the song, by [seconds], said inside its arc
+ *  as the film player says it. */
+@Composable
+private fun Step(arc: ImageVector, seconds: Int, label: String, onClick: () -> Unit) {
+    Box(contentAlignment = Alignment.Center) {
+        RoundMark(arc, label = label, on = false, onClick = onClick)
+        Text("$seconds", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalPalette.current.text, modifier = Modifier.padding(top = 3.dp))
     }
 }
 
