@@ -30,8 +30,8 @@ private val ReadingWidth = 820.dp
 /** What stands in the middle of a page read line by line, as wide as such
  *  a page is. */
 @Composable
-fun ReadingColumn(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(horizontal = Gutter), contentAlignment = Alignment.TopCenter) {
+fun ReadingColumn(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(modifier.fillMaxWidth().padding(horizontal = Gutter), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = ReadingWidth).fillMaxWidth()) { content() }
     }
 }

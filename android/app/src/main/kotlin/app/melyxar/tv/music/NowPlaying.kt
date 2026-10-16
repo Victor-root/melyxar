@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.RowHead
+import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.TopBar
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Gutter
@@ -65,6 +66,7 @@ private val COVER = 300.dp
  */
 @Composable
 fun NowPlayingScreen() {
+    val chrome = LocalChrome.current
     val listening = LocalListening.current
     val hearts = LocalHearts.current
     val palette = LocalPalette.current
@@ -136,6 +138,16 @@ fun NowPlayingScreen() {
                         onClick = { listening.skip(on = true) },
                     )
                     RoundMark(Icons.NextSong, label = stringResource(R.string.tv_music_next), on = false, onClick = listening::next)
+                    // Stopped, there is nothing left for this page to show.
+                    RoundMark(
+                        Icons.Stop,
+                        label = stringResource(R.string.tv_music_stop),
+                        on = false,
+                        onClick = {
+                            listening.stop()
+                            chrome.back()
+                        },
+                    )
                     RoundMark(
                         if (queue.repeat == Repeat.One) Icons.RepeatOne else Icons.Repeat,
                         label = stringResource(

@@ -168,16 +168,20 @@ fun Door(
         }
     }
 
-    var started by remember { mutableStateOf(!startsAlone) }
+    val opensOn = remember { sessions.opening(api.origin).who(sessions.last(api.origin)).takeIf { startsAlone } }
+    var started by remember { mutableStateOf(opensOn == null) }
+    /** Whether the door stays undrawn while the television opens on its
+     *  profile by itself: it shows only if that profile asks for something. */
+    var unseen by remember { mutableStateOf(opensOn != null) }
     LaunchedEffect(answer) {
         val now = answer as? Answer.Open ?: return@LaunchedEffect
         if (!started) {
             started = true
-            sessions.opening(api.origin).who(sessions.last(api.origin))
-                ?.takeIf { who -> now.profiles.any { it.name == who } }
-                ?.let { open(it, now.branding) }
+            val who = opensOn?.takeIf { who -> now.profiles.any { it.name == who } }
+            if (who == null) unseen = false else open(who, now.branding)
         }
     }
+    val hidden = unseen && knocking == null && locked == null && answer != Answer.Unreachable
 
     val open = answer as? Answer.Open
     val deviceIsDark = isSystemInDarkTheme()
@@ -185,6 +189,10 @@ fun Door(
         paletteOf(light = wantsLight("server", open?.branding?.defaultTheme ?: "dark", deviceIsDark))
     }
     TvLook(palette) {
+        if (hidden) {
+            Box(Modifier.fillMaxSize().background(LocalPalette.current.ground))
+            return@TvLook
+        }
         CompositionLocalProvider(LocalServer provides api, LocalPictures provides rememberPictures(api)) {
             StageLight {
                 when (val now = answer) {

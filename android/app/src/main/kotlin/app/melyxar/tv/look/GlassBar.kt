@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
@@ -115,6 +116,14 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
 @Composable
 fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
+    GlassRound(label, onClick, modifier) { lit ->
+        Glyph(icon, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
+    }
+}
+
+/** A round press of the piece holding [content], told how lit it is. */
+@Composable
+fun GlassRound(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.(lit: () -> Float) -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Box(
@@ -124,6 +133,6 @@ fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: M
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, 20.dp)
+        content { lit }
     }
 }
