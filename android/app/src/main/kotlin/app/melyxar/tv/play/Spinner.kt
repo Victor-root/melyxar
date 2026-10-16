@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import app.melyxar.tv.look.LocalPalette
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** The ring, against the 48 points it is drawn in on the web: how far out,
@@ -43,8 +44,8 @@ private val SWEEP = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
  * The ring that turns while a film is on its way, as the web player's: a
  * faint track, and over it the accent running round on a wavy edge, growing
  * out of nothing and drawn back in as it turns. Told how far the wait has
- * got, [percent], it stands still and is lit that far round from the top.
- * Only drawn again as it turns.
+ * got, [percent], it is lit that far round from the top, its wave still
+ * running along it. Only drawn again as it turns.
  */
 @Composable
 fun Spinner(modifier: Modifier = Modifier, percent: () -> Float? = { null }) {
@@ -81,18 +82,23 @@ fun Spinner(modifier: Modifier = Modifier, percent: () -> Float? = { null }) {
         modifier.size(52.dp).drawWithCache {
             val scale = size.minDimension / BOX
             val middle = Offset(size.width / 2, size.height / 2)
-            val wave = Path().apply {
-                val steps = WAVES * PIECES
-                for (step in 0 until steps) {
-                    val angle = step.toDouble() / steps * 2 * PI
-                    val out = (RADIUS + AMPLITUDE * sin(WAVES * angle)).toFloat() * scale
+            // The wave from the top round [share] of the ring, turned
+            // [turned] radians, which moves the wave along it.
+            fun Path.wave(share: Float, turned: Double) {
+                val steps = (WAVES * PIECES * share).roundToInt().coerceAtLeast(1)
+                for (step in 0..steps) {
+                    val angle = share * 2 * PI * step / steps
+                    val out = (RADIUS + AMPLITUDE * sin(WAVES * (angle - turned))).toFloat() * scale
                     val x = middle.x + out * cos(angle - PI / 2).toFloat()
                     val y = middle.y + out * sin(angle - PI / 2).toFloat()
                     if (step == 0) moveTo(x, y) else lineTo(x, y)
                 }
+            }
+            val whole = Path().apply {
+                wave(1f, 0.0)
                 close()
             }
-            val measure = PathMeasure().apply { setPath(wave, true) }
+            val measure = PathMeasure().apply { setPath(whole, true) }
             val length = measure.length
             val shown = Path()
             val track = Stroke(2 * scale)
@@ -101,9 +107,14 @@ fun Spinner(modifier: Modifier = Modifier, percent: () -> Float? = { null }) {
                 drawCircle(Color.White.copy(alpha = 0.14f), RADIUS * scale, middle, style = track)
                 val known = percent()
                 if (known != null) {
-                    shown.reset()
-                    measure.getSegment(0f, length * known.coerceIn(0f, 100f) / 100f, shown, true)
-                    drawPath(shown, palette.accentBright, style = line)
+                    // Lit from the top as far as what was measured, the wave
+                    // still running along it, so a long wait reads as work.
+                    val share = known.coerceIn(0f, 100f) / 100f
+                    if (share > 0f) {
+                        shown.reset()
+                        shown.wave(share, turn.value * PI / 180)
+                        drawPath(shown, palette.accentBright, style = line)
+                    }
                     return@onDrawBehind
                 }
                 rotate(turn.value) {
