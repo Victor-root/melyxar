@@ -1,6 +1,9 @@
 package app.melyxar.tv.look
 
 import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * Where a row or a page scrolls the piece the remote comes to: always to the
@@ -19,9 +22,9 @@ class Pivot(
 }
 
 /**
- * Where a row scrolls the piece the remote comes to when the row is short
- * enough to be read at a glance: only as far as it takes to show it whole,
- * [margin] points from the edge, and not at all while it is.
+ * Where a row scrolls the piece the remote comes to: only as far as it takes
+ * to show it whole, [margin] points from the edge, and not at all while it
+ * is, so a row only moves once the remote reaches its end.
  */
 class Nearest(private val margin: Float) : BringIntoViewSpec {
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
@@ -33,4 +36,11 @@ class Nearest(private val margin: Float) : BringIntoViewSpec {
             else -> 0f
         }
     }
+}
+
+/** How every row of the inside scrolls, keeping the page's margin. */
+@Composable
+fun rememberRowScrolling(): Nearest {
+    val margin = with(LocalDensity.current) { Gutter.toPx() }
+    return remember(margin) { Nearest(margin) }
 }

@@ -1,10 +1,12 @@
 package app.melyxar.tv.play
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -43,6 +46,7 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rememberRowScrolling
 
 /** How far apart the marks of a film that names no scenes stand. */
 private const val A_STEP_OF_S = 300.0
@@ -73,6 +77,7 @@ fun chapterAt(chapters: List<Chapter>, at: Double): Int = chapters.indexOfLast {
  * and when it starts, the one playing marked: the remote starts on it, and
  * a press takes the film to the one it is on.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChapterStrip(playback: Playback, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
@@ -96,23 +101,25 @@ fun ChapterStrip(playback: Playback, onClose: () -> Unit, modifier: Modifier = M
             color = palette.text,
             modifier = Modifier.padding(start = Gutter, bottom = 14.dp),
         )
-        LazyRow(
-            state = rememberLazyListState(initialFirstVisibleItemIndex = opening),
-            contentPadding = PaddingValues(horizontal = Gutter),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            itemsIndexed(chapters, key = { _, chapter -> chapter.atSecond }) { at, chapter ->
-                ChapterCard(
-                    chapter = chapter,
-                    name = chapter.title ?: stringResource(R.string.tv_chapter_number, at + 1),
-                    playing = at == playing,
-                    playback = playback,
-                    onClick = {
-                        playback.goTo(chapter.atSecond)
-                        onClose()
-                    },
-                    modifier = if (at == opening) Modifier.focusRequester(start) else Modifier,
-                )
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rememberRowScrolling()) {
+            LazyRow(
+                state = rememberLazyListState(initialFirstVisibleItemIndex = opening),
+                contentPadding = PaddingValues(horizontal = Gutter),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                itemsIndexed(chapters, key = { _, chapter -> chapter.atSecond }) { at, chapter ->
+                    ChapterCard(
+                        chapter = chapter,
+                        name = chapter.title ?: stringResource(R.string.tv_chapter_number, at + 1),
+                        playing = at == playing,
+                        playback = playback,
+                        onClick = {
+                            playback.goTo(chapter.atSecond)
+                            onClose()
+                        },
+                        modifier = if (at == opening) Modifier.focusRequester(start) else Modifier,
+                    )
+                }
             }
         }
     }

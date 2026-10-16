@@ -21,7 +21,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -30,8 +29,8 @@ import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.Pivot
 import app.melyxar.tv.look.SectionGap
+import app.melyxar.tv.look.rememberRowScrolling
 
 /** A row's heading, as the web's: its icon in the accent, then its name. */
 @Composable
@@ -48,8 +47,8 @@ fun RowHead(title: String, icon: ImageVector?, modifier: Modifier = Modifier) {
 }
 
 /**
- * A heading and its cards side by side, scrolled so the card the remote is
- * on stands where the first one did. Coming into the row from above or below
+ * A heading and its cards side by side, scrolled only once the remote
+ * reaches the end of what is shown. Coming into the row from above or below
  * lands on the card it left, or on the first card the first time.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -62,12 +61,11 @@ fun <T> CardRow(
     modifier: Modifier = Modifier,
     card: @Composable (T) -> Unit,
 ) {
-    val lead = with(LocalDensity.current) { Gutter.toPx() }
-    val pivot = remember(lead) { Pivot(lead) }
+    val scrolling = rememberRowScrolling()
     val first = remember { FocusRequester() }
     Column(modifier.padding(bottom = SectionGap)) {
         title?.let { RowHead(it, icon) }
-        CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) {
+        CompositionLocalProvider(LocalBringIntoViewSpec provides scrolling) {
             LazyRow(
                 state = rememberLazyListState(),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = 18.dp),

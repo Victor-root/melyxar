@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -57,7 +56,6 @@ import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.Nearest
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.accentAir
@@ -65,6 +63,7 @@ import app.melyxar.tv.look.accentBloom
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
 import kotlinx.coroutines.flow.first
@@ -125,8 +124,7 @@ fun Band(
     memory: FocusMemory,
 ) {
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
-    val lead = with(LocalDensity.current) { Gutter.toPx() }
-    val nearest = remember(lead) { Nearest(lead) }
+    val nearest = rememberRowScrolling()
     // Coming into the band lands on the tile it left, or on the first.
     val first = remember { FocusRequester() }
     CompositionLocalProvider(LocalBringIntoViewSpec provides nearest) {
