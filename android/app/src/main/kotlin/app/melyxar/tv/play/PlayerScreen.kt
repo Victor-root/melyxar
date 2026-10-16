@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -61,6 +62,7 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /** How long the controls stay up once the remote stops. */
 private const val CONTROLS_FOR_MS = 4_000L
@@ -72,6 +74,10 @@ private val FILM_KEYS = setOf(
     Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
     Key.Menu, Key.Info,
 )
+
+/** Whether [event] is an arrow to the side held down. */
+private fun held(event: KeyEvent): Boolean =
+    (event.key == Key.DirectionLeft || event.key == Key.DirectionRight) && event.nativeKeyEvent.repeatCount > 0
 
 /** What takes the foot of the film in place of the controls. */
 private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast)
@@ -164,6 +170,17 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         shown = true
     }
 
+    // The bar is drawn a frame after the controls come up: the remote is put
+    // on it then, and the arrow still held runs it.
+    var scrubbing by remember { mutableStateOf(false) }
+    LaunchedEffect(scrubbing) {
+        if (scrubbing) {
+            withFrameNanos {}
+            memory.requester(BAR).requestFocus()
+            scrubbing = false
+        }
+    }
+
     /** Opens a list over the film, or closes the one open. */
     fun openMenu(next: Menu?) {
         left = menu
@@ -181,7 +198,10 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     }
 
     // An open list of tracks takes the key first, and closes.
-    BackHandler(onBack = onDone)
+    // With the controls up, the back key only takes them away.
+    BackHandler {
+        if (shown) shown = false else onDone()
+    }
 
     Box(
         modifier = Modifier
@@ -212,7 +232,13 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     !in FILM_KEYS -> false
                     // The controls up with nothing chosen: any arrow comes to
                     // them. What the film is opens from the buttons only.
-                    else -> if (shown && quietHeld && menu == null && announced == null) {
+                    // An arrow held to the side, whether the controls are up
+                    // or not, takes the bar along with the film's pictures.
+                    else -> if (held(event) && quietHeld && menu == null && announced == null) {
+                        nudge()
+                        scrubbing = true
+                        true
+                    } else if (shown && quietHeld && menu == null && announced == null) {
                         when (event.key) {
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
                             Key.Back -> return@onPreviewKeyEvent false
@@ -242,7 +268,17 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         WordsOverFilm(playback, raised = shown, modifier = Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().focusRequester(quiet).onFocusChanged { quietHeld = it.isFocused }.focusable())
         if (waiting && !playback.failed) {
-            Spinner(Modifier.align(Alignment.Center))
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spinner { playback.loading }
+                playback.loading?.let {
+                    Text(
+                        stringResource(R.string.tv_loading_percent, it.roundToInt()),
+                        fontSize = 15.sp,
+                        color = LocalPalette.current.textSoft,
+                        modifier = Modifier.padding(top = 12.dp),
+                    )
+                }
+            }
         }
         // The chapters and the sheets take the foot of the film the controls
         // stand in.

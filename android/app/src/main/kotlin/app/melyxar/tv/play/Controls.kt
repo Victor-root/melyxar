@@ -136,7 +136,7 @@ fun Controls(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(clock(at), style = Times, color = palette.text)
-                SeekBar(at, length, playback, Modifier.weight(1f).remembered(memory, "bar"))
+                SeekBar(at, length, playback, Modifier.weight(1f).remembered(memory, BAR))
                 Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
             }
             Row(
@@ -194,6 +194,10 @@ fun Controls(
 /** The key the play button is remembered under, which the remote is put on
  *  when it first comes into the controls. */
 const val PLAY = "play"
+
+/** The key the bar is remembered under, which an arrow held to the side
+ *  puts the remote on. */
+const val BAR = "bar"
 
 /** What is playing, at the top left: the film's own logo, or its name, and
  *  for an episode which one it is. */

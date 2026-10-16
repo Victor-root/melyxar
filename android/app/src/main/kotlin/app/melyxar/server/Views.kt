@@ -356,6 +356,12 @@ data class WideGamutHandling(
 @Serializable
 data class StreamSession(val id: String, val playlistUrl: String)
 
+/** How far the server has got making a rebuilt film: its step, starting,
+ *  reading, producing or ready, and how much of the first piece a player
+ *  needs is written, from nought to one. */
+@Serializable
+data class Preparation(val step: String = "starting", val firstWritten: Float = 0f)
+
 @Serializable
 data class Heard(val stop: Boolean = false)
 
