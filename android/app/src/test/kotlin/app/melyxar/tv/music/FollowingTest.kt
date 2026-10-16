@@ -58,4 +58,36 @@ class FollowingTest {
         assertEquals(10.5, momentOf(10.0, 3_000), 0.0001)
         assertEquals(10.0, momentOf(10.0, -5), 0.0001)
     }
+
+    @Test
+    fun liftsEachBarByTheLoudestOfItsShareOfTheBands() {
+        val bars = FloatArray(BARS)
+        barsOf(floatArrayOf(0.1f, 0.4f, 0.2f, 0.2f, 0.9f, 0.3f, 0f, 0.5f), bars)
+        assertArrayEquals(floatArrayOf(0.4f, 0.2f, 0.9f, 0.5f), bars, 0.0001f)
+        barsOf(FloatArray(0), bars)
+        assertArrayEquals(FloatArray(BARS), bars, 0.0001f)
+    }
+
+    @Test
+    fun theMeterJumpsUpAtOnceAndFallsSlowly() {
+        val meter = BarMeter()
+        meter.step(floatArrayOf(0f, 0f, 0f, 0f), 33)
+        assertEquals(0.15f, meter.shown[0], 0.001f)
+        meter.step(floatArrayOf(1f, 0f, 0f, 0f), 33)
+        // Up seven tenths of the way from the floor at once.
+        assertEquals(0.15f + 0.85f * 0.7f, meter.shown[0], 0.001f)
+        assertEquals(0.15f, meter.shown[1], 0.001f)
+        meter.step(floatArrayOf(0f, 0f, 0f, 0f), 100)
+        // Down by 1.6 heights a second, never below the floor.
+        assertEquals(0.15f + 0.85f * 0.7f - 0.16f, meter.shown[0], 0.001f)
+    }
+
+    @Test
+    fun keepsBeatsOfItsOwnThereAndBack() {
+        assertEquals(0.25f, ownBeat(0, 0), 0.001f)
+        assertEquals(1f, ownBeat(0, 360), 0.001f)
+        assertEquals(0.85f, ownBeat(0, 900), 0.001f)
+        assertEquals(0.25f, ownBeat(0, 1_800), 0.001f)
+        assertTrue(ownBeat(1, 0) in 0.25f..1f)
+    }
 }

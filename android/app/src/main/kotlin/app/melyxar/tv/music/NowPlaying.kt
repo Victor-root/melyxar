@@ -125,7 +125,7 @@ fun NowPlayingScreen() {
             }
         }
         Box(Modifier.fillMaxWidth()) {
-            SongWave(song.id, Modifier.matchParentSize())
+            SongWave(Modifier.matchParentSize())
             Column(Modifier.padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 22.dp)) {
                 Rail(listening)
                 Controls(listening, song.id, first, Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp))
@@ -152,7 +152,6 @@ private fun Coming(listening: Listening, modifier: Modifier) {
             SongLine(
                 queue.songs[place],
                 number = if (at == 0) null else "$at",
-                playingNow = at == 0,
                 onClick = null,
             )
         }

@@ -340,8 +340,7 @@ private fun tabContent(
                 songs(id, songOrder, songsDescending, it)
             }
             val empty = stringResource(R.string.tv_music_no_song)
-            val playingNow = listening.queue.current?.id
-            pagedSongs(list, empty, playingNow) { songs, at -> listening.play(songs, at) }
+            pagedSongs(list, empty) { songs, at -> listening.play(songs, at) }
         }
         "playlists" -> {
             val loaded = rememberLoaded("music:playlists", comebacks) { playlists() }.value
@@ -431,7 +430,6 @@ private fun HeardList(heard: Heard, memory: FocusMemory, onPlay: (Int) -> Unit, 
                 SongLine(
                     song,
                     number = "${at + 1}",
-                    playingNow = false,
                     onClick = { onPlay(at) },
                     modifier = Modifier.remembered(memory, "${heard.title}/$at"),
                     withAlbum = false,
@@ -467,7 +465,6 @@ private fun <T> paged(
 private fun pagedSongs(
     list: MusicList<Song>,
     empty: String,
-    playingNow: String?,
     onPlay: (List<Song>, Int) -> Unit,
 ): LazyGridScope.(GridSpot) -> Unit {
     var reached by remember(list) { mutableIntStateOf(0) }
@@ -477,7 +474,7 @@ private fun pagedSongs(
     }
     val songs = list.items
     return { spot ->
-        songLines(songs, empty, playingNow, spot, onReach = { reached = it }, onPlay = onPlay)
+        songLines(songs, empty, spot, onReach = { reached = it }, onPlay = onPlay)
     }
 }
 
@@ -513,7 +510,7 @@ fun LazyGridScope.foundMusic(found: FoundMusic, names: FoundNames, empty: String
     }
     if (found.songs.isNotEmpty()) {
         wide("music/songs") { RowHead(names.songs, Icons.Music, Modifier.toTheEdges(Gutter)) }
-        songLines(found.songs, empty = null, listening.queue.current?.id, spot) { songs, at -> listening.play(songs, at) }
+        songLines(found.songs, empty = null, spot) { songs, at -> listening.play(songs, at) }
     }
 }
 
@@ -550,7 +547,6 @@ private fun <T> LazyGridScope.tiles(
 private fun LazyGridScope.songLines(
     songs: List<Song>?,
     empty: String?,
-    playingNow: String?,
     spot: GridSpot,
     onReach: (Int) -> Unit = {},
     onPlay: (List<Song>, Int) -> Unit,
@@ -565,7 +561,6 @@ private fun LazyGridScope.songLines(
         SongLine(
             song,
             number = null,
-            playingNow = song.id == playingNow,
             onClick = { onPlay(songs, at) },
             modifier = Modifier
                 .remembered(spot.memory, "song/${song.id}")
