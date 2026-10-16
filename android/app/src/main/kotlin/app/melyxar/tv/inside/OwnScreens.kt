@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,7 +44,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Work
@@ -75,7 +73,6 @@ private const val CROSSFADE_MS = 600
 @Composable
 fun FolderPage(work: Work, memory: FocusMemory, first: FocusRequester) {
     val chrome = LocalChrome.current
-    val palette = LocalPalette.current
     val notes = work.children.associate { child ->
         child.card.id to child.takeIf { it.card.kind == "folder" }?.let {
             pluralStringResource(R.plurals.tv_item_count, it.childCount, it.childCount)
@@ -91,22 +88,9 @@ fun FolderPage(work: Work, memory: FocusMemory, first: FocusRequester) {
         firstCard = first,
         noteOf = { notes[it.id] },
     ) {
-        Column {
-            // The grid keeps the page's margin already.
-            TopBar(inset = Gutter)
-            Row(
-                modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text(work.title, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, color = palette.text)
-                Text(
-                    pluralStringResource(R.plurals.tv_item_count, work.children.size, work.children.size),
-                    fontSize = 16.sp,
-                    color = palette.textFaint,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
+        // The grid keeps the page's margin already.
+        TopBar(Modifier.padding(bottom = 22.dp), inset = Gutter) {
+            BarTitle(Icons.Camera, work.title, work.children.size)
         }
     }
 }

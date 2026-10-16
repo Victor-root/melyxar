@@ -385,7 +385,7 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
                     BoxShadow(palette.accentDim.copy(alpha = 0.7f), blur = 60.dp, spread = (-12).dp, y = 16.dp),
                 ) { lit }
                 .clip(shape)
-                .rim(shape, palette.text.copy(alpha = 0.1f), 1.dp)
+                .rim(shape, palette.text.copy(alpha = 0.1f), 1.dp) { 1f - lit }
                 .rim(shape, palette.accentBright, 2.dp) { lit },
         ) {
             Face(profile.name, profile.avatar, TILE)

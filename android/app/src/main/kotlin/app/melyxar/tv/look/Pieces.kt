@@ -83,7 +83,8 @@ fun PlainButton(
             .grows({ lit }, BUTTON_GROWTH)
             .clip(ControlShape)
             .background(if (lit > 0.5f) palette.surfaceHover else palette.surfaceRaised)
-            .border(1.dp, palette.border, ControlShape)
+            // Gone under the rim, or its grey shows round it.
+            .rim(ControlShape, palette.border, 1.dp) { 1f - lit }
             .rim(ControlShape, palette.accentBright, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 26.dp, vertical = 12.dp),
@@ -114,7 +115,7 @@ fun RoundMark(
             .grows({ lit }, 1.06f)
             .clip(CircleShape)
             .background(palette.surfaceRaised.copy(alpha = 0.74f))
-            .border(1.dp, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, CircleShape)
+            .rim(CircleShape, if (on) palette.accent.copy(alpha = 0.6f) else palette.border, 1.dp) { 1f - lit }
             .rim(CircleShape, palette.accentBright, 3.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick)
             .semantics { contentDescription = label },
