@@ -80,8 +80,15 @@ suspend fun Api.playlists(): List<PlaylistSummary> = get("/api/v1/music/playlist
 
 suspend fun Api.playlist(id: String): Playlist = get("/api/v1/music/playlists/$id", Playlist.serializer())
 
-suspend fun Api.searchMusic(words: String): FoundMusic =
-    get(asking("/api/v1/music/search") { addQueryParameter("words", words) }, FoundMusic.serializer())
+/** What [words] name in the music, in one [library] or in every one. */
+suspend fun Api.searchMusic(words: String, library: String? = null): FoundMusic =
+    get(
+        asking("/api/v1/music/search") {
+            addQueryParameter("words", words)
+            library?.let { addQueryParameter("library", it) }
+        },
+        FoundMusic.serializer(),
+    )
 
 suspend fun Api.musicPreferences(): MusicPreferences = get("/api/v1/music/preferences", MusicPreferences.serializer())
 

@@ -76,7 +76,9 @@ sealed interface Place {
         override val key = "person:$id"
     }
 
-    data object Search : Place {
+    /** The search, in one [library] when it was asked from that library's
+     *  own pages, everywhere otherwise. */
+    data class Search(val library: Library? = null) : Place {
         override val key = "search"
     }
 
@@ -114,6 +116,15 @@ sealed interface Place {
  *  says, or where the server has it stopped. */
 data class Play(val work: String, val source: String?, val from: Double?)
 
+/** The library whose pages these are, which a search asked from them looks
+ *  in, as the web's does. */
+private val Place.library: Library?
+    get() = when (this) {
+        is Place.Shelf -> library
+        is Place.Genre -> library
+        else -> null
+    }
+
 /** What every screen's top bar shows, and where its pieces lead. */
 class Chrome(
     val branding: Branding,
@@ -126,8 +137,13 @@ class Chrome(
     val changeProfile: () -> Unit,
     /** What the account chose to have on the bar and in its menu. */
     val buttons: BarButtons,
+    /** The screen shown. */
+    val here: Place,
 ) {
     fun play(play: Play) = go(Place.Playing(play))
+
+    /** The search, in the library whose pages these are, if they are. */
+    fun search() = go(Place.Search(here.library))
 }
 
 val LocalChrome = staticCompositionLocalOf<Chrome> { error("no chrome") }
@@ -218,16 +234,23 @@ fun Inside(
                     is Place.Album, is Place.Artist, is Place.Playlist, is Place.Genre,
                     -> trail.add(place)
                     // One search and one song playing at a time: going to
-                    // either again comes back to the one already open.
-                    Place.Search, Place.NowPlaying -> {
-                        val open = trail.indexOf(place)
-                        if (open >= 0) backTo(open + 1) else trail.add(place)
+                    // either again comes back to the one already open, the
+                    // search then looking where it was asked to.
+                    is Place.Search, Place.NowPlaying -> {
+                        val open = trail.indexOfFirst { it.key == place.key }
+                        if (open >= 0) {
+                            backTo(open + 1)
+                            trail[open] = place
+                        } else {
+                            trail.add(place)
+                        }
                     }
                 }
             },
             canGoBack = trail.size > 1,
             changeProfile = onChangeProfile,
             buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),
+            here = here,
         )
         // Its page over home, as if opened from Melyxar's own row.
         LaunchedEffect(opening) {
@@ -259,7 +282,7 @@ fun Inside(
                             }
                             val music = listening.queue.current != null
                             when {
-                                event.key == Key.Search -> chrome.go(Place.Search)
+                                event.key == Key.Search -> chrome.search()
                                 !music -> return@onKeyEvent false
                                 event.key == Key.MediaPlayPause -> listening.toggle()
                                 event.key == Key.MediaNext -> listening.next()
@@ -282,7 +305,7 @@ fun Inside(
                             }
                             is Place.Opened -> WorkScreen(here.work, comebacks)
                             is Place.Person -> PersonScreen(here.id, comebacks)
-                            Place.Search -> SearchScreen(comebacks)
+                            is Place.Search -> SearchScreen(here.library, comebacks)
                             is Place.Listed -> ShortlistScreen(here.list, comebacks)
                             is Place.Album -> AlbumScreen(here.id, comebacks)
                             is Place.Artist -> ArtistScreen(here.id, comebacks)

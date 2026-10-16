@@ -105,7 +105,7 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: 
                 BarButton(Icons.Music) { chrome.go(Place.NowPlaying) }
             }
             chrome.buttons.bar.forEach { button ->
-                barPlace(button)?.let { BarButton(it.icon) { chrome.go(it.place) } }
+                barPlace(button)?.let { BarButton(it.icon) { it.press(chrome) } }
             }
             // A rule between who is here and everything that is not.
             Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
@@ -116,13 +116,13 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: 
 }
 
 /** What a button of the bar shows, its name in the account's menu, and
- *  where it leads. */
-private class BarPlace(val icon: ImageVector, @param:StringRes val name: Int, val place: Place)
+ *  what pressing it does. */
+private class BarPlace(val icon: ImageVector, @param:StringRes val name: Int, val press: (Chrome) -> Unit)
 
 private fun barPlace(button: String): BarPlace? = when (button) {
-    "search" -> BarPlace(Icons.Search, R.string.tv_search, Place.Search)
-    "favourites" -> BarPlace(Icons.Heart, R.string.tv_favourites, Place.Listed(Shortlist.Favourites))
-    "watch_later" -> BarPlace(Icons.Clock, R.string.tv_watch_later, Place.Listed(Shortlist.WatchLater))
+    "search" -> BarPlace(Icons.Search, R.string.tv_search) { it.search() }
+    "favourites" -> BarPlace(Icons.Heart, R.string.tv_favourites) { it.go(Place.Listed(Shortlist.Favourites)) }
+    "watch_later" -> BarPlace(Icons.Clock, R.string.tv_watch_later) { it.go(Place.Listed(Shortlist.WatchLater)) }
     else -> null
 }
 
@@ -263,7 +263,7 @@ private fun Account(modifier: Modifier) {
                     title = chrome.account.name,
                     choices = places.map { stringResource(it.name) } + stringResource(R.string.tv_change_profile),
                     chosen = null,
-                    onChoose = { at -> places.getOrNull(at)?.let { chrome.go(it.place) } ?: chrome.changeProfile() },
+                    onChoose = { at -> places.getOrNull(at)?.press?.invoke(chrome) ?: chrome.changeProfile() },
                     onClose = close,
                 )
             }

@@ -106,6 +106,7 @@
     <string name="tv_play_now">Play now</string>
     <string name="tv_cancel">Cancel</string>
     <string name="tv_search">Search</string>
+    <string name="tv_search_in">Search %1$s</string>
     <string name="tv_search_placeholder">Search for a title</string>
     <string name="tv_search_none">No title matches.</string>
     <string name="tv_search_voice">Search by voice</string>
