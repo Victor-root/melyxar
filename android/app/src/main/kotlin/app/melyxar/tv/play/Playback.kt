@@ -159,6 +159,9 @@ class Playback(
 
     private var stream: StreamSession? = null
     private var reporting: Job? = null
+
+    /** How long the film takes to start, for the debug build's log. */
+    private val clock = StartClock()
     private var keeping: Job? = null
 
     init {
@@ -169,6 +172,7 @@ class Playback(
         if (BuildConfig.DEBUG) {
             // Every format, decoder and output of sound the player takes.
             player.addAnalyticsListener(EventLogger(SOUND_LOG))
+            player.addAnalyticsListener(clock)
         }
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -189,7 +193,11 @@ class Playback(
         })
         scope.launch {
             try {
-                val first = api.plan(source, asked(TrackChoice.Unsaid))
+                clock.mark("screen open, measuring the device")
+                val asking = asked(TrackChoice.Unsaid)
+                clock.mark("device measured, asking the plan")
+                val first = api.plan(source, asking)
+                clock.mark("plan received: ${first.method}")
                 audio = first.chosenAudioId
                 subtitle = first.chosenSubtitleId
                 open(first, from ?: first.resumeFromSeconds ?: 0.0)
@@ -228,7 +236,9 @@ class Playback(
         } else {
             stage = LoadingStage.Opening
             loading = 0f
+            clock.mark("opening a stream on the server")
             api.openStream(source, asked(paintedChoice), at).also {
+                clock.mark("stream opened")
                 stream = it
                 reached(LoadingStage.SessionOpened)
                 countTheWait(it.id)
@@ -239,6 +249,7 @@ class Playback(
             .setUri(address)
             .apply { if (plan.method != "direct_play") setMimeType(MimeTypes.APPLICATION_M3U8) }
             .build()
+        clock.mark("film handed to the player at $at s")
         player.setMediaItem(item, (at * 1000).toLong())
         player.prepare()
         player.play()
