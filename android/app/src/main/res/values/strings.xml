@@ -259,6 +259,9 @@
     <string name="tv_setting_opening">Open on</string>
     <string name="tv_opening_ask">Who is watching? every time</string>
     <string name="tv_opening_last">The last profile used</string>
+    <string name="tv_setting_sound_out">Sound the television cannot decode</string>
+    <string name="tv_sound_decoded">Converted by the server, volume adjustable</string>
+    <string name="tv_sound_passed_on">Sent as it is to the receiver</string>
     <plurals name="tv_seconds">
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>

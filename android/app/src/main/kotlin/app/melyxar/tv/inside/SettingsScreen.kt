@@ -30,6 +30,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +51,8 @@ import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.listLine
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.play.passSoundOn
+import app.melyxar.tv.play.soundPassedOn
 import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -107,6 +110,8 @@ fun SettingsScreen(sessions: Sessions) {
     val scope = rememberCoroutineScope()
     var asked by remember { mutableStateOf<Asked?>(null) }
     var opening by remember { mutableStateOf(sessions.opening(api.origin)) }
+    val context = LocalContext.current
+    var passedOn by remember { mutableStateOf(soundPassedOn(context)) }
     val profiles = rememberLoaded("door:names") { names().names.map { it.name } }.value.ready.orEmpty()
         .plus(sessions.of(api.origin).map { it.name })
         .distinct()
@@ -324,6 +329,17 @@ fun SettingsScreen(sessions: Sessions) {
                         ask(title, openings, names, opening) { chosenOpening ->
                             sessions.openOn(api.origin, chosenOpening)
                             opening = chosenOpening
+                        }
+                    }
+                }
+                group("sound-out", null, null) {
+                    val title = stringResource(R.string.tv_setting_sound_out)
+                    val ways = listOf(false, true)
+                    val names = listOf(stringResource(R.string.tv_sound_decoded), stringResource(R.string.tv_sound_passed_on))
+                    Line("sound-out", title, names[ways.indexOf(passedOn)], memory) {
+                        ask(title, ways, names, passedOn) { passed ->
+                            passSoundOn(context, passed)
+                            passedOn = passed
                         }
                     }
                 }

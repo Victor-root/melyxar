@@ -58,18 +58,19 @@ private val sound = AudioAttributes.Builder()
     .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
     .build()
 
-/** What the device plays, measured once: its decoders and its screen do not
- *  change while it runs. What the sound goes through is read by Media3 at
- *  each film. Asking every decoder what it reads takes long enough to freeze
+/** What the device plays, measured once for each way its sound may go: its
+ *  decoders and its screen do not change while it runs. What the sound goes
+ *  through is read by Media3 at each film. Asking every decoder what it reads takes long enough to freeze
  *  the screen, so it is asked away from the thread that draws it. */
-private var measured: JsonObject? = null
+private val measured = HashMap<Boolean, JsonObject>()
 
 /** What the device plays, held to [quality] as the web's page holds it. */
 private suspend fun profileOf(context: Context, quality: Quality): JsonObject {
-    val device = measured
+    val passedOn = soundPassedOn(context)
+    val device = measured[passedOn]
         ?: withContext(Dispatchers.Default) {
-            Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound)).jsonObject
-        }.also { measured = it }
+            Json.encodeToJsonElement(ClientProfile.serializer(), measuredProfile(context, sound, passedOn)).jsonObject
+        }.also { measured[passedOn] = it }
     val ceiling = listOfNotNull(
         quality.height?.let { "max_height" to JsonPrimitive(it) },
         quality.bitrate?.let { "max_bitrate" to JsonPrimitive(it) },
