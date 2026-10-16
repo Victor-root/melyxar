@@ -87,6 +87,7 @@ object Icons {
             "M10 20.4a2.2 2.2 0 0 0 4 0",
         ),
     )
+    val Stop = solid("stop", 0f, "M7 7h10v10H7Z")
     val Tick = outlined("tick", paths = arrayOf("M5 12.6l4.6 4.6L19 7.4"))
     val Clock = outlined("clock", paths = arrayOf(circle(12f, 12f, 8.6f), "M12 7.4V12l3 1.8"))
     val Info = outlined("info", paths = arrayOf(circle(12f, 12f, 8.8f), "M12 11v5.4", "M12 7.8h.01"))

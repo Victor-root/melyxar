@@ -143,7 +143,7 @@ fun SettingsScreen(sessions: Sessions) {
                     }
                 }
                 item("title") {
-                    ReadingColumn {
+                    ReadingColumn(Modifier.head(head, "title")) {
                         Row(
                             modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -163,7 +163,7 @@ fun SettingsScreen(sessions: Sessions) {
                 if (chosen == null) {
                     return@LazyColumn
                 }
-                group("look", R.string.tv_settings_look, Icons.Eye) {
+                group("look", R.string.tv_settings_look, Icons.Eye, Modifier.head(head, "look")) {
                     val themes = listOf("system", "dark", "light")
                     val themeNames = listOf(R.string.tv_theme_system, R.string.tv_theme_dark, R.string.tv_theme_light).map { stringResource(it) }
                     val title = stringResource(R.string.tv_setting_theme)
@@ -173,7 +173,7 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
-                group("accent", null, null) {
+                group("accent", null, null, Modifier.head(head, "accent")) {
                     val names = ACCENT_NAMES.map { stringResource(it) }
                     val title = stringResource(R.string.tv_setting_accent)
                     val now = chosen.accentColor.lowercase()
@@ -183,7 +183,7 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
-                group("backdrop", null, null) {
+                group("backdrop", null, null, Modifier.head(head, "backdrop")) {
                     val backdrops = listOf("light", "library", "none")
                     val names = listOf(R.string.tv_backdrop_light, R.string.tv_backdrop_library, R.string.tv_backdrop_none).map { stringResource(it) }
                     val title = stringResource(R.string.tv_setting_backdrop)
@@ -194,7 +194,7 @@ fun SettingsScreen(sessions: Sessions) {
                     }
                 }
                 if (chosen.backdrop == "light") {
-                    group("light", null, null) {
+                    group("light", null, null, Modifier.head(head, "light")) {
                         val lights = (1..LIGHT_NAMES.size).toList()
                         val names = LIGHT_NAMES.map { stringResource(it) }
                         val title = stringResource(R.string.tv_setting_backdrop_light)
@@ -358,10 +358,11 @@ private fun subtitleModeName(mode: String): Int = when (mode) {
     else -> R.string.tv_subtitles_smart
 }
 
-/** A line of the settings, under the name of its group when it opens one. */
-private fun LazyListScope.group(key: String, name: Int?, icon: ImageVector?, line: @Composable () -> Unit) {
+/** A line of the settings, under the name of its group when it opens one;
+ *  [modifier] makes it part of the page's head. */
+private fun LazyListScope.group(key: String, name: Int?, icon: ImageVector?, modifier: Modifier = Modifier, line: @Composable () -> Unit) {
     item(key) {
-        ReadingColumn {
+        ReadingColumn(modifier) {
             name?.let { GroupHead(stringResource(it), icon) }
             line()
         }

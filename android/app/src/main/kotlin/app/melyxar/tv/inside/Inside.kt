@@ -147,6 +147,8 @@ class Chrome(
     val account: Account,
     val libraries: List<Library>,
     val go: (Place) -> Unit,
+    /** Takes the screen shown off, back to the one under it. */
+    val back: () -> Unit,
     /** Whether the back key leads to another screen, which it does
      *  anywhere but home. */
     val canGoBack: Boolean,
@@ -270,6 +272,7 @@ fun Inside(
                     }
                 }
             },
+            back = { if (trail.size > 1) backTo(trail.size - 1) },
             canGoBack = trail.size > 1,
             changeProfile = onChangeProfile,
             buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),

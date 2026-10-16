@@ -179,6 +179,7 @@
     <string name="tv_music_play_all">Play all</string>
     <string name="tv_music_pause">Pause</string>
     <string name="tv_music_next">Next</string>
+    <string name="tv_music_stop">Stop</string>
     <string name="tv_music_previous">Previous</string>
     <string name="tv_music_skip_back">Back %1$d s</string>
     <string name="tv_music_skip_on">On %1$d s</string>

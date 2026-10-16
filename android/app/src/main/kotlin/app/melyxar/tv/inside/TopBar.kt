@@ -30,6 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -54,6 +59,7 @@ import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.tv.door.Face
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.GlassIcon
+import app.melyxar.tv.look.GlassRound
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
@@ -113,7 +119,7 @@ private fun Bar(chrome: Chrome, first: FocusRequester?) {
         ) {
             // The song playing, while one is.
             if (LocalListening.current.queue.current != null) {
-                BarButton(Icons.Music, stringResource(R.string.tv_music_now_playing)) { chrome.go(Place.NowPlaying) }
+                PlayingNow { chrome.go(Place.NowPlaying) }
             }
             val unread = LocalNotes.current.held.unread
             chrome.buttons.bar.forEach { button ->
@@ -239,6 +245,35 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
                     .background(palette.accent)
                     .padding(horizontal = 5.dp, vertical = 1.dp),
             )
+        }
+    }
+}
+
+/** The song playing, as the web's bar shows it: its cover in a round, or
+ *  the note of music for one without, ringed by how far it has played. */
+@Composable
+private fun PlayingNow(onClick: () -> Unit) {
+    val palette = LocalPalette.current
+    val listening = LocalListening.current
+    val cover = listening.queue.current?.cover.orEmpty()
+    GlassRound(
+        stringResource(R.string.tv_music_now_playing),
+        onClick,
+        // Only drawn again as the song plays, never laid out again.
+        Modifier.drawWithContent {
+            drawContent()
+            val ring = 2.dp.toPx()
+            val inset = ring / 2
+            val arc = Size(size.width - ring, size.height - ring)
+            drawArc(palette.text.copy(alpha = 0.18f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(ring))
+            val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+            drawArc(palette.accentBright, -90f, 360f * done, false, Offset(inset, inset), arc, style = Stroke(ring, cap = StrokeCap.Round))
+        },
+    ) { lit ->
+        if (cover.isEmpty()) {
+            Glyph(Icons.Music, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
+        } else {
+            ServerPicture(cover, 30.dp, Modifier.size(30.dp).clip(CircleShape))
         }
     }
 }
