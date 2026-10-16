@@ -62,6 +62,14 @@ import kotlinx.coroutines.delay
 /** How long the controls stay up once the remote stops. */
 private const val CONTROLS_FOR_MS = 4_000L
 
+/** The keys of the remote the player answers; every other one, its volume
+ *  first, is left to the television. */
+private val FILM_KEYS = setOf(
+    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Back,
+    Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
+    Key.Menu, Key.Info,
+)
+
 /** The steps back and on of the arrows and the buttons, as the account
  *  chose them. */
 data class Steps(val back: Int, val on: Int)
@@ -184,6 +192,9 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         nudge()
                         true
                     }
+                    // The television's own: its volume, and anything else
+                    // the film has no use for.
+                    !in FILM_KEYS -> false
                     else -> if (!shown && announced == null) {
                         // The controls away, the arrows and the middle button
                         // act on the film itself.
