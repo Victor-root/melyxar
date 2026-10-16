@@ -1,9 +1,14 @@
 package app.melyxar.server
 
+import java.net.HttpURLConnection
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
+import okhttp3.Request
 
 /*
  * The server's music, asked as the web's player asks it.
@@ -95,6 +100,29 @@ suspend fun Api.changeMusicPreferences(changes: JsonObject): MusicPreferences {
     val now = get("/api/v1/music/preferences", JsonObject.serializer())
     val kept = send("PUT", "/api/v1/music/preferences", JsonObject(now + changes)) ?: now
     return serverJson.decodeFromJsonElement(MusicPreferences.serializer(), kept)
+}
+
+/** The words of a song, nothing when none were found. */
+suspend fun Api.lyrics(song: String): SongLyrics? = get("/api/v1/music/songs/$song/lyrics", SongLyrics.serializer().nullable)
+
+/** How the sound of a song is spread, nothing for a song not read for it
+ *  yet or an answer that does not hold together. */
+suspend fun Api.spectrum(song: String): SongSpectrum? = withContext(Dispatchers.IO) {
+    val asked = Request.Builder().url(address("/api/v1/music/songs/$song/spectrum")).header("Accept", "application/octet-stream").build()
+    http.newCall(asked).execute().use { answer ->
+        if (answer.code == HttpURLConnection.HTTP_NO_CONTENT) {
+            return@use null
+        }
+        if (!answer.isSuccessful) {
+            throw Refusal(answer.code, null)
+        }
+        val bands = answer.header("x-spectrum-bands")?.toIntOrNull() ?: 0
+        val framesASecond = answer.header("x-spectrum-frames-a-second")?.toDoubleOrNull() ?: 0.0
+        val levels = answer.body.bytes()
+        SongSpectrum(bands, framesASecond, levels).takeIf {
+            bands >= 2 && framesASecond > 0 && levels.size >= bands && levels.size % bands == 0
+        }
+    }
 }
 
 /** Says a song was listened to, once per time it is. */

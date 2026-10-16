@@ -192,6 +192,10 @@
     <string name="tv_music_repeat_all">Répétition : tout</string>
     <string name="tv_music_repeat_one">Répétition : ce morceau</string>
     <string name="tv_music_queue">File d’attente</string>
+    <string name="tv_music_lyrics">Paroles</string>
+    <string name="tv_music_lyrics_loading">Chargement</string>
+    <string name="tv_music_lyrics_none">Aucune parole trouvée pour ce morceau.</string>
+    <string name="tv_music_lyrics_instrumental">Ce morceau n’a pas de paroles.</string>
     <string name="tv_music_playlist_empty">Cette liste de lecture est vide. Ajoutez-y des morceaux depuis leur menu.</string>
     <string name="tv_music_no_playlist">Aucune liste de lecture pour l’instant. Ajoutez des morceaux à une liste depuis leur menu.</string>
     <string name="tv_music_heart">Favori</string>
