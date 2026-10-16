@@ -3,6 +3,7 @@ package app.melyxar.tv.inside
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,8 +19,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +33,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.center
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -61,6 +67,7 @@ import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
+import kotlinx.coroutines.flow.first
 
 /** As many covers as the other tiles fan out posters. */
 private const val IN_A_FAN = 5
@@ -73,6 +80,13 @@ fun coversOf(albums: List<Album>): List<Album> = albums.sortedBy { it.cover.isEm
  *  the web's home takes them. */
 fun <T> inTurn(lists: List<List<T>>, most: Int): List<T> =
     (0 until (lists.maxOfOrNull { it.size } ?: 0)).flatMap { at -> lists.mapNotNull { it.getOrNull(at) } }.take(most)
+
+/** How many covers, from the middle out, have a record behind them. */
+private const val WITH_A_RECORD = 3
+
+/** How large a cover is drawn next to the height a poster would have, the
+ *  outer ones stopping just inside the tile's sides. */
+private const val COVER_SIZE = 0.75f
 
 /** A tile of the band. */
 private val TileWidth = 208.dp
@@ -146,6 +160,15 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    // The records are drawn the first time the remote comes to the tile,
+    // since nothing of them is seen before.
+    var woken by remember { mutableStateOf(false) }
+    if (square) {
+        LaunchedEffect(interaction) {
+            interaction.interactions.first { it is FocusInteraction.Focus }
+            woken = true
+        }
+    }
     val front = fan.firstOrNull()?.color?.let(::parseHex) ?: palette.accent.toArgb()
     val force = if (palette.light) 0.34f else 1f
     Box(
@@ -183,7 +206,7 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
             TileHeight * 0.9f,
             Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp),
         )
-        Fan(fan, square, { lit })
+        Fan(fan, square, woken, { lit })
         // The foot of the tile sinks into the ground, under the name.
         Box(
             Modifier.fillMaxSize().drawWithCache {
@@ -245,16 +268,21 @@ private fun Arrow(lit: () -> Float) {
 private val ARROW_SCALE = TileWidth / 340.dp
 
 /** The fan of posters, or of square covers, standing on a line at 69% of
- *  the tile. */
+ *  the tile. Covers stand where the posters would, two thirds of their
+ *  height across apart, and the [records] slide out from behind the middle
+ *  ones as the fan opens. */
 @Composable
-private fun Fan(fan: List<Leafed>, square: Boolean, open: () -> Float) {
+private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -> Float) {
     val palette = LocalPalette.current
     val shape = RoundedCornerShape(8.dp)
+    val scale = if (square) COVER_SIZE else 1f
+    // A shift counted in the widths of a poster, whatever is drawn.
+    val reach = if (square) 2f / 3f / COVER_SIZE else 1f
     Box(Modifier.fillMaxSize()) {
         // The outer leaves first, so the front one is drawn over them.
         FAN.withIndex().reversed().forEach { (at, leaf) ->
             val shown = fan.getOrNull(at) ?: return@forEach
-            val down: Dp = TileHeight * leaf.height
+            val down: Dp = TileHeight * leaf.height * scale
             val across = if (square) down else down * 2 / 3
             Box(
                 Modifier
@@ -264,46 +292,95 @@ private fun Fan(fan: List<Leafed>, square: Boolean, open: () -> Float) {
                     .graphicsLayer {
                         val opened = open()
                         transformOrigin = TransformOrigin(0.5f, 1f)
-                        translationX = (leaf.shift + leaf.opensBy * opened) * size.width
+                        translationX = (leaf.shift + leaf.opensBy * opened) * reach * size.width
                         translationY = if (at == 0) -0.04f * size.height * opened else 0f
                         rotationZ = leaf.tilt + leaf.tiltsBy * opened
-                    }
-                    // The front poster stands raised, with a brighter edge and
-                    // the air of the accent just off it; the others lie on
-                    // the tile with a fainter edge and no shadow of their
-                    // own. They lean as the fan opens, and the graphics card
-                    // works the blur of a leaning box out afresh at every
-                    // frame of it, which a television cannot keep up with.
-                    .then(
-                        if (at == 0) {
-                            Modifier.boxShadow(
-                                shape,
-                                palette.shadowRaised,
-                                BoxShadow(palette.text.copy(alpha = 0.20f), blur = 0.dp, spread = 1.dp),
-                                BoxShadow(palette.accentGlow, blur = 38.dp, spread = (-6).dp),
+                    },
+            ) {
+                if (records && at < WITH_A_RECORD) {
+                    Record(open)
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        // The front poster stands raised, with a brighter edge
+                        // and the air of the accent just off it; the others
+                        // lie on the tile with a fainter edge and no shadow of
+                        // their own. They lean as the fan opens, and the
+                        // graphics card works the blur of a leaning box out
+                        // afresh at every frame of it, which a television
+                        // cannot keep up with.
+                        .then(
+                            if (at == 0) {
+                                Modifier.boxShadow(
+                                    shape,
+                                    palette.shadowRaised,
+                                    BoxShadow(palette.text.copy(alpha = 0.20f), blur = 0.dp, spread = 1.dp),
+                                    BoxShadow(palette.accentGlow, blur = 38.dp, spread = (-6).dp),
+                                )
+                            } else {
+                                Modifier.boxShadow(shape, BoxShadow(palette.text.copy(alpha = 0.14f), blur = 0.dp, spread = 1.dp))
+                            },
+                        )
+                        .clip(shape),
+                ) {
+                    ServerPicture(shown.pictures, across, Modifier.fillMaxSize())
+                    Box(
+                        Modifier.fillMaxSize().drawWithCache {
+                            // The sheen across each poster.
+                            val sheen = Brush.linearGradient(
+                                0f to palette.text.copy(alpha = 0.11f),
+                                0.34f to Color.Transparent,
+                                start = Offset(0f, 0f),
+                                end = Offset(size.width * 0.4f, size.height),
                             )
-                        } else {
-                            Modifier.boxShadow(shape, BoxShadow(palette.text.copy(alpha = 0.14f), blur = 0.dp, spread = 1.dp))
+                            onDrawBehind { drawRect(sheen) }
                         },
                     )
-                    .clip(shape),
-            ) {
-                ServerPicture(shown.pictures, across, Modifier.fillMaxSize())
-                Box(
-                    Modifier.fillMaxSize().drawWithCache {
-                        // The sheen across each poster.
-                        val sheen = Brush.linearGradient(
-                            0f to palette.text.copy(alpha = 0.11f),
-                            0.34f to Color.Transparent,
-                            start = Offset(0f, 0f),
-                            end = Offset(size.width * 0.4f, size.height),
-                        )
-                        onDrawBehind { drawRect(sheen) }
-                    },
-                )
+                }
             }
         }
     }
+}
+
+/** The record behind a cover, as the web's `.band-record`: the size of the
+ *  cover, risen by a third of it as the fan opens. Painted once; only its
+ *  layer moves. */
+@Composable
+private fun Record(open: () -> Float) {
+    val palette = LocalPalette.current
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { translationY = -0.32f * size.height * open() }
+            .drawWithCache {
+                val radius = size.minDimension / 2
+                val shine = palette.text
+                // The two glints a record catches from a light above it, the
+                // brighter right of the middle, the fainter left of it.
+                val glints = Brush.sweepGradient(
+                    // Turned a quarter back from the web's, which starts at
+                    // the top where this one starts on the right.
+                    210f / 360f to Color.Transparent,
+                    232f / 360f to shine.copy(alpha = 0.32f),
+                    252f / 360f to Color.Transparent,
+                    278f / 360f to Color.Transparent,
+                    294f / 360f to shine.copy(alpha = 0.50f),
+                    314f / 360f to Color.Transparent,
+                    center = size.center,
+                )
+                val grooves = (1..((radius - radius * 0.18f) / 3.dp.toPx()).toInt()).map { radius * 0.18f + it * 3.dp.toPx() }
+                val groove = Stroke(1.dp.toPx())
+                onDrawBehind {
+                    drawCircle(palette.ground, radius)
+                    grooves.forEach { drawCircle(shine.copy(alpha = 0.07f), it, style = groove) }
+                    drawCircle(glints, radius)
+                    drawCircle(shine.copy(alpha = 0.16f), radius, style = Stroke(1.dp.toPx()))
+                    drawCircle(palette.accent, radius * 0.17f)
+                    drawCircle(palette.ground, radius * 0.03f)
+                }
+            },
+    )
 }
 
 private fun glowAt(center: Offset, radius: Float, colour: Color): Brush =
