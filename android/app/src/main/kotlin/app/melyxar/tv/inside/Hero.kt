@@ -236,8 +236,8 @@ private fun Words(
         if (more.logo.isNotEmpty()) {
             ServerPicture(
                 more.logo,
-                380.dp,
-                Modifier.heightIn(max = 84.dp).widthIn(max = 380.dp),
+                300.dp,
+                Modifier.heightIn(max = 56.dp).widthIn(max = 300.dp),
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.CenterStart,
             )
@@ -254,14 +254,18 @@ private fun Words(
             )
         }
         Facts(work)
+        // What room the banner has left once everything else is in, so a
+        // long tagline or a second line of badges shortens the overview
+        // rather than squeezing the buttons out.
         more.overview?.let {
             Text(
                 it,
                 fontSize = 14.5.sp,
                 lineHeight = 22.sp,
                 color = palette.textSoft,
-                maxLines = 3,
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
         }
         val playable = card.source != null && card.kind != "series"
