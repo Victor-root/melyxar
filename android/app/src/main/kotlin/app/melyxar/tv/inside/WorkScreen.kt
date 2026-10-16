@@ -113,7 +113,7 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             }
             section("cast", work.cast) {
                 CardRow(stringResource(R.string.tv_cast), Icons.People, work.cast, key = { it.personId + it.role }) { credit ->
-                    CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}"))
+                    CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
                 }
             }
             work.saga?.let { saga ->
@@ -211,7 +211,7 @@ private fun Top(work: Work, first: FocusRequester) {
 
 /** Ratings, dates, length, age and genres, then what the file holds. */
 @Composable
-private fun Facts(work: Work) {
+fun Facts(work: Work) {
     val palette = LocalPalette.current
     val version = work.versions.firstOrNull()
     val picture = version?.video?.firstOrNull()
@@ -416,18 +416,17 @@ private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory)
     }
 }
 
-/** Somebody of the cast: their photo, their name and their part, which
- *  opens their page. */
+/** Somebody of the cast: their photo, their name and their part; pressed,
+ *  [onOpen]. */
 @Composable
-private fun CastMember(credit: Credit, modifier: Modifier) {
-    val chrome = LocalChrome.current
+fun CastMember(credit: Credit, modifier: Modifier, onOpen: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Column(
         modifier
             .width(PosterWidth * 0.8f)
-            .clickable(interaction, indication = null) { chrome.go(Place.Person(credit.personId)) },
+            .clickable(interaction, indication = null, onClick = onOpen),
     ) {
         Box(
             Modifier

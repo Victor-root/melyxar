@@ -179,3 +179,9 @@ fun instantOf(written: String): Long? {
         set(parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5])
     }.timeInMillis
 }
+
+/** When a film would end, in milliseconds since 1970, with [remaining]
+ *  seconds of it left at [speed], from [now]; nothing when it is over or
+ *  not playing forward. */
+fun endsAt(remaining: Double, speed: Float, now: Long): Long? =
+    if (remaining > 0 && speed > 0) now + (remaining / speed * 1000).toLong() else null

@@ -24,10 +24,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -52,6 +54,7 @@ import app.melyxar.tv.inside.LocalAccountPreferences
 import app.melyxar.tv.inside.LocalMarks
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
+import app.melyxar.tv.inside.rememberFocusMemory
 import app.melyxar.tv.inside.rememberLoaded
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Gutter
@@ -69,6 +72,9 @@ private val FILM_KEYS = setOf(
     Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
     Key.Menu, Key.Info,
 )
+
+/** What takes the foot of the film in place of the controls. */
+private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast)
 
 /** The steps back and on of the arrows and the buttons, as the account
  *  chose them. */
@@ -99,15 +105,18 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         return
     }
 
-    var shown by remember { mutableStateOf(true) }
+    // Away until the film is on its way, so nothing invites a press while
+    // it comes.
+    var shown by remember { mutableStateOf(false) }
     var nudges by remember { mutableIntStateOf(0) }
     var menu by remember { mutableStateOf<Menu?>(null) }
     var left by remember { mutableStateOf<Menu?>(null) }
     var playing by remember { mutableStateOf(false) }
     var ended by remember { mutableStateOf(false) }
+    var waiting by remember { mutableStateOf(true) }
     val quiet = remember { FocusRequester() }
-    val controls = remember { FocusRequester() }
-    val buttons = remember { FocusRequester() }
+    var quietHeld by remember { mutableStateOf(false) }
+    val memory = rememberFocusMemory()
     val upNextFirst = remember { FocusRequester() }
     val next = work?.carryOnWith?.takeIf { it.sourceId != null }
     var declined by remember { mutableStateOf(false) }
@@ -124,6 +133,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
 
             override fun onPlaybackStateChanged(state: Int) {
                 ended = state == Player.STATE_ENDED
+                waiting = state == Player.STATE_BUFFERING || state == Player.STATE_IDLE
             }
         }
         playback.player.addListener(heard)
@@ -140,11 +150,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             shown = false
         }
     }
+    // The controls come up with nothing chosen on them: the remote is
+    // only put on them once an arrow asks for it.
     LaunchedEffect(shown, announced != null) {
         when {
             announced != null -> upNextFirst.requestFocus()
-            shown -> controls.requestFocus()
-            else -> quiet.requestFocus()
+            !shown -> quiet.requestFocus()
         }
     }
 
@@ -159,10 +170,14 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         menu = next
     }
 
-    // Once a list closes, the remote goes back to the button that opened it,
-    // the controls being there again by then.
+    // Once a list or a sheet closes, the controls are there again, and the
+    // remote goes back to the button that opened it.
     LaunchedEffect(menu) {
-        if (menu == null && left != null) buttons.requestFocus()
+        if (menu == null && left != null) {
+            shown = true
+            withFrameNanos {}
+            memory.restore()
+        }
     }
 
     // An open list of tracks takes the key first, and closes.
@@ -195,7 +210,18 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     // The television's own: its volume, and anything else
                     // the film has no use for.
                     !in FILM_KEYS -> false
-                    else -> if (!shown && announced == null) {
+                    // The controls up with nothing chosen: an arrow comes to
+                    // them, down opens what the film is.
+                    else -> if (shown && quietHeld && menu == null && announced == null) {
+                        when (event.key) {
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
+                            Key.DirectionDown -> if (work != null) openMenu(Menu.Info)
+                            Key.Back -> return@onPreviewKeyEvent false
+                            else -> memory.requester(PLAY).requestFocus()
+                        }
+                        nudge()
+                        true
+                    } else if (!shown && announced == null) {
                         // The controls away, the arrows and the middle button
                         // act on the film itself.
                         when (event.key) {
@@ -215,16 +241,19 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     ) {
         Picture(playback)
         WordsOverFilm(playback, raised = shown, modifier = Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().focusRequester(quiet).focusable())
-        // The chapters take the foot of the film the controls stand in.
-        AnimatedVisibility(shown && menu != Menu.Chapters, enter = fadeIn(), exit = fadeOut()) {
+        Box(Modifier.fillMaxSize().focusRequester(quiet).onFocusChanged { quietHeld = it.isFocused }.focusable())
+        if (waiting && !playback.failed) {
+            Spinner(Modifier.align(Alignment.Center))
+        }
+        // The chapters and the sheets take the foot of the film the controls
+        // stand in.
+        AnimatedVisibility(shown && menu !in FOOT_TAKERS, enter = fadeIn(), exit = fadeOut()) {
             Controls(
                 playback = playback,
                 work = work,
                 playing = playing,
                 steps = steps,
-                first = controls,
-                buttons = buttons,
+                memory = memory,
                 onMenu = ::openMenu,
                 onNext = next?.let { { playNext(it) } },
             )
@@ -245,8 +274,11 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
             )
         }
-        menu?.let { open ->
-            PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
+        when (val open = menu) {
+            null -> Unit
+            Menu.Info -> work?.let { InfoSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
+            Menu.Cast -> work?.let { CastSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
+            else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
         }
         if (playback.failed) {
             CannotPlay(onDone)

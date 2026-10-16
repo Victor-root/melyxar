@@ -19,6 +19,10 @@ import app.melyxar.tv.speedName
 
 /** Which list is open over the film, and the list it leads back to. */
 enum class Menu(val from: Menu? = null) {
+    /** The sheets of what the film is and who is in it, drawn by the
+     *  player itself over the film's foot. */
+    Info,
+    Cast,
     Audio,
     Subtitles,
     Chapters,
@@ -72,6 +76,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             modifier = placed,
         )
         Menu.Chapters -> ChapterStrip(playback, onClose = back, modifier = modifier.fillMaxWidth())
+        Menu.Info, Menu.Cast -> Unit
         Menu.Settings -> {
             val wideGamut = plan.wideGamut
             val lines = listOfNotNull(
