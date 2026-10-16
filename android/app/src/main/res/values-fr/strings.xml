@@ -107,6 +107,7 @@
     <string name="tv_play_now">Lire maintenant</string>
     <string name="tv_cancel">Annuler</string>
     <string name="tv_search">Rechercher</string>
+    <string name="tv_search_in">Rechercher dans %1$s</string>
     <string name="tv_search_placeholder">Rechercher un titre</string>
     <string name="tv_search_none">Aucun titre ne correspond.</string>
     <string name="tv_search_voice">Rechercher à la voix</string>

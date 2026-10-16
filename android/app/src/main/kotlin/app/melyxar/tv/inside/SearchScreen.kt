@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Browse
+import app.melyxar.server.Library
 import app.melyxar.server.searchMusic
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.Gutter
@@ -53,11 +54,12 @@ private const val SEARCH_WAIT_MS = 200L
 /**
  * The search, as the web's: the title of a film, a series or a video, typed
  * with the television's keyboard or said into the remote, and the works it
- * names in a grid under it, as soon as the words stop changing.
+ * names in a grid under it, as soon as the words stop changing. Asked from
+ * the pages of a [library], it looks only there, its music or its works.
  */
 @OptIn(FlowPreview::class)
 @Composable
-fun SearchScreen(comebacks: Int) {
+fun SearchScreen(library: Library?, comebacks: Int) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
     val words = rememberTextFieldState()
@@ -69,10 +71,11 @@ fun SearchScreen(comebacks: Int) {
     }
     val memory = rememberFocusMemory()
     val field = remember { FocusRequester() }
-    val works = rememberWorks(Browse(search = asked), comebacks, asking = asked.isNotEmpty())
+    val inMusic = library?.kind == "music"
+    val works = rememberWorks(Browse(library = library?.id, search = asked), comebacks, asking = asked.isNotEmpty() && !inMusic)
     // What the words find in the music, above the works, as on the web.
-    val music = asked.takeIf { it.isNotEmpty() }?.let { words ->
-        rememberLoaded("music:search:$words", comebacks) { searchMusic(words) }.value.ready
+    val music = asked.takeIf { it.isNotEmpty() && (library == null || inMusic) }?.let { words ->
+        rememberLoaded("music:search:${library?.id}:$words", comebacks) { searchMusic(words, library?.id) }.value.ready
     }
     val names = foundNames()
     val listening = LocalListening.current
@@ -92,7 +95,7 @@ fun SearchScreen(comebacks: Int) {
             // The grid keeps the page's margin already.
             TopBar(inset = Gutter)
             Text(
-                stringResource(R.string.tv_search),
+                library?.let { stringResource(R.string.tv_search_in, it.name) } ?: stringResource(R.string.tv_search),
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.02).em,
