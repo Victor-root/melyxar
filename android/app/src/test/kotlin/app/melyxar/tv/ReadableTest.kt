@@ -68,6 +68,13 @@ class ReadableTest {
     }
 
     @Test
+    fun aFilmEndsAfterWhatIsLeftAtItsSpeed() {
+        assertEquals(1_000L + 60_000L, endsAt(60.0, 1f, 1_000L))
+        assertEquals(1_000L + 30_000L, endsAt(60.0, 2f, 1_000L))
+        assertNull(endsAt(0.0, 1f, 1_000L))
+    }
+
+    @Test
     fun readsTheInstantsTheServerWrites() {
         assertEquals(86_400_000L, instantOf("1970-01-02T00:00:00Z"))
         assertEquals(1_000L, instantOf("1970-01-01T00:00:01.25Z"))

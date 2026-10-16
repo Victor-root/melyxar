@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -165,9 +166,9 @@ private fun barPlace(button: String): BarPlace? = when (button) {
     else -> null
 }
 
-/** The time, under the account's name, turning with the minute. */
+/** The time, turning with the minute. */
 @Composable
-private fun Clock(colour: Color) {
+fun Clock(colour: Color, fontSize: TextUnit = 11.sp, weight: FontWeight = FontWeight.Medium) {
     val context = LocalContext.current
     val format = remember(context) { DateFormat.getTimeFormat(context) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -177,7 +178,7 @@ private fun Clock(colour: Color) {
             now = System.currentTimeMillis()
         }
     }
-    Text(format.format(Date(now)), fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium, color = colour)
+    Text(format.format(Date(now)), fontSize = fontSize, lineHeight = fontSize * 1.2f, fontWeight = weight, color = colour)
 }
 
 /**

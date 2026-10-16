@@ -1,5 +1,20 @@
 package app.melyxar.tv.play
 
+import android.text.format.DateFormat
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import app.melyxar.R
+import app.melyxar.tv.door.Face
+import app.melyxar.tv.endsAt
+import app.melyxar.tv.inside.Clock
+import app.melyxar.tv.inside.FocusMemory
+import app.melyxar.tv.inside.LocalChrome
+import app.melyxar.tv.inside.remembered
+import app.melyxar.tv.look.ServerPicture
+import java.util.Date
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,9 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -91,8 +103,7 @@ fun Controls(
     work: Work?,
     playing: Boolean,
     steps: Steps,
-    first: FocusRequester,
-    buttons: FocusRequester,
+    memory: FocusMemory,
     onMenu: (Menu) -> Unit,
     onNext: (() -> Unit)?,
 ) {
@@ -106,30 +117,14 @@ fun Controls(
     }
     val length = playback.length
     Box(Modifier.fillMaxSize()) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)))
                 .padding(start = Gutter, end = Gutter, top = 24.dp, bottom = 56.dp),
         ) {
-            work?.let {
-                val series = it.ancestry.firstOrNull { above -> above.kind == "series" }?.title
-                Text(
-                    series ?: it.title,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset.Zero, 16f)),
-                )
-                if (series != null) {
-                    val season = it.ancestry.firstOrNull { above -> above.kind == "season" }?.number
-                    whichEpisode(season, it.number, it.title)?.let { line ->
-                        Text(line, fontSize = 15.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
+            work?.let { Named(it, Modifier.weight(1f)) } ?: Spacer(Modifier.weight(1f))
+            Who()
         }
         Column(
             modifier = Modifier
@@ -141,37 +136,110 @@ fun Controls(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(clock(at), style = Times, color = palette.text)
-                SeekBar(at, length, playback, Modifier.weight(1f))
+                SeekBar(at, length, playback, Modifier.weight(1f).remembered(memory, "bar"))
                 Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                // Asked for, the row gives the remote back to the button it
-                // was last on: the one that opened a list, once it closes.
-                modifier = Modifier.focusRequester(buttons).focusRestorer(first),
+                // Down from the buttons, what the film is.
+                modifier = Modifier.onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown && work != null) {
+                        onMenu(Menu.Info)
+                        true
+                    } else {
+                        false
+                    }
+                },
             ) {
-                PlayerButton(Icons.Restart, onClick = { playback.withStep(-steps.back) })
+                StepButton(Icons.Restart, steps.back, onClick = { playback.withStep(-steps.back) }, Modifier.remembered(memory, "back"))
                 PlayerButton(
                     if (playing) Icons.Pause else Icons.Play,
                     onClick = playback::toggle,
                     large = true,
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.remembered(memory, PLAY),
                 )
-                PlayerButton(Icons.StepOn, onClick = { playback.withStep(steps.on) })
-                onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it) }
+                StepButton(Icons.StepOn, steps.on, onClick = { playback.withStep(steps.on) }, Modifier.remembered(memory, "on"))
+                onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it, modifier = Modifier.remembered(memory, "next")) }
+                length?.let { endsAt(it - at, playback.speed, System.currentTimeMillis()) }?.let { end ->
+                    Text(
+                        stringResource(R.string.tv_ends_at, DateFormat.getTimeFormat(LocalContext.current).format(Date(end))),
+                        fontSize = 15.sp,
+                        color = palette.textSoft,
+                        modifier = Modifier.padding(start = 14.dp),
+                    )
+                }
                 Spacer(Modifier.weight(1f))
+                if (work != null) {
+                    PlayerButton(Icons.Info, onClick = { onMenu(Menu.Info) }, modifier = Modifier.remembered(memory, "info"))
+                    if (work.cast.isNotEmpty()) {
+                        PlayerButton(Icons.People, onClick = { onMenu(Menu.Cast) }, modifier = Modifier.remembered(memory, "cast"))
+                    }
+                }
                 if (chaptersOf(playback.plan?.chapters.orEmpty(), length).isNotEmpty()) {
-                    PlayerButton(Icons.Chapters, onClick = { onMenu(Menu.Chapters) })
+                    PlayerButton(Icons.Chapters, onClick = { onMenu(Menu.Chapters) }, modifier = Modifier.remembered(memory, "chapters"))
                 }
                 if ((playback.plan?.audio?.size ?: 0) > 1) {
-                    PlayerButton(Icons.Audio, onClick = { onMenu(Menu.Audio) })
+                    PlayerButton(Icons.Audio, onClick = { onMenu(Menu.Audio) }, modifier = Modifier.remembered(memory, "audio"))
                 }
                 if (playback.plan?.subtitles?.isNotEmpty() == true) {
-                    PlayerButton(Icons.Subtitles, onClick = { onMenu(Menu.Subtitles) })
+                    PlayerButton(Icons.Subtitles, onClick = { onMenu(Menu.Subtitles) }, modifier = Modifier.remembered(memory, "subtitles"))
                 }
-                PlayerButton(Icons.Gear, onClick = { onMenu(Menu.Settings) })
+                PlayerButton(Icons.Gear, onClick = { onMenu(Menu.Settings) }, modifier = Modifier.remembered(memory, "settings"))
             }
+        }
+    }
+}
+
+/** The key the play button is remembered under, which the remote is put on
+ *  when it first comes into the controls. */
+const val PLAY = "play"
+
+/** What is playing, at the top left: the film's own logo, or its name, and
+ *  for an episode which one it is. */
+@Composable
+private fun Named(work: Work, modifier: Modifier) {
+    val palette = LocalPalette.current
+    val series = work.ancestry.firstOrNull { above -> above.kind == "series" }?.title
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (work.logo.isNotEmpty() && series == null) {
+            ServerPicture(
+                work.logo,
+                260.dp,
+                Modifier.heightIn(max = 64.dp).widthIn(max = 260.dp),
+                contentScale = ContentScale.Fit,
+                alignment = Alignment.CenterStart,
+            )
+        } else {
+            Text(
+                series ?: work.title,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.6f), Offset.Zero, 16f)),
+            )
+        }
+        if (series != null) {
+            val season = work.ancestry.firstOrNull { above -> above.kind == "season" }?.number
+            whichEpisode(season, work.number, work.title)?.let { line ->
+                Text(line, fontSize = 15.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** The time, and under it who is watching, at the top right. */
+@Composable
+private fun Who() {
+    val palette = LocalPalette.current
+    val account = LocalChrome.current.account
+    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Clock(palette.text, fontSize = 26.sp, weight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.clip(RoundedCornerShape(5.dp))) { Face(account.name, account.avatar, 22.dp) }
+            Text(account.name, fontSize = 15.sp, color = palette.textSoft, maxLines = 1)
         }
     }
 }
@@ -283,6 +351,22 @@ private fun Preview(seconds: Double, share: Float, thumbnails: Thumbnails?, modi
             )
         }
         Text(clock(seconds), style = Times, color = palette.text)
+    }
+}
+
+/** A step back or on, the seconds it goes written inside its arc, as the
+ *  web player draws it. */
+@Composable
+private fun StepButton(arc: ImageVector, seconds: Int, onClick: () -> Unit, modifier: Modifier) {
+    Box(contentAlignment = Alignment.Center) {
+        PlayerButton(arc, onClick, modifier)
+        Text(
+            "$seconds",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            color = LocalPalette.current.text,
+            modifier = Modifier.padding(top = 3.dp),
+        )
     }
 }
 
