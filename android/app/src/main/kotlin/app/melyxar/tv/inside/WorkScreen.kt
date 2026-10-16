@@ -1,7 +1,10 @@
 package app.melyxar.tv.inside
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,9 +21,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +68,7 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
 import java.util.Locale
@@ -336,6 +342,7 @@ private fun Actions(work: Work, first: FocusRequester) {
 }
 
 /** The seasons of a series as tabs, and the episodes of the one chosen. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Seasons(work: Work, memory: FocusMemory) {
     if (work.children.isEmpty()) {
@@ -348,21 +355,28 @@ private fun Seasons(work: Work, memory: FocusMemory) {
     // Coming into the tabs lands on the one left, or on the season shown.
     val shown = remember { FocusRequester() }
     Column {
-        Row(
-            modifier = Modifier.padding(start = Gutter, bottom = 4.dp).focusRestorer(shown),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            work.children.forEach { season ->
-                SeasonTab(
-                    name = season.title ?: season.number?.let { number ->
-                        if (number == 0) stringResource(R.string.tv_specials) else stringResource(R.string.tv_season, number)
-                    } ?: "",
-                    active = season.card.id == chosen,
-                    onChoose = { chosen = season.card.id },
-                    modifier = Modifier
-                        .remembered(memory, "season/${season.card.id}")
-                        .then(if (season.card.id == chosen) Modifier.focusRequester(shown) else Modifier),
-                )
+        // Scrolled rather than squeezed: a tab squeezed past the edge wraps
+        // its name a letter a line and makes the row as tall as that.
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rememberRowScrolling()) {
+            Row(
+                modifier = Modifier
+                    .focusRestorer(shown)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = Gutter, end = Gutter, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                work.children.forEach { season ->
+                    SeasonTab(
+                        name = season.title ?: season.number?.let { number ->
+                            if (number == 0) stringResource(R.string.tv_specials) else stringResource(R.string.tv_season, number)
+                        } ?: "",
+                        active = season.card.id == chosen,
+                        onChoose = { chosen = season.card.id },
+                        modifier = Modifier
+                            .remembered(memory, "season/${season.card.id}")
+                            .then(if (season.card.id == chosen) Modifier.focusRequester(shown) else Modifier),
+                    )
+                }
             }
         }
         val episodes = rememberLoaded("work:$chosen", chosen) { work(chosen) }.value.ready?.children.orEmpty()
