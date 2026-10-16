@@ -124,4 +124,27 @@ data class MusicPreferences(
     val skipBackSeconds: Int = 10,
     val skipOnSeconds: Int = 10,
     val hiddenTabs: List<String> = emptyList(),
+    /** Whether the wave of the song is drawn behind the player, and how
+     *  high it reaches, in hundredths of the player's height. */
+    val spectrum: Boolean = true,
+    val spectrumAmplitude: Int = 75,
 )
+
+/** One line of a song's words, sung at a known moment. */
+@Serializable
+data class LyricLine(val atMs: Long, val text: String)
+
+/** The words of a song: as they are written, and in lines sung at known
+ *  moments when they carry them, the moments already moved by hand. */
+@Serializable
+data class SongLyrics(
+    val plain: String = "",
+    /** Empty when the words carry no moments. */
+    val lines: List<LyricLine> = emptyList(),
+    val instrumental: Boolean = false,
+)
+
+/** How the sound of a song is spread: [bands] levels for each of the
+ *  [framesASecond] readings of every second, from nought for nothing to 255
+ *  for as loud as the song gets. */
+class SongSpectrum(val bands: Int, val framesASecond: Double, val levels: ByteArray)

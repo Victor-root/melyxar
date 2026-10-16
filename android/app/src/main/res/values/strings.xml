@@ -190,6 +190,10 @@
     <string name="tv_music_repeat_all">Repeat: all</string>
     <string name="tv_music_repeat_one">Repeat: this song</string>
     <string name="tv_music_queue">Queue</string>
+    <string name="tv_music_lyrics">Lyrics</string>
+    <string name="tv_music_lyrics_loading">Loading</string>
+    <string name="tv_music_lyrics_none">No lyrics were found for this song.</string>
+    <string name="tv_music_lyrics_instrumental">This song has no lyrics.</string>
     <string name="tv_music_playlist_empty">This playlist is empty. Add songs from their menu.</string>
     <string name="tv_music_no_playlist">No playlist yet. Add songs to one from their menu.</string>
     <string name="tv_music_heart">Favourite</string>
