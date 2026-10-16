@@ -24,6 +24,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -305,6 +306,10 @@ fun Inside(
                     Modifier
                         .fillMaxSize()
                         .background(LocalPalette.current.ground)
+                        .onPreviewKeyEvent { event ->
+                            if (event.type == KeyEventType.KeyDown) focusSaid("key ${event.key}")
+                            false
+                        }
                         // The search key of a remote that has one, and its keys
                         // of music while a song is queued. A film's own
                         // player answers them first. A key of music is acted
@@ -334,6 +339,7 @@ fun Inside(
                     // What the account chose to draw behind its pages, once
                     // its choice is known.
                     chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
+                    LaunchedEffect(here) { focusSaid("screen shown: ${here.key}") }
                     kept.SaveableStateProvider(here.key) {
                         when (here) {
                             Place.Home -> HomeScreen(comebacks)

@@ -169,7 +169,7 @@ fun PinnedTopBar(modifier: Modifier = Modifier) {
             announcing = false
         }
     }
-    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop), contentAlignment = Alignment.Center) {
+    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop).focusTraced("pinned bar"), contentAlignment = Alignment.Center) {
         shown.title?.invoke()
         Bar(LocalChrome.current, shown.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
     }

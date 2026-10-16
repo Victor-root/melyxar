@@ -29,7 +29,6 @@ class FocusMemory(var last: String?) {
         val requester = last?.let { requesters[it] } ?: return false
         return try {
             requester.requestFocus()
-            true
         } catch (_: IllegalStateException) {
             false
         }
@@ -58,9 +57,10 @@ fun RestoreFocus(memory: FocusMemory, first: FocusRequester, ready: Boolean, orE
         }
         // The rows are laid out a frame after the screen is composed.
         withFrameNanos {}
-        if (!memory.restore() && !takes(first)) {
-            orElse?.let(::takes)
-        }
+        val restored = memory.restore()
+        val onFirst = !restored && takes(first)
+        val elsewhere = !restored && !onFirst && orElse?.let(::takes) == true
+        focusSaid("screen ready: back on ${memory.last} $restored, on its first $onFirst, elsewhere $elsewhere")
     }
 }
 

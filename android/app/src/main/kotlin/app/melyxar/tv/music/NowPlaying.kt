@@ -50,6 +50,7 @@ import app.melyxar.R
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.TopBar
+import app.melyxar.tv.inside.focusTraced
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.GlassBar
 import app.melyxar.tv.look.GlassTab
@@ -78,7 +79,7 @@ fun NowPlayingScreen() {
     val first = remember { FocusRequester() }
     // On the queue for music started anew, on the side left otherwise.
     var side by rememberSaveable(listening.begun) { mutableStateOf(Side.Queue) }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().focusTraced("song page")) {
         TopBar()
         if (song == null) {
             return@Column
