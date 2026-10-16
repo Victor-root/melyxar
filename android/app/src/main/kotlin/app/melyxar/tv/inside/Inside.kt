@@ -67,6 +67,8 @@ import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.PlayerScreen
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** A screen of the inside, as the trail of screens holds it. */
@@ -154,11 +156,12 @@ private val Place.library: Library?
  *  song after or before, so letting it go does nothing more. */
 private class Skipping {
     var held = false
+    var waiting: Job? = null
 }
 
-/** How many times a held key of music repeats before it counts as held:
- *  its first repeat, under half a second. */
-private const val HELD_REPEATS = 1
+/** How long a key of music is held before it counts as held: sooner than
+ *  the remote's own first repeat, which comes after half a second. */
+private const val HELD_AFTER_MS = 300L
 
 /** What every screen's top bar shows, and where its pieces lead. */
 class Chrome(
@@ -368,11 +371,18 @@ fun Inside(
                                 event.key == Key.MediaFastForward || event.key == Key.MediaRewind -> {
                                     val on = event.key == Key.MediaFastForward
                                     when {
-                                        event.type == KeyEventType.KeyUp -> if (!skipped.held) listening.skip(on)
-                                        event.nativeKeyEvent.repeatCount == 0 -> skipped.held = false
-                                        !skipped.held && event.nativeKeyEvent.repeatCount >= HELD_REPEATS -> {
-                                            skipped.held = true
-                                            if (on) listening.next() else listening.previous()
+                                        event.type == KeyEventType.KeyUp -> {
+                                            skipped.waiting?.cancel()
+                                            if (!skipped.held) listening.skip(on)
+                                        }
+                                        down -> {
+                                            skipped.held = false
+                                            skipped.waiting?.cancel()
+                                            skipped.waiting = scope.launch {
+                                                delay(HELD_AFTER_MS)
+                                                skipped.held = true
+                                                if (on) listening.next() else listening.previous()
+                                            }
                                         }
                                     }
                                 }
