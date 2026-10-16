@@ -30,9 +30,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.FocusRequester
@@ -113,7 +114,11 @@ private fun Bar(chrome: Chrome, first: FocusRequester?) {
         // Everything at this end on one piece of glass, as on the web: this
         // end is what is pressed, the other is where one is.
         Row(
-            modifier = Modifier.height(46.dp).glassPiece().padding(horizontal = 4.dp),
+            modifier = Modifier
+                .height(46.dp)
+                .glassPiece()
+                .then(if (LocalListening.current.queue.current != null) Modifier.songPlayed() else Modifier)
+                .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -249,8 +254,8 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
     }
 }
 
-/** The song playing, as the web's bar shows it: its cover in a round, or
- *  the note of music for one without, ringed by how far it has played. */
+/** The song playing: its cover in a round, or the note of music for one
+ *  without. */
 @Composable
 private fun PlayingNow(onClick: () -> Unit) {
     val palette = LocalPalette.current
@@ -259,21 +264,48 @@ private fun PlayingNow(onClick: () -> Unit) {
     GlassRound(
         stringResource(R.string.tv_music_now_playing),
         onClick,
-        // Only drawn again as the song plays, never laid out again.
-        Modifier.drawWithContent {
-            drawContent()
-            val ring = 2.dp.toPx()
-            val inset = ring / 2
-            val arc = Size(size.width - ring, size.height - ring)
-            drawArc(palette.text.copy(alpha = 0.18f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(ring))
-            val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
-            drawArc(palette.accentBright, -90f, 360f * done, false, Offset(inset, inset), arc, style = Stroke(ring, cap = StrokeCap.Round))
-        },
-    ) { lit ->
+) { lit ->
         if (cover.isEmpty()) {
             Glyph(Icons.Music, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
         } else {
             ServerPicture(cover, 30.dp, Modifier.size(30.dp).clip(CircleShape))
+        }
+    }
+}
+
+/**
+ * How far the song playing has played, drawn round the whole of the piece
+ * of glass it is on, from the middle of its top and clockwise: the track
+ * faint, what has played in the accent with its glow. Laid out once for the
+ * piece; only drawn again as the song plays.
+ */
+@Composable
+private fun Modifier.songPlayed(): Modifier {
+    val palette = LocalPalette.current
+    val listening = LocalListening.current
+    return drawWithCache {
+        val line = 2.5.dp.toPx()
+        val inset = line / 2
+        val round = size.height / 2 - inset
+        val (left, right, top, bottom) = listOf(inset, size.width - inset, inset, size.height - inset)
+        val outline = Path().apply {
+            moveTo(size.width / 2, top)
+            lineTo(right - round, top)
+            arcTo(Rect(right - 2 * round, top, right, bottom), -90f, 180f, false)
+            lineTo(left + round, bottom)
+            arcTo(Rect(left, top, left + 2 * round, bottom), 90f, 180f, false)
+            close()
+        }
+        val measure = PathMeasure().apply { setPath(outline, false) }
+        val played = Path()
+        onDrawWithContent {
+            drawContent()
+            drawPath(outline, palette.text.copy(alpha = 0.16f), style = Stroke(line))
+            val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+            played.reset()
+            measure.getSegment(0f, measure.length * done, played, true)
+            drawPath(played, palette.accentGlow, style = Stroke(line * 3, cap = StrokeCap.Round))
+            drawPath(played, palette.accentBright, style = Stroke(line, cap = StrokeCap.Round))
         }
     }
 }
