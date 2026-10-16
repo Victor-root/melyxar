@@ -114,16 +114,6 @@
   background-clip: content-box;
 }
 
-/* Shown but never pressed on a screen touched with a finger: a thumb that
-   lands on it by mistake would take the page away. The pointer of a mouse is
-   the only thing that takes hold of it. */
-@media (pointer: coarse) {
-  .scrollbar,
-  .scrollbar-long {
-    pointer-events: none;
-  }
-}
-
 /* --------------------------------------------------------------------------
  * Pages and sections
  * ----------------------------------------------------------------------- */

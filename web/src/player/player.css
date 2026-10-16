@@ -2074,9 +2074,12 @@ melyxar-picture.player-video {
   right: 0;
 }
 
-/* A finger runs the row along itself: the arrows are for a pointer. */
+/* A finger runs the row along itself: the arrows are for a pointer. And a
+   screen touched with a finger has buttons of its own for the sound, a
+   tablet's as much as a phone's. */
 @media (pointer: coarse) {
-  .player-drawer-along {
+  .player-drawer-along,
+  .player-sound {
     display: none;
   }
 }
