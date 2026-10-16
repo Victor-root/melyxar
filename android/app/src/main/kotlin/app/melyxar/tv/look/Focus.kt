@@ -8,6 +8,8 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
@@ -40,12 +42,21 @@ fun Modifier.grows(lit: () -> Float, growth: Float = FOCUS_GROWTH) = graphicsLay
     scaleY = scale
 }
 
+/** How far past the edge a rim reaches, in pixels: the one the edge's
+ *  smoothing shares with what is under the piece. */
+private const val BLEED = 1f
+
 /** A rim drawn inside the piece's edge, as the web's inset ring: the edge
- *  itself stroked twice as wide and cut to the piece, so it follows every
- *  curve of the shape exactly. */
+ *  itself stroked twice as wide and cut a pixel outside it, so it follows
+ *  every curve of the shape exactly and covers the edge's last pixels,
+ *  where the piece's own ground would otherwise show through as a thin
+ *  line round it. */
 fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
-    val edge = Path().apply { addOutline(outline) }
+    val edge = Path().apply {
+        addOutline(shape.createOutline(Size(size.width + 2 * BLEED, size.height + 2 * BLEED), layoutDirection, this@drawWithCache))
+        translate(Offset(-BLEED, -BLEED))
+    }
     val stroke = Stroke(width.toPx() * 2)
     onDrawWithContent {
         drawContent()

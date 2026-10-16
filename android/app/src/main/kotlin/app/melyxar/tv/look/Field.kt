@@ -1,7 +1,6 @@
 package app.melyxar.tv.look
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -96,7 +95,7 @@ fun TvField(
         .grows({ lit }, 1.02f)
         .clip(ControlShape)
         .background(palette.surfaceRaised.copy(alpha = 0.74f))
-        .border(1.dp, palette.border, ControlShape)
+        .rim(ControlShape, palette.border, 1.dp) { 1f - lit }
         .rim(ControlShape, palette.accentBright, 3.dp) { lit }
     val decorator = TextFieldDecorator { field ->
         Box(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
