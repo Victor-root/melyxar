@@ -35,8 +35,9 @@ fun <T> quick(): TweenSpec<T> = tween(120, easing = Ease)
 /** `--calm`, for sizes and fades. */
 fun <T> calm(): TweenSpec<T> = tween(240, easing = Ease)
 
-/** The margin a television keeps clear of its edges, where some screens cut. */
-val Gutter = 48.dp
+/** The margin a television keeps clear of its edges, where some screens
+ *  cut: close to them, so the screen is used to its sides. */
+val Gutter = 24.dp
 
 /** Between two cards of a row, and between two rows. */
 val CardGap = 14.dp

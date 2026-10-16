@@ -103,6 +103,7 @@ object Icons {
     )
     val ChevronRight = outlined("chevron-right", paths = arrayOf("M8.8 5.6 15.2 12 8.8 18.4"))
     val ChevronLeft = outlined("chevron-left", paths = arrayOf("M15.2 5.6 8.8 12 15.2 18.4"))
+    val ChevronDown = outlined("chevron-down", paths = arrayOf("M5.6 8.8 12 15.2 18.4 8.8"))
     val Back = outlined("back", paths = arrayOf("M19.4 12H5.2", "m11 5.6-5.8 6.4 5.8 6.4"))
     val Lock = outlined(
         "lock",

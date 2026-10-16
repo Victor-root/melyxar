@@ -3,9 +3,11 @@ package app.melyxar.tv.music
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -70,6 +72,10 @@ import app.melyxar.tv.inside.remembered
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.ChoiceList
+import app.melyxar.tv.look.GlassBar
+import app.melyxar.tv.look.GlassIcon
+import app.melyxar.tv.look.GlassRule
+import app.melyxar.tv.look.GlassTab
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
@@ -263,26 +269,33 @@ private fun Head(
             Glyph(Icons.Music, palette.accentBright, 26.dp)
             Text(library.name, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, color = palette.text)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.focusRestorer(firstTab)) {
-            tabs.forEachIndexed { at, name ->
-                PlainButton(
-                    tabName(name),
-                    onClick = { onTab(name) },
-                    modifier = Modifier
-                        .remembered(memory, "tab/$name")
-                        .then(if (at == 0) Modifier.focusRequester(firstTab) else Modifier),
-                    icon = if (name == tab) Icons.Tick else null,
-                )
-            }
-        }
-        Row(
-            modifier = Modifier.padding(top = 14.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        // The tabs on one piece of glass, and what the tab is played and
+        // read by on another, as the web's bar above a library of music.
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            AccentButton(stringResource(R.string.tv_music_play_all), onClick = { onPlay(false) }, modifier = Modifier.remembered(memory, "play"))
-            PlainButton(stringResource(R.string.tv_music_shuffle), onClick = { onPlay(true) }, modifier = Modifier.remembered(memory, "shuffle"), icon = Icons.Shuffle)
-            ordering?.let { OrderButtons(it.name, it.descending, memory, onPick = onPick, onTurn = it.onTurn) }
+            GlassBar(Modifier.focusRestorer(firstTab)) {
+                tabs.forEachIndexed { at, name ->
+                    GlassTab(
+                        tabName(name),
+                        on = name == tab,
+                        onClick = { onTab(name) },
+                        modifier = Modifier
+                            .remembered(memory, "tab/$name")
+                            .then(if (at == 0) Modifier.focusRequester(firstTab) else Modifier),
+                    )
+                }
+            }
+            GlassBar {
+                ordering?.let {
+                    OrderButtons(it.name, it.descending, memory, onPick = onPick, onTurn = it.onTurn)
+                    GlassRule()
+                }
+                GlassIcon(Icons.Play, stringResource(R.string.tv_music_play_all), onClick = { onPlay(false) }, modifier = Modifier.remembered(memory, "play"))
+                GlassIcon(Icons.Shuffle, stringResource(R.string.tv_music_shuffle), onClick = { onPlay(true) }, modifier = Modifier.remembered(memory, "shuffle"))
+            }
         }
     }
 }

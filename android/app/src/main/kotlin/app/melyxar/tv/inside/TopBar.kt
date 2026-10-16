@@ -7,8 +7,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -31,9 +33,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -51,7 +53,9 @@ import app.melyxar.server.Picture
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.tv.door.Face
 import app.melyxar.tv.look.ChoiceList
+import app.melyxar.tv.look.GlassIcon
 import app.melyxar.tv.look.Glyph
+import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.MelyxarMark
@@ -65,32 +69,28 @@ import app.melyxar.tv.notes.LocalNotes
 import java.util.Date
 import kotlinx.coroutines.delay
 
-/** How far the bar stands from the sides and the top of the screen. */
-private val BarEdge = 20.dp
+/** How far the bar stands from the top of the screen. */
+private val BarTop = 20.dp
 
 /**
  * The bar at the top of every screen, as the web's less its tabs, which the
  * band of the home screen stands for on a television: on one piece of glass
  * the server's logo and name, which lead home, behind an arrow saying the
  * back key leads somewhere; on the other the buttons the account put on its
- * bar and whose profile this is, its menu holding the rest; and the time.
+ * bar and whose profile this is, with the time, its menu holding the rest.
  * It scrolls away with the screen, and the remote finds it again going up.
  * [first] is where the remote starts on a screen with nothing else to start
  * on; [inset] is how far what holds it already stands from the sides of the
- * screen, the bar standing at the same place on every screen whatever it is.
+ * screen, the bar standing at the page's margin on every screen whatever it
+ * is.
  */
 @Composable
 fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: Dp = 0.dp) {
     val chrome = LocalChrome.current
     Row(
         modifier = modifier
-            .layout { measurable, constraints ->
-                val out = inset.roundToPx()
-                val across = constraints.maxWidth + 2 * out
-                val bar = measurable.measure(constraints.copy(minWidth = across, maxWidth = across))
-                layout(constraints.maxWidth, bar.height) { bar.place(-out, 0) }
-            }
-            .padding(start = BarEdge, end = BarEdge, top = BarEdge),
+            .fillMaxWidth()
+            .padding(start = Gutter - inset, end = Gutter - inset, top = BarTop),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Brand()
@@ -104,17 +104,16 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: 
         ) {
             // The song playing, while one is.
             if (LocalListening.current.queue.current != null) {
-                BarButton(Icons.Music) { chrome.go(Place.NowPlaying) }
+                BarButton(Icons.Music, stringResource(R.string.tv_music_now_playing)) { chrome.go(Place.NowPlaying) }
             }
             val unread = LocalNotes.current.held.unread
             chrome.buttons.bar.forEach { button ->
-                barPlace(button)?.let { BarButton(it.icon, if (button == "notifications") unread else 0) { it.press(chrome) } }
+                barPlace(button)?.let { BarButton(it.icon, stringResource(it.name), if (button == "notifications") unread else 0) { it.press(chrome) } }
             }
             // A rule between who is here and everything that is not.
             Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
             Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
         }
-        Clock(Modifier.padding(start = 10.dp))
     }
 }
 
@@ -131,10 +130,9 @@ private fun barPlace(button: String): BarPlace? = when (button) {
     else -> null
 }
 
-/** The time, on its own piece of glass at the end of the bar, turning with
- *  the minute. */
+/** The time, under the account's name, turning with the minute. */
 @Composable
-private fun Clock(modifier: Modifier) {
+private fun Clock(colour: Color) {
     val context = LocalContext.current
     val format = remember(context) { DateFormat.getTimeFormat(context) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -144,9 +142,7 @@ private fun Clock(modifier: Modifier) {
             now = System.currentTimeMillis()
         }
     }
-    Box(modifier.height(46.dp).glassPiece().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
-        Text(format.format(Date(now)), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = LocalPalette.current.text)
-    }
+    Text(format.format(Date(now)), fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium, color = colour)
 }
 
 /**
@@ -205,21 +201,10 @@ private fun Brand() {
  *  when the remote comes to it, with how many are waiting when [count]
  *  says any are. */
 @Composable
-private fun BarButton(icon: ImageVector, count: Int = 0, onClick: () -> Unit) {
+private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    val interaction = remember { MutableInteractionSource() }
-    val lit by litBy(interaction)
-    Box(Modifier.clickable(interaction, indication = null, onClick = onClick)) {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(palette.accent.copy(alpha = 0.22f * lit))
-                .rim(CircleShape, palette.accentBright, 2.dp) { lit },
-            contentAlignment = Alignment.Center,
-        ) {
-            Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, 22.dp)
-        }
+    Box {
+        GlassIcon(icon, label, onClick)
         if (count > 0) {
             Text(
                 if (count > MOST_COUNTED) "$MOST_COUNTED+" else "$count",
@@ -261,15 +246,19 @@ private fun Account(modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                chrome.account.name,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (lit > 0.5f) palette.accentBright else palette.text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 150.dp),
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    chrome.account.name,
+                    fontSize = 14.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (lit > 0.5f) palette.accentBright else palette.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 150.dp),
+                )
+                Clock(palette.textSoft)
+            }
             Box(Modifier.clip(RoundedCornerShape(7.dp))) {
                 Face(chrome.account.name, chrome.account.avatar, 32.dp)
             }
