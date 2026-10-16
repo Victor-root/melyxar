@@ -35,6 +35,7 @@ import app.melyxar.R
 import app.melyxar.server.Browse
 import app.melyxar.server.searchMusic
 import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.TvField
@@ -89,7 +90,7 @@ fun SearchScreen(comebacks: Int) {
     ) {
         Column {
             // The grid keeps the page's margin already.
-            TopBar(edges = 0.dp)
+            TopBar(inset = Gutter)
             Text(
                 stringResource(R.string.tv_search),
                 fontSize = 28.sp,

@@ -114,6 +114,7 @@
     <string name="tv_favourites_empty">No favourites yet. Choose the heart on a title to add it here.</string>
     <string name="tv_watch_later">Watch later</string>
     <string name="tv_watch_later_empty">Nothing set aside yet. Choose the clock on a title to add it here. A title leaves this list once you have watched it.</string>
+    <string name="tv_change_profile">Change profile</string>
     <string name="tv_sort">Sort</string>
     <string name="tv_sorted_by">Sort: %1$s</string>
     <string name="tv_sort_title">Title</string>
