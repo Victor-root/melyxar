@@ -79,8 +79,13 @@ import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.shadowRaised
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+
+/** How near the film's clock must come to where the bar sent it for the
+ *  bar to follow the clock again. */
+private const val LANDED_WITHIN_S = 2.0
 
 /** How often the clock and the bar move while the controls are up. */
 private const val TICK_MS = 250L
@@ -265,9 +270,18 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
     val thick by animateDpAsState(if (lit > 0.5f) 14.dp else 10.dp, label = "bar")
     var target by remember { mutableStateOf<Double?>(null) }
     var moves by remember { mutableIntStateOf(0) }
+    /** Where the film was sent, held on the bar until the clock read from
+     *  the film catches up with it, so the bar never jumps back first. */
+    var landing by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(at) {
+        landing?.let { if (abs(at - it) < LANDED_WITHIN_S) landing = null }
+    }
 
     fun settle() {
-        target?.let(playback::goTo)
+        target?.let {
+            playback.goTo(it)
+            landing = it
+        }
         target = null
     }
 
@@ -278,7 +292,7 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
         }
     }
     val shareOf = { seconds: Double -> length?.takeIf { it > 0 }?.let { (seconds / it).toFloat().coerceIn(0f, 1f) } ?: 0f }
-    val done = shareOf(target ?: at)
+    val done = shareOf(target ?: landing ?: at)
     val buffered = shareOf(playback.player.bufferedPosition / 1000.0)
     Box(
         modifier = modifier
