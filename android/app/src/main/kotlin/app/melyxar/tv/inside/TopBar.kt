@@ -303,11 +303,12 @@ private fun Modifier.songPlayed(): Modifier {
         }
         val measure = PathMeasure().apply { setPath(outline, false) }
         val played = Path()
-        val dash = 5.dp.toPx()
+        val dash = 7.dp.toPx()
         onDrawWithContent {
             drawContent()
             drawPath(outline, palette.text.copy(alpha = 0.16f), style = Stroke(line))
-            drawLine(palette.accentBright, Offset(left - dash, size.height / 2), Offset(left + dash, size.height / 2), line, StrokeCap.Round)
+            // Out from the edge only, clear of the cover inside.
+            drawLine(palette.accentBright, Offset(left - dash, size.height / 2), Offset(left, size.height / 2), line, StrokeCap.Round)
             val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
             played.reset()
             measure.getSegment(0f, measure.length * done, played, true)
