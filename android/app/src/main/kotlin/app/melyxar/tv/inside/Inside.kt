@@ -229,6 +229,7 @@ fun Inside(
         }
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
         val pinned = remember { PinnedBar() }
+        LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
         notes.filmOnScreen = here is Place.Playing
         val kept = rememberSaveableStateHolder()
@@ -302,18 +303,22 @@ fun Inside(
                         .background(LocalPalette.current.ground)
                         // The search key of a remote that has one, and its keys
                         // of music while a song is queued. A film's own
-                        // player answers them first.
+                        // player answers them first. A key of music is acted
+                        // on as it goes down and taken whole: let through, its
+                        // going down reaches the music's session too, which
+                        // acted on it a second time.
                         .onKeyEvent { event ->
-                            if (event.type != KeyEventType.KeyUp) {
-                                return@onKeyEvent false
-                            }
+                            // Once, however long the key is held.
+                            val down = event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0
                             val music = listening.queue.current != null
                             when {
-                                event.key == Key.Search -> chrome.search()
+                                event.key == Key.Search -> if (!down) chrome.search()
                                 !music -> return@onKeyEvent false
-                                event.key == Key.MediaPlayPause -> listening.toggle()
-                                event.key == Key.MediaNext -> listening.next()
-                                event.key == Key.MediaPrevious -> listening.previous()
+                                event.key == Key.MediaPlayPause -> if (down) listening.toggle()
+                                event.key == Key.MediaPlay -> if (down && !listening.playing) listening.toggle()
+                                event.key == Key.MediaPause -> if (down && listening.playing) listening.toggle()
+                                event.key == Key.MediaNext -> if (down) listening.next()
+                                event.key == Key.MediaPrevious -> if (down) listening.previous()
                                 else -> return@onKeyEvent false
                             }
                             true
