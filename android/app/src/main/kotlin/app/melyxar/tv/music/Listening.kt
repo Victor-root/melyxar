@@ -23,6 +23,7 @@ import app.melyxar.server.MusicPreferences
 import app.melyxar.server.Refusal
 import app.melyxar.server.Slice
 import app.melyxar.server.Song
+import app.melyxar.server.changeMusicPreferences
 import app.melyxar.server.fitting
 import app.melyxar.server.libraryQueue
 import app.melyxar.server.listenedTo
@@ -32,6 +33,7 @@ import app.melyxar.server.soundOf
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import okhttp3.Call
 import java.io.IOException
 import kotlin.random.Random
@@ -119,6 +121,22 @@ class Listening(private val context: Context, private val api: Api, private val 
             // Listened to as before.
         } catch (_: IOException) {
             // Nor with the network gone.
+        }
+    }
+
+    /** Changes how the account listens: shown at once, and as it was again
+     *  if the server refuses. [sent] names what changes as the server does. */
+    fun changePreferences(shown: MusicPreferences, sent: JsonObject) {
+        val before = preferences
+        preferences = shown
+        scope.launch {
+            preferences = try {
+                api.changeMusicPreferences(sent)
+            } catch (_: Refusal) {
+                before
+            } catch (_: IOException) {
+                before
+            }
         }
     }
 

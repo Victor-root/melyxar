@@ -8,7 +8,7 @@ private val EVERY_BUTTON = listOf(
 )
 
 /** The buttons a television has a page for. */
-val ON_A_TELEVISION = setOf("search", "favourites", "watch_later")
+val ON_A_TELEVISION = setOf("search", "favourites", "watch_later", "settings")
 
 /** The buttons on the bar and those in the account's menu, each in the
  *  account's order. */

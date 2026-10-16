@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,6 +51,7 @@ private val TALLEST = 360.dp
  * [values], starts where the remote last left it, [startAt], and stays open
  * when one is chosen, [leadsOn], since choosing it opens its own list. A
  * [note] says what the choices are for; a list with none says only that.
+ * Colours to choose from show each its own in [swatches].
  */
 @Composable
 fun ChoiceList(
@@ -61,6 +65,7 @@ fun ChoiceList(
     note: String? = null,
     startAt: Int = chosen ?: 0,
     leadsOn: Boolean = false,
+    swatches: List<Color> = emptyList(),
 ) {
     val palette = LocalPalette.current
     val start = remember { FocusRequester() }
@@ -104,6 +109,7 @@ fun ChoiceList(
                 Choice(
                     name,
                     value = values.getOrNull(at),
+                    swatch = swatches.getOrNull(at),
                     chosen = at == chosen,
                     onClick = {
                         onChoose(at)
@@ -118,7 +124,7 @@ fun ChoiceList(
 }
 
 @Composable
-private fun Choice(name: String, value: String?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun Choice(name: String, value: String?, swatch: Color?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -139,6 +145,16 @@ private fun Choice(name: String, value: String?, chosen: Boolean, onClick: () ->
             Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
                 if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
             }
+        }
+        swatch?.let {
+            Box(
+                Modifier
+                    .padding(end = 10.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(it)
+                    .border(1.dp, palette.text.copy(alpha = 0.3f), CircleShape),
+            )
         }
         Text(
             name,

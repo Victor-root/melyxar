@@ -90,6 +90,7 @@ fun Controls(
     playback: Playback,
     work: Work?,
     playing: Boolean,
+    steps: Steps,
     first: FocusRequester,
     buttons: FocusRequester,
     onMenu: (Menu) -> Unit,
@@ -150,14 +151,14 @@ fun Controls(
                 // was last on: the one that opened a list, once it closes.
                 modifier = Modifier.focusRequester(buttons).focusRestorer(first),
             ) {
-                PlayerButton(Icons.Restart, onClick = { playback.withStep(-10) })
+                PlayerButton(Icons.Restart, onClick = { playback.withStep(-steps.back) })
                 PlayerButton(
                     if (playing) Icons.Pause else Icons.Play,
                     onClick = playback::toggle,
                     large = true,
                     modifier = Modifier.focusRequester(first),
                 )
-                PlayerButton(Icons.StepOn, onClick = { playback.withStep(30) })
+                PlayerButton(Icons.StepOn, onClick = { playback.withStep(steps.on) })
                 onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it) }
                 Spacer(Modifier.weight(1f))
                 if (chaptersOf(playback.plan?.chapters.orEmpty(), length).isNotEmpty()) {

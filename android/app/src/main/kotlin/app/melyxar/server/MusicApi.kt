@@ -92,6 +92,15 @@ suspend fun Api.searchMusic(words: String, library: String? = null): FoundMusic 
 
 suspend fun Api.musicPreferences(): MusicPreferences = get("/api/v1/music/preferences", MusicPreferences.serializer())
 
+/** Changes some of how the account listens, named as the server names them:
+ *  the server takes them all at once, so what is not changed is sent back as
+ *  it was read. Gives back all of them as it kept them. */
+suspend fun Api.changeMusicPreferences(changes: JsonObject): MusicPreferences {
+    val now = get("/api/v1/music/preferences", JsonObject.serializer())
+    val kept = send("PUT", "/api/v1/music/preferences", JsonObject(now + changes)) ?: now
+    return serverJson.decodeFromJsonElement(MusicPreferences.serializer(), kept)
+}
+
 /** Says a song was listened to, once per time it is. */
 suspend fun Api.listenedTo(song: String) {
     send("POST", "/api/v1/music/songs/$song/listened", JsonObject(emptyMap()))

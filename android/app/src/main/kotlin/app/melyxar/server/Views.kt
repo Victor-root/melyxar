@@ -61,6 +61,22 @@ data class Preferences(
      *  show them, and those shown on the bar. */
     val headerButtons: List<String> = emptyList(),
     val buttonsInTheBar: List<String> = listOf("search", "favourites", "watch_later", "notifications"),
+    /** Three letter codes, nothing for no preference. */
+    val preferredAudioLanguage: String? = null,
+    val preferredSubtitleLanguage: String? = null,
+    /** When a film starts with subtitles nobody picked for it. */
+    val subtitleMode: String = "smart",
+    val subtitleModes: List<String> = emptyList(),
+    /** How far back a film starts from where it was left. */
+    val resumeRewindSeconds: Int = 0,
+    /** The longest a step, or the way back on resuming, may be. */
+    val longestStep: Int = 90,
+    /** What is done with a film of wide gamut colour, and every choice. */
+    val wideGamut: String = "automatic",
+    val wideGamutChoices: List<String> = emptyList(),
+    /** The languages the libraries hold, which are what is offered. */
+    val audioLanguages: List<String> = emptyList(),
+    val subtitleLanguages: List<String> = emptyList(),
 )
 
 /** A work as every row and grid shows it. */

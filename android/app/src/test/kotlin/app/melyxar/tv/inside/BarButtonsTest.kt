@@ -8,14 +8,14 @@ class BarButtonsTest {
     fun theAccountsOrderIsKeptAndTheRestFollows() {
         val buttons = barButtons(listOf("watch_later", "search"), inTheBar = listOf("search", "watch_later"))
         assertEquals(listOf("watch_later", "search"), buttons.bar)
-        assertEquals(listOf("favourites"), buttons.menu)
+        assertEquals(listOf("favourites", "settings"), buttons.menu)
     }
 
     @Test
     fun unknownDoubledAndUselessButtonsAreLeftOut() {
         val buttons = barButtons(listOf("cast", "search", "nonsense", "search"), inTheBar = listOf("cast", "search"))
         assertEquals(listOf("search"), buttons.bar)
-        assertEquals(listOf("favourites", "watch_later"), buttons.menu)
+        assertEquals(listOf("favourites", "watch_later", "settings"), buttons.menu)
     }
 
     @Test
