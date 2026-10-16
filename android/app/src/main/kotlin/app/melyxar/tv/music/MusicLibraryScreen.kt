@@ -69,6 +69,7 @@ import app.melyxar.tv.inside.ScrollingPage
 import app.melyxar.tv.inside.TopBar
 import app.melyxar.tv.inside.Trouble
 import app.melyxar.tv.inside.firstLineHoldsTheHead
+import app.melyxar.tv.inside.focusTraced
 import app.melyxar.tv.inside.head
 import app.melyxar.tv.inside.ready
 import app.melyxar.tv.inside.rememberFocusMemory
@@ -154,7 +155,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
                 verticalArrangement = Arrangement.spacedBy(26.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().focusTraced("music library"),
             ) {
                 wide("top") {
                     Box(Modifier.head(head, "top")) {
