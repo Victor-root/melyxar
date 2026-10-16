@@ -17,10 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -51,6 +52,7 @@ import androidx.media3.ui.PlayerView
 import app.melyxar.R
 import app.melyxar.server.NextEpisode
 import app.melyxar.server.Preferences
+import app.melyxar.server.Segment
 import app.melyxar.tv.inside.LocalAccountPreferences
 import app.melyxar.tv.inside.LocalMarks
 import app.melyxar.tv.inside.Play
@@ -132,6 +134,11 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     var declined by remember { mutableStateOf(false) }
     val inCredits by rememberInCredits(playback)
     val announced = next?.takeIf { !declined && (ended || inCredits) }
+    // The credits of an episode with another after it are the next
+    // episode's announcement rather than something to skip.
+    val skippable by rememberSkippable(playback, creditsToo = next == null || declined)
+    val skip = remember { FocusRequester() }
+    var skipHeld by remember { mutableStateOf(false) }
 
     fun playNext(episode: NextEpisode) = onNext(Play(episode.id, episode.sourceId, null))
 
@@ -161,11 +168,13 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         }
     }
     // The controls come up with nothing chosen on them: the remote is
-    // only put on them once an arrow asks for it.
-    LaunchedEffect(shown, announced != null) {
+    // only put on them once an arrow asks for it. A stretch to skip takes
+    // the remote with the controls away, so the middle button skips it.
+    LaunchedEffect(shown, announced != null, skippable != null) {
         when {
             announced != null -> upNextFirst.requestFocus()
-            !shown -> quiet.requestFocus()
+            skippable != null -> if (!shown) skip.requestFocus()
+            !shown || skipHeld -> quiet.requestFocus()
         }
     }
 
@@ -253,8 +262,9 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     // the film has no use for.
                     !in FILM_KEYS -> false
                     // Something chosen on the controls, a list or the next
-                    // episode answers its own keys.
-                    else -> if (!quietHeld || menu != null || announced != null) {
+                    // episode answers its own keys; the skip waiting for the
+                    // middle button stands for the film to every other key.
+                    else -> if (!(quietHeld || skipHeld && skippable != null) || menu != null || announced != null) {
                         nudges += 1
                         false
                     } else {
@@ -275,6 +285,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                             }
                             event.key == Key.Back -> return@onPreviewKeyEvent false
                             event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+                                if (!quietHeld) return@onPreviewKeyEvent false
                                 playback.toggle()
                                 nudge()
                             }
@@ -320,13 +331,17 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 onNext = next?.let { { playNext(it) } },
             )
         }
-        // The credits of an episode with another after it are the next
-        // episode's announcement rather than something to skip.
-        Skip(
-            playback,
-            creditsToo = next == null || declined,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
-        )
+        skippable?.let { stretch ->
+            Skip(
+                stretch,
+                onSkip = { playback.player.seekTo((stretch.toSecond * 1000).toLong()) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = Gutter, bottom = 120.dp)
+                    .focusRequester(skip)
+                    .onFocusChanged { skipHeld = it.isFocused },
+            )
+        }
         announced?.let {
             UpNext(
                 it,
@@ -374,30 +389,32 @@ private fun Picture(playback: Playback) {
     )
 }
 
-/** A skip of the recap, the opening or the credits, while the film is in
- *  one. */
+/** The recap, the opening or the credits the film is in, when a press may
+ *  skip it, the credits only when [creditsToo]. */
 @Composable
-private fun Skip(playback: Playback, creditsToo: Boolean, modifier: Modifier) {
-    var at by remember { mutableDoubleStateOf(0.0) }
-    LaunchedEffect(playback) {
+private fun rememberSkippable(playback: Playback, creditsToo: Boolean): State<Segment?> =
+    produceState(null, playback.plan, creditsToo) {
+        val stretches = playback.plan?.segments.orEmpty().filter { it.kind == "recap" || it.kind == "intro" || it.kind == "outro" && creditsToo }
+        value = null
+        if (stretches.isEmpty()) {
+            return@produceState
+        }
         while (true) {
-            at = playback.seconds
+            val at = playback.seconds
+            value = stretches.firstOrNull { at >= it.fromSecond && at < it.toSecond - 1 }
             delay(500)
         }
     }
-    val segment = playback.plan?.segments?.firstOrNull { at >= it.fromSecond && at < it.toSecond - 1 } ?: return
-    val words = when (segment.kind) {
+
+/** The skip of [stretch], named after what it skips. */
+@Composable
+private fun Skip(stretch: Segment, onSkip: () -> Unit, modifier: Modifier) {
+    val words = when (stretch.kind) {
         "recap" -> R.string.tv_skip_recap
         "intro" -> R.string.tv_skip_intro
-        "outro" -> if (creditsToo) R.string.tv_skip_outro else return
-        else -> return
+        else -> R.string.tv_skip_outro
     }
-    AccentButton(
-        stringResource(words),
-        onClick = { playback.player.seekTo((segment.toSecond * 1000).toLong()) },
-        modifier = modifier,
-        icon = null,
-    )
+    AccentButton(stringResource(words), onClick = onSkip, modifier = modifier, icon = null)
 }
 
 @Composable
