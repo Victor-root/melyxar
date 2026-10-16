@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.os.Build
+import android.util.Log
 import android.view.Display
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
@@ -11,11 +12,14 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.audio.AudioCapabilities
+import app.melyxar.BuildConfig
 
 /*
  * What this device plays, read from the device itself: its decoders, its
  * screen, and what it plays sound through.
  */
+
+private const val DEVICE_LOG = "MelyxarDevice"
 
 /** The usual sizes of a film, tallest first, as across and down. */
 private val SIZES = listOf(3840 to 2160, 2560 to 1440, 1920 to 1080, 1280 to 720, 854 to 480)
@@ -45,7 +49,19 @@ fun measuredProfile(context: Context, sound: AudioAttributes, passedOn: Boolean 
     val playedSound = SOUND_DECODERS.filter { (name, mime) ->
         mime in decoded || (passedOn && PASSED_THROUGH[name]?.let(passing::supportsEncoding) == true)
     }.keys
-    return profileOf(decoders, shownCurves(context), playedSound)
+    val profile = profileOf(decoders, shownCurves(context), playedSound)
+    if (BuildConfig.DEBUG) {
+        Log.d(DEVICE_LOG, "screen HDR types ${hdrTypesOf(context).toList()} (1 Dolby Vision, 2 HDR10, 3 HLG, 4 HDR10+)")
+        decoders.filter { it.mime.startsWith("video/") }.forEach { decoder ->
+            Log.d(
+                DEVICE_LOG,
+                "decoder ${decoder.mime}, hardware ${decoder.hardware}, tallest ${decoder.tallest}, profiles ${decoder.profiles.map { it.profile }.distinct()}",
+            )
+        }
+        Log.d(DEVICE_LOG, "sound played $playedSound, handed on allowed $passedOn")
+        Log.d(DEVICE_LOG, "wide gamut declared ${profile.wideGamut}")
+    }
+    return profile
 }
 
 /** The forms of sound the page's player of music can be sent as they are. */
@@ -97,15 +113,20 @@ private fun isHardware(info: MediaCodecInfo): Boolean {
     return !software
 }
 
-/** The curves of wide gamut the screen shows as they are. */
-private fun shownCurves(context: Context): Set<Curve> {
+/** The kinds of HDR the screen says it shows, in Android's numbers. */
+private fun hdrTypesOf(context: Context): IntArray {
     val display = ContextCompat.getDisplayOrDefault(context)
-    val types = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         display.mode.supportedHdrTypes
     } else {
         @Suppress("DEPRECATION")
         display.hdrCapabilities?.supportedHdrTypes ?: intArrayOf()
     }
+}
+
+/** The curves of wide gamut the screen shows as they are. */
+private fun shownCurves(context: Context): Set<Curve> {
+    val types = hdrTypesOf(context)
     return buildSet {
         if (Display.HdrCapabilities.HDR_TYPE_HDR10 in types || Display.HdrCapabilities.HDR_TYPE_HDR10_PLUS in types) {
             add(Curve.Pq)
