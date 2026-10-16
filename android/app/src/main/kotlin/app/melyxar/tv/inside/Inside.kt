@@ -32,6 +32,7 @@ import app.melyxar.server.Api
 import app.melyxar.server.Branding
 import app.melyxar.server.Library
 import app.melyxar.server.Preferences
+import app.melyxar.server.Sessions
 import app.melyxar.theme.USUAL_ACCENT
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.parseHex
@@ -106,6 +107,11 @@ sealed interface Place {
         override val key = "genre:${library.id}:$name"
     }
 
+    /** What the account chooses for itself, and this television. */
+    data object Settings : Place {
+        override val key = "settings"
+    }
+
     /** The song playing and what comes after it. */
     data object NowPlaying : Place {
         override val key = "now-playing"
@@ -160,6 +166,8 @@ fun Inside(
     /** A work to open, asked from the system's Continue watching row. */
     opening: String?,
     onOpened: () -> Unit,
+    /** What this television keeps of its own, which its settings change. */
+    sessions: Sessions,
     onChangeProfile: () -> Unit,
     onSignedOut: () -> Unit,
     onLeave: () -> Unit,
@@ -184,7 +192,9 @@ fun Inside(
         LocalListening provides listening,
         LocalHearts provides remember(api) { Hearts(api, scope, onSignedOut) },
     ) {
-        val chosen = rememberLoaded("preferences", comebacks) { preferences() }.value.ready
+        val held = rememberLoaded("preferences", comebacks) { preferences() }
+        val chosen = held.value.ready
+        val preferences = remember(api, held) { AccountPreferences(api, scope, onSignedOut, held) }
         val libraries = rememberLoaded("libraries", comebacks) { libraries() }.value.ready
         val marks = LocalMarks.current
         // What the libraries hold moved: every screen, the libraries above
@@ -236,7 +246,7 @@ fun Inside(
                     // One search and one song playing at a time: going to
                     // either again comes back to the one already open, the
                     // search then looking where it was asked to.
-                    is Place.Search, Place.NowPlaying -> {
+                    is Place.Search, Place.NowPlaying, Place.Settings -> {
                         val open = trail.indexOfFirst { it.key == place.key }
                         if (open >= 0) {
                             backTo(open + 1)
@@ -268,7 +278,7 @@ fun Inside(
             }
         }
         TvLook(palette) {
-            CompositionLocalProvider(LocalChrome provides chrome) {
+            CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -312,6 +322,7 @@ fun Inside(
                             is Place.Playlist -> PlaylistScreen(here.id, comebacks)
                             is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
                             Place.NowPlaying -> NowPlayingScreen()
+                            Place.Settings -> SettingsScreen(sessions)
                             // The film is always shown dark, as the web's player is.
                             is Place.Playing -> key(here.play) {
                                 TvLook(paletteOf(chosenAccent, light = false)) {

@@ -148,6 +148,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     suspend fun preferences(): Preferences = get("/api/v1/preferences", Preferences.serializer())
 
+    /** Changes some of the account's preferences, named as the server names
+     *  them, and gives back all of them as it kept them. */
+    suspend fun changePreferences(changes: JsonObject): Preferences = withContext(Dispatchers.IO) {
+        http.newCall(request("/api/v1/preferences").put(changes.toString().asJson()).build()).execute().use {
+            read(it, Preferences.serializer())
+        }
+    }
+
     suspend fun home(): Home = get("/api/v1/home", Home.serializer())
 
     suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
@@ -265,7 +273,6 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         http.newCall(request(path).get().build()).execute().use { read(it, answer) }
     }
 
-    /** Sends a change, and gives back the server's answer as it wrote it. */
     /**
      * What the server's live line says, word by word, its opening said as
      * "open"; over when the line closes, and failing when it breaks.
@@ -318,6 +325,7 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         }
     }
 
+    /** Sends a change, and gives back the server's answer as it wrote it. */
     suspend fun send(method: String, path: String, body: JsonObject?): JsonObject? = withContext(Dispatchers.IO) {
         val sent = body?.toString()?.asJson()
         http.newCall(request(path).method(method, sent).build()).execute().use { answer ->

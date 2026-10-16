@@ -58,6 +58,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
             branding = now.branding,
             opening = opening,
             onOpened = onOpened,
+            sessions = sessions,
             onChangeProfile = { stage = Stage.AtTheDoor(now.server, startsAlone = false) },
             onSignedOut = {
                 sessions.forget(now.api.origin, now.account.name)

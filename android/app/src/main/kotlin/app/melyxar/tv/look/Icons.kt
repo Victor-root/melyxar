@@ -79,6 +79,14 @@ object Icons {
         1.8f,
         "M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572",
     )
+    val Television = outlined("television", paths = arrayOf(rect(3f, 4.5f, 18f, 12f, 2f), "M8.5 20.5h7", "M12 16.5v4"))
+    val Bell = outlined(
+        "bell",
+        paths = arrayOf(
+            "M6.2 16.6V11a5.8 5.8 0 0 1 11.6 0v5.6l1.6 1.6H4.6Z",
+            "M10 20.4a2.2 2.2 0 0 0 4 0",
+        ),
+    )
     val Tick = outlined("tick", paths = arrayOf("M5 12.6l4.6 4.6L19 7.4"))
     val Clock = outlined("clock", paths = arrayOf(circle(12f, 12f, 8.6f), "M12 7.4V12l3 1.8"))
     val Info = outlined("info", paths = arrayOf(circle(12f, 12f, 8.8f), "M12 11v5.4", "M12 7.8h.01"))

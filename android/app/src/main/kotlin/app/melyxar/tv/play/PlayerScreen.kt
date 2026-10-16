@@ -47,6 +47,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
 import app.melyxar.server.NextEpisode
+import app.melyxar.server.Preferences
+import app.melyxar.tv.inside.LocalAccountPreferences
 import app.melyxar.tv.inside.LocalMarks
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
@@ -60,9 +62,9 @@ import kotlinx.coroutines.delay
 /** How long the controls stay up once the remote stops. */
 private const val CONTROLS_FOR_MS = 4_000L
 
-/** The steps back and on of the arrows, as the web's player has them. */
-private const val STEP_BACK_S = 10
-private const val STEP_ON_S = 30
+/** The steps back and on of the arrows and the buttons, as the account
+ *  chose them. */
+data class Steps(val back: Int, val on: Int)
 
 /**
  * A film on the whole screen. The remote's arrows step through it and its
@@ -76,6 +78,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val api = LocalServer.current
     val scope = rememberCoroutineScope()
     val marks = LocalMarks.current
+    val chosen = LocalAccountPreferences.current.now ?: Preferences()
+    val steps = Steps(chosen.stepBackSeconds, chosen.stepOnSeconds)
     val source = play.source
     val work = rememberLoaded("work:${play.work}") { work(play.work) }.value.ready
     val playback = remember(play) {
@@ -171,12 +175,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         true
                     }
                     Key.MediaFastForward -> {
-                        playback.withStep(STEP_ON_S)
+                        playback.withStep(steps.on)
                         nudge()
                         true
                     }
                     Key.MediaRewind -> {
-                        playback.withStep(-STEP_BACK_S)
+                        playback.withStep(-steps.back)
                         nudge()
                         true
                     }
@@ -185,8 +189,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         // act on the film itself.
                         when (event.key) {
                             Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> playback.toggle()
-                            Key.DirectionLeft -> playback.withStep(-STEP_BACK_S)
-                            Key.DirectionRight -> playback.withStep(STEP_ON_S)
+                            Key.DirectionLeft -> playback.withStep(-steps.back)
+                            Key.DirectionRight -> playback.withStep(steps.on)
                             Key.Back -> return@onPreviewKeyEvent false
                         }
                         nudge()
@@ -207,6 +211,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 playback = playback,
                 work = work,
                 playing = playing,
+                steps = steps,
                 first = controls,
                 buttons = buttons,
                 onMenu = ::openMenu,

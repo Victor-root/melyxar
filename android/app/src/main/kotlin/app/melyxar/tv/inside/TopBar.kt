@@ -123,6 +123,7 @@ private fun barPlace(button: String): BarPlace? = when (button) {
     "search" -> BarPlace(Icons.Search, R.string.tv_search) { it.search() }
     "favourites" -> BarPlace(Icons.Heart, R.string.tv_favourites) { it.go(Place.Listed(Shortlist.Favourites)) }
     "watch_later" -> BarPlace(Icons.Clock, R.string.tv_watch_later) { it.go(Place.Listed(Shortlist.WatchLater)) }
+    "settings" -> BarPlace(Icons.Gear, R.string.tv_settings) { it.go(Place.Settings) }
     else -> null
 }
 
