@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -47,9 +48,15 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -169,9 +176,12 @@ val LocalPinnedBar = staticCompositionLocalOf { PinnedBar() }
  * its glass filling with the accent as the song plays. As each song starts,
  * its piece of glass gives way for a moment to the song's name beside its
  * cover, so the eye finds what began; the remote coming to it ends that.
+ * Down from it, the remote goes back into [screen] where it left it: the
+ * screen stands under the bar as much as below it, so nothing there is
+ * found below the bar by looking.
  */
 @Composable
-fun PinnedTopBar(modifier: Modifier = Modifier) {
+fun PinnedTopBar(screen: FocusRequester, modifier: Modifier = Modifier) {
     val pinned = LocalPinnedBar.current
     val here = LocalChrome.current.here
     val song = LocalListening.current.queue.current ?: return
@@ -190,7 +200,23 @@ fun PinnedTopBar(modifier: Modifier = Modifier) {
             announcing = false
         }
     }
-    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop).focusTraced("pinned bar"), contentAlignment = Alignment.Center) {
+    val focus = LocalFocusManager.current
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = Gutter, end = Gutter, top = BarTop)
+            .focusTraced("pinned bar")
+            .onPreviewKeyEvent { event ->
+                if (event.key != Key.DirectionDown || event.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                if (!focus.moveFocus(FocusDirection.Down)) {
+                    screen.requestFocus()
+                }
+                true
+            },
+        contentAlignment = Alignment.Center,
+    ) {
         shown?.title?.invoke()
         Bar(LocalChrome.current, shown?.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
     }
