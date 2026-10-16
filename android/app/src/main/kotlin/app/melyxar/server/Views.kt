@@ -7,6 +7,7 @@ import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
 
 /*
  * What the server answers, as its own views write it (crates/server), with
@@ -322,6 +323,8 @@ data class Plan(
     val chapters: List<Chapter> = emptyList(),
     /** What is done with the film's HDR, when it has any. */
     val wideGamut: WideGamutHandling? = null,
+    /** Why the server plays it this way, as codes. */
+    val reasons: List<JsonElement> = emptyList(),
 )
 
 /** The little pictures of a film, as sheets of many: a slash, the sheet's
