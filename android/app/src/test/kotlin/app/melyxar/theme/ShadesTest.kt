@@ -61,4 +61,12 @@ class ShadesTest {
         assertEquals(0x80, markPixel(0x80000000.toInt(), red) ushr 24)
         assertEquals("#720000", hex(markPixel(0x80000000.toInt(), red)))
     }
+
+    @Test
+    fun findsTheOfferedAccentNearestToAnyOther() {
+        OFFERED_ACCENTS.forEach { offered -> assertEquals(offered, nearestOffered(parseHex(offered)!!)) }
+        assertEquals("#2f9e44", nearestOffered(parseHex("#40c060")!!))
+        assertEquals("#1c7ed6", nearestOffered(parseHex("#2f7cf6")!!))
+        assertEquals("#c81e1e", nearestOffered(parseHex("#ff0000")!!))
+    }
 }
