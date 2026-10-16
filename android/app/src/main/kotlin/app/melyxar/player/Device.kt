@@ -32,15 +32,18 @@ private val PASSED_THROUGH = mapOf(
     "truehd" to C.ENCODING_DOLBY_TRUEHD,
 )
 
+/** What the device plays; a sound it cannot decode but could hand as it is
+ *  to a receiver counts only when [passedOn] says it may be, since the
+ *  device's own volume no longer reaches a sound handed on. */
 @OptIn(UnstableApi::class)
-fun measuredProfile(context: Context, sound: AudioAttributes): ClientProfile {
+fun measuredProfile(context: Context, sound: AudioAttributes, passedOn: Boolean = true): ClientProfile {
     val decoders = decoders()
     val decoded = decoders.map { it.mime }.toSet()
     // Only codecs handed on as they are matter here, which a spatial mix of
     // the sound has nothing to do with.
     val passing = AudioCapabilities.getCapabilities(context, sound, null, emptyList())
     val playedSound = SOUND_DECODERS.filter { (name, mime) ->
-        mime in decoded || PASSED_THROUGH[name]?.let(passing::supportsEncoding) == true
+        mime in decoded || (passedOn && PASSED_THROUGH[name]?.let(passing::supportsEncoding) == true)
     }.keys
     return profileOf(decoders, shownCurves(context), playedSound)
 }
