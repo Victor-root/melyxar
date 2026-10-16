@@ -83,6 +83,12 @@ import app.melyxar.tv.notes.LocalNotes
 import java.util.Date
 import kotlinx.coroutines.delay
 
+/*
+ * What the remote is on in the bar is ringed in the colour of the text,
+ * white on the dark theme, rather than the accent the bar's glass is
+ * already tinted with.
+ */
+
 /** How far the bar stands from the top of the screen, and how tall it is. */
 private val BarTop = 20.dp
 private val BarHeight = 46.dp
@@ -304,7 +310,7 @@ private fun Brand() {
             .height(46.dp)
             .glassPiece()
             .background(palette.accent.copy(alpha = 0.22f * lit))
-            .rim(PillShape, palette.accentBright, 2.dp) { lit }
+            .rim(PillShape, palette.text, 2.dp) { lit }
             .focusProperties { canFocus = chrome.canGoBack }
             .clickable(interaction, indication = null, enabled = chrome.canGoBack) { chrome.go(Place.Home) }
             .padding(start = if (chrome.canGoBack) 12.dp else 9.dp, end = 18.dp),
@@ -346,7 +352,7 @@ private fun Brand() {
 private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Box {
-        GlassIcon(icon, label, onClick)
+        GlassIcon(icon, label, onClick, ring = palette.text)
         if (count > 0) {
             Text(
                 if (count > MOST_COUNTED) "$MOST_COUNTED+" else "$count",
@@ -368,7 +374,7 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
 @Composable
 private fun PlayingNow(onClick: () -> Unit) {
     val song = LocalListening.current.queue.current ?: return
-    GlassRound(stringResource(R.string.tv_music_now_playing), onClick) { Cover(song) }
+    GlassRound(stringResource(R.string.tv_music_now_playing), onClick, ring = LocalPalette.current.text) { Cover(song) }
 }
 
 /** A song's cover in a round, or the note of music for one without. */
@@ -414,7 +420,7 @@ private fun Account(modifier: Modifier) {
                 .height(38.dp)
                 .clip(PillShape)
                 .background(palette.accent.copy(alpha = 0.22f * lit))
-                .rim(PillShape, palette.accentBright, 2.dp) { lit }
+                .rim(PillShape, palette.text, 2.dp) { lit }
                 .clickable(interaction, indication = null) { open = true }
                 .padding(start = 12.dp, end = 3.dp),
             verticalAlignment = Alignment.CenterVertically,

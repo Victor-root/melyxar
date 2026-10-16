@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
@@ -55,16 +56,23 @@ fun GlassRule() {
 }
 
 /** What every press on the glass shares: tinted by the accent and ringed
- *  by it as the remote comes to it, filled with it when [on] says it is
- *  the one in force. */
+ *  as the remote comes to it, in the accent or in [ring], filled with the
+ *  accent when [on] says it is the one in force. */
 @Composable
-private fun Modifier.glassPress(shape: Shape, on: Boolean, interaction: MutableInteractionSource, lit: () -> Float, onClick: () -> Unit): Modifier {
+private fun Modifier.glassPress(
+    shape: Shape,
+    on: Boolean,
+    interaction: MutableInteractionSource,
+    lit: () -> Float,
+    onClick: () -> Unit,
+    ring: Color? = null,
+): Modifier {
     val palette = LocalPalette.current
     return this
         .height(PRESS)
         .clip(shape)
         .drawBehind { drawRect(if (on) palette.accent else palette.accent.copy(alpha = 0.22f * lit())) }
-        .rim(shape, palette.accentBright, 2.dp, lit)
+        .rim(shape, ring ?: palette.accentBright, 2.dp, lit)
         .clickable(interaction, indication = null, onClick = onClick)
 }
 
@@ -112,24 +120,31 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
     }
 }
 
-/** A round press of the piece, said by [label] to whoever does not see it. */
+/** A round press of the piece, said by [label] to whoever does not see it,
+ *  ringed in [ring] rather than the accent when it says so. */
 @Composable
-fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, ring: Color? = null) {
     val palette = LocalPalette.current
-    GlassRound(label, onClick, modifier) { lit ->
+    GlassRound(label, onClick, modifier, ring) { lit ->
         Glyph(icon, palette.text, 20.dp)
     }
 }
 
 /** A round press of the piece holding [content], told how lit it is. */
 @Composable
-fun GlassRound(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.(lit: () -> Float) -> Unit) {
+fun GlassRound(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    ring: Color? = null,
+    content: @Composable BoxScope.(lit: () -> Float) -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Box(
         modifier = modifier
             .size(PRESS)
-            .glassPress(CircleShape, on = false, interaction, { lit }, onClick)
+            .glassPress(CircleShape, on = false, interaction, { lit }, onClick, ring)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
