@@ -64,6 +64,7 @@ import app.melyxar.server.KnownServer
 import app.melyxar.server.Picture
 import app.melyxar.server.Refusal
 import app.melyxar.server.Sessions
+import app.melyxar.server.who
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.wantsLight
@@ -101,13 +102,15 @@ private sealed interface Answer {
  * "Who is watching?": the accounts of the server, each a tile, as the web's
  * door draws them. A profile already signed in on this television opens at
  * once, or once its code is typed when it gave itself one; any other asks
- * for its password, once.
+ * for its password, once. As the television [startsAlone], the profile it
+ * was told to open on is opened without being asked for.
  */
 @Composable
 fun Door(
     api: Api,
     server: KnownServer,
     sessions: Sessions,
+    startsAlone: Boolean,
     onIn: (Api, Account, Branding) -> Unit,
     onChangeServer: () -> Unit,
     onBack: () -> Unit,
@@ -162,6 +165,17 @@ fun Door(
             } catch (_: IOException) {
                 answer = Answer.Unreachable
             }
+        }
+    }
+
+    var started by remember { mutableStateOf(!startsAlone) }
+    LaunchedEffect(answer) {
+        val now = answer as? Answer.Open ?: return@LaunchedEffect
+        if (!started) {
+            started = true
+            sessions.opening(api.origin).who(sessions.last(api.origin))
+                ?.takeIf { who -> now.profiles.any { it.name == who } }
+                ?.let { open(it, now.branding) }
         }
     }
 

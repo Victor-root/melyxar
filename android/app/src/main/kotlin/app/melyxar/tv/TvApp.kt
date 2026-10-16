@@ -22,7 +22,9 @@ import app.melyxar.tv.inside.Inside
 private sealed interface Stage {
     data object ChoosingServer : Stage
 
-    data class AtTheDoor(val server: KnownServer) : Stage
+    /** At the door of [server], opening on its chosen profile when the
+     *  television [startsAlone] rather than coming back to it. */
+    data class AtTheDoor(val server: KnownServer, val startsAlone: Boolean) : Stage
 
     data class In(val api: Api, val account: Account, val branding: Branding, val server: KnownServer) : Stage
 }
@@ -30,21 +32,22 @@ private sealed interface Stage {
 @Composable
 fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened: () -> Unit, onLeave: () -> Unit) {
     var stage by remember {
-        mutableStateOf(servers.current()?.let { Stage.AtTheDoor(it) } ?: Stage.ChoosingServer)
+        mutableStateOf(servers.current()?.let { Stage.AtTheDoor(it, startsAlone = true) } ?: Stage.ChoosingServer)
     }
     when (val now = stage) {
         Stage.ChoosingServer -> ServerChoice(
             servers = servers,
             onChosen = { server ->
                 servers.open(server)
-                stage = Stage.AtTheDoor(server)
+                stage = Stage.AtTheDoor(server, startsAlone = false)
             },
-            onBack = { servers.current()?.let { stage = Stage.AtTheDoor(it) } ?: onLeave() },
+            onBack = { servers.current()?.let { stage = Stage.AtTheDoor(it, startsAlone = false) } ?: onLeave() },
         )
         is Stage.AtTheDoor -> Door(
             api = remember(now.server) { Api(ServerOrigin(now.server.origin), network, token = null) },
             server = now.server,
             sessions = sessions,
+            startsAlone = now.startsAlone,
             onIn = { api, account, branding -> stage = Stage.In(api, account, branding, now.server) },
             onChangeServer = { stage = Stage.ChoosingServer },
             onBack = onLeave,
@@ -55,10 +58,10 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
             branding = now.branding,
             opening = opening,
             onOpened = onOpened,
-            onChangeProfile = { stage = Stage.AtTheDoor(now.server) },
+            onChangeProfile = { stage = Stage.AtTheDoor(now.server, startsAlone = false) },
             onSignedOut = {
                 sessions.forget(now.api.origin, now.account.name)
-                stage = Stage.AtTheDoor(now.server)
+                stage = Stage.AtTheDoor(now.server, startsAlone = false)
             },
             onLeave = onLeave,
         )
