@@ -11,6 +11,39 @@ import java.util.UUID
 @Serializable
 data class KeptSession(val name: String, val token: String)
 
+/** Whom this device opens on as it starts, at one server's door. */
+sealed interface Opening {
+    /** "Who is watching?", every time. */
+    data object Ask : Opening
+
+    /** The profile last opened here. */
+    data object Last : Opening
+
+    /** Always the same profile. */
+    data class Always(val name: String) : Opening
+}
+
+/** The profile to open on as the device starts, [last] being the one last
+ *  opened here; none to ask. */
+fun Opening.who(last: String?): String? = when (this) {
+    Opening.Ask -> null
+    Opening.Last -> last
+    is Opening.Always -> name
+}
+
+/** How an opening is written down, and read back; anything unreadable asks. */
+fun Opening.written(): String = when (this) {
+    Opening.Ask -> "ask"
+    Opening.Last -> "last"
+    is Opening.Always -> "always:$name"
+}
+
+fun openingWritten(written: String?): Opening = when {
+    written == "last" -> Opening.Last
+    written?.startsWith("always:") == true -> Opening.Always(written.removePrefix("always:"))
+    else -> Opening.Ask
+}
+
 /**
  * The accounts signed in on this device, server by server, each keeping its
  * own session: choosing a profile again opens it without its password. Kept
@@ -36,8 +69,18 @@ class Sessions(context: Context) {
         }
     }
 
-    fun keep(origin: ServerOrigin, session: KeptSession) =
+    /** Keeps [session], the profile last opened here from now on. */
+    fun keep(origin: ServerOrigin, session: KeptSession) {
         save(origin, of(origin).filter { it.name != session.name } + session)
+        kept.edit { putString("$LAST${origin.value}", session.name) }
+    }
+
+    fun last(origin: ServerOrigin): String? = kept.getString("$LAST${origin.value}", null)
+
+    fun opening(origin: ServerOrigin): Opening = openingWritten(kept.getString("$OPENING${origin.value}", null))
+
+    fun openOn(origin: ServerOrigin, opening: Opening) =
+        kept.edit { putString("$OPENING${origin.value}", opening.written()) }
 
     fun forget(origin: ServerOrigin, name: String) = save(origin, of(origin).filter { it.name != name })
 
@@ -46,5 +89,7 @@ class Sessions(context: Context) {
 
     private companion object {
         const val CLIENT = "client"
+        const val LAST = "last:"
+        const val OPENING = "opening:"
     }
 }
