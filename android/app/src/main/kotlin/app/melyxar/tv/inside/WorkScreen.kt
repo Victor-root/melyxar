@@ -60,7 +60,6 @@ import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
-import app.melyxar.tv.look.Synopsis
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
@@ -167,10 +166,10 @@ private fun Top(work: Work, first: FocusRequester) {
     val palette = LocalPalette.current
     val lying = work.kind == "episode" || work.kind == "video"
     Row(
-        modifier = Modifier.padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 34.dp),
-        horizontalArrangement = Arrangement.spacedBy(36.dp),
+        modifier = Modifier.padding(start = Gutter, end = Gutter, top = 24.dp, bottom = 30.dp),
+        horizontalArrangement = Arrangement.spacedBy(32.dp),
     ) {
-        val across = if (lying) 300.dp else 190.dp
+        val across = if (lying) 280.dp else 170.dp
         Box(
             Modifier
                 .width(across)
@@ -184,27 +183,16 @@ private fun Top(work: Work, first: FocusRequester) {
                 Modifier.fillMaxWidth().aspectRatio(if (lying) 16f / 9 else 2f / 3),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
-            if (work.logo.isNotEmpty()) {
-                ServerPicture(
-                    work.logo,
-                    360.dp,
-                    Modifier.heightIn(max = 90.dp).widthIn(max = 360.dp),
-                    contentScale = ContentScale.Fit,
-                    alignment = Alignment.CenterStart,
-                )
-            } else {
-                Text(
-                    work.title,
-                    fontSize = 40.sp,
-                    lineHeight = 42.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.02).em,
-                    color = palette.text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
+            Text(
+                work.title,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-0.02).em,
+                color = palette.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             work.tagline?.let {
                 Text(it, fontSize = 16.sp, fontStyle = FontStyle.Italic, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -215,7 +203,8 @@ private fun Top(work: Work, first: FocusRequester) {
                     Progress(at.toDouble(), lengthOfAPlay(card), width = 300.dp)
                 }
             }
-            work.overview?.let { Synopsis(it, title = work.title, maxLines = 5) }
+            // Always whole: there is room for it once the title is a line.
+            work.overview?.let { Text(it, fontSize = 15.sp, lineHeight = 23.sp, color = palette.textSoft) }
         }
     }
 }
@@ -395,7 +384,7 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
         fontWeight = FontWeight.SemiBold,
         color = when {
             active -> palette.accentContrast
-            lit > 0.5f -> palette.accentBright
+            lit > 0.5f -> palette.text
             else -> palette.textSoft
         },
         modifier = modifier

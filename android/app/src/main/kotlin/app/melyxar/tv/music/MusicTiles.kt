@@ -223,7 +223,7 @@ fun SongLine(
                 song.title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (playingNow || lit > 0.5f) palette.accentBright else palette.text,
+                color = if (playingNow) palette.accentBright else palette.text,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

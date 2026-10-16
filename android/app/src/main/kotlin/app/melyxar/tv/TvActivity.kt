@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.melyxar.server.KnownServers
 import app.melyxar.server.Sessions
+import app.melyxar.tv.look.TvScale
 
 /**
  * The application on a television: every screen of it drawn here, natively,
@@ -27,7 +28,7 @@ class TvActivity : ComponentActivity() {
         val servers = KnownServers(this)
         val sessions = Sessions(this)
         opening = intent.getStringExtra(OPENING)
-        setContent { TvApp(servers, sessions, opening, onOpened = { opening = null }, onLeave = ::finish) }
+        setContent { TvScale { TvApp(servers, sessions, opening, onOpened = { opening = null }, onLeave = ::finish) } }
     }
 
     override fun onNewIntent(intent: Intent) {

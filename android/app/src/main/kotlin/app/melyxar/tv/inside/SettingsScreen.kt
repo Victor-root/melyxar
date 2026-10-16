@@ -428,7 +428,7 @@ private fun Line(
             name,
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
-            color = if (lit > 0.5f) palette.accentBright else palette.text,
+            color = palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),

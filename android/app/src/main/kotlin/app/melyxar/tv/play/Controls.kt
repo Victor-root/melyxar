@@ -310,6 +310,6 @@ private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modif
                 .background(palette.accent.copy(alpha = 0.16f * lit))
                 .border(2.dp, palette.accent.copy(alpha = lit), shape),
         )
-        Glyph(icon, if (lit > 0.5f) palette.accentBright else palette.text, if (large) 34.dp else 27.dp)
+        Glyph(icon, palette.text, if (large) 34.dp else 27.dp)
     }
 }
