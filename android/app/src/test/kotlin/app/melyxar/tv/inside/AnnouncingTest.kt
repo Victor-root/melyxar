@@ -6,14 +6,15 @@ import org.junit.jupiter.api.Test
 class AnnouncingTest {
     @Test
     fun aNameThatFitsIsSaidTheUsualTime() {
-        assertEquals(SAID_WHOLE_MS, saidForMs(300, 400, 60f))
-        assertEquals(SAID_WHOLE_MS, saidForMs(400, 400, 60f))
+        assertEquals(SAID_WHOLE_MS, saidForMs(0, 40f))
+        assertEquals(SAID_WHOLE_MS, saidForMs(-20, 40f))
     }
 
     @Test
-    fun aLongNameIsSaidUntilItHasRunBy() {
-        // 600 wide in 300 of glass, at 60 a second: 600 + 100 to run, so
-        // eleven and two thirds seconds, after the wait and before the rest.
-        assertEquals(1_200L + 11_666L + 800L, saidForMs(600, 300, 60f))
+    fun aLongNameIsSaidUntilItsEndHasBeenRead() {
+        // 300 pixels past the glass at 40 a second: seven and a half seconds
+        // to run, after the wait and before its end is read.
+        assertEquals(7_500L, runForMs(300, 40f))
+        assertEquals(1_200L + 7_500L + 1_500L, saidForMs(300, 40f))
     }
 }

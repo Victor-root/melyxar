@@ -155,8 +155,8 @@ private class Skipping {
 }
 
 /** How many times a held key of music repeats before it counts as held:
- *  about half a second. */
-private const val HELD_REPEATS = 10
+ *  its first repeat, under half a second. */
+private const val HELD_REPEATS = 1
 
 /** What every screen's top bar shows, and where its pieces lead. */
 class Chrome(
