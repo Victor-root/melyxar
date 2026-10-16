@@ -2,10 +2,9 @@ package app.melyxar.tv.inside
 
 import android.text.format.DateFormat
 import androidx.annotation.StringRes
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -13,7 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -42,7 +41,9 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -145,8 +146,8 @@ val LocalPinnedBar = staticCompositionLocalOf { PinnedBar() }
  * The bar over every screen that has one while a song plays: the song is
  * played from it, so it stays where it is however far the screen scrolls,
  * its glass filling with the accent as the song plays. As each song starts,
- * the whole bar gives way for a moment to the song's name beside its cover,
- * so the eye finds what began.
+ * its piece of glass gives way for a moment to the song's name beside its
+ * cover, so the eye finds what began; the remote coming to it ends that.
  */
 @Composable
 fun PinnedTopBar(modifier: Modifier = Modifier) {
@@ -162,14 +163,9 @@ fun PinnedTopBar(modifier: Modifier = Modifier) {
             announcing = false
         }
     }
-    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop)) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            shown.title?.invoke()
-            Bar(LocalChrome.current, shown.first)
-        }
-        AnimatedVisibility(announcing, Modifier.matchParentSize(), enter = fadeIn(), exit = fadeOut()) {
-            Announced(song)
-        }
+    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop), contentAlignment = Alignment.Center) {
+        shown.title?.invoke()
+        Bar(LocalChrome.current, shown.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
     }
 }
 
@@ -186,67 +182,67 @@ private fun BarLine(modifier: Modifier, first: FocusRequester?, title: (@Composa
     }
 }
 
-/** The song that has just started, over the whole bar: its cover, and its
- *  name and who sings it beside it. */
+/** The song that has just started, in place of what its piece of glass
+ *  holds: its cover, and its name and who sings it running along beside it
+ *  when they are longer than the glass. */
 @Composable
-private fun Announced(song: Song) {
+private fun Announced(song: Song, modifier: Modifier) {
     val palette = LocalPalette.current
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .glassPiece()
-            .songFilled()
-            .padding(start = 5.dp, end = 22.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
+    Row(modifier.padding(start = 5.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(song)
-        Text(
-            song.title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = palette.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        artistsOf(song.artists).takeIf { it.isNotEmpty() }?.let {
-            Text(it, fontSize = 16.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(
+            Modifier.padding(start = 12.dp).basicMarquee(iterations = Int.MAX_VALUE),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(song.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1)
+            artistsOf(song.artists).takeIf { it.isNotEmpty() }?.let {
+                Text("  \u00B7  $it", fontSize = 14.sp, color = palette.textSoft, maxLines = 1)
+            }
         }
     }
 }
 
-/** How long a song that has just started holds the bar. */
+/** How long a song that has just started holds its piece of the bar. */
 private const val ANNOUNCED_MS = 5_000L
 
-/** The bar's two ends. */
+/** The bar's two ends; [announced], the song that has just started, takes
+ *  the place of what the piece of glass of the song holds while it is said,
+ *  that kept under it so the remote finds it where it was. */
 @Composable
-private fun Bar(chrome: Chrome, first: FocusRequester?) {
+private fun Bar(chrome: Chrome, first: FocusRequester?, announced: Song? = null, onReached: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Brand()
         Spacer(Modifier.weight(1f))
         // Everything at this end on one piece of glass, as on the web: this
         // end is what is pressed, the other is where one is.
-        Row(
+        Box(
             modifier = Modifier
                 .height(BarHeight)
                 .glassPiece()
                 .then(if (LocalListening.current.queue.current != null) Modifier.songFilled() else Modifier)
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                .onFocusChanged { if (it.hasFocus) onReached() },
         ) {
-            // The song playing, while one is.
-            if (LocalListening.current.queue.current != null) {
-                PlayingNow { chrome.go(Place.NowPlaying) }
+            val hidden by animateFloatAsState(if (announced != null) 0f else 1f, label = "announced")
+            Row(
+                modifier = Modifier.fillMaxHeight().padding(horizontal = 4.dp).graphicsLayer { alpha = hidden },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                // The song playing, while one is.
+                if (LocalListening.current.queue.current != null) {
+                    PlayingNow { chrome.go(Place.NowPlaying) }
+                }
+                val unread = LocalNotes.current.held.unread
+                chrome.buttons.bar.forEach { button ->
+                    barPlace(button)?.let { BarButton(it.icon, stringResource(it.name), if (button == "notifications") unread else 0) { it.press(chrome) } }
+                }
+                // A rule between who is here and everything that is not.
+                Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
+                Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
             }
-            val unread = LocalNotes.current.held.unread
-            chrome.buttons.bar.forEach { button ->
-                barPlace(button)?.let { BarButton(it.icon, stringResource(it.name), if (button == "notifications") unread else 0) { it.press(chrome) } }
+            if (announced != null) {
+                Announced(announced, Modifier.matchParentSize().graphicsLayer { alpha = 1f - hidden })
             }
-            // A rule between who is here and everything that is not.
-            Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
-            Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
         }
     }
 }

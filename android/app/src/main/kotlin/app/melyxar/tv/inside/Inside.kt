@@ -323,6 +323,9 @@ fun Inside(
                                 event.key == Key.MediaPause -> if (down && listening.playing) listening.toggle()
                                 event.key == Key.MediaNext -> if (down) listening.next()
                                 event.key == Key.MediaPrevious -> if (down) listening.previous()
+                                // By the account's own steps, each press and as it is held.
+                                event.key == Key.MediaFastForward -> if (event.type == KeyEventType.KeyDown) listening.skip(on = true)
+                                event.key == Key.MediaRewind -> if (event.type == KeyEventType.KeyDown) listening.skip(on = false)
                                 else -> return@onKeyEvent false
                             }
                             true
