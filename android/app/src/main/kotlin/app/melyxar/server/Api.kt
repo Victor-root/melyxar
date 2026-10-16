@@ -210,6 +210,11 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
     suspend fun plan(source: String, asked: Asked): Plan =
         post("/api/v1/playback/$source/plan", watched(asked), Plan.serializer())
 
+    /** The plan of this file asked by a page rather than a player, for what
+     *  it tells of the film before anything plays: nothing starts. */
+    suspend fun planOf(source: String): Plan =
+        post("/api/v1/playback/$source/plan", JsonObject(emptyMap()), Plan.serializer())
+
     /** Opens a film the server rebuilds, starting at [from] seconds. */
     suspend fun openStream(source: String, asked: Asked, from: Double): StreamSession =
         post(

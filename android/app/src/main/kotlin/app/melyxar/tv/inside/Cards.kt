@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,8 +64,7 @@ private val Corner = GenericShape { size, _ ->
 /**
  * A work in a row or a grid, as the web draws it: its poster standing, or
  * its still lying down for what is told apart by the still, with how far in
- * somebody is and whether it was watched. The remote coming to it lights it
- * as the pointer does on the web.
+ * somebody is and whether it was watched.
  */
 @Composable
 fun WorkCard(
@@ -79,11 +79,67 @@ fun WorkCard(
     val palette = LocalPalette.current
     val whereabouts = LocalMarks.current.whereabouts(card)
     val progress = whereabouts.resume?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) }
+    val across = if (lying) WideWidth else PosterWidth
+    PictureCard(
+        across = across,
+        down = if (lying) across * 9 / 16 else across * 3 / 2,
+        title = title,
+        note = note,
+        trailing = trailing,
+        ground = card.color?.let(::parseHex)?.let(::Color) ?: palette.surfaceRaised,
+        onClick = onClick,
+        modifier = modifier,
+    ) { glowing ->
+        val pictures = if (lying && card.wide.isNotEmpty()) card.wide else card.poster
+        if (pictures.isEmpty()) {
+            NoPicture(card, across)
+        } else {
+            ServerPicture(pictures, across, Modifier.matchParentSize())
+        }
+        progress?.takeIf { it > 0f }?.let { done ->
+            Box(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(if (glowing) Color.Transparent else Color.Black.copy(alpha = 0.55f)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(done)
+                        .background(if (glowing) palette.accentBright else palette.accent),
+                )
+            }
+        }
+        if (card.watchedMarks) {
+            SeenCorner(whereabouts, card.episodes, Modifier.align(Alignment.TopEnd))
+        }
+    }
+}
+
+/**
+ * A card of a row or a grid: its [picture] in a frame [across] by [down] on
+ * [ground], then its title and what is said under it. The remote coming to
+ * it lights it as the pointer does on the web; [picture] is told whether it
+ * is lit.
+ */
+@Composable
+fun PictureCard(
+    across: Dp,
+    down: Dp,
+    title: String,
+    note: String?,
+    trailing: String?,
+    ground: Color,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    picture: @Composable BoxScope.(glowing: Boolean) -> Unit,
+) {
+    val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val glowing by remember { derivedStateOf { lit > 0.001f } }
-    val across = if (lying) WideWidth else PosterWidth
-    val down = if (lying) across * 9 / 16 else across * 3 / 2
     Column(
         modifier = modifier
             .width(across)
@@ -100,34 +156,10 @@ fun WorkCard(
                 .boxShadow(CardShape, *palette.shadowTile) { 1f - lit }
                 .halo(CardShape, palette) { lit }
                 .clip(CardShape)
-                .background(card.color?.let(::parseHex)?.let(::Color) ?: palette.surfaceRaised)
+                .background(ground)
                 .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
         ) {
-            val pictures = if (lying && card.wide.isNotEmpty()) card.wide else card.poster
-            if (pictures.isEmpty()) {
-                NoPicture(card, across)
-            } else {
-                ServerPicture(pictures, across, Modifier.matchParentSize())
-            }
-            progress?.takeIf { it > 0f }?.let { done ->
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(if (glowing) Color.Transparent else Color.Black.copy(alpha = 0.55f)),
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(done)
-                            .background(if (glowing) palette.accentBright else palette.accent),
-                    )
-                }
-            }
-            if (card.watchedMarks) {
-                SeenCorner(whereabouts, card.episodes, Modifier.align(Alignment.TopEnd))
-            }
+            picture(glowing)
         }
         Text(
             title,
