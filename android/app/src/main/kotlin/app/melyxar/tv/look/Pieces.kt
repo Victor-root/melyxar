@@ -90,7 +90,7 @@ fun PlainButton(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        icon?.let { Glyph(it, if (lit > 0.5f) palette.accentBright else palette.text, 20.dp) }
+        icon?.let { Glyph(it, palette.text, 20.dp) }
         Text(text, color = palette.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
@@ -120,7 +120,7 @@ fun RoundMark(
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Glyph(icon, if (on || lit > 0.5f) palette.accentBright else palette.text, 22.dp)
+        Glyph(icon, if (on) palette.accentBright else palette.text, 22.dp)
     }
 }
 

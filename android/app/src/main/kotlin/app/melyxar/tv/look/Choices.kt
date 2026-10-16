@@ -159,7 +159,7 @@ private fun Choice(name: String, value: String?, swatch: Color?, chosen: Boolean
         Text(
             name,
             fontSize = 14.sp,
-            color = if (lit > 0.5f) palette.accentBright else palette.text,
+            color = palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),

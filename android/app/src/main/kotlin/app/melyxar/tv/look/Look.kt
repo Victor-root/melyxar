@@ -10,6 +10,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.theme.Inter
@@ -53,6 +55,18 @@ val PillShape = RoundedCornerShape(percent = 50)
 
 /** How much a chosen card or tile grows. */
 const val FOCUS_GROWTH = 1.06f
+
+/** How much smaller than the system's own the television draws everything:
+ *  at the system's scale, made for being read across a room, Melyxar's
+ *  pages were larger than they need to be. */
+private const val DRAWN_AT = 0.85f
+
+/** Everything in [content] drawn at Melyxar's own scale on a television. */
+@Composable
+fun TvScale(content: @Composable () -> Unit) {
+    val system = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(system.density * DRAWN_AT, system.fontScale), content = content)
+}
 
 @Composable
 fun TvLook(palette: Palette, content: @Composable () -> Unit) {

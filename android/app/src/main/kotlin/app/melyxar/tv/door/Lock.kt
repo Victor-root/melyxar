@@ -180,7 +180,7 @@ private fun PadKey(key: String, label: String, onClick: () -> Unit, modifier: Mo
             label,
             fontSize = if (key == ERASE) 13.sp else 24.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (lit > 0.5f) palette.accentBright else palette.text,
+            color = palette.text,
         )
     }
 }

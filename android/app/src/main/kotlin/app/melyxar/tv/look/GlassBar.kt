@@ -82,7 +82,7 @@ fun GlassField(name: String, value: String, onClick: () -> Unit, modifier: Modif
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(name, fontSize = 13.sp, color = palette.textFaint)
-        val strong = if (narrows || lit > 0.5f) palette.accentBright else palette.text
+        val strong = if (narrows) palette.accentBright else palette.text
         Text(value, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = strong, maxLines = 1)
         Glyph(Icons.ChevronDown, strong, 16.dp)
     }
@@ -104,7 +104,7 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
             fontWeight = FontWeight.SemiBold,
             color = when {
                 on -> palette.accentContrast
-                lit > 0.5f -> palette.accentBright
+                lit > 0.5f -> palette.text
                 else -> palette.textSoft
             },
             maxLines = 1,
@@ -117,7 +117,7 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
 fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     GlassRound(label, onClick, modifier) { lit ->
-        Glyph(icon, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
+        Glyph(icon, palette.text, 20.dp)
     }
 }
 

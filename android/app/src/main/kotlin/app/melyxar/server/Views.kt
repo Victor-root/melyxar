@@ -268,7 +268,6 @@ data class Work(
     val cast: List<Credit> = emptyList(),
     val poster: List<Picture> = emptyList(),
     val backdrop: List<Picture> = emptyList(),
-    val logo: List<Picture> = emptyList(),
     val versions: List<Version> = emptyList(),
     val ratings: List<Rating> = emptyList(),
     val children: List<Child> = emptyList(),

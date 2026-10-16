@@ -205,7 +205,7 @@ private fun Brand() {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (chrome.canGoBack) {
-            Glyph(Icons.Back, if (lit > 0.5f) palette.accentBright else palette.textSoft, 22.dp)
+            Glyph(Icons.Back, if (lit > 0.5f) palette.text else palette.textSoft, 22.dp)
         }
         val logo = chrome.branding.logo
         if (logo != null) {
@@ -223,7 +223,7 @@ private fun Brand() {
             fontFamily = MelyxarDisplay,
             fontSize = 19.sp,
             letterSpacing = 0.08.em,
-            color = if (lit > 0.5f) palette.accentBright else palette.text,
+            color = palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 220.dp),
@@ -269,7 +269,7 @@ private fun PlayingNow(onClick: () -> Unit) {
         onClick,
 ) { lit ->
         if (cover.isEmpty()) {
-            Glyph(Icons.Music, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
+            Glyph(Icons.Music, palette.text, 20.dp)
         } else {
             ServerPicture(cover, 36.dp, Modifier.size(36.dp).clip(CircleShape))
         }
@@ -354,7 +354,7 @@ private fun Account(modifier: Modifier) {
                     fontSize = 14.sp,
                     lineHeight = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (lit > 0.5f) palette.accentBright else palette.text,
+                    color = palette.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 150.dp),

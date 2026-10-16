@@ -178,7 +178,7 @@ private fun ChapterCard(
             name,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = if (lit > 0.5f) palette.accentBright else palette.text,
+            color = palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 4.dp),

@@ -198,7 +198,7 @@ private fun NoteLine(note: Note, wording: Wording, onClick: () -> Unit, modifier
                 said.title,
                 fontSize = 16.sp,
                 fontWeight = if (note.read) FontWeight.Medium else FontWeight.SemiBold,
-                color = if (lit > 0.5f) palette.accentBright else palette.text,
+                color = palette.text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
