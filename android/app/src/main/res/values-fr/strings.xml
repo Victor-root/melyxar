@@ -117,6 +117,7 @@
     <string name="tv_watch_later">À voir plus tard</string>
     <string name="tv_watch_later_empty">Rien de mis de côté pour l’instant. Choisissez l’horloge sur une fiche pour l’ajouter ici. Un titre quitte cette liste une fois que vous l’avez vu.</string>
     <string name="tv_change_profile">Changer de profil</string>
+    <string name="tv_connect_looking">Aucun serveur trouvé sur le réseau local pour l’instant. La recherche continue…</string>
     <string name="tv_sort">Trier</string>
     <string name="tv_sorted_by">Trier : %1$s</string>
     <string name="tv_sort_title">Titre</string>

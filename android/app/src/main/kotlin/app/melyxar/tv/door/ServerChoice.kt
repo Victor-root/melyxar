@@ -4,8 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +26,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -46,6 +46,7 @@ import app.melyxar.tv.look.MelyxarMark
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.TvField
 import app.melyxar.tv.look.TvLook
+import app.melyxar.tv.look.glassPiece
 import kotlinx.coroutines.launch
 
 /**
@@ -103,58 +104,72 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
         val palette = LocalPalette.current
         StageLight {
             AboveKeyboard {
-                Column(
-                    modifier = Modifier.width(520.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                // As the door of every player of a server at home: the
+                // address typed on the left, the servers found and those
+                // already known on the right.
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 64.dp),
+                    horizontalArrangement = Arrangement.spacedBy(56.dp),
                 ) {
-                    MelyxarMark(84.dp)
-                    Text(
-                        text = stringResource(R.string.app_name).uppercase(),
-                        fontFamily = MelyxarDisplay,
-                        fontSize = 28.sp,
-                        letterSpacing = 0.18.em,
-                        color = palette.text,
-                    )
-                    Text(
-                        stringResource(R.string.connect_title),
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = palette.text,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
-                    Text(
-                        stringResource(R.string.connect_lead),
-                        fontSize = 15.sp,
-                        color = palette.textSoft,
-                        textAlign = TextAlign.Center,
-                    )
-                    if (found.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            MelyxarMark(48.dp)
+                            Text(
+                                text = stringResource(R.string.app_name).uppercase(),
+                                fontFamily = MelyxarDisplay,
+                                fontSize = 24.sp,
+                                letterSpacing = 0.18.em,
+                                color = palette.text,
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.connect_title),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = palette.text,
+                            modifier = Modifier.padding(top = 18.dp),
+                        )
+                        Text(stringResource(R.string.connect_lead), fontSize = 15.sp, color = palette.textSoft)
+                        TvField(
+                            state = typed,
+                            placeholder = stringResource(R.string.connect_address),
+                            onDone = ::connect,
+                            onTyped = { refusal = null },
+                            keyboard = KeyboardType.Uri,
+                            enabled = !asking,
+                            modifier = Modifier
+                                .padding(top = 8.dp)
+                                .fillMaxWidth()
+                                .focusRequester(first),
+                        )
+                        refusal?.let { Text(stringResource(it), color = palette.trouble, fontSize = 15.sp) }
+                        AccentButton(
+                            text = stringResource(if (asking) R.string.tv_signing_in else R.string.connect_go),
+                            onClick = { if (!asking && typed.text.isNotBlank()) connect() },
+                            icon = null,
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .glassPiece(RoundedCornerShape(16.dp))
+                            .padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (known.isNotEmpty()) {
+                            Offered(stringResource(R.string.connect_known), known.map { it.name }, remember { FocusRequester() }) { at ->
+                                onChosen(known[at])
+                            }
+                        }
                         Offered(stringResource(R.string.connect_found), found.map { it.name }, firstFound) { at ->
                             val server = found[at]
                             onChosen(KnownServer(server.origin.value, server.name))
                         }
-                    }
-                    TvField(
-                        state = typed,
-                        placeholder = stringResource(R.string.connect_address),
-                        onDone = ::connect,
-                        onTyped = { refusal = null },
-                        keyboard = KeyboardType.Uri,
-                        enabled = !asking,
-                        modifier = Modifier
-                            .padding(top = 8.dp)
-                            .focusRequester(first),
-                    )
-                    refusal?.let { Text(stringResource(it), color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
-                    AccentButton(
-                        text = stringResource(if (asking) R.string.tv_signing_in else R.string.connect_go),
-                        onClick = { if (!asking && typed.text.isNotBlank()) connect() },
-                        icon = null,
-                    )
-                    if (known.isNotEmpty()) {
-                        Offered(stringResource(R.string.connect_known), known.map { it.name }, remember { FocusRequester() }) { at ->
-                            onChosen(known[at])
+                        if (found.isEmpty()) {
+                            Text(stringResource(R.string.tv_connect_looking), fontSize = 15.sp, color = palette.textSoft)
                         }
                     }
                 }
@@ -164,22 +179,26 @@ fun ServerChoice(servers: KnownServers, onChosen: (KnownServer) -> Unit, onBack:
     LaunchedEffect(Unit) { first.requestFocus() }
 }
 
-/** Servers offered under a [title], a button each; coming to them lands on
- *  the one left, or on the first, which [first] reaches. */
+/** Servers offered under a [title], one under the other; coming to them
+ *  lands on the one left, or on the first, which [first] reaches. */
 @Composable
 private fun Offered(title: String, names: List<String>, first: FocusRequester, onChoose: (Int) -> Unit) {
     val palette = LocalPalette.current
     Text(
-        title,
+        title.uppercase(),
         color = palette.textFaint,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.08.em,
-        modifier = Modifier.padding(top = 18.dp),
+        modifier = Modifier.padding(top = 4.dp),
     )
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.focusRestorer(first)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.focusRestorer(first)) {
         names.forEachIndexed { at, name ->
-            PlainButton(name, onClick = { onChoose(at) }, modifier = if (at == 0) Modifier.focusRequester(first) else Modifier)
+            PlainButton(
+                name,
+                onClick = { onChoose(at) },
+                modifier = Modifier.fillMaxWidth().then(if (at == 0) Modifier.focusRequester(first) else Modifier),
+            )
         }
     }
 }
