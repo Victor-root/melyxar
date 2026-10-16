@@ -411,7 +411,7 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
             .grows({ lit }, 1.05f)
             .clip(shape)
             .background(if (active) palette.accent else palette.surfaceRaised.copy(alpha = 0.74f))
-            .rim(shape, palette.accentBright, 2.dp) { lit }
+            .rim(shape, if (active) palette.accentContrast else palette.accentBright, 2.dp) { lit }
             .clickable(interaction, indication = null, onClick = onChoose)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     )
