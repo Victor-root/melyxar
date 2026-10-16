@@ -145,6 +145,16 @@ private val Place.library: Library?
         else -> null
     }
 
+/** Whether the key of music held down has already taken the music to the
+ *  song after or before, so letting it go does nothing more. */
+private class Skipping {
+    var held = false
+}
+
+/** How many times a held key of music repeats before it counts as held:
+ *  about half a second. */
+private const val HELD_REPEATS = 10
+
 /** What every screen's top bar shows, and where its pieces lead. */
 class Chrome(
     val branding: Branding,
@@ -235,6 +245,7 @@ fun Inside(
         }
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
         val pinned = remember { PinnedBar() }
+        val skipped = remember { Skipping() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
         notes.filmOnScreen = here is Place.Playing
@@ -286,10 +297,6 @@ fun Inside(
             buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),
             here = here,
         )
-        // Music started anew is followed to its page, the queue beside it.
-        LaunchedEffect(listening.begun) {
-            if (listening.begun > 0) chrome.go(Place.NowPlaying)
-        }
         // Its page over home, as if opened from Melyxar's own row.
         LaunchedEffect(opening) {
             opening ?: return@LaunchedEffect
@@ -333,9 +340,19 @@ fun Inside(
                                 event.key == Key.MediaPause -> if (down && listening.playing) listening.toggle()
                                 event.key == Key.MediaNext -> if (down) listening.next()
                                 event.key == Key.MediaPrevious -> if (down) listening.previous()
-                                // By the account's own steps, each press and as it is held.
-                                event.key == Key.MediaFastForward -> if (event.type == KeyEventType.KeyDown) listening.skip(on = true)
-                                event.key == Key.MediaRewind -> if (event.type == KeyEventType.KeyDown) listening.skip(on = false)
+                                // Pressed, a step by the account's own; held, the
+                                // song after or before.
+                                event.key == Key.MediaFastForward || event.key == Key.MediaRewind -> {
+                                    val on = event.key == Key.MediaFastForward
+                                    when {
+                                        event.type == KeyEventType.KeyUp -> if (!skipped.held) listening.skip(on)
+                                        event.nativeKeyEvent.repeatCount == 0 -> skipped.held = false
+                                        !skipped.held && event.nativeKeyEvent.repeatCount >= HELD_REPEATS -> {
+                                            skipped.held = true
+                                            if (on) listening.next() else listening.previous()
+                                        }
+                                    }
+                                }
                                 else -> return@onKeyEvent false
                             }
                             true
