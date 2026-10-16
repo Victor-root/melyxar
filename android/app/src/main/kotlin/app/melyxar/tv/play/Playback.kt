@@ -15,7 +15,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
@@ -94,7 +93,7 @@ class Playback(
     /** The server holds where the film was left, once it is left. */
     private val onLeft: () -> Unit,
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context, DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+    val player: ExoPlayer = ExoPlayer.Builder(context, DecodedSound(context))
         .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
         .setAudioAttributes(sound, true)
         .setHandleAudioBecomingNoisy(true)
