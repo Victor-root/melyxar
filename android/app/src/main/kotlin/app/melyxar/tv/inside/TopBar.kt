@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -25,12 +25,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,17 +38,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -66,6 +60,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import app.melyxar.R
 import app.melyxar.server.Picture
+import app.melyxar.server.Song
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.tv.door.Face
 import app.melyxar.tv.look.ChoiceList
@@ -97,7 +92,8 @@ private val BarHeight = 46.dp
  * the server's logo and name, which lead home, behind an arrow saying the
  * back key leads somewhere; on the other the buttons the account put on its
  * bar and whose profile this is, with the time, its menu holding the rest.
- * It scrolls away with the screen, and the remote finds it again going up.
+ * It scrolls away with the screen, and the remote finds it again going up;
+ * while a song plays, it is pinned over the screen instead (PinnedTopBar).
  * [first] is where the remote starts on a screen with nothing else to start
  * on; [inset] is how far what holds it already stands from the sides of the
  * screen, the bar standing at the page's margin on every screen whatever it
@@ -105,56 +101,75 @@ private val BarHeight = 46.dp
  */
 @Composable
 fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: Dp = 0.dp, title: (@Composable () -> Unit)? = null) {
+    // What this screen puts in the bar, kept for the bar pinned over it
+    // while a song plays, whether or not this piece of the page is drawn.
+    val pinned = LocalPinnedBar.current
+    val here = LocalChrome.current.here
+    SideEffect {
+        val mine = pinned.shown[here] ?: BarShown().also { pinned.shown[here] = it }
+        mine.first = first
+        mine.title = title
+    }
     if (LocalListening.current.queue.current != null) {
-        // While a song plays, the bar is where it is played from: pinned
-        // over the screen rather than scrolled away with it, holding what
-        // this screen would have put in it. Its room here is kept.
-        val pinned = LocalPinnedBar.current
-        val mine = remember { BarShown() }
-        SideEffect {
-            mine.first = first
-            mine.title = title
-        }
-        DisposableEffect(mine) {
-            pinned.shown = mine
-            onDispose { if (pinned.shown === mine) pinned.shown = null }
-        }
+        // The bar is pinned over the screen instead; its room here is kept.
         Spacer(modifier.fillMaxWidth().padding(top = BarTop).height(BarHeight))
         return
     }
     BarLine(modifier.padding(start = Gutter - inset, end = Gutter - inset), first, title)
 }
 
-/** What the screen shown puts in the bar pinned over it. */
+/** What a screen puts in the bar pinned over it. */
 @Stable
 class BarShown {
     var first by mutableStateOf<FocusRequester?>(null)
     var title by mutableStateOf<(@Composable () -> Unit)?>(null)
 }
 
-/** The bar pinned over the screens while a song plays, and what the screen
- *  shown puts in it; nothing when no screen has a bar, as a film's. */
+/** What each screen of the trail puts in the bar pinned over the screens
+ *  while a song plays, and the last song announced in it. A screen without
+ *  a bar, a film's or a photo's, has nothing here, and none is pinned over it. */
 @Stable
 class PinnedBar {
-    var shown by mutableStateOf<BarShown?>(null)
+    val shown = mutableStateMapOf<Place, BarShown>()
+    var announced by mutableStateOf<String?>(null)
+
+    /** Forgets the screens no longer in the trail. */
+    fun keepOnly(trail: List<Place>) {
+        shown.keys.retainAll(trail.toSet())
+    }
 }
 
 val LocalPinnedBar = staticCompositionLocalOf { PinnedBar() }
 
 /**
- * The bar over every screen that has one while a song plays, which the
- * song is played from, so it never scrolls away; under it for a moment,
- * as each song starts, what is playing, so the eye finds where it went.
+ * The bar over every screen that has one while a song plays: the song is
+ * played from it, so it stays where it is however far the screen scrolls,
+ * its glass filling with the accent as the song plays. As each song starts,
+ * the whole bar gives way for a moment to the song's name beside its cover,
+ * so the eye finds what began.
  */
 @Composable
 fun PinnedTopBar(modifier: Modifier = Modifier) {
-    val shown = LocalPinnedBar.current.shown ?: return
-    if (LocalListening.current.queue.current == null) {
-        return
+    val pinned = LocalPinnedBar.current
+    val shown = pinned.shown[LocalChrome.current.here] ?: return
+    val song = LocalListening.current.queue.current ?: return
+    var announcing by remember { mutableStateOf(false) }
+    LaunchedEffect(song.id) {
+        if (pinned.announced != song.id) {
+            pinned.announced = song.id
+            announcing = true
+            delay(ANNOUNCED_MS)
+            announcing = false
+        }
     }
-    Box(modifier.fillMaxWidth()) {
-        BarLine(Modifier.padding(horizontal = Gutter), shown.first, shown.title)
-        SongNote(Modifier.align(Alignment.TopEnd).padding(top = BarTop + BarHeight + 12.dp, end = Gutter))
+    Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop)) {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            shown.title?.invoke()
+            Bar(LocalChrome.current, shown.first)
+        }
+        AnimatedVisibility(announcing, Modifier.matchParentSize(), enter = fadeIn(), exit = fadeOut()) {
+            Announced(song)
+        }
     }
 }
 
@@ -171,50 +186,38 @@ private fun BarLine(modifier: Modifier, first: FocusRequester?, title: (@Composa
     }
 }
 
-/** The song that has just started, said for a moment under the bar. */
+/** The song that has just started, over the whole bar: its cover, and its
+ *  name and who sings it beside it. */
 @Composable
-private fun SongNote(modifier: Modifier) {
+private fun Announced(song: Song) {
     val palette = LocalPalette.current
-    val song = LocalListening.current.queue.current ?: return
-    var said by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(song.id) {
-        said = song.id
-        delay(SONG_NOTE_STAYS_MS)
-        said = null
-    }
-    AnimatedVisibility(
-        visible = said == song.id,
-        enter = fadeIn() + slideInVertically { -it / 2 },
-        exit = fadeOut(),
-        modifier = modifier,
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .glassPiece()
+            .songFilled()
+            .padding(start = 5.dp, end = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .height(BarHeight)
-                .glassPiece()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Glyph(Icons.Music, palette.accentBright, 18.dp)
-            Text(
-                song.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = palette.text,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 320.dp),
-            )
-            artistsOf(song.artists).takeIf { it.isNotEmpty() }?.let {
-                Text(it, fontSize = 14.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
-            }
+        Cover(song)
+        Text(
+            song.title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = palette.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        artistsOf(song.artists).takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 16.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/** How long a song that has just started is said under the bar. */
-private const val SONG_NOTE_STAYS_MS = 5_000L
+/** How long a song that has just started holds the bar. */
+private const val ANNOUNCED_MS = 5_000L
 
 /** The bar's two ends. */
 @Composable
@@ -227,10 +230,8 @@ private fun Bar(chrome: Chrome, first: FocusRequester?) {
         Row(
             modifier = Modifier
                 .height(BarHeight)
-                // Round the glass rather than inside it, so its glow spreads
-                // both ways from the line.
-                .then(if (LocalListening.current.queue.current != null) Modifier.songPlayed() else Modifier)
                 .glassPiece()
+                .then(if (LocalListening.current.queue.current != null) Modifier.songFilled() else Modifier)
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -367,72 +368,34 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
     }
 }
 
-/** The song playing: its cover in a round, or the note of music for one
- *  without. */
+/** The song playing: its cover in a round, which leads to its page. */
 @Composable
 private fun PlayingNow(onClick: () -> Unit) {
-    val palette = LocalPalette.current
-    val listening = LocalListening.current
-    val cover = listening.queue.current?.cover.orEmpty()
-    GlassRound(
-        stringResource(R.string.tv_music_now_playing),
-        onClick,
-) { lit ->
-        if (cover.isEmpty()) {
-            Glyph(Icons.Music, palette.text, 20.dp)
-        } else {
-            ServerPicture(cover, 36.dp, Modifier.size(36.dp).clip(CircleShape))
-        }
-    }
+    val song = LocalListening.current.queue.current ?: return
+    GlassRound(stringResource(R.string.tv_music_now_playing), onClick) { Cover(song) }
 }
 
-/**
- * How far the song playing has played, drawn round the whole of the piece
- * of glass it is on, from the middle of its left end and clockwise, a dash
- * marking that start: the track faint, what has played in the accent
- * with a soft glow, laid in widening strokes as a card's halo is. Laid out
- * once for the piece; only drawn again as the song plays.
- */
+/** A song's cover in a round, or the note of music for one without. */
 @Composable
-private fun Modifier.songPlayed(): Modifier {
-    val palette = LocalPalette.current
-    val listening = LocalListening.current
-    return drawWithCache {
-        val line = 2.5.dp.toPx()
-        val inset = line / 2
-        val round = size.height / 2 - inset
-        val (left, right, top, bottom) = listOf(inset, size.width - inset, inset, size.height - inset)
-        val outline = Path().apply {
-            val ends = Rect(left, top, left + 2 * round, bottom)
-            moveTo(left, size.height / 2)
-            arcTo(ends, 180f, 90f, false)
-            lineTo(right - round, top)
-            arcTo(Rect(right - 2 * round, top, right, bottom), -90f, 180f, false)
-            lineTo(left + round, bottom)
-            arcTo(ends, 90f, 90f, false)
-        }
-        val measure = PathMeasure().apply { setPath(outline, false) }
-        val played = Path()
-        val dash = 7.dp.toPx()
-        onDrawWithContent {
-            drawContent()
-            drawPath(outline, palette.text.copy(alpha = 0.16f), style = Stroke(line))
-            // Out from the edge only, clear of the cover inside.
-            drawLine(palette.accentBright, Offset(left - dash, size.height / 2), Offset(left, size.height / 2), line, StrokeCap.Round)
-            val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
-            played.reset()
-            measure.getSegment(0f, measure.length * done, played, true)
-            GLOW.forEach { (wider, alpha) ->
-                drawPath(played, palette.accentGlow.copy(alpha = alpha), style = Stroke(line * wider, cap = StrokeCap.Round))
-            }
-            drawPath(played, palette.accentBright, style = Stroke(line, cap = StrokeCap.Round))
-        }
+private fun Cover(song: Song) {
+    if (song.cover.isEmpty()) {
+        Glyph(Icons.Music, LocalPalette.current.text, 20.dp)
+    } else {
+        ServerPicture(song.cover, 36.dp, Modifier.size(36.dp).clip(CircleShape))
     }
 }
 
-/** The glow of what has played, as widths of its line and how strong each
- *  is: faint and wide outside, stronger close in. */
-private val GLOW = listOf(6f to 0.10f, 4f to 0.16f, 2.5f to 0.24f)
+/** The glass filled with the accent from its left end as far as the song
+ *  playing has played, whole once it ends. Only drawn again as it plays. */
+@Composable
+private fun Modifier.songFilled(): Modifier {
+    val palette = LocalPalette.current
+    val listening = LocalListening.current
+    return drawBehind {
+        val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
+        drawRect(palette.accent.copy(alpha = 0.45f), size = size.copy(width = size.width * done))
+    }
+}
 
 /** The room round the account's menu its shadow spreads into. */
 private val MENU_SHADOW = 40.dp
