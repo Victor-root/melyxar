@@ -159,10 +159,20 @@ class PinnedBar {
     val barless = mutableStateListOf<Place>()
     var announced by mutableStateOf<String?>(null)
 
+    /** The first piece of the bar's glass the remote is put on by the key
+     *  of more options: the song's cover while one plays, its first button
+     *  otherwise. */
+    val entry = FocusRequester()
+
+    /** How each screen of the trail goes back to its top, where its own
+     *  bar is when none is pinned. */
+    val toTop = HashMap<Place, suspend () -> Unit>()
+
     /** Forgets the screens no longer in the trail. */
     fun keepOnly(trail: List<Place>) {
         shown.keys.retainAll(trail.toSet())
         barless.retainAll(trail.toSet())
+        toTop.keys.retainAll(trail.toSet())
     }
 }
 
@@ -320,13 +330,20 @@ private fun Bar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                val entry = Modifier.focusRequester(LocalPinnedBar.current.entry)
                 // The song playing, while one is.
-                if (LocalListening.current.queue.current != null) {
-                    PlayingNow { chrome.go(Place.NowPlaying) }
+                val music = LocalListening.current.queue.current != null
+                if (music) {
+                    PlayingNow(entry) { chrome.go(Place.NowPlaying) }
                 }
                 val unread = LocalNotes.current.held.unread
-                chrome.buttons.bar.forEach { button ->
-                    barPlace(button)?.let { BarButton(it.icon, stringResource(it.name), if (button == "notifications") unread else 0) { it.press(chrome) } }
+                chrome.buttons.bar.mapNotNull { button -> barPlace(button)?.let { button to it } }.forEachIndexed { at, (button, place) ->
+                    BarButton(
+                        place.icon,
+                        stringResource(place.name),
+                        if (button == "notifications") unread else 0,
+                        if (!music && at == 0) entry else Modifier,
+                    ) { place.press(chrome) }
                 }
                 // A rule between who is here and everything that is not.
                 Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
@@ -435,10 +452,10 @@ private fun Brand() {
  *  when the remote comes to it, with how many are waiting when [count]
  *  says any are. */
 @Composable
-private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick: () -> Unit) {
+private fun BarButton(icon: ImageVector, label: String, count: Int, modifier: Modifier, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Box {
-        GlassIcon(icon, label, onClick, ring = palette.text)
+        GlassIcon(icon, label, onClick, modifier, ring = palette.text)
         if (count > 0) {
             Text(
                 if (count > MOST_COUNTED) "$MOST_COUNTED+" else "$count",
@@ -460,10 +477,10 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
  *  the remote, the mark of the song playing over it, which a ring alone on
  *  a cover does not say plainly enough. */
 @Composable
-private fun PlayingNow(onClick: () -> Unit) {
+private fun PlayingNow(modifier: Modifier, onClick: () -> Unit) {
     val song = LocalListening.current.queue.current ?: return
     val now = rememberNow { true }
-    GlassRound(stringResource(R.string.tv_music_now_playing), onClick, ring = LocalPalette.current.text) { lit ->
+    GlassRound(stringResource(R.string.tv_music_now_playing), onClick, modifier, ring = LocalPalette.current.text) { lit ->
         Cover(song)
         // Made only under the remote: its bars keep the song's levels
         // running while they are shown.

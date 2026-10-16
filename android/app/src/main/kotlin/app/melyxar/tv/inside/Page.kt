@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
@@ -70,6 +71,13 @@ fun ScrollingPage(toTop: suspend () -> Unit, content: @Composable (PageHead) -> 
     val goUp by rememberUpdatedState(toTop)
     LaunchedEffect(held) {
         if (held) goUp()
+    }
+    // How the key of more options brings the screen's own bar back.
+    val pinned = LocalPinnedBar.current
+    val here = LocalChrome.current.here
+    DisposableEffect(pinned, here) {
+        pinned.toTop[here] = { goUp() }
+        onDispose { pinned.toTop.remove(here) }
     }
     CompositionLocalProvider(LocalBringIntoViewSpec provides pivot) { content(head) }
 }

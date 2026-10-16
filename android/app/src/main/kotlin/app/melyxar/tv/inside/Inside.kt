@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -66,6 +67,7 @@ import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.PlayerScreen
+import kotlinx.coroutines.launch
 
 /** A screen of the inside, as the trail of screens holds it. */
 sealed interface Place {
@@ -338,6 +340,23 @@ fun Inside(
                             val music = listening.queue.current != null
                             when {
                                 event.key == Key.Search -> if (!down) chrome.search()
+                                // The key of more options puts the remote on the bar:
+                                // on the song's cover while one plays, on its first
+                                // button otherwise, the screen brought back to its top
+                                // where its own bar is.
+                                event.key == Key.Menu -> if (down) {
+                                    scope.launch {
+                                        if (listening.queue.current == null) {
+                                            pinned.toTop[here]?.invoke()
+                                            withFrameNanos {}
+                                        }
+                                        try {
+                                            pinned.entry.requestFocus()
+                                        } catch (_: IllegalStateException) {
+                                            // A screen without a bar, a film's or a photo's.
+                                        }
+                                    }
+                                }
                                 !music -> return@onKeyEvent false
                                 event.key == Key.MediaPlayPause -> if (down) listening.toggle()
                                 event.key == Key.MediaPlay -> if (down && !listening.playing) listening.toggle()
