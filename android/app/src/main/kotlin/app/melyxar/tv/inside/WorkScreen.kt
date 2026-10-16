@@ -122,6 +122,12 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
                     CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
                 }
             }
+            // A series and a season are nothing but what they hold: neither
+            // is played.
+            val source = work.versions.firstOrNull()?.takeIf { !it.missing }?.id
+            if (source != null && work.kind != "series" && work.kind != "season" && work.children.isEmpty()) {
+                item("chapters") { WorkChapters(source, memory) { at -> chrome.play(Play(work.id, source, at)) } }
+            }
             work.saga?.let { saga ->
                 section("saga", saga.cards) {
                     CardRow(saga.name ?: stringResource(R.string.tv_saga), Icons.Film, saga.cards, key = { it.id }) { card ->
