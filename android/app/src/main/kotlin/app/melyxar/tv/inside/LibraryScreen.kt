@@ -128,16 +128,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
         ) {
             Column {
                 // The grid keeps the page's margin already.
-                TopBar(inset = Gutter)
-                Row(
-                    modifier = Modifier.padding(top = 26.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Glyph(Icons.ofKind(library.kind), palette.accentBright, 26.dp)
-                    Text(library.name, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, color = palette.text)
-                    Text("${library.works}", fontSize = 16.sp, color = palette.textFaint, modifier = Modifier.padding(start = 4.dp))
-                }
+                TopBar(inset = Gutter) { BarTitle(Icons.ofKind(library.kind), library.name, library.works) }
                 SortAndFilters(
                     order = order,
                     descending = descending,
@@ -156,7 +147,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 current = at,
                 onJump = ::jump,
                 // In the page's margin, beside the grid rather than over it.
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 92.dp, end = 2.dp),
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 78.dp, end = 2.dp),
             )
         }
         when (picking) {

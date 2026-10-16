@@ -61,6 +61,7 @@ import app.melyxar.tv.inside.Place
 import app.melyxar.tv.inside.RowHead
 import app.melyxar.tv.inside.RestoreFocus
 import app.melyxar.tv.inside.ScrollingPage
+import app.melyxar.tv.inside.BarTitle
 import app.melyxar.tv.inside.TopBar
 import app.melyxar.tv.inside.Trouble
 import app.melyxar.tv.inside.firstLineHoldsTheHead
@@ -260,19 +261,11 @@ private fun Head(
     val palette = LocalPalette.current
     Column {
         // The grid keeps the page's margin already.
-        TopBar(inset = Gutter)
-        Row(
-            modifier = Modifier.padding(top = 26.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Glyph(Icons.Music, palette.accentBright, 26.dp)
-            Text(library.name, fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, color = palette.text)
-        }
+        TopBar(inset = Gutter) { BarTitle(Icons.Music, library.name) }
         // The tabs on one piece of glass, and what the tab is played and
         // read by on another, as the web's bar above a library of music.
         FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

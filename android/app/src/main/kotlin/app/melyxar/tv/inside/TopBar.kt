@@ -82,17 +82,26 @@ private val BarTop = 20.dp
  * [first] is where the remote starts on a screen with nothing else to start
  * on; [inset] is how far what holds it already stands from the sides of the
  * screen, the bar standing at the page's margin on every screen whatever it
- * is.
+ * is. A page that is a library says so in the middle of the bar, [title].
  */
 @Composable
-fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: Dp = 0.dp) {
+fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: Dp = 0.dp, title: (@Composable () -> Unit)? = null) {
     val chrome = LocalChrome.current
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = Gutter - inset, end = Gutter - inset, top = BarTop),
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.Center,
     ) {
+        title?.invoke()
+        Bar(chrome, first)
+    }
+}
+
+/** The bar's two ends. */
+@Composable
+private fun Bar(chrome: Chrome, first: FocusRequester?) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Brand()
         Spacer(Modifier.weight(1f))
         // Everything at this end on one piece of glass, as on the web: this
@@ -114,6 +123,18 @@ fun TopBar(modifier: Modifier = Modifier, first: FocusRequester? = null, inset: 
             Box(Modifier.padding(horizontal = 6.dp).width(1.dp).height(28.dp).background(LocalPalette.current.border))
             Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
         }
+    }
+}
+
+/** The name of the library a page is, with its icon and, when it says, how
+ *  many works it holds, for the middle of the bar. */
+@Composable
+fun BarTitle(icon: ImageVector, name: String, count: Int? = null) {
+    val palette = LocalPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Glyph(icon, palette.accentBright, 24.dp)
+        Text(name, fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.02).em, color = palette.text, maxLines = 1)
+        count?.let { Text("$it", fontSize = 15.sp, color = palette.textFaint) }
     }
 }
 
