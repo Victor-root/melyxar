@@ -42,10 +42,12 @@ private val SWEEP = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
 /**
  * The ring that turns while a film is on its way, as the web player's: a
  * faint track, and over it the accent running round on a wavy edge, growing
- * out of nothing and drawn back in as it turns. Only drawn again as it turns.
+ * out of nothing and drawn back in as it turns. Told how far the wait has
+ * got, [percent], it stands still and is lit that far round from the top.
+ * Only drawn again as it turns.
  */
 @Composable
-fun Spinner(modifier: Modifier = Modifier) {
+fun Spinner(modifier: Modifier = Modifier, percent: () -> Float? = { null }) {
     val palette = LocalPalette.current
     val turning = rememberInfiniteTransition(label = "spinner")
     val turn = turning.animateFloat(0f, 360f, infiniteRepeatable(tween(2_400, easing = LinearEasing)), label = "turn")
@@ -97,6 +99,13 @@ fun Spinner(modifier: Modifier = Modifier) {
             val line = Stroke(4 * scale, cap = StrokeCap.Round)
             onDrawBehind {
                 drawCircle(Color.White.copy(alpha = 0.14f), RADIUS * scale, middle, style = track)
+                val known = percent()
+                if (known != null) {
+                    shown.reset()
+                    measure.getSegment(0f, length * known.coerceIn(0f, 100f) / 100f, shown, true)
+                    drawPath(shown, palette.accentBright, style = line)
+                    return@onDrawBehind
+                }
                 rotate(turn.value) {
                     val start = (from.value % 1f) * length
                     val end = start + lit.value * length

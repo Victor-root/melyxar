@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -46,6 +47,10 @@ import java.io.IOException
 
 /** How often the server is told where the film is, as the web tells it. */
 private const val REPORT_EVERY_MS = 10_000L
+
+/** How often the server is asked how far a rebuilt film has got, while it
+ *  is on its way, as the web player asks. */
+private const val PREPARATION_EVERY_MS = 250L
 
 /** How often a film the server rebuilds is said to be still watched. */
 private const val STILL_HERE_EVERY_MS = 30_000L
@@ -144,6 +149,14 @@ class Playback(
     private var wordsFrom: String? = null
     private var reading: Job? = null
 
+    /** How far a film the server rebuilds is on its way, from nought to a
+     *  hundred, while it is; nothing for a file played as it is, or once
+     *  the film plays. */
+    var loading by mutableStateOf<Float?>(null)
+        private set
+    private var stage = LoadingStage.Opening
+    private var counting: Job? = null
+
     private var stream: StreamSession? = null
     private var reporting: Job? = null
     private var keeping: Job? = null
@@ -164,6 +177,14 @@ class Playback(
 
             override fun onPlayerError(error: PlaybackException) {
                 failed = true
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                if (!timeline.isEmpty) reached(LoadingStage.ManifestParsed)
+            }
+
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) reached(LoadingStage.Done)
             }
         })
         scope.launch {
@@ -205,7 +226,13 @@ class Playback(
         val address = if (plan.method == "direct_play") {
             api.address(plan.url)
         } else {
-            api.openStream(source, asked(paintedChoice), at).also { stream = it }.let { api.address(it.playlistUrl) }
+            stage = LoadingStage.Opening
+            loading = 0f
+            api.openStream(source, asked(paintedChoice), at).also {
+                stream = it
+                reached(LoadingStage.SessionOpened)
+                countTheWait(it.id)
+            }.let { api.address(it.playlistUrl) }
         }
         readTheWords()
         val item = MediaItem.Builder()
@@ -363,8 +390,40 @@ class Playback(
         }
     }
 
+    /** A later stage of the wait reached, never an earlier one. */
+    private fun reached(next: LoadingStage) {
+        if (next > stage) stage = next
+        if (stage == LoadingStage.Done) {
+            counting?.cancel()
+            loading = null
+        }
+    }
+
+    /** Reads how far the server has got with the first piece, and moves the
+     *  number shown toward it, until the film plays. */
+    private fun countTheWait(id: String) {
+        counting?.cancel()
+        counting = scope.launch {
+            var written = 0f
+            while (isActive && stage != LoadingStage.Done) {
+                try {
+                    val seen = api.preparation(id)
+                    written = maxOf(written, seen.firstWritten)
+                    reached(if (seen.firstWritten >= 1f) LoadingStage.Produced else if (seen.step != "starting") LoadingStage.Producing else stage)
+                } catch (_: IOException) {
+                    // The next look carries the same news.
+                } catch (_: Refusal) {
+                    // Nor is a refused look worth troubling the viewer with.
+                }
+                loading?.let { shown -> loading = glideToward(shown, percentOf(stage, written)) }
+                delay(PREPARATION_EVERY_MS)
+            }
+        }
+    }
+
     private suspend fun closeTheStream() {
         keeping?.cancel()
+        counting?.cancel()
         val closing = stream ?: return
         stream = null
         try {
@@ -382,6 +441,7 @@ class Playback(
     @kotlin.OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     fun leave() {
         reporting?.cancel()
+        counting?.cancel()
         keeping?.cancel()
         val at = seconds
         val paused = !player.isPlaying

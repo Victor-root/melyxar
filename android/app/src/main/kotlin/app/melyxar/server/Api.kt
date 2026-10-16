@@ -228,6 +228,9 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         false
     }
 
+    /** How far the server has got making a rebuilt film's first piece. */
+    suspend fun preparation(id: String): Preparation = get("/api/v1/stream/$id/preparation", Preparation.serializer())
+
     suspend fun closeStream(id: String) {
         send("DELETE", "/api/v1/stream/$id", null)
     }

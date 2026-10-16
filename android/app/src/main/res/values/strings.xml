@@ -181,6 +181,7 @@
     <string name="tv_music_next">Next</string>
     <string name="tv_music_stop">Stop</string>
     <string name="tv_ends_at">Ends at %1$s</string>
+    <string name="tv_loading_percent">%1$d%%</string>
     <string name="tv_music_previous">Previous</string>
     <string name="tv_music_skip_back">Back %1$d s</string>
     <string name="tv_music_skip_on">On %1$d s</string>
