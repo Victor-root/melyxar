@@ -3,6 +3,7 @@ package app.melyxar.tv.inside
 import android.text.format.DateFormat
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
@@ -29,12 +30,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +57,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -87,10 +91,15 @@ import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.music.NowDisc
 import app.melyxar.tv.music.artistsOf
+import app.melyxar.tv.music.rememberNow
 import app.melyxar.tv.notes.LocalNotes
 import java.util.Date
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /*
  * What the remote is on in the bar is ringed in the colour of the text,
@@ -192,11 +201,13 @@ fun PinnedTopBar(screen: FocusRequester, modifier: Modifier = Modifier) {
     // puts in it comes a moment after the screen does.
     val shown = pinned.shown[here]
     var announcing by remember { mutableStateOf(false) }
+    // How long the name is said, once the glass has measured it.
+    var said by remember(song.id) { mutableStateOf<Long?>(null) }
     LaunchedEffect(song.id) {
         if (pinned.announced != song.id) {
             pinned.announced = song.id
             announcing = true
-            delay(ANNOUNCED_MS)
+            delay(withTimeoutOrNull(MEASURED_WITHIN_MS) { snapshotFlow { said }.filterNotNull().first() } ?: SAID_WHOLE_MS)
             announcing = false
         }
     }
@@ -218,7 +229,13 @@ fun PinnedTopBar(screen: FocusRequester, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
     ) {
         shown?.title?.invoke()
-        Bar(LocalChrome.current, shown?.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
+        Bar(
+            LocalChrome.current,
+            shown?.first,
+            announced = song.takeIf { announcing },
+            onReached = { announcing = false },
+            onMeasured = { said = it },
+        )
     }
 }
 
@@ -239,12 +256,29 @@ private fun BarLine(modifier: Modifier, first: FocusRequester?, title: (@Composa
  *  holds: its cover, and its name and who sings it running along beside it
  *  when they are longer than the glass. */
 @Composable
-private fun Announced(song: Song, modifier: Modifier) {
+private fun Announced(song: Song, onMeasured: (Long) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
+    var room by remember { mutableIntStateOf(0) }
+    var wide by remember { mutableIntStateOf(0) }
+    val speed = with(LocalDensity.current) { NAME_RUNS.toPx() }
+    LaunchedEffect(room, wide) {
+        if (room > 0 && wide > 0) onMeasured(saidForMs(wide, room, speed))
+    }
     Row(modifier.padding(start = 5.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(song)
+        // Once round, and gone when it is: the glass it runs in, then the
+        // name as long as it is.
         Row(
-            Modifier.padding(start = 12.dp).basicMarquee(iterations = Int.MAX_VALUE),
+            Modifier
+                .padding(start = 12.dp)
+                .onSizeChanged { room = it.width }
+                .basicMarquee(
+                    iterations = 1,
+                    initialDelayMillis = RUN_WAITS_MS.toInt(),
+                    spacing = MarqueeSpacing.fractionOfContainer(RUN_GAP),
+                    velocity = NAME_RUNS,
+                )
+                .onSizeChanged { wide = it.width },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(song.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1)
@@ -255,14 +289,24 @@ private fun Announced(song: Song, modifier: Modifier) {
     }
 }
 
-/** How long a song that has just started holds its piece of the bar. */
-private const val ANNOUNCED_MS = 5_000L
+/** How long the glass is given to measure the name of a song that has just
+ *  started, before it is said for the usual time. */
+private const val MEASURED_WITHIN_MS = 1_000L
+
+/** How fast a name that does not fit runs along the glass. */
+private val NAME_RUNS = 40.dp
 
 /** The bar's two ends; [announced], the song that has just started, takes
  *  the place of what the piece of glass of the song holds while it is said,
  *  that kept under it so the remote finds it where it was. */
 @Composable
-private fun Bar(chrome: Chrome, first: FocusRequester?, announced: Song? = null, onReached: () -> Unit = {}) {
+private fun Bar(
+    chrome: Chrome,
+    first: FocusRequester?,
+    announced: Song? = null,
+    onReached: () -> Unit = {},
+    onMeasured: (Long) -> Unit = {},
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Brand()
         Spacer(Modifier.weight(1f))
@@ -294,7 +338,7 @@ private fun Bar(chrome: Chrome, first: FocusRequester?, announced: Song? = null,
                 Account(first?.let { Modifier.focusRequester(it) } ?: Modifier)
             }
             if (announced != null) {
-                Announced(announced, Modifier.matchParentSize().graphicsLayer { alpha = 1f - hidden })
+                Announced(announced, onMeasured, Modifier.matchParentSize().graphicsLayer { alpha = 1f - hidden })
             }
         }
     }
@@ -417,11 +461,21 @@ private fun BarButton(icon: ImageVector, label: String, count: Int = 0, onClick:
     }
 }
 
-/** The song playing: its cover in a round, which leads to its page. */
+/** The song playing: its cover in a round, which leads to its page; under
+ *  the remote, the mark of the song playing over it, which a ring alone on
+ *  a cover does not say plainly enough. */
 @Composable
 private fun PlayingNow(onClick: () -> Unit) {
     val song = LocalListening.current.queue.current ?: return
-    GlassRound(stringResource(R.string.tv_music_now_playing), onClick, ring = LocalPalette.current.text) { Cover(song) }
+    val now = rememberNow { true }
+    GlassRound(stringResource(R.string.tv_music_now_playing), onClick, ring = LocalPalette.current.text) { lit ->
+        Cover(song)
+        // Made only under the remote: its bars keep the song's levels
+        // running while they are shown.
+        if (lit() > 0f) {
+            NowDisc(now, Modifier.graphicsLayer { alpha = lit() })
+        }
+    }
 }
 
 /** A song's cover in a round, or the note of music for one without. */
