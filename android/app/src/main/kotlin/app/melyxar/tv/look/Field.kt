@@ -97,7 +97,7 @@ fun TvField(
         .clip(ControlShape)
         .background(palette.surfaceRaised.copy(alpha = 0.74f))
         .border(1.dp, palette.border, ControlShape)
-        .rim(ControlShape, palette.accentBright, 2.dp) { lit }
+        .rim(ControlShape, palette.accentBright, 3.dp) { lit }
     val decorator = TextFieldDecorator { field ->
         Box(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
             if (state.text.isEmpty()) {

@@ -83,8 +83,16 @@ object Icons {
     val Bell = outlined(
         "bell",
         paths = arrayOf(
-            "M6.2 16.6V11a5.8 5.8 0 0 1 11.6 0v5.6l1.6 1.6H4.6Z",
-            "M10 20.4a2.2 2.2 0 0 0 4 0",
+            "M18 9.4a6 6 0 1 0-12 0c0 5-2 6.4-2 6.4h16s-2-1.4-2-6.4Z",
+            "M13.7 19.4a2 2 0 0 1-3.4 0",
+        ),
+    )
+    val Leave = outlined(
+        "leave",
+        paths = arrayOf(
+            "M14.4 4.6H6.6a1.8 1.8 0 0 0-1.8 1.8v11.2a1.8 1.8 0 0 0 1.8 1.8h7.8",
+            "M15.6 8.4 19.2 12l-3.6 3.6",
+            "M19.2 12H9.6",
         ),
     )
     val Stop = solid("stop", 0f, "M7 7h10v10H7Z")

@@ -27,9 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Browse
@@ -93,17 +91,11 @@ fun SearchScreen(library: Library?, comebacks: Int) {
     ) {
         Column {
             // The grid keeps the page's margin already.
-            TopBar(inset = Gutter)
-            Text(
-                library?.let { stringResource(R.string.tv_search_in, it.name) } ?: stringResource(R.string.tv_search),
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.02).em,
-                color = palette.text,
-                modifier = Modifier.padding(top = 26.dp),
-            )
+            TopBar(inset = Gutter) {
+                BarTitle(Icons.Search, library?.let { stringResource(R.string.tv_search_in, it.name) } ?: stringResource(R.string.tv_search))
+            }
             Row(
-                modifier = Modifier.padding(top = 14.dp, bottom = 6.dp),
+                modifier = Modifier.padding(top = 26.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {

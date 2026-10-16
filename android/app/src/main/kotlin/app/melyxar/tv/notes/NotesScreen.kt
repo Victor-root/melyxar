@@ -35,11 +35,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Note
 import app.melyxar.theme.Palette
+import app.melyxar.tv.inside.BarTitle
 import app.melyxar.tv.inside.Chrome
 import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.Place
@@ -108,25 +108,16 @@ fun NotesScreen() {
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
         LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
             item("top") {
-                Box(Modifier.head(head, "top")) { TopBar(first = first.takeIf { held.notes.isEmpty() }) }
+                Box(Modifier.head(head, "top")) {
+                    TopBar(first = first.takeIf { held.notes.isEmpty() }) {
+                        BarTitle(Icons.Bell, stringResource(R.string.tv_notes), held.unread.takeIf { it > 0 })
+                    }
+                }
             }
             item("title") {
                 ReadingColumn {
-                    Row(
-                        modifier = Modifier.padding(top = 26.dp, bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Glyph(Icons.Bell, palette.accentBright, 26.dp)
-                        Text(
-                            stringResource(R.string.tv_notes),
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.02).em,
-                            color = palette.text,
-                        )
-                        if (held.unread > 0) {
-                            Text("${held.unread}", fontSize = 16.sp, color = palette.textFaint, modifier = Modifier.padding(start = 4.dp))
+                    if (held.unread > 0) {
+                        Row(Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 10.dp)) {
                             Spacer(Modifier.weight(1f))
                             PlainButton(
                                 stringResource(R.string.tv_notes_mark_all_read),
@@ -137,7 +128,7 @@ fun NotesScreen() {
                         }
                     }
                     if (notes.loaded && held.notes.isEmpty()) {
-                        Text(stringResource(R.string.tv_notes_none), fontSize = 16.sp, color = palette.textSoft)
+                        Text(stringResource(R.string.tv_notes_none), fontSize = 16.sp, color = palette.textSoft, modifier = Modifier.padding(top = 26.dp))
                     }
                 }
             }

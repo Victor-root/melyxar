@@ -33,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,7 +52,8 @@ private val TALLEST = 360.dp
  * [values], starts where the remote last left it, [startAt], and stays open
  * when one is chosen, [leadsOn], since choosing it opens its own list. A
  * [note] says what the choices are for; a list with none says only that.
- * Colours to choose from show each its own in [swatches].
+ * Colours to choose from show each its own in [swatches], and a menu its
+ * choices' icons in [icons].
  */
 @Composable
 fun ChoiceList(
@@ -66,6 +68,7 @@ fun ChoiceList(
     startAt: Int = chosen ?: 0,
     leadsOn: Boolean = false,
     swatches: List<Color> = emptyList(),
+    icons: List<ImageVector?> = emptyList(),
 ) {
     val palette = LocalPalette.current
     val start = remember { FocusRequester() }
@@ -110,6 +113,7 @@ fun ChoiceList(
                     name,
                     value = values.getOrNull(at),
                     swatch = swatches.getOrNull(at),
+                    icon = icons.getOrNull(at),
                     chosen = at == chosen,
                     onClick = {
                         onChoose(at)
@@ -124,7 +128,7 @@ fun ChoiceList(
 }
 
 @Composable
-private fun Choice(name: String, value: String?, swatch: Color?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVector?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -143,7 +147,10 @@ private fun Choice(name: String, value: String?, swatch: Color?, chosen: Boolean
         // A setting says what it is on rather than being ticked.
         if (value == null) {
             Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
-                if (chosen) Glyph(Icons.Tick, palette.accentBright, 18.dp)
+                when {
+                    chosen -> Glyph(Icons.Tick, palette.accentBright, 18.dp)
+                    icon != null -> Glyph(icon, if (lit > 0.5f) palette.text else palette.textSoft, 18.dp)
+                }
             }
         }
         swatch?.let {
