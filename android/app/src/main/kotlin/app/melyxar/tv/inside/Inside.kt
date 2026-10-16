@@ -20,6 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -246,6 +249,7 @@ fun Inside(
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
         val pinned = remember { PinnedBar() }
         val skipped = remember { Skipping() }
+        val screen = remember { FocusRequester() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
         notes.filmOnScreen = here is Place.Playing
@@ -362,38 +366,42 @@ fun Inside(
                     // its choice is known.
                     chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
                     LaunchedEffect(here) { focusSaid("screen shown: ${here.key}") }
-                    kept.SaveableStateProvider(here.key) {
-                        when (here) {
-                            Place.Home -> HomeScreen(comebacks)
-                            is Place.Shelf -> if (here.library.kind == "music") {
-                                MusicLibraryScreen(here.library, comebacks)
-                            } else {
-                                LibraryScreen(here.library, comebacks)
-                            }
-                            is Place.Opened -> WorkScreen(here.work, comebacks)
-                            is Place.Person -> PersonScreen(here.id, comebacks)
-                            is Place.Search -> SearchScreen(here.library, comebacks)
-                            is Place.Listed -> ShortlistScreen(here.list, comebacks)
-                            is Place.Album -> AlbumScreen(here.id, comebacks)
-                            is Place.Artist -> ArtistScreen(here.id, comebacks)
-                            is Place.Playlist -> PlaylistScreen(here.id, comebacks)
-                            is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
-                            Place.NowPlaying -> NowPlayingScreen()
-                            Place.Settings -> SettingsScreen(sessions)
-                            Place.Notifications -> NotesScreen()
-                            // The film is always shown dark, as the web's player is.
-                            is Place.Playing -> key(here.play) {
-                                TvLook(paletteOf(chosenAccent, light = false)) {
-                                    PlayerScreen(
-                                        here.play,
-                                        onDone = { backTo(trail.size - 1) },
-                                        onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
-                                    )
+                    // The screen as one piece the remote comes back into where it
+                    // left it, which the bar pinned over it leads down to.
+                    Box(Modifier.fillMaxSize().focusRequester(screen).focusRestorer()) {
+                        kept.SaveableStateProvider(here.key) {
+                            when (here) {
+                                Place.Home -> HomeScreen(comebacks)
+                                is Place.Shelf -> if (here.library.kind == "music") {
+                                    MusicLibraryScreen(here.library, comebacks)
+                                } else {
+                                    LibraryScreen(here.library, comebacks)
+                                }
+                                is Place.Opened -> WorkScreen(here.work, comebacks)
+                                is Place.Person -> PersonScreen(here.id, comebacks)
+                                is Place.Search -> SearchScreen(here.library, comebacks)
+                                is Place.Listed -> ShortlistScreen(here.list, comebacks)
+                                is Place.Album -> AlbumScreen(here.id, comebacks)
+                                is Place.Artist -> ArtistScreen(here.id, comebacks)
+                                is Place.Playlist -> PlaylistScreen(here.id, comebacks)
+                                is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
+                                Place.NowPlaying -> NowPlayingScreen()
+                                Place.Settings -> SettingsScreen(sessions)
+                                Place.Notifications -> NotesScreen()
+                                // The film is always shown dark, as the web's player is.
+                                is Place.Playing -> key(here.play) {
+                                    TvLook(paletteOf(chosenAccent, light = false)) {
+                                        PlayerScreen(
+                                            here.play,
+                                            onDone = { backTo(trail.size - 1) },
+                                            onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                    PinnedTopBar(Modifier.align(Alignment.TopCenter))
+                    PinnedTopBar(screen, Modifier.align(Alignment.TopCenter))
                     // Over every screen, the film's included, which only
                     // what is urgent is said over.
                     NotesCorner(Modifier.align(Alignment.TopEnd))
