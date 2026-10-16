@@ -57,7 +57,8 @@ fun GlassRule() {
 
 /** What every press on the glass shares: tinted by the accent and ringed
  *  as the remote comes to it, in the accent or in [ring], filled with the
- *  accent when [on] says it is the one in force. */
+ *  accent when [on] says it is the one in force and then ringed in what is
+ *  written on it. */
 @Composable
 private fun Modifier.glassPress(
     shape: Shape,
@@ -72,7 +73,7 @@ private fun Modifier.glassPress(
         .height(PRESS)
         .clip(shape)
         .drawBehind { drawRect(if (on) palette.accent else palette.accent.copy(alpha = 0.22f * lit())) }
-        .rim(shape, ring ?: palette.accentBright, 2.dp, lit)
+        .rim(shape, ring ?: if (on) palette.accentContrast else palette.accentBright, 2.dp, lit)
         .clickable(interaction, indication = null, onClick = onClick)
 }
 
