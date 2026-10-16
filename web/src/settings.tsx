@@ -17,6 +17,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "./api";
+import { appIcon } from "./app-icon";
 import { buttonOrder, EVERY_HEADER_BUTTON, IN_THE_BAR_AT_FIRST, knownButtons } from "./buttons";
 import type { Backdrop, HeaderButton, ViewerPreferences } from "./api";
 import {
@@ -297,6 +298,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // out again would move them for no reason.
   useEffect(() => {
     const root = document.documentElement;
+    appIcon?.wear(accent);
     if (accent === THE_USUAL_ACCENT) {
       delete root.dataset.accent;
       root.style.removeProperty("--accent");

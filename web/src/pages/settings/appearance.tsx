@@ -9,7 +9,7 @@
 import { useState } from "react";
 import type { Backdrop, HeaderButton } from "../../api";
 import { appIcon } from "../../app-icon";
-import type { AppIcon, LauncherIcon } from "../../app-icon";
+import type { AppIcon, LauncherGround } from "../../app-icon";
 import { LanguagePicker } from "../../components/language-picker";
 import { ColourPicker } from "../../components/colour-picker";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
@@ -147,27 +147,41 @@ function OnAPhone() {
   );
 }
 
-/** The icon the application shows in this phone's launcher. */
+/** The icon the application shows in this phone's launcher: the ground
+ *  under the logo, and whether the logo wears the account's accent. */
 function IconOfTheApp({ icon }: { icon: AppIcon }) {
   const { t } = useSettings();
-  const [shown, setShown] = useState<LauncherIcon>(() => icon.current());
+  const [ground, setGround] = useState<LauncherGround>(() => icon.ground());
+  const [follows, setFollows] = useState(() => icon.follows());
 
   return (
-    <Setting label={t("settings.app_icon")} why={t("settings.app_icon_why")}>
-      <Picker<LauncherIcon>
-        label={t("settings.app_icon")}
-        value={shown}
-        onPick={(chosen) => {
-          icon.choose(chosen);
-          setShown(chosen);
-        }}
-        options={[
-          ["light", t("app_icon.light")],
-          ["dark", t("app_icon.dark")],
-          ["clear", t("app_icon.clear")],
-        ]}
-      />
-    </Setting>
+    <>
+      <Setting label={t("settings.app_icon")} why={t("settings.app_icon_why")}>
+        <Picker<LauncherGround>
+          label={t("settings.app_icon")}
+          value={ground}
+          onPick={(chosen) => {
+            icon.choose(chosen, follows);
+            setGround(chosen);
+          }}
+          options={[
+            ["light", t("app_icon.light")],
+            ["dark", t("app_icon.dark")],
+            ["clear", t("app_icon.clear")],
+          ]}
+        />
+      </Setting>
+      <Setting label={t("settings.app_icon_accent")} why={t("settings.app_icon_accent_why")}>
+        <Toggle
+          label={t("settings.app_icon_accent")}
+          checked={follows}
+          onChange={(chosen) => {
+            icon.choose(ground, chosen);
+            setFollows(chosen);
+          }}
+        />
+      </Setting>
+    </>
   );
 }
 

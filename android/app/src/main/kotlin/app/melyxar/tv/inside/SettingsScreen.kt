@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Opening
 import app.melyxar.server.Sessions
+import app.melyxar.theme.OFFERED_ACCENTS
 import app.melyxar.theme.parseHex
 import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
@@ -58,9 +59,6 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-
-/** The accent colours offered, as the web offers them, the usual first. */
-private val ACCENTS = listOf("#c81e1e", "#d9480f", "#c2a100", "#2f9e44", "#0c8599", "#1c7ed6", "#6741d9", "#c2255c")
 
 private val ACCENT_NAMES = listOf(
     R.string.tv_accent_red, R.string.tv_accent_orange, R.string.tv_accent_yellow, R.string.tv_accent_green,
@@ -182,8 +180,8 @@ fun SettingsScreen(sessions: Sessions) {
                     val names = ACCENT_NAMES.map { stringResource(it) }
                     val title = stringResource(R.string.tv_setting_accent)
                     val now = chosen.accentColor.lowercase()
-                    Line("accent", title, names.getOrNull(ACCENTS.indexOf(now)) ?: stringResource(R.string.tv_accent_own), memory, swatch = parseHex(now)?.let(::Color)) {
-                        ask(title, ACCENTS, names, now, ACCENTS.mapNotNull { hex -> parseHex(hex)?.let(::Color) }) { colour ->
+                    Line("accent", title, names.getOrNull(OFFERED_ACCENTS.indexOf(now)) ?: stringResource(R.string.tv_accent_own), memory, swatch = parseHex(now)?.let(::Color)) {
+                        ask(title, OFFERED_ACCENTS, names, now, OFFERED_ACCENTS.mapNotNull { hex -> parseHex(hex)?.let(::Color) }) { colour ->
                             preferences.change({ it.copy(accentColor = colour) }, buildJsonObject { put("accent_color", colour) })
                         }
                     }

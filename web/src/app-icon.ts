@@ -1,19 +1,25 @@
 /*
  * The icon Melyxar's Android application shows in the phone's launcher, when
- * this page runs inside it. The application carries a few and the page
- * chooses among them; the choice belongs to the phone, not to the account.
+ * this page runs inside it. The application carries the logo on a few grounds,
+ * each in every accent offered, and the page chooses the ground and whether
+ * the logo follows the account's accent, which it hands on as it changes. The
+ * choice belongs to the phone, not to the account.
  *
  * Absent in a browser, where nothing here is used.
  */
 
-/** The icons the application carries. */
-export type LauncherIcon = "light" | "dark" | "clear";
+/** The grounds the logo can sit on. */
+export type LauncherGround = "light" | "dark" | "clear";
 
 export interface AppIcon {
-  /** The icon shown now. */
-  current(): LauncherIcon;
-  /** Shows this icon in the launcher in place of the current one. */
-  choose(icon: LauncherIcon): void;
+  /** The ground shown now. */
+  ground(): LauncherGround;
+  /** Whether the logo wears the account's accent rather than the usual red. */
+  follows(): boolean;
+  /** Shows the logo on this ground, in the account's accent or not. */
+  choose(ground: LauncherGround, follows: boolean): void;
+  /** The account's accent, given whenever it is known or changes. */
+  wear(accent: string): void;
 }
 
 declare global {

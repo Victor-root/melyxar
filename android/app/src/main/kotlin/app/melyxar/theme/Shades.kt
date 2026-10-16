@@ -15,6 +15,9 @@ import kotlin.math.roundToInt
 /** The accent every account starts with, the red Melyxar was drawn around. */
 const val USUAL_ACCENT = 0xFFC81E1E.toInt()
 
+/** The accent colours offered, as the web offers them, the usual first. */
+val OFFERED_ACCENTS = listOf("#c81e1e", "#d9480f", "#c2a100", "#2f9e44", "#0c8599", "#1c7ed6", "#6741d9", "#c2255c")
+
 private const val WHITE = 0xFFFFFFFF.toInt()
 private const val BLACK = 0xFF000000.toInt()
 
@@ -111,6 +114,18 @@ fun vividOf(accent: Int): Int {
         else -> (red - green) / spread + 4
     }
     return fromHsl(hue, min(1.0, saturation * MADE_VIVID), MARK_LIGHTNESS)
+}
+
+/** The offered accent whose logo looks most like the logo in this one. */
+fun nearestOffered(accent: Int): String {
+    val mark = vividOf(accent)
+    return OFFERED_ACCENTS.minBy { offered ->
+        val other = vividOf(parseHex(offered)!!)
+        listOf(16, 8, 0).sumOf { shift ->
+            val apart = (mark shr shift and 0xFF) - (other shr shift and 0xFF)
+            apart * apart
+        }
+    }
 }
 
 private fun fromHsl(hue: Double, saturation: Double, lightness: Double): Int {
