@@ -2,6 +2,7 @@ package app.melyxar.tv.play
 
 import android.content.Context
 import android.os.Handler
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.Format
 import androidx.media3.common.util.UnstableApi
@@ -12,6 +13,10 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
+import app.melyxar.BuildConfig
+
+/** The tag the film's sound is followed under in a debug build. */
+const val SOUND_LOG = "MelyxarSound"
 
 /**
  * The film's renderers, its sound decoded on the television whenever it has
@@ -37,8 +42,14 @@ class DecodedSound(context: Context) : DefaultRenderersFactory(context) {
         out: ArrayList<Renderer>,
     ) {
         out += object : MediaCodecAudioRenderer(context, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, audioSink) {
-            override fun shouldUseBypass(format: Format): Boolean =
-                !decodes(mediaCodecSelector, format) && super.shouldUseBypass(format)
+            override fun shouldUseBypass(format: Format): Boolean {
+                val decoded = decodes(mediaCodecSelector, format)
+                val bypass = !decoded && super.shouldUseBypass(format)
+                if (BuildConfig.DEBUG) {
+                    Log.d(SOUND_LOG, "sound ${format.sampleMimeType}: decoder ${if (decoded) "found" else "none"}, handed on as it is: $bypass")
+                }
+                return bypass
+            }
         }
     }
 

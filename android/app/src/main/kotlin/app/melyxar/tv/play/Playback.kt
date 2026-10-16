@@ -1,6 +1,7 @@
 package app.melyxar.tv.play
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -16,6 +17,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.util.EventLogger
+import app.melyxar.BuildConfig
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
 import app.melyxar.player.measuredProfile
@@ -149,6 +152,10 @@ class Playback(
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
+        if (BuildConfig.DEBUG) {
+            // Every format, decoder and output of sound the player takes.
+            player.addAnalyticsListener(EventLogger(SOUND_LOG))
+        }
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 scope.launch { report(leaving = false) }
@@ -190,6 +197,9 @@ class Playback(
      *  from there. */
     private suspend fun open(plan: Plan, at: Double) {
         this.plan = plan
+        if (BuildConfig.DEBUG) {
+            Log.d(SOUND_LOG, "plan: ${plan.method}, audio ${plan.audio.firstOrNull { it.id == plan.chosenAudioId }?.codec}")
+        }
         closeTheStream()
         val address = if (plan.method == "direct_play") {
             api.address(plan.url)
