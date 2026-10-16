@@ -39,6 +39,9 @@ import app.melyxar.server.Filters
 import app.melyxar.server.Library
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.ChoiceList
+import app.melyxar.tv.look.GlassBar
+import app.melyxar.tv.look.GlassField
+import app.melyxar.tv.look.GlassRule
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
@@ -152,7 +155,8 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 it,
                 current = at,
                 onJump = ::jump,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 92.dp, end = 10.dp),
+                // In the page's margin, beside the grid rather than over it.
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = 92.dp, end = 2.dp),
             )
         }
         when (picking) {
@@ -206,25 +210,29 @@ private fun SortAndFilters(
     onTurn: () -> Unit,
 ) {
     val any = stringResource(R.string.tv_filter_any)
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-    ) {
-        OrderButtons(orderName(order), descending, memory, onPick = { onPick(Picking.Order) }, onTurn = onTurn)
-        if (filters != null && filters.genres.isNotEmpty()) {
-            PlainButton(
-                stringResource(R.string.tv_genre_is, genre ?: any),
-                onClick = { onPick(Picking.Genre) },
-                modifier = Modifier.remembered(memory, "genre"),
-            )
-        }
-        if (filters != null && filters.decades.isNotEmpty()) {
-            PlainButton(
-                stringResource(R.string.tv_decade_is, decade?.let { decadeName(it) } ?: any),
-                onClick = { onPick(Picking.Decade) },
-                modifier = Modifier.remembered(memory, "decade"),
-            )
+    Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
+        GlassBar {
+            OrderButtons(orderName(order), descending, memory, onPick = { onPick(Picking.Order) }, onTurn = onTurn)
+            if (filters != null && filters.genres.isNotEmpty()) {
+                GlassRule()
+                GlassField(
+                    stringResource(R.string.tv_genre),
+                    genre ?: any,
+                    onClick = { onPick(Picking.Genre) },
+                    modifier = Modifier.remembered(memory, "genre"),
+                    narrows = genre != null,
+                )
+            }
+            if (filters != null && filters.decades.isNotEmpty()) {
+                GlassRule()
+                GlassField(
+                    stringResource(R.string.tv_decade),
+                    decade?.let { decadeName(it) } ?: any,
+                    onClick = { onPick(Picking.Decade) },
+                    modifier = Modifier.remembered(memory, "decade"),
+                    narrows = decade != null,
+                )
+            }
         }
     }
 }
@@ -266,7 +274,7 @@ private fun Letter(letter: String, current: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(5.dp)
     Box(
         modifier = Modifier
-            .size(26.dp, 16.dp)
+            .size(Gutter - 4.dp, 16.dp)
             .clip(shape)
             .background(palette.accent.copy(alpha = lit))
             .clickable(interaction, indication = null, onClick = onClick),
