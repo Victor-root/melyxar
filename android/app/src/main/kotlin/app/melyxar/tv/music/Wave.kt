@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.nativePaint
 import androidx.compose.ui.unit.IntSize
 import app.melyxar.tv.look.LocalPalette
 import kotlin.math.roundToInt
@@ -59,7 +60,7 @@ fun SongWave(modifier: Modifier) {
                     colors = listOf(Color.Transparent, accent.copy(alpha = 0.6f), accent.copy(alpha = 0.6f)),
                     colorStops = listOf(0f, 0.55f, 1f),
                 )
-                asFrameworkPaint().maskFilter = BlurMaskFilter(SOFTENED_PX, BlurMaskFilter.Blur.NORMAL)
+                nativePaint.maskFilter = BlurMaskFilter(SOFTENED_PX, BlurMaskFilter.Blur.NORMAL)
             }
             val whole = IntSize(size.width.roundToInt(), size.height.roundToInt())
             onDrawBehind {
