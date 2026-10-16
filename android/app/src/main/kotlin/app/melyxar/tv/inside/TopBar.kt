@@ -278,8 +278,8 @@ private fun PlayingNow(onClick: () -> Unit) {
 
 /**
  * How far the song playing has played, drawn round the whole of the piece
- * of glass it is on, from where its left end meets its top and clockwise,
- * a dash marking that start: the track faint, what has played in the accent
+ * of glass it is on, from the middle of its left end and clockwise, a dash
+ * marking that start: the track faint, what has played in the accent
  * with a soft glow, laid in widening strokes as a card's halo is. Laid out
  * once for the piece; only drawn again as the song plays.
  */
@@ -293,11 +293,13 @@ private fun Modifier.songPlayed(): Modifier {
         val round = size.height / 2 - inset
         val (left, right, top, bottom) = listOf(inset, size.width - inset, inset, size.height - inset)
         val outline = Path().apply {
-            moveTo(left + round, top)
+            val ends = Rect(left, top, left + 2 * round, bottom)
+            moveTo(left, size.height / 2)
+            arcTo(ends, 180f, 90f, false)
             lineTo(right - round, top)
             arcTo(Rect(right - 2 * round, top, right, bottom), -90f, 180f, false)
             lineTo(left + round, bottom)
-            arcTo(Rect(left, top, left + 2 * round, bottom), 90f, 180f, false)
+            arcTo(ends, 90f, 90f, false)
         }
         val measure = PathMeasure().apply { setPath(outline, false) }
         val played = Path()
@@ -305,7 +307,7 @@ private fun Modifier.songPlayed(): Modifier {
         onDrawWithContent {
             drawContent()
             drawPath(outline, palette.text.copy(alpha = 0.16f), style = Stroke(line))
-            drawLine(palette.accentBright, Offset(left + round, top - dash), Offset(left + round, top + dash), line, StrokeCap.Round)
+            drawLine(palette.accentBright, Offset(left - dash, size.height / 2), Offset(left + dash, size.height / 2), line, StrokeCap.Round)
             val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
             played.reset()
             measure.getSegment(0f, measure.length * done, played, true)
