@@ -66,6 +66,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.start_library_phone", "settings.start_library_phone_why"],
       ["settings.app_icon", "settings.app_icon_why"],
       ["settings.app_icon_accent", "settings.app_icon_accent_why"],
+      ["settings.app_icon_apply", "settings.app_icon_apply_why"],
     ],
     choices: {
       "nav.theme": ["theme.system", "theme.dark", "theme.light"],
