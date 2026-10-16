@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -116,8 +117,10 @@ private fun Bar(chrome: Chrome, first: FocusRequester?) {
         Row(
             modifier = Modifier
                 .height(46.dp)
-                .glassPiece()
+                // Round the glass rather than inside it, so its glow spreads
+                // both ways from the line.
                 .then(if (LocalListening.current.queue.current != null) Modifier.songPlayed() else Modifier)
+                .glassPiece()
                 .padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -268,16 +271,17 @@ private fun PlayingNow(onClick: () -> Unit) {
         if (cover.isEmpty()) {
             Glyph(Icons.Music, if (lit() > 0.5f) palette.accentBright else palette.text, 20.dp)
         } else {
-            ServerPicture(cover, 30.dp, Modifier.size(30.dp).clip(CircleShape))
+            ServerPicture(cover, 36.dp, Modifier.size(36.dp).clip(CircleShape))
         }
     }
 }
 
 /**
  * How far the song playing has played, drawn round the whole of the piece
- * of glass it is on, from the middle of its top and clockwise: the track
- * faint, what has played in the accent with its glow. Laid out once for the
- * piece; only drawn again as the song plays.
+ * of glass it is on, from where its left end meets its top and clockwise,
+ * a dash marking that start: the track faint, what has played in the accent
+ * with a soft glow, laid in widening strokes as a card's halo is. Laid out
+ * once for the piece; only drawn again as the song plays.
  */
 @Composable
 private fun Modifier.songPlayed(): Modifier {
@@ -289,26 +293,33 @@ private fun Modifier.songPlayed(): Modifier {
         val round = size.height / 2 - inset
         val (left, right, top, bottom) = listOf(inset, size.width - inset, inset, size.height - inset)
         val outline = Path().apply {
-            moveTo(size.width / 2, top)
+            moveTo(left + round, top)
             lineTo(right - round, top)
             arcTo(Rect(right - 2 * round, top, right, bottom), -90f, 180f, false)
             lineTo(left + round, bottom)
             arcTo(Rect(left, top, left + 2 * round, bottom), 90f, 180f, false)
-            close()
         }
         val measure = PathMeasure().apply { setPath(outline, false) }
         val played = Path()
+        val dash = 5.dp.toPx()
         onDrawWithContent {
             drawContent()
             drawPath(outline, palette.text.copy(alpha = 0.16f), style = Stroke(line))
+            drawLine(palette.accentBright, Offset(left + round, top - dash), Offset(left + round, top + dash), line, StrokeCap.Round)
             val done = listening.length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
             played.reset()
             measure.getSegment(0f, measure.length * done, played, true)
-            drawPath(played, palette.accentGlow, style = Stroke(line * 3, cap = StrokeCap.Round))
+            GLOW.forEach { (wider, alpha) ->
+                drawPath(played, palette.accentGlow.copy(alpha = alpha), style = Stroke(line * wider, cap = StrokeCap.Round))
+            }
             drawPath(played, palette.accentBright, style = Stroke(line, cap = StrokeCap.Round))
         }
     }
 }
+
+/** The glow of what has played, as widths of its line and how strong each
+ *  is: faint and wide outside, stronger close in. */
+private val GLOW = listOf(6f to 0.10f, 4f to 0.16f, 2.5f to 0.24f)
 
 /** The most waiting the bell counts before it says "more". */
 private const val MOST_COUNTED = 99
