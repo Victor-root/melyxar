@@ -3,4 +3,7 @@
     <!-- The ground of the web interface's dark theme, for what the system draws
          before a screen does: the window. -->
     <color name="ground">#0C0D10</color>
+    <!-- Behind the logo of the launcher icons that have a ground. -->
+    <color name="icon_light">#FFFFFF</color>
+    <color name="icon_dark">@color/ground</color>
 </resources>

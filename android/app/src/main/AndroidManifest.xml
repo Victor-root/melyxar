@@ -37,7 +37,7 @@
         android:banner="@drawable/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_launcher_light"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Melyxar"
@@ -48,10 +48,46 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The door again, once for each icon the phone's launcher can show,
+             only one of them on at a time: the logo on white, the one there
+             at first, on the dark ground, or alone with nothing behind it,
+             chosen in the settings of the interface (web/LauncherIcons.kt). -->
+        <activity-alias
+            android:name=".connect.IconLight"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_light"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.IconDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_dark"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.IconClear"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_clear"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- The whole of the application on a television, every screen of it
              drawn natively. -->
