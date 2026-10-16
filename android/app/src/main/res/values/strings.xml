@@ -116,6 +116,7 @@
     <string name="tv_watch_later">Watch later</string>
     <string name="tv_watch_later_empty">Nothing set aside yet. Choose the clock on a title to add it here. A title leaves this list once you have watched it.</string>
     <string name="tv_change_profile">Change profile</string>
+    <string name="tv_back_again_to_leave">Press back again to leave Melyxar</string>
     <string name="tv_connect_looking">No server found on your home network yet. Still looking…</string>
     <string name="tv_sort">Sort</string>
     <string name="tv_sort_title">Title</string>

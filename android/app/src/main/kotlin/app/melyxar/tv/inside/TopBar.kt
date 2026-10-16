@@ -246,7 +246,7 @@ private fun Account(modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(horizontalAlignment = Alignment.End) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     chrome.account.name,
                     fontSize = 14.sp,
