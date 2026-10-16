@@ -103,6 +103,9 @@ fun Controls(
     work: Work?,
     playing: Boolean,
     steps: Steps,
+    /** Only the bar and its times, as the arrows stepping through the film
+     *  show them. */
+    barOnly: Boolean,
     memory: FocusMemory,
     onMenu: (Menu) -> Unit,
     onNext: (() -> Unit)?,
@@ -117,7 +120,7 @@ fun Controls(
     }
     val length = playback.length
     Box(Modifier.fillMaxSize()) {
-        Row(
+        if (!barOnly) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)))
@@ -139,7 +142,7 @@ fun Controls(
                 SeekBar(at, length, playback, Modifier.weight(1f).remembered(memory, BAR))
                 Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
             }
-            Row(
+            if (!barOnly) Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 // Down from the buttons, what the film is.
