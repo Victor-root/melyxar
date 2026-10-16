@@ -103,6 +103,7 @@ fun FolderPage(work: Work, memory: FocusMemory, first: FocusRequester) {
  */
 @Composable
 fun PhotoViewer(startAt: String) {
+    NoBarPinned()
     val palette = LocalPalette.current
     var showing by rememberSaveable { mutableStateOf(startAt) }
     val photo = rememberLoaded("work:$showing") { work(showing) }.value.ready?.takeIf { it.id == showing }

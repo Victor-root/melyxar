@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +60,7 @@ import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
 
 /** How wide the cover of the song playing is. */
@@ -77,8 +77,7 @@ fun NowPlayingScreen() {
     val palette = LocalPalette.current
     val song = listening.queue.current
     val first = remember { FocusRequester() }
-    // On the queue for music started anew, on the side left otherwise.
-    var side by rememberSaveable(listening.begun) { mutableStateOf(Side.Queue) }
+    var side by rememberSaveable { mutableStateOf(Side.Queue) }
     Column(Modifier.fillMaxSize().focusTraced("song page")) {
         TopBar()
         if (song == null) {
@@ -132,7 +131,6 @@ fun NowPlayingScreen() {
             }
         }
     }
-    LaunchedEffect(song != null) { if (song != null) first.requestFocus() }
 }
 
 /** What stands beside the song: what comes after it, or its words. */
@@ -158,8 +156,9 @@ private fun Coming(listening: Listening, modifier: Modifier) {
     }
 }
 
-/** The buttons that lead the music, the remote starting on the one that
- *  plays and pauses it. */
+/** The buttons that lead the music, the remote coming into them on the one
+ *  that plays and pauses it; it is left where it was as the page opens, on
+ *  the bar it was opened from. */
 @Composable
 private fun Controls(listening: Listening, song: String, first: FocusRequester, modifier: Modifier) {
     val chrome = LocalChrome.current
@@ -253,6 +252,7 @@ private fun Rail(listening: Listening, modifier: Modifier = Modifier) {
                     val round = CornerRadius(line / 2)
                     drawRoundRect(palette.text.copy(alpha = 0.2f), Offset(0f, top), Size(size.width, line), round)
                     drawRoundRect(palette.accent, Offset(0f, top), Size(size.width * done, line), round)
+                    seekHandle(palette.text, done, lit)
                 },
         )
         Row {

@@ -1,20 +1,6 @@
 package app.melyxar.tv.play
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import app.melyxar.R
-import app.melyxar.tv.door.Face
-import app.melyxar.tv.endsAt
-import app.melyxar.tv.inside.Clock
-import app.melyxar.tv.inside.FocusMemory
-import app.melyxar.tv.inside.LocalChrome
-import app.melyxar.tv.inside.remembered
-import app.melyxar.tv.look.ServerPicture
-import java.util.Date
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,9 +15,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,29 +47,42 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.melyxar.R
 import app.melyxar.server.Thumbnails
 import app.melyxar.server.Work
 import app.melyxar.tv.clock
+import app.melyxar.tv.door.Face
+import app.melyxar.tv.endsAt
+import app.melyxar.tv.inside.Clock
+import app.melyxar.tv.inside.FocusMemory
+import app.melyxar.tv.inside.LocalChrome
+import app.melyxar.tv.inside.remembered
 import app.melyxar.tv.inside.whichEpisode
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
-import kotlinx.coroutines.delay
+import java.util.Date
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 /** How near the film's clock must come to where the bar sent it for the
  *  bar to follow the clock again. */
@@ -324,15 +325,7 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
                 drawRoundRect(Color.White.copy(alpha = 0.2f), Offset(0f, top), Size(size.width, line), round)
                 drawRoundRect(Color.White.copy(alpha = 0.32f), Offset(0f, top), Size(size.width * buffered, line), round)
                 drawRoundRect(palette.accent, Offset(0f, top), Size(size.width * done, line), round)
-                if (lit > 0f) {
-                    val handle = Size(8.dp.toPx(), 18.dp.toPx() * 1.5f * lit)
-                    drawRoundRect(
-                        Color.White.copy(alpha = lit),
-                        Offset(size.width * done - handle.width / 2, (size.height - handle.height) / 2),
-                        handle,
-                        CornerRadius(2.dp.toPx()),
-                    )
-                }
+                seekHandle(Color.White, done, lit)
             },
     ) {
         target?.let { Preview(it, done, playback.plan?.thumbnails, Modifier.matchParentSize()) }

@@ -24,11 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -133,16 +135,29 @@ class BarShown {
 }
 
 /** What each screen of the trail puts in the bar pinned over the screens
- *  while a song plays, and the last song announced in it. A screen without
- *  a bar, a film's or a photo's, has nothing here, and none is pinned over it. */
+ *  while a song plays, and the last song announced in it. No bar is pinned
+ *  over a film, nor over the screens that say they have none, a photo's. */
 @Stable
 class PinnedBar {
     val shown = mutableStateMapOf<Place, BarShown>()
+    val barless = mutableStateListOf<Place>()
     var announced by mutableStateOf<String?>(null)
 
     /** Forgets the screens no longer in the trail. */
     fun keepOnly(trail: List<Place>) {
         shown.keys.retainAll(trail.toSet())
+        barless.retainAll(trail.toSet())
+    }
+}
+
+/** Says the screen shown has no bar, none to be pinned over it. */
+@Composable
+fun NoBarPinned() {
+    val pinned = LocalPinnedBar.current
+    val here = LocalChrome.current.here
+    DisposableEffect(pinned, here) {
+        pinned.barless += here
+        onDispose { pinned.barless -= here }
     }
 }
 
@@ -158,8 +173,14 @@ val LocalPinnedBar = staticCompositionLocalOf { PinnedBar() }
 @Composable
 fun PinnedTopBar(modifier: Modifier = Modifier) {
     val pinned = LocalPinnedBar.current
-    val shown = pinned.shown[LocalChrome.current.here] ?: return
+    val here = LocalChrome.current.here
     val song = LocalListening.current.queue.current ?: return
+    if (here is Place.Playing || here in pinned.barless) {
+        return
+    }
+    // Kept from one screen to the next, the remote with it: what a screen
+    // puts in it comes a moment after the screen does.
+    val shown = pinned.shown[here]
     var announcing by remember { mutableStateOf(false) }
     LaunchedEffect(song.id) {
         if (pinned.announced != song.id) {
@@ -170,8 +191,8 @@ fun PinnedTopBar(modifier: Modifier = Modifier) {
         }
     }
     Box(modifier.fillMaxWidth().padding(start = Gutter, end = Gutter, top = BarTop).focusTraced("pinned bar"), contentAlignment = Alignment.Center) {
-        shown.title?.invoke()
-        Bar(LocalChrome.current, shown.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
+        shown?.title?.invoke()
+        Bar(LocalChrome.current, shown?.first, announced = song.takeIf { announcing }, onReached = { announcing = false })
     }
 }
 
