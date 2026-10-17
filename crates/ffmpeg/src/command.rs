@@ -383,6 +383,20 @@ pub enum WhereToCut {
 /// default.
 const SHORTER_THAN_ANY_PICTURE: Millis = Millis::new(1);
 
+/// Every copied picture made to last exactly until the next one is decoded.
+///
+/// A film keeps the length of its pictures rounded, Matroska to the
+/// millisecond: 42 ms for a picture of 41.7. The segment writer checks the
+/// first picture of each segment against the end of the last picture of the
+/// one before, and a picture lasting longer than the gap to the next one
+/// fails that check. The key picture opening the segment is then given its
+/// decoding time as its showing time, three pictures early, and players drop
+/// it: measured, a picture lost at two joins in three on a television. A
+/// picture with no decoding time to measure from, just after a jump or at the
+/// very end, keeps the length the film gives it. The commas are escaped
+/// because the tool splits a chain of filters on them.
+const COPIED_PICTURE_LASTS_UNTIL_THE_NEXT: &str = r"setts=pts=PTS:dts=DTS:duration=if(eq(DTS\,NOPTS)+eq(NEXT_DTS\,NOPTS)\,DURATION\,NEXT_DTS-DTS)";
+
 /// A full invocation.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Command {
@@ -699,6 +713,10 @@ impl Command {
             VideoOutput::Copy => {
                 push!("-c:v");
                 push!("copy");
+                if matches!(self.output, Output::Segments { .. }) {
+                    push!("-bsf:v");
+                    push!(COPIED_PICTURE_LASTS_UNTIL_THE_NEXT);
+                }
             }
             VideoOutput::Encode(encode) => {
                 // Already written into the named graph when the picture is
@@ -2163,6 +2181,46 @@ mod tests {
             !arguments(&from_the_start).contains(&"-noaccurate_seek".to_string()),
             "nothing was skipped, so there is nothing to trim"
         );
+    }
+
+    #[test]
+    fn a_copied_picture_in_segments_lasts_until_the_next_one() {
+        // Measured on a television: with the lengths a film keeps rounded,
+        // the key picture opening two segments in three was given a time
+        // three pictures early and dropped.
+        let segments = || Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            cut: WhereToCut::AtEveryKeyFrame,
+            start_number: 0,
+        };
+        let filter = |command: &Command| {
+            let args = arguments(command);
+            position(&args, "-bsf:v").map(|at| args[at + 1].clone())
+        };
+
+        let copied =
+            Command::new(Input::new("/media/film.mkv"), segments()).with_video(VideoOutput::Copy);
+        assert_eq!(
+            filter(&copied).as_deref(),
+            Some(COPIED_PICTURE_LASTS_UNTIL_THE_NEXT)
+        );
+        assert!(
+            COPIED_PICTURE_LASTS_UNTIL_THE_NEXT.contains("pts=PTS:dts=DTS"),
+            "left unsaid, the filter gives every picture its decoding time to show at"
+        );
+
+        let rebuilt = Command::new(Input::new("/media/film.mkv"), segments())
+            .with_video(VideoOutput::Encode(VideoEncode::software_h264()));
+        assert_eq!(filter(&rebuilt), None, "an encoder gives its pictures their true length");
+
+        let to_a_file = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Copy);
+        assert_eq!(filter(&to_a_file), None, "only the segment writer checks the joins");
     }
 
     #[test]
