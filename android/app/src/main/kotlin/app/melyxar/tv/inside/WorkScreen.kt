@@ -302,7 +302,7 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
                         episode.episode ?: 1,
                     ),
                     onClick = { chrome.play(Play(episode.id, episode.sourceId, null)) },
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.focusRequester(first).remembered(memory, "play"),
                 )
             }
             source != null -> {
@@ -310,12 +310,13 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
                 AccentButton(
                     stringResource(if (resumeAt != null) R.string.tv_resume else R.string.tv_play),
                     onClick = { chrome.play(Play(work.id, source, resumeAt?.toDouble() ?: 0.0)) },
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.focusRequester(first).remembered(memory, "play"),
                 )
                 if (resumeAt != null) {
                     PlainButton(
                         stringResource(R.string.tv_from_start),
                         onClick = { chrome.play(Play(work.id, source, 0.0)) },
+                        modifier = Modifier.remembered(memory, "from-start"),
                         icon = Icons.Restart,
                     )
                 }
@@ -331,7 +332,9 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
                 label = stringResource(R.string.tv_mark_watched),
                 on = watched,
                 onClick = { marks.setWatched(card, !watched) },
-                modifier = if (next == null && source == null) Modifier.focusRequester(first) else Modifier,
+                modifier = Modifier
+                    .remembered(memory, "watched")
+                    .then(if (next == null && source == null) Modifier.focusRequester(first) else Modifier),
             )
         }
         val favourite = marks.favourite(card)
@@ -340,6 +343,7 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
             label = stringResource(R.string.tv_favourites),
             on = favourite,
             onClick = { marks.setFavourite(card, !favourite) },
+            modifier = Modifier.remembered(memory, "favourite"),
         )
         val later = marks.watchLater(card)
         RoundMark(
@@ -347,6 +351,7 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
             label = stringResource(R.string.tv_watch_later),
             on = later,
             onClick = { marks.setWatchLater(card, !later) },
+            modifier = Modifier.remembered(memory, "later"),
         )
     }
 }
