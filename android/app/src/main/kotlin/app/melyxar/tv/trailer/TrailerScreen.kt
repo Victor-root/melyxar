@@ -12,12 +12,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,7 +30,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
@@ -71,6 +70,7 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.rail
 import kotlinx.coroutines.delay
 
 /** How far one press to the side moves the trailer, in milliseconds. */
@@ -238,16 +238,8 @@ fun TrailerScreen(title: String, url: String) {
                         .padding(start = Gutter, end = Gutter, top = 40.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(percent = 50))
-                            .background(palette.text.copy(alpha = 0.25f)),
-                    ) {
-                        val done = if (length > 0) (position / length).toFloat().coerceIn(0f, 1f) else 0f
-                        Box(Modifier.fillMaxHeight().fillMaxWidth(done).background(palette.accentBright))
-                    }
+                    val done = if (length > 0) (position / length).toFloat() else 0f
+                    Spacer(Modifier.fillMaxWidth().height(10.dp).drawBehind { rail(size.height, palette.text.copy(alpha = 0.2f), palette.accent to done) })
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Glyph(if (playing) Icons.Pause else Icons.Play, palette.text, 22.dp)
                         Text(
