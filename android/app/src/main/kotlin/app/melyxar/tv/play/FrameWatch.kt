@@ -9,6 +9,7 @@ import android.view.Display
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
@@ -19,6 +20,7 @@ import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import java.io.IOException
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 import kotlin.math.roundToLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -35,6 +37,10 @@ private const val SUMMED_EVERY_MS = 10_000L
 /** How long the thread that draws the screen may go without drawing before
  *  it is said to have been held up: six frames of a screen at sixty. */
 private const val HELD_UP_MS = 100L
+
+/** More than the screen's beat, at the slowest screen it can run: the clock
+ *  the pictures follow moving by this much between two of them jumped. */
+private const val CLOCK_JUMP_NS = 25_000_000L
 
 /** Two pictures further apart than this many steps are a jump, a seek, not
  *  pictures lost. */
@@ -61,6 +67,7 @@ class FrameWatch(
     // Read and written on the player's own thread only, where the player
     // itself must not be asked anything.
     private var lastShownUs = C.TIME_UNSET
+    private var lastReleaseNs = 0L
     private var stepUs = Long.MAX_VALUE
 
     // Written on the player's thread, read on the screen's.
@@ -72,6 +79,7 @@ class FrameWatch(
     private var watching = false
     private var summing: Job? = null
     private var summed = Counts()
+    private var summedSoundSkipped = 0
 
     fun start() {
         watching = true
@@ -103,11 +111,17 @@ class FrameWatch(
             Log.d(FRAMES_LOG, "picture at ${seconds(presentationTimeUs)} s handed over ${millis(-aheadNs)} ms late")
         }
         val last = lastShownUs
+        val lastRelease = lastReleaseNs
         lastShownUs = presentationTimeUs
+        lastReleaseNs = releaseTimeNs
         if (last == C.TIME_UNSET) {
             return
         }
         val gapUs = presentationTimeUs - last
+        // How far the clock the pictures follow moved against the film
+        // between the two: nothing but the rounding to the screen's beat
+        // when it runs evenly, a whole picture or more when it jumped.
+        val shiftNs = releaseTimeNs - lastRelease - gapUs * 1000
         // The film's own step between pictures, as the smallest gap seen:
         // the file's frame rate is not always carried to the player.
         if (gapUs in 1_000 until stepUs) {
@@ -119,6 +133,14 @@ class FrameWatch(
         val missing = (gapUs.toDouble() / stepUs).roundToLong() - 1
         when {
             gapUs <= 0 || missing > JUMP_STEPS -> Log.d(FRAMES_LOG, "jumped from ${seconds(last)} s to ${seconds(presentationTimeUs)} s")
+            abs(shiftNs) > CLOCK_JUMP_NS -> {
+                lostSinceSum.addAndGet(missing)
+                Log.d(
+                    FRAMES_LOG,
+                    "the clock moved ${millis(-shiftNs)} ms ahead of the film between ${seconds(last)} s and ${seconds(presentationTimeUs)} s, " +
+                        "$missing picture(s) lost, this one handed over ${millis(aheadNs)} ms ahead",
+                )
+            }
             missing > 0 -> {
                 lostSinceSum.addAndGet(missing)
                 Log.d(
@@ -183,6 +205,19 @@ class FrameWatch(
         Log.d(FRAMES_LOG, "sound ran dry at ${seconds(eventTime.currentPlaybackPositionMs * 1000)} s, $elapsedSinceLastFeedMs ms since it was last fed")
     }
 
+    override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
+        Log.d(FRAMES_LOG, "sound trouble at ${seconds(eventTime.currentPlaybackPositionMs * 1000)} s: $audioSinkError")
+    }
+
+    override fun onPositionDiscontinuity(
+        eventTime: AnalyticsListener.EventTime,
+        oldPosition: Player.PositionInfo,
+        newPosition: Player.PositionInfo,
+        reason: Int,
+    ) {
+        Log.d(FRAMES_LOG, "position moved from ${seconds(oldPosition.positionMs * 1000)} s to ${seconds(newPosition.positionMs * 1000)} s, reason $reason")
+    }
+
     private fun sum() {
         val counters = player.videoDecoderCounters ?: return
         counters.ensureUpdated()
@@ -193,6 +228,8 @@ class FrameWatch(
             droppedInput = counters.droppedInputBufferCount,
             droppedToKey = counters.droppedToKeyframeCount,
         )
+        val sound = player.audioDecoderCounters?.also { it.ensureUpdated() }
+        val soundSkipped = sound?.skippedOutputBufferCount ?: 0
         val tightest = tightestNs.getAndSet(Long.MAX_VALUE)
         Log.d(
             FRAMES_LOG,
@@ -202,9 +239,11 @@ class FrameWatch(
                 "${lostSinceSum.getAndSet(0)} lost between pictures, ${lateSinceSum.getAndSet(0)} handed over late, " +
                 "tightest ${if (tightest == Long.MAX_VALUE) "none" else "${millis(tightest)} ms"} ahead, " +
                 "most dropped in a row ${counters.maxConsecutiveDroppedBufferCount}, ${heldAhead()} s held ahead, " +
+                "${soundSkipped - summedSoundSkipped} pieces of sound skipped, " +
                 "speed ${player.playbackParameters.speed}, ${screen()}",
         )
         summed = now
+        summedSoundSkipped = soundSkipped
     }
 
     private fun heldAhead() = String.format(Locale.ROOT, "%.1f", (player.bufferedPosition - player.currentPosition) / 1000.0)
