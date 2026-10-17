@@ -347,7 +347,24 @@
     padding-left: calc(var(--gap-wide) + var(--safe-left));
   }
 
+  /* The words sit across the picture rather than beside it, so whatever the
+     theme they are the light kind over a dark wash. The wash gives way to
+     the page only under the row below, where the picture runs on. */
   .hero::after {
-    background: linear-gradient(to top, var(--surface-deep) 12%, rgba(0, 0, 0, 0.45) 70%);
+    background: linear-gradient(
+      to top,
+      var(--surface-deep) 0,
+      transparent var(--hero-under-the-row),
+      rgba(0, 0, 0, 0.6) calc(var(--hero-under-the-row) + 48px),
+      rgba(0, 0, 0, 0.2) 75%
+    );
+  }
+
+  .hero-tagline,
+  .hero-facts,
+  .hero-words .progress-line {
+    --text: var(--on-app-ground);
+    --text-soft: color-mix(in srgb, var(--on-app-ground) 78%, transparent);
+    --text-faint: color-mix(in srgb, var(--on-app-ground) 58%, transparent);
   }
 }
