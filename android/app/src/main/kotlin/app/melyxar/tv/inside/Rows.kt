@@ -32,6 +32,9 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.rememberRowScrolling
 
+/** The room a row of cards keeps above and below them. */
+private val ROW_ROOM = 18.dp
+
 /** A row's heading, as the web's: its icon in the accent, then its name. */
 @Composable
 fun RowHead(title: String, icon: ImageVector?, modifier: Modifier = Modifier) {
@@ -63,12 +66,14 @@ fun <T> CardRow(
 ) {
     val scrolling = rememberRowScrolling()
     val first = remember { FocusRequester() }
-    Column(modifier.padding(bottom = SectionGap)) {
+    // The room the cards are given above and below, to grow into as the
+    // remote comes, counts in the gap to what follows.
+    Column(modifier.padding(bottom = SectionGap - ROW_ROOM)) {
         title?.let { RowHead(it, icon) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides scrolling) {
             LazyRow(
                 state = rememberLazyListState(),
-                contentPadding = PaddingValues(horizontal = Gutter, vertical = 18.dp),
+                contentPadding = PaddingValues(horizontal = Gutter, vertical = ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
                 modifier = Modifier.focusRestorer(first),
             ) {
