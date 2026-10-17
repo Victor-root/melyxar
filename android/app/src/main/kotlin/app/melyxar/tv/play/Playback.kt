@@ -176,6 +176,9 @@ class Playback(
     private val clock = StartClock()
     private var keeping: Job? = null
 
+    /** Every picture lost on the way to the screen, for the debug build's log. */
+    private val frameWatch = if (BuildConfig.DEBUG) FrameWatch(context, player, scope) else null
+
     init {
         // The words are read and drawn by Melyxar, which can move them.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -186,6 +189,7 @@ class Playback(
             player.addAnalyticsListener(EventLogger(SOUND_LOG))
             player.addAnalyticsListener(clock)
         }
+        frameWatch?.start()
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                 videoDecoder = decoderName
@@ -481,6 +485,7 @@ class Playback(
         keeping?.cancel()
         val at = seconds
         val paused = !player.isPlaying
+        frameWatch?.stop()
         player.release()
         val closing = stream
         GlobalScope.launch(Dispatchers.IO + NonCancellable) {
