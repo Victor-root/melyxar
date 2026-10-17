@@ -50,6 +50,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,6 +78,10 @@ import kotlinx.coroutines.delay
 
 /** The height of the banner, under which the first row shows. */
 val HeroHeight = 340.dp
+
+/** How far the banner's picture runs on under the row below it, fading
+ *  away behind the tiles of the libraries rather than ending above them. */
+private val UNDER_THE_ROW = 120.dp
 
 /** How long each work of the banner stands before the next. */
 private const val EACH_STANDS_FOR_MS = 9_000L
@@ -126,7 +131,7 @@ fun Hero(
             targetState = at,
             transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
             label = "hero",
-            modifier = Modifier.fillMaxSize().fadesIntoThePage(),
+            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().fadesIntoThePage(),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }
@@ -163,6 +168,7 @@ private fun Backdrop(work: WithCard<HeroMore>) {
     Box(Modifier.fillMaxSize().drawWithCache {
         // Shaded enough on the left to read the words over, never so much
         // that the picture looks pushed aside: a solid edge reads as a hole.
+        val below = Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground)
         val words = Brush.horizontalGradient(
             0f to palette.ground.copy(alpha = 0.8f),
             0.18f to palette.ground.copy(alpha = 0.6f),
@@ -173,6 +179,7 @@ private fun Backdrop(work: WithCard<HeroMore>) {
         onDrawWithContent {
             drawContent()
             drawRect(words)
+            drawRect(below)
         }
     }) {
         ServerPicture(
@@ -185,18 +192,29 @@ private fun Backdrop(work: WithCard<HeroMore>) {
 }
 
 /**
- * The web's `--hero-fade` over a shorter stretch: on a television the web's
- * fade ate too much of the picture, so only its last fifth thins out, but
- * all the way to nothing, so no edge is left where the picture ends.
+ * The picture taller than the banner by [UNDER_THE_ROW], hanging below it
+ * while the banner keeps its own height for what comes after: the row under
+ * it is drawn later and so over it.
+ */
+private fun Modifier.runsOnUnderTheRow() = layout { measurable, constraints ->
+    val height = constraints.maxHeight + UNDER_THE_ROW.roundToPx()
+    val picture = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+    layout(picture.width, constraints.maxHeight) { picture.place(0, 0) }
+}
+
+/**
+ * The web's `--hero-fade`: the banner, its picture and its shades together,
+ * made clear towards its foot, so the page's own ground shows through it
+ * rather than a band of plain colour. Its foot is under the row below.
  */
 private fun Modifier.fadesIntoThePage() = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithCache {
         val clear = Brush.verticalGradient(
-            0.8f to Color.Black,
-            0.86f to Color.Black.copy(alpha = 0.88f),
-            0.92f to Color.Black.copy(alpha = 0.56f),
-            0.97f to Color.Black.copy(alpha = 0.2f),
+            0.66f to Color.Black,
+            0.78f to Color.Black.copy(alpha = 0.88f),
+            0.87f to Color.Black.copy(alpha = 0.56f),
+            0.94f to Color.Black.copy(alpha = 0.24f),
             1f to Color.Transparent,
         )
         onDrawWithContent {
