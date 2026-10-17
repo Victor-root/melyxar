@@ -377,6 +377,7 @@ private fun barPlace(button: String): BarPlace? = when (button) {
     "favourites" -> BarPlace(Icons.Heart, R.string.tv_favourites) { it.go(Place.Listed(Shortlist.Favourites)) }
     "watch_later" -> BarPlace(Icons.Clock, R.string.tv_watch_later) { it.go(Place.Listed(Shortlist.WatchLater)) }
     "notifications" -> BarPlace(Icons.Bell, R.string.tv_notes) { it.go(Place.Notifications) }
+    "requests" -> BarPlace(Icons.Request, R.string.tv_requests) { it.go(Place.TitleRequests) }
     "settings" -> BarPlace(Icons.Gear, R.string.tv_settings) { it.go(Place.Settings) }
     else -> null
 }

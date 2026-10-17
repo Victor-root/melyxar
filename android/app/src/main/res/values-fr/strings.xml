@@ -329,4 +329,47 @@
         <item quantity="many">%d de fichiers vérifiés après suppression : aucun ne reste sur le disque.</item>
         <item quantity="other">%d fichiers vérifiés après suppression : aucun ne reste sur le disque.</item>
     </plurals>
+    <string name="tv_requests">Demander un titre</string>
+    <string name="tv_requests_tab_ask">Rechercher</string>
+    <string name="tv_requests_tab_mine">Mes demandes</string>
+    <string name="tv_requests_film">Film</string>
+    <string name="tv_requests_series">Série</string>
+    <string name="tv_requests_search_placeholder">Un titre, un lien ou un identifiant TMDB ou IMDb</string>
+    <string name="tv_requests_nothing_found">Rien trouvé sous ce nom.</string>
+    <string name="tv_requests_suggested_genre">Pour vous : %1$s</string>
+    <string name="tv_requests_suggested_popular">Populaires en ce moment</string>
+    <string name="tv_requests_more">Voir plus</string>
+    <string name="tv_requests_here">Déjà sur le serveur</string>
+    <string name="tv_requests_here_in_part">Sur le serveur : %1$s</string>
+    <string name="tv_requests_open">Ouvrir</string>
+    <string name="tv_requests_asked_by_you">Demandé par vous</string>
+    <string name="tv_requests_ask">Demander</string>
+    <string name="tv_requests_ask_too">Le demander aussi</string>
+    <string name="tv_requests_seasons">Saisons</string>
+    <string name="tv_requests_whole_series">Toute la série</string>
+    <string name="tv_requests_season_here">Déjà là</string>
+    <string name="tv_requests_seasons_unread">Les saisons n’ont pas pu être lues. Réessayez plus tard.</string>
+    <string name="tv_requests_note">Une précision (facultatif)</string>
+    <string name="tv_requests_note_example">La version longue, en VF…</string>
+    <string name="tv_requests_send">Envoyer la demande</string>
+    <string name="tv_requests_not_sent">La demande n’a pas pu être envoyée. Réessayez plus tard.</string>
+    <string name="tv_requests_state_pending">En attente</string>
+    <string name="tv_requests_state_accepted">Acceptée</string>
+    <string name="tv_requests_state_refused">Refusée</string>
+    <string name="tv_requests_state_added">Ajoutée</string>
+    <string name="tv_requests_answer">Réponse : %1$s</string>
+    <string name="tv_requests_cancel">Annuler la demande</string>
+    <string name="tv_requests_clear">Retirer de la liste</string>
+    <string name="tv_requests_none_yet">Vous n’avez encore rien demandé.</string>
+    <string name="tv_requests_cast">Distribution</string>
+    <plurals name="tv_requests_others">
+        <item quantity="one">Aussi demandé par %1$d compte</item>
+        <item quantity="many">Aussi demandé par %1$d de comptes</item>
+        <item quantity="other">Aussi demandé par %1$d comptes</item>
+    </plurals>
+    <plurals name="tv_requests_episodes">
+        <item quantity="one">%1$d épisode</item>
+        <item quantity="many">%1$d d’épisodes</item>
+        <item quantity="other">%1$d épisodes</item>
+    </plurals>
 </resources>

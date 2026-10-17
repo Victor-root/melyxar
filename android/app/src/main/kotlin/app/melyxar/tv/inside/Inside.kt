@@ -67,6 +67,11 @@ import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.PlayerScreen
+import app.melyxar.tv.requests.LocalRequests
+import app.melyxar.tv.requests.MoreTitlesScreen
+import app.melyxar.tv.requests.RequestedTitleScreen
+import app.melyxar.tv.requests.Requests
+import app.melyxar.tv.requests.RequestsScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -122,6 +127,22 @@ sealed interface Place {
 
     data class Genre(val library: Library, val name: String) : Place {
         override val key = "genre:${library.id}:$name"
+    }
+
+    /** Asking for titles the server has not, and this account's requests. */
+    data object TitleRequests : Place {
+        override val key = "requests"
+    }
+
+    /** The page of a title of the provider, which may not be here. */
+    data class RequestedTitle(val catalogue: String, val tmdbId: String) : Place {
+        override val key = "request-title:$catalogue:$tmdbId"
+    }
+
+    /** Many more titles of a shelf of suggestions: the most popular of a
+     *  catalogue, in a [genre] when one is named. */
+    data class MoreTitles(val catalogue: String, val genreId: String?, val genre: String?) : Place {
+        override val key = "request-more:$catalogue:$genreId"
     }
 
     /** The account's notifications. */
@@ -247,6 +268,7 @@ fun Inside(
         LocalListening provides listening,
         LocalHearts provides remember(api) { Hearts(api, scope, onSignedOut) },
         LocalNotes provides remember(api) { Notes(api, scope, onSignedOut) },
+        LocalRequests provides remember(api) { Requests(api, scope, onSignedOut) },
         LocalSongLevels provides remember(api) { SongLevels() },
     ) {
         FollowSongLevels(LocalSongLevels.current)
@@ -259,7 +281,16 @@ fun Inside(
         // What the libraries hold moved: every screen, the libraries above
         // them included, reads again what it shows.
         val notes = LocalNotes.current
-        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved, onLooksMoved = { looksMoved += 1 }, onWord = notes::heard)
+        val requests = LocalRequests.current
+        FollowTheLiveLine(
+            onLibrariesMoved = marks::rowsHaveMoved,
+            onLooksMoved = { looksMoved += 1 },
+            onWord = { word ->
+                notes.heard(word)
+                requests.heard(word)
+            },
+        )
+        LaunchedEffect(api, comebacks) { requests.read() }
         val hearts = LocalHearts.current
         LaunchedEffect(api, comebacks, marks.rowsMoved, looksMoved) {
             hearts.read()
@@ -309,11 +340,12 @@ fun Inside(
                     }
                     is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed,
                     is Place.Album, is Place.Artist, is Place.Playlist, is Place.Genre,
+                    is Place.RequestedTitle, is Place.MoreTitles,
                     -> trail.add(place)
                     // One search and one song playing at a time: going to
                     // either again comes back to the one already open, the
                     // search then looking where it was asked to.
-                    is Place.Search, Place.NowPlaying, Place.Settings, Place.Notifications -> {
+                    is Place.Search, Place.NowPlaying, Place.Settings, Place.Notifications, Place.TitleRequests -> {
                         val open = trail.indexOfFirst { it.key == place.key }
                         if (open >= 0) {
                             backTo(open + 1)
@@ -327,7 +359,12 @@ fun Inside(
             back = { if (trail.size > 1) backTo(trail.size - 1) },
             canGoBack = trail.size > 1,
             changeProfile = onChangeProfile,
-            buttons = barButtons(chosen?.headerButtons.orEmpty(), chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar),
+            buttons = barButtons(
+                chosen?.headerButtons.orEmpty(),
+                chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar,
+                // Requests only while they are on and this account may make them.
+                if (requests.access?.mayAsk == true) ON_A_TELEVISION + "requests" else ON_A_TELEVISION,
+            ),
             here = here,
         )
         // Its page over home, as if opened from Melyxar's own row.
@@ -434,6 +471,9 @@ fun Inside(
                                 is Place.Artist -> ArtistScreen(here.id, comebacks)
                                 is Place.Playlist -> PlaylistScreen(here.id, comebacks)
                                 is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
+                                Place.TitleRequests -> RequestsScreen()
+                                is Place.RequestedTitle -> RequestedTitleScreen(here.catalogue, here.tmdbId)
+                                is Place.MoreTitles -> MoreTitlesScreen(here.catalogue, here.genreId, here.genre)
                                 Place.NowPlaying -> NowPlayingScreen()
                                 Place.Settings -> SettingsScreen(sessions)
                                 Place.Notifications -> NotesScreen()
