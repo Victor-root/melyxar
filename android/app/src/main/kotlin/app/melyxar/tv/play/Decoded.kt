@@ -13,8 +13,6 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
-import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
-import androidx.media3.exoplayer.video.VideoRendererEventListener
 import app.melyxar.BuildConfig
 
 /** The tag the film's sound is followed under in a debug build. */
@@ -25,8 +23,7 @@ const val SOUND_LOG = "MelyxarSound"
  * a decoder for it, rather than handed as it is to the receiver behind it:
  * handed on, the television's own volume no longer reaches it, and the
  * remote can only change it through the receiver. Only a sound the
- * television cannot decode is handed on. In a debug build, the picture's
- * renderer tells the log around every picture it drops.
+ * television cannot decode is handed on.
  */
 @OptIn(UnstableApi::class)
 class DecodedSound(context: Context) : DefaultRenderersFactory(context) {
@@ -54,32 +51,6 @@ class DecodedSound(context: Context) : DefaultRenderersFactory(context) {
                 return bypass
             }
         }
-    }
-
-    override fun buildVideoRenderers(
-        context: Context,
-        extensionRendererMode: Int,
-        mediaCodecSelector: MediaCodecSelector,
-        enableDecoderFallback: Boolean,
-        eventHandler: Handler,
-        eventListener: VideoRendererEventListener,
-        allowedVideoJoiningTimeMs: Long,
-        out: ArrayList<Renderer>,
-    ) {
-        if (!BuildConfig.DEBUG) {
-            super.buildVideoRenderers(context, extensionRendererMode, mediaCodecSelector, enableDecoderFallback, eventHandler, eventListener, allowedVideoJoiningTimeMs, out)
-            return
-        }
-        out += WatchedPictures(
-            MediaCodecVideoRenderer.Builder(context)
-                .setCodecAdapterFactory(codecAdapterFactory)
-                .setMediaCodecSelector(mediaCodecSelector)
-                .setAllowedJoiningTimeMs(allowedVideoJoiningTimeMs)
-                .setEnableDecoderFallback(enableDecoderFallback)
-                .setEventHandler(eventHandler)
-                .setEventListener(eventListener)
-                .setMaxDroppedFramesToNotify(MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY),
-        )
     }
 
     private fun decodes(selector: MediaCodecSelector, format: Format): Boolean {
