@@ -84,7 +84,7 @@ private fun sideways(event: KeyEvent): Boolean = event.key == Key.DirectionLeft 
 private fun held(event: KeyEvent): Boolean = sideways(event) && event.nativeKeyEvent.repeatCount > 0
 
 /** What takes the foot of the film in place of the controls. */
-private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast)
+private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast, Menu.Diagnostics)
 
 /** The steps back and on of the arrows and the buttons, as the account
  *  chose them. */
@@ -355,6 +355,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             null -> Unit
             Menu.Info -> work?.let { InfoSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
             Menu.Cast -> work?.let { CastSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
+            Menu.Diagnostics -> Diagnostics(playback, onClose = { openMenu(Menu.Settings) }, Modifier.align(Alignment.CenterEnd).padding(end = Gutter))
             else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
         }
         if (playback.failed) {

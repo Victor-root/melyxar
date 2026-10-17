@@ -18,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.util.EventLogger
 import app.melyxar.BuildConfig
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -158,6 +159,17 @@ class Playback(
     private var counting: Job? = null
 
     private var stream: StreamSession? = null
+
+    /** The session the server makes the film in, while it does. */
+    val streamId: String? get() = stream?.id
+
+    /** The decoders this device took for the picture and the sound, for the
+     *  diagnostics; no decoder of sound for one sent as it is to the sound
+     *  system. */
+    var videoDecoder by mutableStateOf<String?>(null)
+        private set
+    var audioDecoder by mutableStateOf<String?>(null)
+        private set
     private var reporting: Job? = null
 
     /** How long the film takes to start, for the debug build's log. */
@@ -174,6 +186,19 @@ class Playback(
             player.addAnalyticsListener(EventLogger(SOUND_LOG))
             player.addAnalyticsListener(clock)
         }
+        player.addAnalyticsListener(object : AnalyticsListener {
+            override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                videoDecoder = decoderName
+            }
+
+            override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
+                audioDecoder = decoderName
+            }
+
+            override fun onAudioDecoderReleased(eventTime: AnalyticsListener.EventTime, decoderName: String) {
+                audioDecoder = null
+            }
+        })
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 scope.launch { report(leaving = false) }
