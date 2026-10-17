@@ -64,6 +64,7 @@ import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.WhereABandIsCut
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.RoundMark
@@ -172,7 +173,7 @@ fun WorkBackdrop(pictures: List<Picture>) {
             drawRect(foot)
         }
     }) {
-        ServerPicture(pictures, 960.dp, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+        ServerPicture(pictures, 960.dp, Modifier.fillMaxSize(), alignment = WhereABandIsCut)
     }
 }
 

@@ -68,6 +68,7 @@ import app.melyxar.tv.look.Badge
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.WhereABandIsCut
 import app.melyxar.tv.look.PillShape
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
@@ -180,7 +181,7 @@ private fun Backdrop(work: WithCard<HeroMore>) {
             work.more.backdrop.ifEmpty { work.card.wide },
             960.dp,
             Modifier.fillMaxSize(),
-            alignment = Alignment.TopCenter,
+            alignment = WhereABandIsCut,
         )
     }
 }
