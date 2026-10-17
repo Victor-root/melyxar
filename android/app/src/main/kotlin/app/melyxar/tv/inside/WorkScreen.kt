@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
+import app.melyxar.server.Card
 import app.melyxar.server.Child
 import app.melyxar.server.Credit
 import app.melyxar.server.Picture
@@ -134,6 +136,9 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             if (source != null && work.kind != "series" && work.kind != "season" && work.children.isEmpty()) {
                 item("chapters") { WorkChapters(source, memory) { at -> chrome.play(Play(work.id, source, at)) } }
             }
+            if (work.kind == "episode") {
+                theRestOfTheSeason(work, memory)
+            }
             work.saga?.let { saga ->
                 section("saga", saga.cards) {
                     CardRow(saga.name ?: stringResource(R.string.tv_saga), Icons.Film, saga.cards, key = { it.id }) { card ->
@@ -195,8 +200,11 @@ private fun Top(work: Work, memory: FocusMemory, first: FocusRequester) {
                 .clip(CardShape)
                 .background(palette.surfaceRaised),
         ) {
+            // An episode is shown by its still, as its own card among its
+            // season's carries it, the web's way.
+            val still = work.siblings.firstOrNull { it.card.id == work.id }?.card?.wide.orEmpty()
             ServerPicture(
-                if (lying) work.backdrop.ifEmpty { work.poster } else work.poster,
+                if (lying) still.ifEmpty { work.backdrop }.ifEmpty { work.poster } else work.poster,
                 across,
                 Modifier.fillMaxWidth().aspectRatio(if (lying) 16f / 9 else 2f / 3),
             )
@@ -432,7 +440,12 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
 /** A season's episodes lying down, each played at once from where it was
  *  left. */
 @Composable
-private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory) {
+private fun Episodes(
+    title: String?,
+    episodes: List<Child>,
+    memory: FocusMemory,
+    onChoose: ((Card) -> Unit)? = null,
+) {
     val chrome = LocalChrome.current
     val marks = LocalMarks.current
     CardRow(title, null, episodes, key = { it.card.id }) { episode ->
@@ -442,9 +455,52 @@ private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory)
             lying = true,
             title = listOfNotNull(episode.number?.let { "$it." }, episode.title ?: card.title).joinToString(" "),
             note = card.runtimeMinutes?.takeIf { it > 0 }?.let { howLong(it) },
-            onClick = { chrome.play(Play(card.id, card.source, marks.whereabouts(card).resume?.toDouble())) },
+            onClick = { onChoose?.invoke(card) ?: chrome.play(Play(card.id, card.source, marks.whereabouts(card).resume?.toDouble())) },
             modifier = Modifier.remembered(memory, "episode/${card.id}"),
         )
+    }
+}
+
+/**
+ * Under an episode, the way about its series as the web gives it: the other
+ * episodes of its season, each opening its own page, then the season and
+ * the series themselves.
+ */
+private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
+    val season = work.ancestry.firstOrNull { it.kind == "season" }
+    val series = work.ancestry.firstOrNull { it.kind == "series" }
+    if (work.siblings.size > 1) {
+        item("season-episodes") {
+            val chrome = LocalChrome.current
+            val name = season?.title ?: season?.number?.let { stringResource(R.string.tv_season, it) }
+            Episodes(name ?: stringResource(R.string.tv_episodes), work.siblings, memory) { card -> chrome.go(Place.Opened(card.id)) }
+        }
+    }
+    if (season != null || series != null) {
+        item("way-up") {
+            val chrome = LocalChrome.current
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(start = Gutter, end = Gutter, bottom = 30.dp),
+            ) {
+                season?.let {
+                    PlainButton(
+                        it.title ?: it.number?.let { number -> stringResource(R.string.tv_season, number) } ?: stringResource(R.string.tv_episodes),
+                        onClick = { chrome.go(Place.Opened(it.id)) },
+                        modifier = Modifier.remembered(memory, "season-page"),
+                        icon = Icons.Series,
+                    )
+                }
+                series?.title?.let { title ->
+                    PlainButton(
+                        title,
+                        onClick = { chrome.go(Place.Opened(series.id)) },
+                        modifier = Modifier.remembered(memory, "series-page"),
+                        icon = Icons.Series,
+                    )
+                }
+            }
+        }
     }
 }
 
