@@ -170,7 +170,7 @@ private fun Backdrop(work: WithCard<HeroMore>) {
             0.56f to palette.ground.copy(alpha = 0.08f),
             0.7f to Color.Transparent,
         )
-        val below = Brush.verticalGradient(0.72f to Color.Transparent, 0.99f to palette.ground)
+        val below = Brush.verticalGradient(0.8f to Color.Transparent, 0.995f to palette.ground)
         onDrawWithContent {
             drawContent()
             drawRect(words)
@@ -196,10 +196,10 @@ private fun Modifier.fadesIntoThePage() = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithCache {
         val clear = Brush.verticalGradient(
-            0.8f to Color.Black,
-            0.87f to Color.Black.copy(alpha = 0.88f),
-            0.93f to Color.Black.copy(alpha = 0.56f),
-            0.97f to Color.Black.copy(alpha = 0.24f),
+            0.86f to Color.Black,
+            0.91f to Color.Black.copy(alpha = 0.88f),
+            0.95f to Color.Black.copy(alpha = 0.56f),
+            0.98f to Color.Black.copy(alpha = 0.24f),
             1f to Color.Transparent,
         )
         onDrawWithContent {
