@@ -372,4 +372,8 @@
         <item quantity="many">%1$d d’épisodes</item>
         <item quantity="other">%1$d épisodes</item>
     </plurals>
+    <string name="tv_trailer">Bande-annonce</string>
+    <string name="tv_trailer_of">Bande-annonce : %1$s</string>
+    <string name="tv_trailer_cannot_play">Cette bande-annonce ne peut pas être lue ici.</string>
+    <string name="tv_trailer_no_app">Aucune application de cette télévision ne sait ouvrir cette bande-annonce.</string>
 </resources>

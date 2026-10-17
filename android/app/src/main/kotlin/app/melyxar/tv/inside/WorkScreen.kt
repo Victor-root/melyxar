@@ -56,6 +56,8 @@ import app.melyxar.server.Picture
 import app.melyxar.server.Work
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.lengthOfAPlay
+import app.melyxar.tv.trailer.TrailerButton
+import app.melyxar.tv.trailer.trailerOf
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Badge
 import app.melyxar.tv.look.CardShape
@@ -109,7 +111,7 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             item("top") {
                 Column(Modifier.head(head, "top")) {
                     TopBar()
-                    Top(work, first)
+                    Top(work, memory, first)
                 }
             }
             if (work.kind == "series") {
@@ -175,7 +177,7 @@ fun WorkBackdrop(pictures: List<Picture>) {
 }
 
 @Composable
-private fun Top(work: Work, first: FocusRequester) {
+private fun Top(work: Work, memory: FocusMemory, first: FocusRequester) {
     val palette = LocalPalette.current
     val lying = work.kind == "episode" || work.kind == "video"
     Row(
@@ -210,7 +212,7 @@ private fun Top(work: Work, first: FocusRequester) {
                 Text(it, fontSize = 16.sp, fontStyle = FontStyle.Italic, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Facts(work)
-            Actions(work, first)
+            Actions(work, memory, first)
             work.card?.takeIf { work.kind != "series" }?.let { card ->
                 LocalMarks.current.whereabouts(card).resume?.let { at ->
                     Progress(at.toDouble(), lengthOfAPlay(card), width = 300.dp)
@@ -277,7 +279,7 @@ fun RatingMark(site: String, value: Double, fill: Brush, ink: Color) {
 
 /** How to play the work, and the marks an account puts on it. */
 @Composable
-private fun Actions(work: Work, first: FocusRequester) {
+private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
     val chrome = LocalChrome.current
     val marks = LocalMarks.current
     val card = work.card
@@ -319,6 +321,7 @@ private fun Actions(work: Work, first: FocusRequester) {
                 }
             }
         }
+        trailerOf(work.trailers)?.let { TrailerButton(it, work.title, Modifier.remembered(memory, "trailer")) }
         // Marks belong to a work the server sent a card for.
         card ?: return@Row
         if (card.watchedMarks) {

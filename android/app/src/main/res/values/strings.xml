@@ -360,4 +360,8 @@
         <item quantity="one">%1$d episode</item>
         <item quantity="other">%1$d episodes</item>
     </plurals>
+    <string name="tv_trailer">Trailer</string>
+    <string name="tv_trailer_of">Trailer: %1$s</string>
+    <string name="tv_trailer_cannot_play">This trailer cannot be played here.</string>
+    <string name="tv_trailer_no_app">No application on this television can open this trailer.</string>
 </resources>
