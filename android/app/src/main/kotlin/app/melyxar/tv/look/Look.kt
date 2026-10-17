@@ -8,6 +8,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
@@ -44,6 +45,11 @@ val Gutter = 24.dp
 /** Between two cards of a row, and between two rows. */
 val CardGap = 14.dp
 val SectionGap = 24.dp
+
+/** Where a band is taken out of a picture taller than the band, as the
+ *  web's `--where-a-band-is-cut`: an eighth of the way down from its top,
+ *  so that what goes is the floor of the picture rather than its sky. */
+val WhereABandIsCut = BiasAlignment(0f, 2 * 0.13f - 1)
 
 /** A card standing up, 2:3, and one lying down, 16:9. */
 val PosterWidth = 132.dp
