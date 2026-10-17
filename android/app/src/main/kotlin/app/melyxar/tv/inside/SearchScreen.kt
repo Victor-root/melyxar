@@ -116,12 +116,12 @@ fun SearchScreen(library: Library?, comebacks: Int) {
 }
 
 /**
- * The microphone beside the field, for a television that has something to
+ * The microphone beside a field, for a television that has something to
  * listen with: what was said is written into the field. Not drawn at all on
  * one that has not.
  */
 @Composable
-private fun Listen(onHeard: (String) -> Unit) {
+fun Listen(onHeard: (String) -> Unit) {
     val context = LocalContext.current
     val asking = remember {
         Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)

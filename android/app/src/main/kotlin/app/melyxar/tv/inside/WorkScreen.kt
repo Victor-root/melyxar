@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Child
 import app.melyxar.server.Credit
+import app.melyxar.server.Picture
 import app.melyxar.server.Work
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.lengthOfAPlay
@@ -102,7 +103,7 @@ fun WorkScreen(id: String, comebacks: Int) {
 private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
     val chrome = LocalChrome.current
     val list = rememberLazyListState()
-    Backdrop(work)
+    WorkBackdrop(work.backdrop)
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
             item("top") {
@@ -151,10 +152,10 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
     }
 }
 
-/** The work's picture behind the page, faded into it on the left, where the
+/** A work's picture behind its page, faded into it on the left, where the
  *  words are, and towards the foot. */
 @Composable
-private fun Backdrop(work: Work) {
+fun WorkBackdrop(pictures: List<Picture>) {
     val palette = LocalPalette.current
     Box(Modifier.fillMaxSize().drawWithCache {
         val words = Brush.horizontalGradient(
@@ -169,7 +170,7 @@ private fun Backdrop(work: Work) {
             drawRect(foot)
         }
     }) {
-        ServerPicture(work.backdrop, 960.dp, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
+        ServerPicture(pictures, 960.dp, Modifier.fillMaxSize(), alignment = Alignment.TopCenter)
     }
 }
 
@@ -255,7 +256,7 @@ fun Facts(work: Work) {
 }
 
 @Composable
-private fun RatingMark(site: String, value: Double, fill: Brush, ink: Color) {
+fun RatingMark(site: String, value: Double, fill: Brush, ink: Color) {
     val palette = LocalPalette.current
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -439,7 +440,12 @@ private fun Episodes(title: String?, episodes: List<Child>, memory: FocusMemory)
 /** Somebody of the cast: their photo, their name and their part; pressed,
  *  [onOpen]. */
 @Composable
-fun CastMember(credit: Credit, modifier: Modifier, onOpen: () -> Unit) {
+fun CastMember(credit: Credit, modifier: Modifier, onOpen: () -> Unit) =
+    Face(credit.name, credit.character, credit.photo, modifier, onOpen)
+
+/** Somebody's photo, their name and their part; pressed, [onOpen]. */
+@Composable
+fun Face(name: String, character: String?, photo: List<Picture>, modifier: Modifier, onOpen: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -456,10 +462,10 @@ fun CastMember(credit: Credit, modifier: Modifier, onOpen: () -> Unit) {
                 .background(palette.surfaceRaised)
                 .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
         ) {
-            ServerPicture(credit.photo, PosterWidth * 0.8f, Modifier.fillMaxSize())
+            ServerPicture(photo, PosterWidth * 0.8f, Modifier.fillMaxSize())
         }
-        Text(credit.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
-        credit.character?.let {
+        Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        character?.let {
             Text(it, fontSize = 12.sp, color = palette.textFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
