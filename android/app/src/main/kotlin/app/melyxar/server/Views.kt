@@ -283,6 +283,9 @@ data class Work(
     val children: List<Child> = emptyList(),
     /** The series and season above an episode, the series first. */
     val ancestry: List<Ancestor> = emptyList(),
+    /** Whether [title] says more than the number of a season or an episode;
+     *  a scan that read only a number wrote it out in English. */
+    val hasOwnName: Boolean = true,
     /** An episode's season, itself among them. */
     val siblings: List<Child> = emptyList(),
     val carryOnWith: NextEpisode? = null,
