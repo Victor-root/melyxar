@@ -185,17 +185,19 @@ private fun Backdrop(work: WithCard<HeroMore>) {
 }
 
 /**
- * A light take on the web's `--hero-fade`: on a television the web's fade
- * ate too much of the picture, so only its last seventh thins out, and not
- * all the way, the page's own ground showing faintly through its foot.
+ * The web's `--hero-fade` over a shorter stretch: on a television the web's
+ * fade ate too much of the picture, so only its last fifth thins out, but
+ * all the way to nothing, so no edge is left where the picture ends.
  */
 private fun Modifier.fadesIntoThePage() = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithCache {
         val clear = Brush.verticalGradient(
-            0.86f to Color.Black,
-            0.94f to Color.Black.copy(alpha = 0.8f),
-            1f to Color.Black.copy(alpha = 0.45f),
+            0.8f to Color.Black,
+            0.86f to Color.Black.copy(alpha = 0.88f),
+            0.92f to Color.Black.copy(alpha = 0.56f),
+            0.97f to Color.Black.copy(alpha = 0.2f),
+            1f to Color.Transparent,
         )
         onDrawWithContent {
             drawContent()
