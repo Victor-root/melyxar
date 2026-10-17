@@ -21,14 +21,17 @@ private const val AGAIN_AFTER_MS = 5_000L
  * page holds it: told that what the libraries hold moved, a scan bringing
  * films in or a film named, every screen reads again what it shows. Opened
  * again when it breaks, after which everything is read again too, since
- * nothing was said to it meanwhile. Every word, its opening included, is
- * also told to [onWord], for what follows the account's notifications.
+ * nothing was said to it meanwhile. Told that how Melyxar looks moved, the
+ * account's choices or the server's name, logo or theme, [onLooksMoved]
+ * reads them again. Every word, its opening included, is also told to
+ * [onWord], for what follows the account's notifications.
  */
 @Composable
-fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onWord: (LiveWord) -> Unit) {
+fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onLooksMoved: () -> Unit, onWord: (LiveWord) -> Unit) {
     val api = LocalServer.current
     val signedOut = LocalSignedOut.current
     val moved by rememberUpdatedState(onLibrariesMoved)
+    val looked by rememberUpdatedState(onLooksMoved)
     val told by rememberUpdatedState(onWord)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(api, lifecycle) {
@@ -40,8 +43,14 @@ fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onWord: (LiveWord) -> Unit) 
                 try {
                     api.live().collect { word ->
                         when (word.name) {
-                            "open" -> if (opened) moved() else opened = true
+                            "open" -> if (opened) {
+                                moved()
+                                looked()
+                            } else {
+                                opened = true
+                            }
                             "libraries" -> moved()
+                            "looks" -> looked()
                         }
                         told(word)
                     }
