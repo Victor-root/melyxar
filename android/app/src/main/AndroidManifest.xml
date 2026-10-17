@@ -13,11 +13,16 @@
          the lock screen only for an application allowed to notify. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Whether the device has something to listen with, for searching by
-         voice: since Android 11 an application sees only what it names. -->
+    <!-- Searching by voice listens to the remote's microphone itself,
+         through the television's own recogniser, rather than opening the
+         recogniser's window over Melyxar's. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Whether the device has something to listen with: since Android 11 an
+         application sees only what it names. -->
     <queries>
         <intent>
-            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -27,6 +32,10 @@
         android:required="false" />
     <uses-feature
         android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <!-- Searching by voice is a comfort, never a reason not to install. -->
+    <uses-feature
+        android:name="android.hardware.microphone"
         android:required="false" />
 
     <!-- Plain http is let through by the system because a server at home

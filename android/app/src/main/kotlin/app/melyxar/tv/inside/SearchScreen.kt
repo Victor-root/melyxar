@@ -1,10 +1,5 @@
 package app.melyxar.tv.inside
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.speech.RecognizerIntent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -25,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +30,6 @@ import app.melyxar.server.searchMusic
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.TvField
 import app.melyxar.tv.music.GridSpot
 import app.melyxar.tv.music.LocalListening
@@ -61,6 +54,7 @@ fun SearchScreen(library: Library?, comebacks: Int) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
     val words = rememberTextFieldState()
+    val voice = rememberVoice { words.setTextAndPlaceCursorAtEnd(it) }
     var asked by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(words) {
         snapshotFlow { words.text.toString().trim() }
@@ -85,6 +79,7 @@ fun SearchScreen(library: Library?, comebacks: Int) {
         memory = memory,
         grid = grid,
         onOpen = { chrome.go(Place.Opened(it.id)) },
+        modifier = Modifier.listensOnItsKey(voice),
         besides = { head ->
             music?.let { foundMusic(it, names, empty = null, GridSpot(grid, head, memory), chrome.go, listening) }
         },
@@ -105,7 +100,7 @@ fun SearchScreen(library: Library?, comebacks: Int) {
                     onDone = {},
                     modifier = Modifier.weight(1f).remembered(memory, "field").focusRequester(field),
                 )
-                Listen(onHeard = { words.setTextAndPlaceCursorAtEnd(it) })
+                Listen(voice)
             }
             if (asked.isEmpty()) {
                 Text(stringResource(R.string.tv_search_lead), fontSize = 15.sp, color = palette.textSoft)
@@ -113,38 +108,4 @@ fun SearchScreen(library: Library?, comebacks: Int) {
         }
     }
     RestoreFocus(memory, field, ready = true)
-}
-
-/**
- * The microphone beside a field, for a television that has something to
- * listen with: what was said is written into the field. Not drawn at all on
- * one that has not.
- */
-@Composable
-fun Listen(onHeard: (String) -> Unit) {
-    val context = LocalContext.current
-    val asking = remember {
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-    }
-    val canListen = remember { context.packageManager.queryIntentActivities(asking, 0).isNotEmpty() }
-    val listen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let(onHeard)
-    }
-    if (!canListen) {
-        return
-    }
-    val prompt = stringResource(R.string.tv_search_voice)
-    RoundMark(
-        Icons.Microphone,
-        label = prompt,
-        on = false,
-        onClick = {
-            try {
-                listen.launch(Intent(asking).putExtra(RecognizerIntent.EXTRA_PROMPT, prompt))
-            } catch (_: ActivityNotFoundException) {
-                // Gone since the screen was drawn: nothing to listen with.
-            }
-        },
-    )
 }

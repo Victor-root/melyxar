@@ -111,6 +111,7 @@
     <string name="tv_search_placeholder">Rechercher un titre</string>
     <string name="tv_search_none">Aucun titre ne correspond.</string>
     <string name="tv_search_voice">Rechercher à la voix</string>
+    <string name="tv_search_listening">À l’écoute… appuyez de nouveau pour arrêter</string>
     <string name="tv_search_lead">Tapez ou dites le titre d’un film, d’une série ou d’une vidéo.</string>
     <string name="tv_favourites">Favoris</string>
     <string name="tv_favourites_empty">Aucun favori pour le moment. Choisissez le cœur sur une fiche pour l’ajouter ici.</string>

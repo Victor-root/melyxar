@@ -48,6 +48,8 @@ import app.melyxar.tv.inside.BarTitle
 import app.melyxar.tv.inside.CardRow
 import app.melyxar.tv.inside.FocusMemory
 import app.melyxar.tv.inside.Listen
+import app.melyxar.tv.inside.listensOnItsKey
+import app.melyxar.tv.inside.rememberVoice
 import app.melyxar.tv.inside.Loaded
 import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.Place
@@ -55,6 +57,7 @@ import app.melyxar.tv.inside.ReadingColumn
 import app.melyxar.tv.inside.RestoreFocus
 import app.melyxar.tv.inside.ScrollingPage
 import app.melyxar.tv.inside.TopBar
+import app.melyxar.tv.inside.Voice
 import app.melyxar.tv.inside.head
 import app.melyxar.tv.inside.rememberFocusMemory
 import app.melyxar.tv.inside.ready
@@ -100,6 +103,7 @@ fun RequestsScreen() {
     val requests = LocalRequests.current
     var tab by rememberSaveable { mutableStateOf(ASK) }
     val words = rememberTextFieldState()
+    val voice = rememberVoice { words.setTextAndPlaceCursorAtEnd(it) }
     var asked by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(words) {
         snapshotFlow { words.text.toString().trim() }
@@ -111,7 +115,7 @@ fun RequestsScreen() {
     val list = rememberLazyListState()
     val language = requestLanguage()
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
-        LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize().listensOnItsKey(voice)) {
             item("top") {
                 Column(Modifier.head(head, "top")) {
                     TopBar { BarTitle(Icons.Request, stringResource(R.string.tv_requests)) }
@@ -132,7 +136,7 @@ fun RequestsScreen() {
                 }
             }
             when (tab) {
-                ASK -> asking(words, asked, language, memory)
+                ASK -> asking(words, voice, asked, language, memory)
                 else -> mine(requests.mine, memory)
             }
         }
@@ -144,6 +148,7 @@ fun RequestsScreen() {
  *  suggestions while nothing is typed. */
 private fun LazyListScope.asking(
     words: TextFieldState,
+    voice: Voice?,
     asked: String,
     language: String,
     memory: FocusMemory,
@@ -161,7 +166,7 @@ private fun LazyListScope.asking(
                     onDone = {},
                     modifier = Modifier.weight(1f).remembered(memory, "field"),
                 )
-                Listen(onHeard = { words.setTextAndPlaceCursorAtEnd(it) })
+                Listen(voice)
             }
         }
     }
