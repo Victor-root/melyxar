@@ -42,8 +42,12 @@
      and why it is what it is, sits with the other measurements of the
      interface. */
   height: var(--hero-height);
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
-  overflow: hidden;
+  /* The picture runs on under the row below and fades away behind its
+     tiles, rather than ending above them on an edge the eye finds however
+     long the fade: kept from spilling sideways only. The row is drawn over
+     it, by the page's own rules. */
+  --hero-under-the-row: 120px;
+  overflow-x: clip;
   isolation: isolate;
   /* Kept as a layer of its own, which is what stops the fade below being
      worked out again on every frame of a scroll. A fade is a pass over the
@@ -72,7 +76,7 @@
    picture. */
 .hero-pictures {
   position: absolute;
-  inset: 0;
+  inset: 0 0 calc(-1 * var(--hero-under-the-row));
   mask-image: var(--hero-fade);
   -webkit-mask-image: var(--hero-fade);
 }
@@ -106,7 +110,7 @@
 .hero::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 0 0 calc(-1 * var(--hero-under-the-row));
   background:
     linear-gradient(to right, var(--surface-deep) 6%, transparent 62%),
     linear-gradient(to top, var(--surface-deep) 2%, transparent 42%);
