@@ -35,9 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -76,6 +74,7 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rail
 import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
 import java.util.Date
@@ -319,12 +318,7 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
             .onFocusChanged { if (!it.isFocused) settle() }
             .focusable(interactionSource = interaction)
             .drawBehind {
-                val line = thick.toPx()
-                val top = (size.height - line) / 2
-                val round = CornerRadius(line / 2)
-                drawRoundRect(Color.White.copy(alpha = 0.2f), Offset(0f, top), Size(size.width, line), round)
-                drawRoundRect(Color.White.copy(alpha = 0.32f), Offset(0f, top), Size(size.width * buffered, line), round)
-                drawRoundRect(palette.accent, Offset(0f, top), Size(size.width * done, line), round)
+                rail(thick.toPx(), Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.32f) to buffered, palette.accent to done)
                 seekHandle(Color.White, done, lit)
             },
     ) {

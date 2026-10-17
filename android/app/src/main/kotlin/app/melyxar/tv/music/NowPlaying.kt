@@ -36,9 +36,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -65,6 +62,7 @@ import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rail
 import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
 
@@ -276,11 +274,7 @@ private fun Rail(listening: Listening, modifier: Modifier = Modifier) {
                 }
                 .focusable(interactionSource = interaction)
                 .drawBehind {
-                    val line = thick.toPx()
-                    val top = (size.height - line) / 2
-                    val round = CornerRadius(line / 2)
-                    drawRoundRect(palette.text.copy(alpha = 0.2f), Offset(0f, top), Size(size.width, line), round)
-                    drawRoundRect(palette.accent, Offset(0f, top), Size(size.width * done, line), round)
+                    rail(thick.toPx(), palette.text.copy(alpha = 0.2f), palette.accent to done)
                     seekHandle(palette.text, done, lit)
                 },
         )
