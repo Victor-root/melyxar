@@ -22,6 +22,7 @@ pub async fn set_preferences(
         .database()
         .save_music_preferences(who.id, chosen)
         .await?;
+    crate::looks::account_moved(state, who.id);
     Ok(*chosen)
 }
 

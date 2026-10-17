@@ -92,12 +92,14 @@ pub async fn identity(state: &AppState) -> Result<Identity, AppError> {
 pub async fn rename(state: &AppState, asked: &str) -> Result<String, Trouble> {
     let name = name_of(asked)?;
     state.database().set_server_name(&name).await?;
+    crate::looks::server_moved(state);
     Ok(name)
 }
 
 /// Gives the server back the name it came with.
 pub async fn forget_name(state: &AppState) -> Result<(), AppError> {
     state.database().set_server_name(DEFAULT_NAME).await?;
+    crate::looks::server_moved(state);
     Ok(())
 }
 
@@ -115,6 +117,7 @@ pub async fn set_logo(state: &AppState, bytes: &[u8]) -> Result<String, Trouble>
     )
     .await;
     tracing::info!("the server was given a logo");
+    crate::looks::server_moved(state);
     Ok(name)
 }
 
@@ -122,6 +125,7 @@ pub async fn set_logo(state: &AppState, bytes: &[u8]) -> Result<String, Trouble>
 pub async fn remove_logo(state: &AppState) -> Result<(), Trouble> {
     let before = state.database().set_logo(None).await?;
     forget(&state.config().directories.uploads(), before.as_deref()).await;
+    crate::looks::server_moved(state);
     Ok(())
 }
 
@@ -156,6 +160,7 @@ pub async fn default_theme(state: &AppState) -> Result<ThemeMode, AppError> {
 /// themes themselves: "the server's" is what an account holds until it picks.
 pub async fn set_default_theme(state: &AppState, theme: ThemeMode) -> Result<(), AppError> {
     state.database().set_default_theme(theme).await?;
+    crate::looks::server_moved(state);
     Ok(())
 }
 

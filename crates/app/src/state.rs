@@ -67,6 +67,8 @@ struct Inner {
     notifications: crate::notifications::live::Outbox,
     /// Where every page is told the title requests moved.
     requests: crate::requests::live::Moved,
+    /// Where every page is told how it looks moved.
+    looks: crate::looks::Outbox,
 }
 
 impl AppState {
@@ -133,6 +135,7 @@ impl AppState {
                 schedule: crate::schedule::Running::default(),
                 notifications: crate::notifications::live::Outbox::default(),
                 requests: crate::requests::live::Moved::default(),
+                looks: crate::looks::Outbox::default(),
             }),
         }
     }
@@ -159,6 +162,10 @@ impl AppState {
 
     pub(crate) fn requests(&self) -> &crate::requests::live::Moved {
         &self.inner.requests
+    }
+
+    pub(crate) fn looks(&self) -> &crate::looks::Outbox {
+        &self.inner.looks
     }
 
     pub(crate) fn journal(&self) -> &crate::activity::Journal {

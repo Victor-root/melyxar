@@ -27,6 +27,7 @@ pub mod hand_edits;
 pub mod identify;
 pub mod images;
 pub mod libraries;
+pub mod looks;
 pub mod mark;
 pub mod marks;
 pub mod measures;

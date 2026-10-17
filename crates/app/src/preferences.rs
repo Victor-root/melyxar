@@ -49,6 +49,7 @@ pub async fn save(
         }
     }
     database.save_preferences(user_id, &preferences).await?;
+    crate::looks::account_moved(state, user_id);
     of(state, user_id).await
 }
 

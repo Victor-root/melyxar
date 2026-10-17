@@ -1,6 +1,6 @@
 //! The live line of every page: what changes in the account's
-//! notifications, told the moment it changes; that the title requests or what
-//! the libraries hold moved; and for an administrator, what is written in the
+//! notifications, told the moment it changes; that the title requests, what
+//! the libraries hold or how the page looks moved; and for an administrator, what is written in the
 //! activity journal and what is being watched, sent again the moment it
 //! changes when the page shows it.
 //!
@@ -14,6 +14,7 @@ use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
+use melyxar_app::looks::Moved;
 use melyxar_app::notifications::live::News;
 use melyxar_app::AppState;
 use serde::Deserialize;
@@ -60,6 +61,7 @@ struct Following {
     notified: broadcast::Receiver<News>,
     requests: watch::Receiver<u64>,
     libraries: watch::Receiver<u64>,
+    looks: broadcast::Receiver<Moved>,
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
     administration: Option<Administration>,
@@ -133,6 +135,7 @@ async fn line(
         notified: melyxar_app::notifications::live::follow(&state),
         requests: melyxar_app::requests::live::follow(&state),
         libraries: state.database().library_moves(),
+        looks: melyxar_app::looks::follow(&state),
         administration,
         closing: melyxar_app::watching::closing(&state),
         state,
@@ -153,6 +156,9 @@ enum Word {
     Requests,
     /// Something a library holds changed: a page showing it reads it again.
     Libraries,
+    /// How the page looks moved: the account's own choices, or the server's
+    /// name, logo or theme. The page reads again what it wears.
+    Looks(&'static str),
     /// The page fell behind and some changes were lost: it reads its
     /// notifications again.
     Missed,
@@ -185,6 +191,15 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                     moved.ok()?;
                     Word::Libraries
                 }
+                moved = following.looks.recv() => match moved {
+                    Ok(Moved::Account(user)) if user == following.who => Word::Looks("account"),
+                    Ok(Moved::Account(_)) => continue,
+                    // Fallen behind, the page reads everything it wears.
+                    Ok(Moved::Server) | Err(broadcast::error::RecvError::Lagged(_)) => {
+                        Word::Looks("server")
+                    }
+                    Err(broadcast::error::RecvError::Closed) => return None,
+                },
                 // Only whether it closed is kept: what it hands back may not
                 // be held across what the other branches wait on.
                 () = async {
@@ -214,6 +229,7 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
             }
             Word::Requests => Ok(Event::default().event("requests").data("moved")),
             Word::Libraries => Ok(Event::default().event("libraries").data("moved")),
+            Word::Looks(what) => Ok(Event::default().event("looks").data(what)),
             Word::Missed => Event::default()
                 .event("notifications_missed")
                 .json_data(serde_json::Value::Null),
