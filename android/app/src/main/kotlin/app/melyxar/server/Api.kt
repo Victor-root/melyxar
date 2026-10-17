@@ -10,6 +10,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
 import kotlinx.serialization.json.JsonElement
@@ -341,11 +342,12 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         }
     }
 
-    /** Sends a change, and gives back the server's answer as it wrote it. */
+    /** Sends a change, and gives back the server's answer as it wrote it:
+     *  nothing when it answers nothing. */
     suspend fun send(method: String, path: String, body: JsonObject?): JsonObject? = withContext(Dispatchers.IO) {
         val sent = body?.toString()?.asJson()
         http.newCall(request(path).method(method, sent).build()).execute().use { answer ->
-            read(answer, JsonObject.serializer())
+            read(answer, JsonObject.serializer().nullable)
         }
     }
 
