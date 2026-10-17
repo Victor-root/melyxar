@@ -1,6 +1,7 @@
 package app.melyxar.server
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
@@ -331,6 +332,51 @@ data class Plan(
     val wideGamut: WideGamutHandling? = null,
     /** Why the server plays it this way, as codes. */
     val reasons: List<JsonElement> = emptyList(),
+    /** What is rebuilding the picture, when something is. */
+    val rebuild: PictureRebuild? = null,
+    /** What the file itself holds, beside what is made of it. */
+    val film: FilmHolds? = null,
+)
+
+/** What rebuilds the picture: card or processor. */
+@Serializable
+data class PictureRebuild(val by: String, val codec: String, val height: Int? = null, val bitrate: Long? = null)
+
+/** What the file holds, as the server's analyser read it. */
+@Serializable
+data class FilmHolds(
+    val container: String? = null,
+    val sizeBytes: Long = 0,
+    val overallBitrate: Long? = null,
+    val picture: PictureHeld? = null,
+    /** The soundtrack being played, not the first of the file. */
+    val sound: SoundHeld? = null,
+)
+
+@Serializable
+data class PictureHeld(
+    val codec: String,
+    val profile: String? = null,
+    /** The picture, margins off. */
+    val width: Int,
+    val height: Int,
+    /** The frame it sits in, only when part of it is not the picture. */
+    val frameWidth: Int? = null,
+    val frameHeight: Int? = null,
+    val frameRate: Double? = null,
+    val bitrate: Long? = null,
+    /** hdr10, hlg or dolby_vision. */
+    val hdr: String? = null,
+    val bitDepth: Int? = null,
+)
+
+@Serializable
+data class SoundHeld(
+    val codec: String,
+    val channels: Int,
+    val channelLayout: String? = null,
+    val sampleRate: Int? = null,
+    val bitrate: Long? = null,
 )
 
 /** The little pictures of a film, as sheets of many: a slash, the sheet's
@@ -369,7 +415,17 @@ data class StreamSession(val id: String, val playlistUrl: String)
  *  reading, producing or ready, and how much of the first piece a player
  *  needs is written, from nought to one. */
 @Serializable
-data class Preparation(val step: String = "starting", val firstWritten: Float = 0f)
+data class Preparation(
+    val step: String = "starting",
+    val firstWritten: Float = 0f,
+    /** How hard the machine works at the film, while it does. */
+    val producing: Producing? = null,
+)
+
+/** Pictures a second the server's tool writes, and that work against real
+ *  time: below one, the picture will stop. */
+@Serializable
+data class Producing(@SerialName("pictures_a_second") val picturesASecond: Double = 0.0, val speed: Double = 0.0)
 
 @Serializable
 data class Heard(val stop: Boolean = false)

@@ -31,6 +31,8 @@ enum class Menu(val from: Menu? = null) {
     Quality(Settings),
     WideGamut(Settings),
     WordsOffset(Settings),
+    /** What is happening to the film, drawn by the player itself. */
+    Diagnostics(Settings),
 }
 
 /** How far the words can be moved, half a second at a time, as the web
@@ -76,7 +78,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             modifier = placed,
         )
         Menu.Chapters -> ChapterStrip(playback, onClose = back, modifier = modifier.fillMaxWidth())
-        Menu.Info, Menu.Cast -> Unit
+        Menu.Info, Menu.Cast, Menu.Diagnostics -> Unit
         Menu.Settings -> {
             val wideGamut = plan.wideGamut
             val lines = listOfNotNull(
@@ -86,6 +88,8 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
                     Menu.WideGamut to stringResource(if (it.converted) R.string.tv_wide_gamut_converted else R.string.tv_wide_gamut_kept)
                 },
                 Menu.WordsOffset to offsetName(playback.wordsOffset),
+                // Opens a window rather than a list, with nothing to be on.
+                Menu.Diagnostics to "",
             )
             ChoiceList(
                 title = stringResource(R.string.tv_settings),
@@ -161,6 +165,7 @@ private fun settingName(menu: Menu): String = stringResource(
         Menu.Quality -> R.string.tv_quality
         Menu.WideGamut -> R.string.tv_wide_gamut
         Menu.WordsOffset -> R.string.tv_words_offset
+        Menu.Diagnostics -> R.string.tv_facts
         else -> R.string.tv_speed
     },
 )
