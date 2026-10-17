@@ -3,6 +3,7 @@ package app.melyxar.tv.play
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.MediaFormat
+import android.os.SystemClock
 import android.util.Log
 import android.view.Choreographer
 import android.view.Display
@@ -11,11 +12,14 @@ import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.decoder.DecoderInputBuffer
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import java.io.IOException
 import java.util.Locale
@@ -260,6 +264,61 @@ class FrameWatch(
         if (data.mediaStartTimeMs == C.TIME_UNSET) "no time" else "${seconds(data.mediaStartTimeMs * 1000)}-${seconds(data.mediaEndTimeMs * 1000)} s"
 
     private class Counts(val shown: Int = 0, val dropped: Int = 0, val skipped: Int = 0, val droppedInput: Int = 0, val droppedToKey: Int = 0)
+}
+
+/** How many of the pictures last fed to the decoder and last given back by
+ *  it are kept, to be told around a picture it drops. */
+private const val REMEMBERED = 40
+
+/**
+ * The film's picture renderer as Media3 builds it, for the debug build only:
+ * each picture it drops is told with how late the decoder gave it back, the
+ * pictures last fed to the decoder in their order, key pictures and pictures
+ * nothing depends on marked, and the pictures last given back, each with how
+ * long ago. Nothing it decides is changed.
+ */
+@OptIn(UnstableApi::class)
+class WatchedPictures(builder: MediaCodecVideoRenderer.Builder) : MediaCodecVideoRenderer(builder) {
+    private val fed = ArrayDeque<Pair<String, Long>>()
+    private val given = ArrayDeque<Pair<String, Long>>()
+    private var earlyUs = 0L
+
+    override fun onQueueInputBuffer(buffer: DecoderInputBuffer) {
+        super.onQueueInputBuffer(buffer)
+        val marks = (if (buffer.isKeyFrame) " key" else "") + (if (buffer.notDependedOn()) " unreferenced" else "")
+        remember(fed, seconds(buffer.timeUs - outputStreamOffsetUs) + marks)
+    }
+
+    override fun shouldDropOutputBuffer(earlyUs: Long, elapsedRealtimeSinceLastRenderUs: Long, isLastFrame: Boolean): Boolean {
+        this.earlyUs = earlyUs
+        return super.shouldDropOutputBuffer(earlyUs, elapsedRealtimeSinceLastRenderUs, isLastFrame)
+    }
+
+    override fun onProcessedOutputBuffer(presentationTimeUs: Long) {
+        super.onProcessedOutputBuffer(presentationTimeUs)
+        remember(given, seconds(presentationTimeUs - outputStreamOffsetUs))
+    }
+
+    override fun dropOutputBuffer(codec: MediaCodecAdapter, index: Int, presentationTimeUs: Long) {
+        Log.d(
+            FRAMES_LOG,
+            "decoder gave the picture at ${seconds(presentationTimeUs - outputStreamOffsetUs)} s back ${millis(-earlyUs * 1000)} ms late, dropped; " +
+                "last fed: ${said(fed)}; last given back: ${said(given)}",
+        )
+        super.dropOutputBuffer(codec, index, presentationTimeUs)
+    }
+
+    private fun remember(into: ArrayDeque<Pair<String, Long>>, what: String) {
+        if (into.size == REMEMBERED) {
+            into.removeFirst()
+        }
+        into.addLast(what to SystemClock.elapsedRealtime())
+    }
+
+    private fun said(from: ArrayDeque<Pair<String, Long>>): String {
+        val now = SystemClock.elapsedRealtime()
+        return from.joinToString { (what, at) -> "$what (${now - at} ms ago)" }
+    }
 }
 
 private fun seconds(us: Long) = String.format(Locale.ROOT, "%.3f", us / 1_000_000.0)
