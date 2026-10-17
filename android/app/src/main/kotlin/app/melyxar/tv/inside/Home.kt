@@ -90,7 +90,10 @@ fun HomeScreen(comebacks: Int) {
                 }
             }
             loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
-            else -> TopBar()
+            else -> {
+                TopBar()
+                ArrivalLoader(Modifier.align(Alignment.Center))
+            }
         }
     }
     RestoreFocus(memory, first, ready = home != null)
