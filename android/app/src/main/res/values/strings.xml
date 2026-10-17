@@ -110,6 +110,7 @@
     <string name="tv_search_placeholder">Search for a title</string>
     <string name="tv_search_none">No title matches.</string>
     <string name="tv_search_voice">Search by voice</string>
+    <string name="tv_search_listening">Listening… press again to stop</string>
     <string name="tv_search_lead">Type or say the title of a film, a series or a video.</string>
     <string name="tv_favourites">Favourites</string>
     <string name="tv_favourites_empty">No favourites yet. Choose the heart on a title to add it here.</string>
