@@ -1141,12 +1141,13 @@ fetch_source() {
 # ── What changed ──────────────────────────────────────────────────────────────
 # Each part is rebuilt only when something it is made from changed since it
 # was last installed. The interface is made from web/ alone; the server from
-# everything else, apart from what neither is built from. Leaving a folder
+# everything else, apart from what neither is built from, the Android
+# application among it, which is built on its own. Leaving a folder
 # out of the server wrongly would install a stale server, so the list names
 # what is left out rather than what is in: a folder added one day is counted
 # as the server's until somebody says otherwise.
 INTERFACE_SOURCES=(web)
-ENGINE_SOURCES=(. ':(exclude)web' ':(exclude)docs' ':(exclude)scripts'
+ENGINE_SOURCES=(. ':(exclude)web' ':(exclude)android' ':(exclude)docs' ':(exclude)scripts'
   ':(exclude)README.md' ':(exclude)CLAUDE.md' ':(exclude)LICENSE')
 
 # Whether a part is still the one the source would build now.
