@@ -362,7 +362,8 @@
 
   .hero-tagline,
   .hero-facts,
-  .hero-words .progress-line {
+  .hero-words .progress-line,
+  .hero-dots {
     --text: var(--on-app-ground);
     --text-soft: color-mix(in srgb, var(--on-app-ground) 78%, transparent);
     --text-faint: color-mix(in srgb, var(--on-app-ground) 58%, transparent);
