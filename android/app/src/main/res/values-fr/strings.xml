@@ -134,6 +134,11 @@
     <string name="tv_counted">%1$s (%2$d)</string>
     <string name="tv_letters">Aller à une lettre</string>
     <string name="tv_mark_watched">Vu</string>
+    <string name="tv_menu_favourite">Ajouter aux favoris</string>
+    <string name="tv_menu_unfavourite">Retirer des favoris</string>
+    <string name="tv_menu_unwatch_later">Retirer de À voir plus tard</string>
+    <string name="tv_menu_mark_watched">Marquer comme vu</string>
+    <string name="tv_menu_mark_unwatched">Marquer comme non vu</string>
     <string name="tv_person_born">Naissance</string>
     <string name="tv_person_born_age">%1$s (%2$d ans)</string>
     <string name="tv_person_died">Décès</string>
