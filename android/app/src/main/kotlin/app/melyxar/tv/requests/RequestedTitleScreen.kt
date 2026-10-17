@@ -236,14 +236,14 @@ private fun Actions(page: TitlePage, memory: FocusMemory, first: FocusRequester,
             is Standing.Here -> AccentButton(
                 stringResource(R.string.tv_requests_open),
                 onClick = { chrome.go(Place.Opened(standing.workId)) },
-                modifier = Modifier.focusRequester(first),
+                modifier = Modifier.focusRequester(first).remembered(memory, "open"),
                 icon = null,
             )
             is Standing.Mine -> {
                 PlainButton(
                     stringResource(R.string.tv_requests_asked_by_you),
                     onClick = { chrome.go(Place.TitleRequests) },
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.focusRequester(first).remembered(memory, "mine"),
                     icon = Icons.Tick,
                 )
                 if (standing.request.state == "pending") {
@@ -258,7 +258,7 @@ private fun Actions(page: TitlePage, memory: FocusMemory, first: FocusRequester,
                 AccentButton(
                     stringResource(if (standing.others > 0) R.string.tv_requests_ask_too else R.string.tv_requests_ask),
                     onClick = onAsk,
-                    modifier = Modifier.focusRequester(first),
+                    modifier = Modifier.focusRequester(first).remembered(memory, "ask"),
                     icon = Icons.Request,
                 )
                 if (standing.heldSeasons.isNotEmpty()) {
