@@ -56,7 +56,7 @@ fun TvApp(servers: KnownServers, sessions: Sessions, opening: String?, onOpened:
         is Stage.In -> Inside(
             api = now.api,
             account = now.account,
-            branding = now.branding,
+            signedInWith = now.branding,
             opening = opening,
             onOpened = onOpened,
             sessions = sessions,
