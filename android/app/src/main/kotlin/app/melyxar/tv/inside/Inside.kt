@@ -67,6 +67,7 @@ import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.PlayerScreen
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -152,15 +153,32 @@ private val Place.library: Library?
         else -> null
     }
 
-/** Whether the key of music held down has already taken the music to the
- *  song after or before, so letting it go does nothing more. */
-private class Skipping {
-    var held = false
-    var waiting: Job? = null
+/** A key of the remote that does one thing pressed and another held: held,
+ *  letting it go does nothing more. */
+private class Holding(private val scope: CoroutineScope) {
+    private var held = false
+    private var waiting: Job? = null
+
+    /** Gone down: [onHeld] once it has been held long enough. */
+    fun down(onHeld: () -> Unit) {
+        held = false
+        waiting?.cancel()
+        waiting = scope.launch {
+            delay(HELD_AFTER_MS)
+            held = true
+            onHeld()
+        }
+    }
+
+    /** Let go: [onPressed], unless it was held. */
+    fun up(onPressed: () -> Unit) {
+        waiting?.cancel()
+        if (!held) onPressed()
+    }
 }
 
-/** How long a key of music is held before it counts as held: sooner than
- *  the remote's own first repeat, which comes after half a second. */
+/** How long a key is held before it counts as held: sooner than the
+ *  remote's own first repeat, which comes after half a second. */
 private const val HELD_AFTER_MS = 300L
 
 /** What every screen's top bar shows, and where its pieces lead. */
@@ -196,7 +214,8 @@ val LocalChrome = staticCompositionLocalOf<Chrome> { error("no chrome") }
 fun Inside(
     api: Api,
     account: Account,
-    branding: Branding,
+    /** What the server wore when the account came in, until it is read again. */
+    signedInWith: Branding,
     /** A work to open, asked from the system's Continue watching row. */
     opening: String?,
     onOpened: () -> Unit,
@@ -210,6 +229,8 @@ fun Inside(
     // a colour or a theme changed on another device shows without a restart.
     var comebacks by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { comebacks += 1 }
+    // And each time the live line says how Melyxar looks moved.
+    var looksMoved by remember { mutableIntStateOf(0) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -229,7 +250,8 @@ fun Inside(
         LocalSongLevels provides remember(api) { SongLevels() },
     ) {
         FollowSongLevels(LocalSongLevels.current)
-        val held = rememberLoaded("preferences", comebacks) { preferences() }
+        val held = rememberLoaded("preferences", comebacks, looksMoved) { preferences() }
+        val branding = rememberLoaded("branding", comebacks, looksMoved) { branding() }.value.ready ?: signedInWith
         val chosen = held.value.ready
         val preferences = remember(api, held) { AccountPreferences(api, scope, onSignedOut, held) }
         val libraries = rememberLoaded("libraries", comebacks) { libraries() }.value.ready
@@ -237,9 +259,9 @@ fun Inside(
         // What the libraries hold moved: every screen, the libraries above
         // them included, reads again what it shows.
         val notes = LocalNotes.current
-        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved, onWord = notes::heard)
+        FollowTheLiveLine(onLibrariesMoved = marks::rowsHaveMoved, onLooksMoved = { looksMoved += 1 }, onWord = notes::heard)
         val hearts = LocalHearts.current
-        LaunchedEffect(api, comebacks, marks.rowsMoved) {
+        LaunchedEffect(api, comebacks, marks.rowsMoved, looksMoved) {
             hearts.read()
             listening.readPreferences()
         }
@@ -253,7 +275,9 @@ fun Inside(
         }
         val trail = remember { mutableStateListOf<Place>(Place.Home) }
         val pinned = remember { PinnedBar() }
-        val skipped = remember { Skipping() }
+        val skipped = remember { Holding(scope) }
+        val more = remember { Holding(scope) }
+        val cardMenus = remember { CardMenus() }
         val screen = remember { FocusRequester() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
@@ -322,7 +346,7 @@ fun Inside(
             }
         }
         TvLook(palette) {
-            CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences, LocalPinnedBar provides pinned) {
+            CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences, LocalPinnedBar provides pinned, LocalCardMenus provides cardMenus) {
                 Box(
                     Modifier
                         .fillMaxSize()
@@ -343,21 +367,28 @@ fun Inside(
                             val music = listening.queue.current != null
                             when {
                                 event.key == Key.Search -> if (!down) chrome.search()
-                                // The key of more options puts the remote on the bar:
-                                // on the song's cover while one plays, on its first
-                                // button otherwise, the screen brought back to its top
-                                // where its own bar is.
-                                event.key == Key.Menu -> if (down) {
-                                    scope.launch {
-                                        if (listening.queue.current == null) {
-                                            pinned.toTop[here]?.invoke()
-                                            withFrameNanos {}
+                                // The key of more options pressed puts the remote on
+                                // the bar: on the song's cover while one plays, on its
+                                // first button otherwise, the screen brought back to
+                                // its top where its own bar is. Held, it opens the
+                                // menu of the card the remote is on.
+                                event.key == Key.Menu -> {
+                                    fun toTheBar() {
+                                        scope.launch {
+                                            if (listening.queue.current == null) {
+                                                pinned.toTop[here]?.invoke()
+                                                withFrameNanos {}
+                                            }
+                                            try {
+                                                pinned.entry.requestFocus()
+                                            } catch (_: IllegalStateException) {
+                                                // A screen without a bar, a film's or a photo's.
+                                            }
                                         }
-                                        try {
-                                            pinned.entry.requestFocus()
-                                        } catch (_: IllegalStateException) {
-                                            // A screen without a bar, a film's or a photo's.
-                                        }
+                                    }
+                                    when {
+                                        down -> more.down { if (!cardMenus.openFocused()) toTheBar() }
+                                        event.type == KeyEventType.KeyUp -> more.up(::toTheBar)
                                     }
                                 }
                                 !music -> return@onKeyEvent false
@@ -371,19 +402,8 @@ fun Inside(
                                 event.key == Key.MediaFastForward || event.key == Key.MediaRewind -> {
                                     val on = event.key == Key.MediaFastForward
                                     when {
-                                        event.type == KeyEventType.KeyUp -> {
-                                            skipped.waiting?.cancel()
-                                            if (!skipped.held) listening.skip(on)
-                                        }
-                                        down -> {
-                                            skipped.held = false
-                                            skipped.waiting?.cancel()
-                                            skipped.waiting = scope.launch {
-                                                delay(HELD_AFTER_MS)
-                                                skipped.held = true
-                                                if (on) listening.next() else listening.previous()
-                                            }
-                                        }
+                                        down -> skipped.down { if (on) listening.next() else listening.previous() }
+                                        event.type == KeyEventType.KeyUp -> skipped.up { listening.skip(on) }
                                     }
                                 }
                                 else -> return@onKeyEvent false
@@ -431,6 +451,7 @@ fun Inside(
                         }
                     }
                     PinnedTopBar(screen, Modifier.align(Alignment.TopCenter))
+                    cardMenus.open?.let { card -> CardMenu(card, onClose = { cardMenus.open = null }) }
                     // Over every screen, the film's included, which only
                     // what is urgent is said over.
                     NotesCorner(Modifier.align(Alignment.TopEnd))
