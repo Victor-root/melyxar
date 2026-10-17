@@ -88,7 +88,7 @@ fun WorkCard(
         trailing = trailing,
         ground = card.color?.let(::parseHex)?.let(::Color) ?: palette.surfaceRaised,
         onClick = onClick,
-        modifier = modifier.offersMenuOf(card),
+        modifier = modifier.offersMenuOf(Offered.Work(card)),
     ) { glowing ->
         val pictures = if (lying && card.wide.isNotEmpty()) card.wide else card.poster
         if (pictures.isEmpty()) {

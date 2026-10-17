@@ -6,7 +6,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.HttpUrl
 import okhttp3.Request
 
@@ -78,6 +82,11 @@ suspend fun Api.artist(id: String): ArtistPage = get("/api/v1/music/artists/$id"
 suspend fun Api.artistSongs(id: String): List<Song> = get("/api/v1/music/artists/$id/songs", ListSerializer(Song.serializer()))
 
 suspend fun Api.playlists(): List<PlaylistSummary> = get("/api/v1/music/playlists", ListSerializer(PlaylistSummary.serializer()))
+
+/** Puts [songs] at the end of the playlist [id]. */
+suspend fun Api.addToPlaylist(id: String, songs: List<String>) {
+    send("POST", "/api/v1/music/playlists/$id/songs", buildJsonObject { put("songs", JsonArray(songs.map(::JsonPrimitive))) })
+}
 
 suspend fun Api.playlist(id: String): Playlist = get("/api/v1/music/playlists/$id", Playlist.serializer())
 

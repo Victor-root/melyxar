@@ -48,6 +48,8 @@ import app.melyxar.server.Song
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.parseHex
 import app.melyxar.tv.clock
+import app.melyxar.tv.inside.Offered
+import app.melyxar.tv.inside.offersMenuOf
 import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.ControlShape
@@ -259,6 +261,8 @@ fun SongLine(
     val playing = now != Now.Other
     Row(
         modifier = modifier
+            // A song only shown has no menu either.
+            .then(if (onClick != null) Modifier.offersMenuOf(Offered.Tune(song)) else Modifier)
             .fillMaxWidth()
             .heightIn(min = LINE_TALL)
             .then(if (afterAnother) Modifier.drawBehind { lineBetween(palette.accent) } else Modifier)

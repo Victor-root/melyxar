@@ -197,6 +197,24 @@ class Listening(private val context: Context, private val api: Api, private val 
         describe()
     }
 
+    /** Puts [songs] right after the song playing. */
+    fun playNext(songs: List<Song>) = queued(queue.withNext(songs))
+
+    /** Puts [songs] at the end of the queue. */
+    fun playLast(songs: List<Song>) = queued(queue.withLast(songs))
+
+    /** The queue grown by songs added to it: played at once when nothing
+     *  was, the song playing left alone otherwise. */
+    private fun queued(next: Queue) {
+        if (queue.current == null) {
+            start(next)
+            return
+        }
+        forgetThePrepared()
+        queue = next
+        describe()
+    }
+
     /** Plays the song at [place] of the order. */
     fun jumpTo(place: Int) = start(queue.jumpTo(place))
 
