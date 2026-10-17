@@ -139,6 +139,12 @@
     <string name="tv_menu_unwatch_later">Retirer de À voir plus tard</string>
     <string name="tv_menu_mark_watched">Marquer comme vu</string>
     <string name="tv_menu_mark_unwatched">Marquer comme non vu</string>
+    <string name="tv_menu_play_next">Lire ensuite</string>
+    <string name="tv_menu_play_last">Ajouter à la file d’attente</string>
+    <string name="tv_menu_add_to_playlist">Ajouter à une liste de lecture</string>
+    <string name="tv_menu_go_to_album">Aller à l’album</string>
+    <string name="tv_menu_go_to_artist">Aller à l’artiste</string>
+    <string name="tv_menu_no_playlist">Aucune liste de lecture pour l’instant. Créez-en une dans Melyxar sur un ordinateur ou un téléphone.</string>
     <string name="tv_person_born">Naissance</string>
     <string name="tv_person_born_age">%1$s (%2$d ans)</string>
     <string name="tv_person_died">Décès</string>

@@ -50,6 +50,25 @@ fun playing(songs: List<Song>, first: Int, shuffle: Boolean, repeat: Repeat, dra
     return Queue(songs, listOf(start) + places.filter { it != start }.shuffled(draw), 0, shuffle, repeat)
 }
 
+/** [added] put right after the song playing; played from the first when
+ *  nothing is queued. */
+fun Queue.withNext(added: List<Song>): Queue {
+    if (order.isEmpty()) {
+        return playing(added, 0, false, repeat)
+    }
+    val places = added.indices.map { songs.size + it }
+    return copy(songs = songs + added, order = order.take(at + 1) + places + order.drop(at + 1))
+}
+
+/** [added] put at the end of the queue; played from the first when nothing
+ *  is queued. */
+fun Queue.withLast(added: List<Song>): Queue {
+    if (order.isEmpty()) {
+        return playing(added, 0, false, repeat)
+    }
+    return copy(songs = songs + added, order = order + added.indices.map { songs.size + it })
+}
+
 /** Where the queue goes when a song ends on its own: the same one again
  *  under repeat one, otherwise as on a press of next. */
 fun Queue.afterTheEnd(): Queue? = if (repeat == Repeat.One) this else forward()

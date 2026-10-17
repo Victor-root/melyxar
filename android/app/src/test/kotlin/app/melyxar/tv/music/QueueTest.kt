@@ -70,4 +70,25 @@ class QueueTest {
         assertEquals(Repeat.One, Repeat.All.next())
         assertEquals(Repeat.Off, Repeat.One.next())
     }
+
+    private val more = listOf("Echo", "Fjord").map { Song(id = it.lowercase(), title = it) }
+
+    @Test
+    fun songsPlayedNextComeRightAfterTheOnePlaying() {
+        val queue = playing(songs, 1, shuffle = false, repeat = Repeat.Off).withNext(more)
+        assertEquals("Harbour", queue.current?.title)
+        assertEquals(listOf("Echo", "Fjord", "Lanterns", "Tide"), queue.upNext.map { it.title })
+    }
+
+    @Test
+    fun songsAddedToTheQueueComeAtItsEnd() {
+        val queue = playing(songs, 1, shuffle = false, repeat = Repeat.Off).withLast(more)
+        assertEquals(listOf("Lanterns", "Tide", "Echo", "Fjord"), queue.upNext.map { it.title })
+    }
+
+    @Test
+    fun songsAddedToNothingPlayFromTheFirst() {
+        assertEquals("Echo", Queue().withNext(more).current?.title)
+        assertEquals(listOf("Fjord"), Queue().withLast(more).upNext.map { it.title })
+    }
 }
