@@ -67,6 +67,8 @@ data class TitlePage(
     val backdrop: String? = null,
     val cast: List<TitlePerson> = emptyList(),
     val seasons: List<SeasonChoice> = emptyList(),
+    /** Where each trailer can be watched, the official ones first. */
+    val trailers: List<String> = emptyList(),
 )
 
 /** One of this account's requests. */

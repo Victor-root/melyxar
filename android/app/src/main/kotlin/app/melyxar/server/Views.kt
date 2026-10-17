@@ -282,7 +282,13 @@ data class Work(
     val card: Card? = null,
     val alike: Kin? = null,
     val saga: Kin? = null,
+    val trailers: List<WorkTrailer> = emptyList(),
 )
+
+/** A trailer of a work: a file next to it, fetched from [url], or a link
+ *  watched where it lives, [remoteUrl]. */
+@Serializable
+data class WorkTrailer(val url: String? = null, val remoteUrl: String? = null)
 
 /** A track of a film as the player offers it. */
 @Serializable

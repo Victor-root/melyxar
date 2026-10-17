@@ -69,6 +69,8 @@ import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.shadowRaised
 import app.melyxar.tv.readableDay
+import app.melyxar.tv.trailer.TrailerButton
+import app.melyxar.tv.trailer.trailerOfLinks
 import java.util.Locale
 
 /** How many of the cast are shown, as on the web. */
@@ -264,6 +266,7 @@ private fun Actions(page: TitlePage, memory: FocusMemory, first: FocusRequester,
                 }
             }
         }
+        trailerOfLinks(page.trailers)?.let { TrailerButton(it, page.found.title, Modifier.remembered(memory, "trailer")) }
         val others = when (standing) {
             is Standing.Here -> 0
             is Standing.Mine -> standing.others

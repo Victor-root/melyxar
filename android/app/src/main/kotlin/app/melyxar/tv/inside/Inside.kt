@@ -72,6 +72,7 @@ import app.melyxar.tv.requests.MoreTitlesScreen
 import app.melyxar.tv.requests.RequestedTitleScreen
 import app.melyxar.tv.requests.Requests
 import app.melyxar.tv.requests.RequestsScreen
+import app.melyxar.tv.trailer.TrailerScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -143,6 +144,11 @@ sealed interface Place {
      *  catalogue, in a [genre] when one is named. */
     data class MoreTitles(val catalogue: String, val genreId: String?, val genre: String?) : Place {
         override val key = "request-more:$catalogue:$genreId"
+    }
+
+    /** A trailer sitting next to the work called [title], fetched from [url]. */
+    data class Trailer(val title: String, val url: String) : Place {
+        override val key = "trailer"
     }
 
     /** The account's notifications. */
@@ -312,7 +318,7 @@ fun Inside(
         val screen = remember { FocusRequester() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
-        notes.filmOnScreen = here is Place.Playing
+        notes.filmOnScreen = here is Place.Playing || here is Place.Trailer
         val kept = rememberSaveableStateHolder()
 
         /** Takes the screens above [depth] off the trail, forgetting them. */
@@ -340,7 +346,7 @@ fun Inside(
                     }
                     is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed,
                     is Place.Album, is Place.Artist, is Place.Playlist, is Place.Genre,
-                    is Place.RequestedTitle, is Place.MoreTitles,
+                    is Place.RequestedTitle, is Place.MoreTitles, is Place.Trailer,
                     -> trail.add(place)
                     // One search and one song playing at a time: going to
                     // either again comes back to the one already open, the
@@ -474,6 +480,7 @@ fun Inside(
                                 Place.TitleRequests -> RequestsScreen()
                                 is Place.RequestedTitle -> RequestedTitleScreen(here.catalogue, here.tmdbId)
                                 is Place.MoreTitles -> MoreTitlesScreen(here.catalogue, here.genreId, here.genre)
+                                is Place.Trailer -> TrailerScreen(here.title, here.url)
                                 Place.NowPlaying -> NowPlayingScreen()
                                 Place.Settings -> SettingsScreen(sessions)
                                 Place.Notifications -> NotesScreen()

@@ -161,6 +161,10 @@ object Icons {
                 "a1.5 1.5 0 0 0-1.37.9Z",
         ),
     )
+    val Trailer = outlined(
+        "trailer",
+        paths = arrayOf(rect(3f, 10f, 18f, 10f, 1.8f), "M3 10 19.8 5.5 19 2.6 2.2 7.1Z", "M7.4 5.7l2.3 3M12.2 4.4l2.3 3"),
+    )
     val Chapters = outlined("chapters", paths = arrayOf(rect(2.8f, 6.4f, 8f, 11.2f, 1.6f), rect(13.2f, 6.4f, 8f, 11.2f, 1.6f)))
     val Audio = outlined("audio", paths = arrayOf("M4 9.6v4.8M8 6.6v10.8M12 4v16M16 7.4v9.2M20 10.4v3.2"))
     val NextEpisode = solid(
