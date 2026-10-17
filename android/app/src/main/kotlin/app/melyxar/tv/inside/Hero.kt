@@ -39,8 +39,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -123,7 +126,7 @@ fun Hero(
             targetState = at,
             transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
             label = "hero",
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().fadesIntoThePage(),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }
@@ -180,6 +183,25 @@ private fun Backdrop(work: WithCard<HeroMore>) {
         )
     }
 }
+
+/**
+ * A light take on the web's `--hero-fade`: on a television the web's fade
+ * ate too much of the picture, so only its last seventh thins out, and not
+ * all the way, the page's own ground showing faintly through its foot.
+ */
+private fun Modifier.fadesIntoThePage() = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithCache {
+        val clear = Brush.verticalGradient(
+            0.86f to Color.Black,
+            0.94f to Color.Black.copy(alpha = 0.8f),
+            1f to Color.Black.copy(alpha = 0.45f),
+        )
+        onDrawWithContent {
+            drawContent()
+            drawRect(clear, blendMode = BlendMode.DstIn)
+        }
+    }
 
 @Composable
 private fun Words(
