@@ -148,6 +148,15 @@ where
         database.bump_library_version(library.id).await?;
     }
 
+    // A film just named shows its ratings from elsewhere with its page, not
+    // the morning after: the nightly task only catches up what this missed.
+    if report.identified > 0
+        && !report.cancelled
+        && let Err(error) = crate::ratings::start(state, library.clone(), JobPriority::BACKGROUND).await
+    {
+        tracing::warn!(%error, "the ratings of the works just named could not be asked for");
+    }
+
     tracing::info!(
         library = library.name,
         mode = mode.as_str(),
