@@ -122,11 +122,12 @@ fun Band(
     order: List<String>,
     onOpen: (Library) -> Unit,
     memory: FocusMemory,
+    /** Given to the first tile, for a home that starts the remote there. */
+    first: FocusRequester,
 ) {
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
     val nearest = rememberRowScrolling()
     // Coming into the band lands on the tile it left, or on the first.
-    val first = remember { FocusRequester() }
     CompositionLocalProvider(LocalBringIntoViewSpec provides nearest) {
         LazyRow(
             contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 20.dp, bottom = SectionGap),

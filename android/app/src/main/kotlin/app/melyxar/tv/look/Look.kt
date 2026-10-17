@@ -43,7 +43,7 @@ val Gutter = 24.dp
 
 /** Between two cards of a row, and between two rows. */
 val CardGap = 14.dp
-val SectionGap = 34.dp
+val SectionGap = 24.dp
 
 /** A card standing up, 2:3, and one lying down, 16:9. */
 val PosterWidth = 132.dp
