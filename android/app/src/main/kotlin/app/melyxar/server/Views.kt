@@ -283,6 +283,8 @@ data class Work(
     val children: List<Child> = emptyList(),
     /** The series and season above an episode, the series first. */
     val ancestry: List<Ancestor> = emptyList(),
+    /** An episode's season, itself among them. */
+    val siblings: List<Child> = emptyList(),
     val carryOnWith: NextEpisode? = null,
     /** The photos before and after a photo in its folder, when there are. */
     val previousPhoto: String? = null,
