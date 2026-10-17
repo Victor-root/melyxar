@@ -212,6 +212,10 @@ object Icons {
             "M14 14l1-1c.93-.9 2.07-.9 3 0l3 3",
         ),
     )
+    val Request = outlined(
+        "request",
+        paths = arrayOf("M13 4.6H5.6a2 2 0 0 0-2 2v10.8a2 2 0 0 0 2 2h12.8a2 2 0 0 0 2-2V12", "M3.6 9h3.2M3.6 15h3.2M17.2 15h3.2", "M18.4 2.6v6.2M15.3 5.7h6.2"),
+    )
     val Queue = outlined("queue", paths = arrayOf("M4 6.4h11M4 11.2h11M4 16h7", "M15.6 14.2v5.2l4.2-2.6Z"))
     val Playlist = outlined("playlist", paths = arrayOf("M4.4 7h11M4.4 12h11M4.4 17h6.6", "M16.6 14.4v5.2M14 17h5.2"))
     val NextSong = solid("next-song", 2.2f, "M6.2 6.6 14.4 12l-8.2 5.4Z", "M17.8 6.4v11.2")
