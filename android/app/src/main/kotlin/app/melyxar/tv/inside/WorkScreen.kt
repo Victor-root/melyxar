@@ -136,7 +136,7 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             if (source != null && work.kind != "series" && work.kind != "season" && work.children.isEmpty()) {
                 item("chapters") { WorkChapters(source, memory) { at -> chrome.play(Play(work.id, source, at)) } }
             }
-            if (work.kind == "episode") {
+            if (work.kind == "episode" || work.kind == "season") {
                 theRestOfTheSeason(work, memory)
             }
             work.saga?.let { saga ->
@@ -211,7 +211,7 @@ private fun Top(work: Work, memory: FocusMemory, first: FocusRequester) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
             Text(
-                work.title,
+                headingOf(work),
                 fontSize = 30.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = (-0.02).em,
@@ -461,10 +461,22 @@ private fun Episodes(
     }
 }
 
+/** A season announced by its number in the language read, as the web does,
+ *  its own name added only when it has one; anything else by its title. */
+@Composable
+private fun headingOf(work: Work): String {
+    val number = work.number
+    if (work.kind != "season" || number == null) {
+        return work.title
+    }
+    val numbered = if (number == 0) stringResource(R.string.tv_specials) else stringResource(R.string.tv_season, number)
+    return if (work.hasOwnName) "$numbered · ${work.title}" else numbered
+}
+
 /**
- * Under an episode, the way about its series as the web gives it: the other
- * episodes of its season, each opening its own page, then the season and
- * the series themselves.
+ * Under an episode or a season, the way about its series as the web gives
+ * it: the other episodes of an episode's season, each opening its own page,
+ * then the season and the series themselves.
  */
 private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
     val season = work.ancestry.firstOrNull { it.kind == "season" }
