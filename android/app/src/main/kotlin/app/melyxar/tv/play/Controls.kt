@@ -207,16 +207,19 @@ const val PLAY = "play"
  *  puts the remote on. */
 const val BAR = "bar"
 
-/** What is playing, at the top left: the film's own logo, or its name, and
- *  for an episode which one it is. */
+/** What is playing, at the top left: the film's own logo, an episode's
+ *  series' as the web falls back to it, or the name, and for an episode
+ *  which one it is. */
 @Composable
 private fun Named(work: Work, modifier: Modifier) {
     val palette = LocalPalette.current
-    val series = work.ancestry.firstOrNull { above -> above.kind == "series" }?.title
+    val above = work.ancestry.firstOrNull { it.kind == "series" }
+    val series = above?.title
+    val logo = work.logo.ifEmpty { above?.logo.orEmpty() }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (work.logo.isNotEmpty() && series == null) {
+        if (logo.isNotEmpty()) {
             ServerPicture(
-                work.logo,
+                logo,
                 260.dp,
                 Modifier.heightIn(max = 64.dp).widthIn(max = 260.dp),
                 contentScale = ContentScale.Fit,
@@ -234,7 +237,7 @@ private fun Named(work: Work, modifier: Modifier) {
             )
         }
         if (series != null) {
-            val season = work.ancestry.firstOrNull { above -> above.kind == "season" }?.number
+            val season = work.ancestry.firstOrNull { it.kind == "season" }?.number
             whichEpisode(season, work.number, work.title)?.let { line ->
                 Text(line, fontSize = 15.sp, color = palette.textSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

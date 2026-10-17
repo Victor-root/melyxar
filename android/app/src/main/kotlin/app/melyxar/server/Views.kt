@@ -244,7 +244,14 @@ data class NextEpisode(
 )
 
 @Serializable
-data class Ancestor(val id: String, val kind: String, val number: Int? = null, val title: String? = null)
+data class Ancestor(
+    val id: String,
+    val kind: String,
+    val number: Int? = null,
+    val title: String? = null,
+    /** A series' title drawn as a picture, which its episodes have none of. */
+    val logo: List<Picture> = emptyList(),
+)
 
 /** Works shown beside one, under a name. */
 @Serializable
