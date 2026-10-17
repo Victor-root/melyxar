@@ -116,7 +116,9 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
                 }
             }
             if (work.kind == "series") {
-                item("seasons") { Seasons(work, memory) }
+                // The tabs stand on the first screen: the page keeps still on them and
+                // scrolls only once the remote goes down to the episodes.
+                item("seasons") { Seasons(work, memory, Modifier.head(head, "seasons")) }
             }
             if (work.kind == "season") {
                 section("episodes", work.children) { Episodes(stringResource(R.string.tv_episodes), work.children, memory) }
@@ -360,7 +362,7 @@ private fun Actions(work: Work, memory: FocusMemory, first: FocusRequester) {
 /** The seasons of a series as tabs, and the episodes of the one chosen. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Seasons(work: Work, memory: FocusMemory) {
+private fun Seasons(work: Work, memory: FocusMemory, tabs: Modifier) {
     if (work.children.isEmpty()) {
         return
     }
@@ -375,7 +377,7 @@ private fun Seasons(work: Work, memory: FocusMemory) {
         // its name a letter a line and makes the row as tall as that.
         CompositionLocalProvider(LocalBringIntoViewSpec provides rememberRowScrolling()) {
             Row(
-                modifier = Modifier
+                modifier = tabs
                     .focusRestorer(shown)
                     .horizontalScroll(rememberScrollState())
                     .padding(start = Gutter, end = Gutter, bottom = 4.dp),
