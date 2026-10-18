@@ -497,4 +497,6 @@
     <string name="tv_track_hearing_impaired">Pour malentendants</string>
     <string name="tv_track_external">Fichier externe</string>
     <string name="tv_track_burns_in">Incrusté dans la vidéo</string>
+    <string name="tv_brightness">Luminosité</string>
+    <string name="tv_contrast">Contraste</string>
 </resources>
