@@ -18,7 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -162,14 +162,14 @@ private fun Together(firstSection: String, secondSection: String, first: Int, se
                     memory,
                     Modifier
                         .width(rowWidth(second, WideWidth, CardGap, Gutter))
-                        .drawBehind {
+                        .drawWithCache {
                             val line = Brush.verticalGradient(
                                 0f to Color.Transparent,
                                 0.18f to palette.accent.copy(alpha = 0.45f),
                                 0.82f to palette.accent.copy(alpha = 0.45f),
                                 1f to Color.Transparent,
                             )
-                            drawRect(line, size = Size(1.dp.toPx(), size.height))
+                            onDrawBehind { drawRect(line, size = Size(1.dp.toPx(), size.height)) }
                         },
                 )
             }
