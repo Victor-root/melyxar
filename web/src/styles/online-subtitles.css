@@ -1,94 +1,35 @@
 /*
- * The window of a copy's subtitles: the tracks it has, and those offered
- * online, one line each.
+ * The window of a copy's subtitles, laid out as every window that looks
+ * something up (finder.css): what only it adds.
  */
 
-.modal-subtitles {
-  width: min(980px, 100%);
-}
-
-.subtitles-heading {
-  margin: 4px 0 8px;
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--text);
-}
-
-.subtitles-heading + .subtitles-lines,
-.subtitles-heading + .settings-why {
-  margin-bottom: var(--gap-wide);
-}
-
-.subtitles-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.subtitles-offers {
-  max-height: 46vh;
-  margin-top: var(--gap);
-  overflow-y: auto;
-}
-
-.subtitles-line {
-  display: flex;
-  flex-wrap: wrap;
+/* A track the copy holds, said on a pill, the one downloaded taken off by
+   its cross. */
+.subtitles-held {
+  display: inline-flex;
   align-items: center;
-  gap: 8px var(--gap);
-  padding: 9px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-}
-
-.subtitles-language {
-  flex: none;
-  font-weight: 600;
-}
-
-.subtitles-release {
-  flex: 1 1 200px;
-  min-width: 0;
-  color: var(--text-soft);
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
-}
-
-.subtitles-origin,
-.subtitles-marks {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-faint);
-  font-size: 12.5px;
-}
-
-/* Timed on this very file: the one to take. */
-.subtitles-fits {
-  border-color: var(--ok);
-  color: var(--ok);
+  gap: 4px;
 }
 
 .subtitles-off {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
+  margin-right: -4px;
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: 50%;
   background: none;
-  color: var(--text-soft);
+  color: inherit;
   cursor: pointer;
 }
 
 .subtitles-off:hover {
   background: var(--surface-hover);
-  color: var(--text);
+}
+
+.subtitles-downloads {
+  color: var(--text-soft);
 }
 
 /* The key and the account OpenSubtitles is asked with, one field a line. */
@@ -106,11 +47,20 @@
   gap: var(--gap-tight);
 }
 
+/* The language, the switch and the button, on one bar of glass. */
 .subtitles-search {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gap-tight);
+  gap: var(--gap-tight) var(--gap);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+}
+
+.subtitles-search .button {
+  margin-left: auto;
 }
 
 /* The switch and what it says, pressed as one. */

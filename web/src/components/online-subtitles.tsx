@@ -3,6 +3,9 @@
  * each comes from, and those OpenSubtitles offers in a chosen language, one
  * of which is downloaded as one more track.
  *
+ * Laid out as the lyrics window is (finder.css): the copy on top with its
+ * tracks, the search under it, and the offers, which alone scroll.
+ *
  * Whatever changes here is read again by the screens showing the work, so
  * the player offers a downloaded subtitle the next time it is opened.
  */
@@ -11,7 +14,7 @@ import { useState } from "react";
 import { api } from "../api";
 import type { SubtitleOffer } from "../api";
 import { refusalOf, useAsked } from "../asking";
-import { CloseIcon, DownloadIcon } from "../icons";
+import { CloseIcon, DownloadIcon, SearchIcon, SubtitlesIcon } from "../icons";
 import { languageName, METADATA_LANGUAGES } from "../languages";
 import { useMarks } from "../marks";
 import { howManyVoted } from "../readable";
@@ -90,41 +93,58 @@ export function OnlineSubtitlesDialog({
 
   const languages = METADATA_LANGUAGES.map((code) => [code, languageName(code, language)] as const);
   const noKey = settings.answer && !settings.answer.has_key;
+  const held = tracks.answer ?? [];
 
   return (
-    <Modal title={t("online_subtitles.title", { title })} onClose={onClose} className="modal-subtitles">
-      <h3 className="subtitles-heading">{t("online_subtitles.tracks")}</h3>
-      {tracks.answer?.length === 0 && <p className="settings-why">{t("online_subtitles.no_tracks")}</p>}
-      {tracks.answer && tracks.answer.length > 0 && (
-        <ul className="subtitles-lines">
-          {tracks.answer.map((track) => (
-            <li key={track.id} className="subtitles-line">
-              <span className="subtitles-language">
-                {track.language ? languageName(track.language, language) : t("online_subtitles.unknown_language")}
-              </span>
-              <span className="subtitles-release">{track.title ?? ""}</span>
-              <span className="subtitles-origin">{t(`online_subtitles.origin.${track.origin}`)}</span>
-              {track.origin === "downloaded" && (
-                <button
-                  type="button"
-                  className="subtitles-off"
-                  aria-label={t("online_subtitles.remove")}
-                  title={t("online_subtitles.remove")}
-                  onClick={() => take(track.id)}
-                >
-                  <CloseIcon size={15} />
-                </button>
+    <Modal title={t("online_subtitles.title", { title })} onClose={onClose} className="finder">
+      <section className="finder-head" aria-label={t("online_subtitles.tracks")}>
+        <span className="finder-mark" aria-hidden="true">
+          <SubtitlesIcon size={26} />
+        </span>
+        <div className="finder-head-words">
+          <h3 className="finder-head-title">{title}</h3>
+          <span className="finder-head-by">{t("online_subtitles.tracks")}</span>
+          {tracks.answer && (
+            <div className="finder-head-state">
+              {held.length === 0 && (
+                <span className="state-pill state-attention">{t("online_subtitles.no_tracks")}</span>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
+              {held.map((track) => (
+                <span
+                  key={track.id}
+                  className={`state-pill subtitles-held${track.origin === "downloaded" ? " state-news" : " finder-pill-plain"}`}
+                >
+                  {track.language ? languageName(track.language, language) : t("online_subtitles.unknown_language")}
+                  {" · "}
+                  {t(`online_subtitles.origin.${track.origin}`)}
+                  {track.origin === "downloaded" && (
+                    <button
+                      type="button"
+                      className="subtitles-off"
+                      aria-label={t("online_subtitles.remove")}
+                      title={track.title ? `${t("online_subtitles.remove")} : ${track.title}` : t("online_subtitles.remove")}
+                      onClick={() => take(track.id)}
+                    >
+                      <CloseIcon size={13} />
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="finder-head-side">
+          <span className="finder-figure">
+            <span className="finder-figure-name">{t("online_subtitles.held")}</span>
+            <span className="finder-figure-value">{tracks.answer ? held.length : "–"}</span>
+          </span>
+        </div>
+      </section>
 
-      <h3 className="subtitles-heading">{t("online_subtitles.search")}</h3>
       {noKey ? (
         <p className="settings-why">{t("online_subtitles.no_key")}</p>
       ) : (
-        <div className="subtitles-search">
+        <div className="finder-search subtitles-search" role="search" aria-label={t("online_subtitles.search")}>
           <Picker
             label={t("online_subtitles.language")}
             value={wanted}
@@ -146,6 +166,7 @@ export function OnlineSubtitlesDialog({
             <span>{t("online_subtitles.forced_only")}</span>
           </label>
           <button type="button" className="button button-small button-accent" disabled={busy !== null} onClick={search}>
+            <SearchIcon size={15} />
             {t("online_subtitles.look")}
           </button>
         </div>
@@ -153,40 +174,50 @@ export function OnlineSubtitlesDialog({
       {refused && <p className="notice">{t(refused)}</p>}
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
       {long && <p className="panel-notice panel-notice-trouble">{t("online_subtitles.too_long")}</p>}
-      {offers?.length === 0 && <p className="settings-why">{t("online_subtitles.nothing")}</p>}
-      {offers && offers.length > 0 && (
-        <ul className="subtitles-lines subtitles-offers">
-          {offers.map((offer) => (
-            <li key={offer.file_id} className="subtitles-line">
-              <span className="subtitles-release">{offer.release}</span>
-              <span className="subtitles-marks">
-                {offer.matches_the_file && (
-                  <span className="work-badge subtitles-fits">{t("online_subtitles.fits")}</span>
-                )}
+
+      <div className="finder-offers" aria-busy={busy === "search"}>
+        {busy === "search" && <p className="finder-quiet">{t("online_subtitles.searching")}</p>}
+        {busy !== "search" && offers?.length === 0 && <p className="finder-quiet">{t("online_subtitles.nothing")}</p>}
+        {offers?.map((offer) => (
+          <article key={offer.file_id} className={`finder-offer${fetched.has(offer.file_id) ? " finder-offer-taken" : ""}`}>
+            <div className="finder-offer-lead">
+              <span className="finder-offer-lead-main">{languageName(offer.language, language)}</span>
+              <span className="finder-offer-lead-note subtitles-downloads">
+                {t("online_subtitles.downloads", { count: howManyVoted(offer.downloads, language) })}
+              </span>
+            </div>
+            <div className="finder-offer-words">
+              <span className="finder-offer-title" title={offer.release}>
+                {offer.release}
+              </span>
+              <span className="finder-offer-marks">
+                {offer.matches_the_file && <span className="state-pill state-ok">{t("online_subtitles.fits")}</span>}
                 {offer.other_speed && (
-                  <span className="work-badge work-badge-warning" title={t("online_subtitles.other_speed_why")}>
+                  <span className="state-pill state-attention" title={t("online_subtitles.other_speed_why")}>
                     {t("online_subtitles.other_speed")}
                   </span>
                 )}
-                <span>{t("online_subtitles.downloads", { count: howManyVoted(offer.downloads, language) })}</span>
-                {offer.forced && <span className="work-badge">{t("online_subtitles.forced")}</span>}
-                {offer.hearing_impaired && <span className="work-badge">{t("online_subtitles.hearing_impaired")}</span>}
-                {offer.machine_translated && <span className="work-badge">{t("online_subtitles.machine")}</span>}
-                {offer.trusted && <span className="work-badge">{t("online_subtitles.trusted")}</span>}
+                {offer.forced && <span className="state-pill state-news">{t("online_subtitles.forced")}</span>}
+                {offer.hearing_impaired && (
+                  <span className="state-pill finder-pill-plain">{t("online_subtitles.hearing_impaired")}</span>
+                )}
+                {offer.machine_translated && (
+                  <span className="state-pill finder-pill-plain">{t("online_subtitles.machine")}</span>
+                )}
+                {offer.trusted && <span className="state-pill finder-pill-plain">{t("online_subtitles.trusted")}</span>}
               </span>
-              <button
-                type="button"
-                className="button button-small"
-                disabled={busy !== null || fetched.has(offer.file_id)}
-                onClick={() => download(offer)}
-              >
+            </div>
+            {fetched.has(offer.file_id) ? (
+              <span className="state-pill state-ok">{t("online_subtitles.done")}</span>
+            ) : (
+              <button type="button" className="button button-small" disabled={busy !== null} onClick={() => download(offer)}>
                 <DownloadIcon size={15} />
-                {t(fetched.has(offer.file_id) ? "online_subtitles.done" : "online_subtitles.download")}
+                {t("online_subtitles.download")}
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
+            )}
+          </article>
+        ))}
+      </div>
     </Modal>
   );
 }
