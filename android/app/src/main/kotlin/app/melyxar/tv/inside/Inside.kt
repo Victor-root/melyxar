@@ -1,7 +1,6 @@
 package app.melyxar.tv.inside
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,11 +44,11 @@ import app.melyxar.theme.USUAL_ACCENT
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.parseHex
 import app.melyxar.theme.wantsLight
-import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PageBackdrop
 import app.melyxar.tv.look.TvLook
+import app.melyxar.tv.look.WindowGround
 import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.music.AlbumScreen
 import app.melyxar.tv.music.ArtistScreen
@@ -417,14 +416,12 @@ fun Inside(
                 onLeave()
             }
         }
+        WindowGround(palette.ground)
         TvLook(palette) {
             CompositionLocalProvider(LocalChrome provides chrome, LocalAccountPreferences provides preferences, LocalPinnedBar provides pinned, LocalCardMenus provides cardMenus) {
                 Box(
                     Modifier
                         .fillMaxSize()
-                        // A film covers the whole screen in black: nothing
-                        // under it would be seen, only drawn again with it.
-                        .then(if (film) Modifier else Modifier.background(LocalPalette.current.ground))
                         .onPreviewKeyEvent { event ->
                             if (event.type == KeyEventType.KeyDown) focusSaid { "key ${event.key}" }
                             false
