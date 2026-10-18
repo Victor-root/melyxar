@@ -240,13 +240,6 @@ impl ToneMapping {
         matches!(self, Self::OwnFilter)
     }
 
-    /// Whether this recipe refuses a picture that does not say how bright the
-    /// film was mastered: the card's own filter does, where Vulkan falls back
-    /// on the usual values.
-    pub(crate) fn needs_the_mastering_data(self) -> bool {
-        matches!(self, Self::OwnFilter)
-    }
-
     /// Whether the picture leaves the card once converted.
     pub fn brings_the_picture_down(self) -> bool {
         matches!(
@@ -296,14 +289,6 @@ pub struct Card {
     /// is left out of those films entirely and they are rebuilt in software,
     /// where the ceiling on the picture size applies.
     pub tone_mapping: Option<ToneMapping>,
-    /// A second way the card converts wide gamut colour, for a film the first
-    /// refuses: proved only when the first needs every picture to say how
-    /// bright the film was mastered, and this one does not.
-    ///
-    /// Many films say it on their first picture alone, so a run set going
-    /// part way through one never hears it, and the card's own filter then
-    /// refuses the film from any chapter while it plays it from the start.
-    pub tone_mapping_when_refused: Option<ToneMapping>,
     /// The layout a subtitle made of pictures is handed up to the card in,
     /// when the card was proved to lay one onto a picture.
     ///
@@ -333,18 +318,8 @@ impl Card {
             decoders: BTreeSet::new(),
             can_scale: true,
             tone_mapping: None,
-            tone_mapping_when_refused: None,
             picture_subtitle_layout: None,
         }
-    }
-
-    /// The same card converting colour its second way, when it has one.
-    pub fn converting_the_other_way(&self) -> Option<Self> {
-        self.tone_mapping_when_refused.map(|recipe| Self {
-            tone_mapping: Some(recipe),
-            tone_mapping_when_refused: None,
-            ..self.clone()
-        })
     }
 
     /// The layout a subtitle made of pictures is handed up in, when this card
@@ -625,7 +600,6 @@ pub(crate) mod test_cards {
             decoders: ["hevc".to_string()].into_iter().collect(),
             can_scale,
             tone_mapping: can_tone_map.then_some(ToneMapping::OwnFilter),
-            tone_mapping_when_refused: None,
             ..Card::unproved(
                 CardPath::Vaapi,
                 "vaapi:0000:03:00.0".to_string(),
