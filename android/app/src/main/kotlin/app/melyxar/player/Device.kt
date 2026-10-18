@@ -67,7 +67,13 @@ fun measuredProfile(context: Context, sound: AudioAttributes, passedOn: Boolean 
 /** The forms of sound the page's player of music can be sent as they are. */
 fun measuredMusicForms(): String = musicFormsOf(decoders().map { it.mime }.toSet())
 
-private fun decoders(): List<Decoder> = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+/** The device's decoders, asked once: asking every one of them what it
+ *  reads is slow, and what they read does not change while it runs. */
+private fun decoders(): List<Decoder> = asked
+
+private val asked: List<Decoder> by lazy { askedOfTheDevice() }
+
+private fun askedOfTheDevice(): List<Decoder> = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
     .filter { info -> !info.isEncoder && !info.name.endsWith(".secure") && !isAlias(info) }
     .flatMap { info ->
         info.supportedTypes.mapNotNull { mime ->

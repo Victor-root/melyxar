@@ -32,6 +32,10 @@ import app.melyxar.server.songs
 import app.melyxar.server.soundOf
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Call
@@ -71,8 +75,14 @@ class Listening(private val context: Context, private val api: Api, private val 
             service = MediaController.Builder(context, SessionToken(context, ComponentName(context, MusicService::class.java))).buildAsync()
         }
 
-    /** What the device plays, as the server reads it. */
-    private val forms by lazy { measuredMusicForms() }
+    /** What the device plays, as the server reads it: asked of its
+     *  decoders away from the thread that draws the screen, which asking
+     *  them all would freeze, the first time a song is played. */
+    private var forms: String? = null
+    private val measuring = scope.async(Dispatchers.Default, start = CoroutineStart.LAZY) { measuredMusicForms() }
+
+    /** The song waiting for [forms] to be known before it is loaded. */
+    private var waiting: Job? = null
 
     var queue by mutableStateOf(Queue())
         private set
@@ -220,6 +230,7 @@ class Listening(private val context: Context, private val api: Api, private val 
 
     /** Everything stopped, the queue emptied. */
     fun stop() {
+        waiting?.cancel()
         made?.stopAll()
         queue = Queue()
         playing = false
@@ -257,7 +268,17 @@ class Listening(private val context: Context, private val api: Api, private val 
         position = from
         length = song.seconds?.toDouble()
         engine.level(deck, levelOf(song, preferences.volumeMode), 0.0)
-        engine.load(deck, api.soundOf(song.id, forms, from), andPlay = true)
+        waiting?.cancel()
+        val known = forms
+        if (known != null) {
+            engine.load(deck, api.soundOf(song.id, known, from), andPlay = true)
+        } else {
+            waiting = scope.launch {
+                val measured = measuring.await()
+                forms = measured
+                engine.load(deck, api.soundOf(song.id, measured, from), andPlay = true)
+            }
+        }
         describe()
     }
 
@@ -326,6 +347,7 @@ class Listening(private val context: Context, private val api: Api, private val 
     /** Near the end of a song, the next made ready on the other deck and
      *  started at its moment, faded in when the account asks for it. */
     private fun prepareTheNext(told: DeckTold) {
+        val known = forms ?: return
         val duration = told.duration ?: return
         val next = queue.afterTheEnd()?.takeUnless { it === queue } ?: return
         val song = next.current ?: return
@@ -335,7 +357,7 @@ class Listening(private val context: Context, private val api: Api, private val 
         prepared = next
         val other = 1 - deck
         val fade = fadeBetween(preferences.crossfadeSeconds.toDouble(), duration, song.seconds?.toDouble())
-        engine.load(other, api.soundOf(song.id, forms), andPlay = false)
+        engine.load(other, api.soundOf(song.id, known), andPlay = false)
         engine.handOverAt(deck, other, duration - fade, fade, levelOf(song, preferences.volumeMode))
     }
 
