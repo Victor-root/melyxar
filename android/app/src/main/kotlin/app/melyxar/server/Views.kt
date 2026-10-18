@@ -200,6 +200,20 @@ data class VideoTrack(
     val width: Int = 0,
     val height: Int = 0,
     val hdr: String? = null,
+    /** The title the file itself gives the track, when it gives one. */
+    val title: String? = null,
+    val level: Int? = null,
+    val aspectRatio: String? = null,
+    val isInterlaced: Boolean = false,
+    val frameRate: Double? = null,
+    val bitrate: Long? = null,
+    val pixelFormat: String? = null,
+    val referenceFrames: Int? = null,
+    val colorPrimaries: String? = null,
+    val colorSpace: String? = null,
+    val colorTransfer: String? = null,
+    val bitDepth: Int? = null,
+    val isDefault: Boolean = false,
 )
 
 @Serializable
@@ -209,6 +223,25 @@ data class AudioTrack(
     val language: String? = null,
     val channels: Int = 0,
     val isDefault: Boolean = false,
+    val title: String? = null,
+    val channelLayout: String? = null,
+    val sampleRate: Int? = null,
+    val bitDepth: Int? = null,
+    val bitrate: Long? = null,
+    val isForced: Boolean = false,
+)
+
+@Serializable
+data class SubtitleTrack(
+    val codec: String,
+    val title: String? = null,
+    val language: String? = null,
+    val isDefault: Boolean = false,
+    val isForced: Boolean = false,
+    val isHearingImpaired: Boolean = false,
+    val isExternal: Boolean = false,
+    /** Painted into the picture by the server to be shown at all. */
+    val burnsIn: Boolean = false,
 )
 
 @Serializable
@@ -219,6 +252,17 @@ data class Version(
     val missing: Boolean = false,
     val video: List<VideoTrack> = emptyList(),
     val audio: List<AudioTrack> = emptyList(),
+    val subtitles: List<SubtitleTrack> = emptyList(),
+    /** Where the file is and the disk it is on, sent to an administrator
+     *  only. */
+    val path: String? = null,
+    val rootLabel: String? = null,
+    val addedAt: String? = null,
+    val sizeBytes: Long = 0,
+    val overallBitrate: Long? = null,
+    val container: String? = null,
+    val analysed: Boolean = true,
+    val chapters: Int = 0,
 )
 
 @Serializable
