@@ -37,6 +37,13 @@ class ThumbnailTest {
     }
 
     @Test
+    fun countsTheSheetsTheLastOneHalfFilled() {
+        assertEquals(3, sheets.sheetsCounted())
+        assertEquals(2, sheets.copy(counted = 200).sheetsCounted())
+        assertEquals(0, sheets.copy(columns = 0).sheetsCounted())
+    }
+
+    @Test
     fun keepsTheFilmsShape() {
         assertEquals(135.dp, sheets.heightAt(240.dp))
     }

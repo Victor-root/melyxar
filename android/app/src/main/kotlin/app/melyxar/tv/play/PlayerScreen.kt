@@ -146,6 +146,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
 
     fun playNext(episode: NextEpisode) = onNext(Play(episode.id, episode.sourceId, null))
 
+    // The sheets of thumbnails come over once the film plays, so they never
+    // hold up its start, and are on the device by the time the bar goes far.
+    var played by remember { mutableStateOf(false) }
+    LaunchedEffect(playing) { if (playing) played = true }
+    if (played) playback.plan?.thumbnails?.let { FetchingSheets(it) }
+
     DisposableEffect(playback) {
         val heard = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
