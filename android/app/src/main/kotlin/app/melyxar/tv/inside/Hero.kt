@@ -1,6 +1,8 @@
 package app.melyxar.tv.inside
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -152,7 +154,15 @@ fun Hero(
     Box(modifier.fillMaxWidth().height(HeroHeight).onFocusChanged { holdsTheRemote = it.hasFocus }) {
         AnimatedContent(
             targetState = at,
-            transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
+            // Drawn lighter, the next work takes the place of the one before
+            // at once, rather than the two whole pictures drawn together.
+            transitionSpec = {
+                if (Lighter.on) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS))
+                }
+            },
             label = "hero",
             modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().probed(Part.Banner).then(if (Probe.shows(Part.BannerFade) && !Lighter.on) Modifier.fadesIntoThePage() else Modifier),
         ) { index ->

@@ -10,10 +10,11 @@ import androidx.core.content.edit
 /**
  * Whether this television draws its screens lighter, for one whose graphics
  * chip cannot keep up with the full look: chosen in its settings alone and
- * kept on it. Lighter, nothing blurred is drawn round the pieces, neither
- * shadow nor glow, the banner ends on the page's ground instead of fading
- * into what is behind it, and pictures come without fading in. Every piece
- * is still there and works the same.
+ * kept on it. Lighter, the painting the account chose behind the pages is
+ * left out for the page's plain ground, nothing blurred is drawn round the
+ * pieces, neither shadow nor glow, the banner ends on that ground instead of
+ * fading into it and turns from one work to the next at once, and pictures
+ * come without fading in. Every piece is still there and works the same.
  */
 object Lighter {
     private const val KEPT = "television"
