@@ -69,6 +69,7 @@ import app.melyxar.tv.look.Badge
 import app.melyxar.tv.look.Drawn
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.WhereABandIsCut
 import app.melyxar.tv.look.PillShape
@@ -153,7 +154,7 @@ fun Hero(
             targetState = at,
             transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
             label = "hero",
-            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().probed(Part.Banner).then(if (Probe.shows(Part.BannerFade)) Modifier.fadesIntoThePage() else Modifier),
+            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().probed(Part.Banner).then(if (Probe.shows(Part.BannerFade) && !Lighter.on) Modifier.fadesIntoThePage() else Modifier),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }

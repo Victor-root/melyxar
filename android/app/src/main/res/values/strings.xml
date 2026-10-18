@@ -280,6 +280,9 @@
     <string name="tv_setting_sound_out">Sound the television cannot decode</string>
     <string name="tv_sound_decoded">Converted by the server, volume adjustable</string>
     <string name="tv_sound_passed_on">Sent as it is to the receiver</string>
+    <string name="tv_setting_lighter">Lighter drawing</string>
+    <string name="tv_lighter_full">Full</string>
+    <string name="tv_lighter_on">Lighter</string>
     <string name="tv_settings_probe">Smoothness test</string>
     <string name="tv_setting_probe_shadows">Shadows</string>
     <string name="tv_setting_probe_banner_fade">Banner fade</string>

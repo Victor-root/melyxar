@@ -100,7 +100,7 @@ fun ServerPicture(
     val context = LocalContext.current
     val pixels = with(LocalDensity.current) { across.roundToPx() }
     val address = remember(api, pictures, pixels) { api.addressOf(pictures, pixels) } ?: return
-    val fades = Probe.shows(Part.PictureFade)
+    val fades = Probe.shows(Part.PictureFade) && !Lighter.on
     AsyncImage(
         model = remember(address, fades) {
             ImageRequest.Builder(context).data(address).crossfade(if (fades) 240 else 0).build()
