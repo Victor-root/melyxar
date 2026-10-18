@@ -2,9 +2,11 @@ package app.melyxar.tv.inside
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
@@ -22,10 +24,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.server.Api
@@ -33,7 +43,9 @@ import app.melyxar.server.Browse
 import app.melyxar.server.Card
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.CardGap
+import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
+import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PosterWidth
@@ -187,6 +199,8 @@ fun WorksGrid(
     belongs: (Card) -> Boolean = { true },
     /** What stands between the head and the cards. */
     besides: LazyGridScope.(PageHead) -> Unit = {},
+    /** Where the letter last jumped to begins, marked in the grid. */
+    startsAt: LetterStart? = null,
     top: @Composable (PageHead) -> Unit,
 ) {
     val reach = rememberReaching(works, works.cards, works::reachedTo)
@@ -212,6 +226,7 @@ fun WorksGrid(
             onReach(card)
         },
         besides = besides,
+        startsAt = startsAt,
         top = top,
     )
 }
@@ -237,6 +252,8 @@ fun CardGrid(
     onReach: (Int, Card) -> Unit = { _, _ -> },
     /** What stands between the head and the cards. */
     besides: LazyGridScope.(PageHead) -> Unit = {},
+    /** Where the letter last jumped to begins, marked in the grid. */
+    startsAt: LetterStart? = null,
     top: @Composable (PageHead) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -259,21 +276,69 @@ fun CardGrid(
                         Text(empty, fontSize = 16.sp, color = palette.textSoft, modifier = Modifier.padding(top = 8.dp))
                     }
                 }
-                itemsIndexed(cards.orEmpty(), key = { _, card -> card.id }) { at, card ->
-                    WorkCard(
-                        card = card,
-                        lying = lying,
-                        note = noteOf(card),
-                        onClick = { onOpen(card) },
-                        modifier = Modifier
-                            .remembered(memory, card.id)
-                            .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
-                            .onFocusChanged { if (it.isFocused) onReach(at, card) }
-                            .firstLineHoldsTheHead(grid, head, card.id),
-                    )
+                val shown = cards.orEmpty()
+                // The cards before where the letter begins, its mark, and the
+                // rest: two runs, each card still counted from the first.
+                val marked = startsAt?.let { starts -> shown.indexOfFirst { it.id == starts.work } }?.takeIf { it >= 0 } ?: shown.size
+                fun LazyGridScope.cardsFrom(from: Int, until: Int) {
+                    itemsIndexed(shown.subList(from, until), key = { _, card -> card.id }) { onRun, card ->
+                        val at = from + onRun
+                        WorkCard(
+                            card = card,
+                            lying = lying,
+                            note = noteOf(card),
+                            onClick = { onOpen(card) },
+                            modifier = Modifier
+                                .remembered(memory, card.id)
+                                .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
+                                .onFocusChanged { if (it.isFocused) onReach(at, card) }
+                                .firstLineHoldsTheHead(grid, head, card.id),
+                        )
+                    }
                 }
+                cardsFrom(0, marked)
+                startsAt?.takeIf { marked < shown.size }?.let { starts ->
+                    item(key = "starts:${starts.work}") { LetterStarts(starts.letter, lying) }
+                }
+                cardsFrom(marked, shown.size)
             }
         }
+    }
+}
+
+/** Where a letter of the titles begins in a grid: the first work under
+ *  [letter]. */
+data class LetterStart(val work: String, val letter: String)
+
+/**
+ * Where the letter just jumped to begins, standing in the grid as one more
+ * card, as the web marks it: the row it opens may still end the letter
+ * before. Its letter and an arrow pointing on to the first of its works,
+ * inside a dashed frame of the accent. Nothing the remote stops on.
+ */
+@Composable
+private fun LetterStarts(letter: String, lying: Boolean) {
+    val palette = LocalPalette.current
+    val frame = frameOf(lying)
+    Row(
+        modifier = Modifier
+            .size(frame)
+            .drawBehind {
+                val line = 2.dp.toPx()
+                val corner = 10.dp.toPx()
+                drawRoundRect(
+                    palette.accent.copy(alpha = 0.6f),
+                    topLeft = Offset(line / 2, line / 2),
+                    size = Size(size.width - line, size.height - line),
+                    cornerRadius = CornerRadius(corner),
+                    style = Stroke(line, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3 * line, 2 * line))),
+                )
+            },
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(letter.uppercase(), fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, color = palette.accentBright)
+        Glyph(Icons.ChevronRight, palette.accentBright, 28.dp)
     }
 }
 
