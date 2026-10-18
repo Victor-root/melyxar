@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -254,8 +255,18 @@ fun Inside(
 ) {
     // Read again each time the television comes back to the application:
     // a colour or a theme changed on another device shows without a restart.
+    // Only after it was left: the resume the lifecycle replays to a screen
+    // composed while the application is already on would ask everything
+    // twice as the television comes in.
     var comebacks by remember { mutableIntStateOf(0) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { comebacks += 1 }
+    var away by remember { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { away = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (away) {
+            away = false
+            comebacks += 1
+        }
+    }
     // And each time the live line says how Melyxar looks moved.
     var looksMoved by remember { mutableIntStateOf(0) }
 
@@ -331,11 +342,8 @@ fun Inside(
             }
         }
 
-        val chrome = Chrome(
-            branding = branding,
-            account = account,
-            libraries = libraries.orEmpty(),
-            go = { place ->
+        val go: (Place) -> Unit = remember {
+            { place ->
                 when (place) {
                     // Home and the libraries lead from home, not from
                     // wherever the trail had got to.
@@ -361,18 +369,31 @@ fun Inside(
                         }
                     }
                 }
-            },
-            back = { if (trail.size > 1) backTo(trail.size - 1) },
-            canGoBack = trail.size > 1,
-            changeProfile = onChangeProfile,
-            buttons = barButtons(
-                chosen?.headerButtons.orEmpty(),
-                chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar,
-                // Requests only while they are on and this account may make them.
-                if (requests.access?.mayAsk == true) ON_A_TELEVISION + "requests" else ON_A_TELEVISION,
-            ),
-            here = here,
+            }
+        }
+        val back: () -> Unit = remember { { if (trail.size > 1) backTo(trail.size - 1) } }
+        val buttons = barButtons(
+            chosen?.headerButtons.orEmpty(),
+            chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar,
+            // Requests only while they are on and this account may make them.
+            if (requests.access?.mayAsk == true) ON_A_TELEVISION + "requests" else ON_A_TELEVISION,
         )
+        val canGoBack = trail.size > 1
+        // Every screen reads it: a new one only when what it says changed,
+        // or all of them are composed again.
+        val chrome = remember(branding, account, libraries, go, back, canGoBack, onChangeProfile, buttons, here) {
+            Chrome(
+                branding = branding,
+                account = account,
+                libraries = libraries.orEmpty(),
+                go = go,
+                back = back,
+                canGoBack = canGoBack,
+                changeProfile = onChangeProfile,
+                buttons = buttons,
+                here = here,
+            )
+        }
         // Its page over home, as if opened from Melyxar's own row.
         LaunchedEffect(opening) {
             opening ?: return@LaunchedEffect
@@ -395,7 +416,7 @@ fun Inside(
                         .fillMaxSize()
                         .background(LocalPalette.current.ground)
                         .onPreviewKeyEvent { event ->
-                            if (event.type == KeyEventType.KeyDown) focusSaid("key ${event.key}")
+                            if (event.type == KeyEventType.KeyDown) focusSaid { "key ${event.key}" }
                             false
                         }
                         // The search key of a remote that has one, and its keys
@@ -457,7 +478,7 @@ fun Inside(
                     // What the account chose to draw behind its pages, once
                     // its choice is known.
                     chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
-                    LaunchedEffect(here) { focusSaid("screen shown: ${here.key}") }
+                    LaunchedEffect(here) { focusSaid { "screen shown: ${here.key}" } }
                     // The screen as one piece the remote comes back into where it
                     // left it, which the bar pinned over it leads down to.
                     Box(Modifier.fillMaxSize().focusRequester(screen).focusRestorer()) {
