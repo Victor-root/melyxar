@@ -1,8 +1,12 @@
 package app.melyxar.tv.look
 
+import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
 import android.os.Build
+import android.util.LruCache
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
@@ -25,15 +29,16 @@ import androidx.core.graphics.withSave
 import app.melyxar.theme.Palette
 import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.probe.ShadowTest
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
 /*
  * The web's box-shadow, value for value: a CSS pixel is a point of the
- * television. Drawn straight onto the screen's own canvas, where the
- * graphics card works the blur of a rounded box out itself, rather than
- * painted into a picture on the thread that draws the screen, as Compose's
- * shadows are.
+ * television. Each shadow is blurred once into a mask that every piece of
+ * the same size shares, and drawn from it after that: blurring and cutting
+ * it live on every frame cost the box's graphics card most of its time.
  */
 
 /** One shadow of CSS's `box-shadow: x y blur spread color`. */
@@ -105,6 +110,8 @@ private class BoxShadowNode(
 ) : Modifier.Node(), DrawModifierNode {
     private val made = MadeFor()
     private var piece = android.graphics.Path()
+    private var pieceCorner = 0f
+    private var pieceSize = Size.Zero
     private var layers = emptyList<DrawnShadow>()
 
     fun update(shape: Shape, shadows: List<BoxShadow>, shown: () -> Float) {
@@ -126,15 +133,20 @@ private class BoxShadowNode(
         if (strength > 0f && test != ShadowTest.None) {
             Probe.shadowDrawn()
             drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.withSave {
-                    clipOutPath(piece)
+                val native = canvas.nativeCanvas
+                if (test == ShadowTest.Baked) {
                     layers.forEach { layer ->
-                        val blur = if (test == ShadowTest.Hard) null else layer.blur
-                        if (layer.paint.maskFilter !== blur) {
-                            layer.paint.maskFilter = blur
+                        val baked = layer.baked ?: BakedShadows.of(pieceSize, pieceCorner, layer).also { layer.baked = it }
+                        layer.bakedPaint.alpha = (layer.alpha * strength * 255).roundToInt()
+                        native.drawBitmap(baked.mask, baked.left, baked.top, layer.bakedPaint)
+                    }
+                } else {
+                    native.withSave {
+                        clipOutPath(piece)
+                        layers.forEach { layer ->
+                            layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
+                            drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
                         }
-                        layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
-                        drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
                     }
                 }
             }
@@ -146,6 +158,8 @@ private class BoxShadowNode(
         Probe.shadowMade()
         val outline = shape.createOutline(size, layoutDirection, this)
         val corner = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
+        pieceCorner = corner
+        pieceSize = size
         piece = android.graphics.Path().apply {
             addRoundRect(0f, 0f, size.width, size.height, corner, corner, android.graphics.Path.Direction.CW)
         }
@@ -153,12 +167,17 @@ private class BoxShadowNode(
             val spread = shadow.spread.toPx()
             val x = shadow.x.toPx()
             val y = shadow.y.toPx()
+            val radius = blurOf(shadow.blur.toPx())
             DrawnShadow(
                 box = RectF(x - spread, y - spread, size.width + x + spread, size.height + y + spread),
                 corner = max(0f, corner + spread),
                 alpha = shadow.color.alpha,
-                blur = blurOf(shadow.blur.toPx())?.let { BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) },
+                radius = radius,
                 paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = shadow.color.toArgb()
+                    radius?.let { maskFilter = BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) }
+                },
+                bakedPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                     color = shadow.color.toArgb()
                 },
             )
@@ -170,9 +189,67 @@ private class DrawnShadow(
     val box: RectF,
     val corner: Float,
     val alpha: Float,
-    val blur: BlurMaskFilter?,
+    val radius: Float?,
     val paint: android.graphics.Paint,
+    val bakedPaint: android.graphics.Paint,
+) {
+    var baked: BakedShadow? = null
+}
+
+/** A shadow drawn once into a mask of its own, its blur and the cut of the
+ *  piece out of it included, and where it sits from the piece's corner. */
+private class BakedShadow(val mask: Bitmap, val left: Float, val top: Float)
+
+/** What a baked shadow is made from: two pieces of the same size wearing
+ *  the same shadow share its mask, whatever its colour. */
+private data class BakeKey(
+    val width: Float,
+    val height: Float,
+    val pieceCorner: Float,
+    val box: RectF,
+    val corner: Float,
+    val radius: Float?,
 )
+
+/**
+ * The shadows' masks, each made once on the thread that composes and drawn
+ * after that as a plain picture, coloured by its paint: the graphics card
+ * then neither blurs nor cuts anything while the screen moves, and a piece
+ * growing as the remote comes to it only stretches its picture.
+ */
+private object BakedShadows {
+    private const val KEPT_BYTES = 16 * 1024 * 1024
+
+    private val kept = object : LruCache<BakeKey, BakedShadow>(KEPT_BYTES) {
+        override fun sizeOf(key: BakeKey, value: BakedShadow) = value.mask.allocationByteCount
+    }
+
+    fun of(pieceSize: Size, pieceCorner: Float, layer: DrawnShadow): BakedShadow {
+        val key = BakeKey(pieceSize.width, pieceSize.height, pieceCorner, layer.box, layer.corner, layer.radius)
+        return kept.get(key) ?: bake(key).also { kept.put(key, it) }
+    }
+
+    private fun bake(key: BakeKey): BakedShadow {
+        Probe.shadowBaked()
+        // How far Android's blur reaches past the box: three deviations.
+        val reach = key.radius?.let { ceil(3 * (0.57735f * it + 0.5f)).toInt() } ?: 0
+        val left = floor(key.box.left).toInt() - reach - 1
+        val top = floor(key.box.top).toInt() - reach - 1
+        val right = ceil(key.box.right).toInt() + reach + 1
+        val bottom = ceil(key.box.bottom).toInt() + reach + 1
+        val mask = Bitmap.createBitmap(right - left, bottom - top, Bitmap.Config.ALPHA_8)
+        android.graphics.Canvas(mask).apply {
+            translate(-left.toFloat(), -top.toFloat())
+            drawRoundRect(key.box, key.corner, key.corner, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                key.radius?.let { maskFilter = BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) }
+            })
+            drawRoundRect(0f, 0f, key.width, key.height, key.pieceCorner, key.pieceCorner, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+            })
+        }
+        return BakedShadow(mask, left.toFloat(), top.toFloat())
+    }
+}
 
 /** The size, density and direction what a piece's drawing works out was
  *  made for, to make it again only once one of them moves. */
