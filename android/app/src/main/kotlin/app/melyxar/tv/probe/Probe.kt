@@ -10,9 +10,6 @@ import android.util.Log
 import android.view.FrameMetrics
 import android.view.KeyEvent
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
 import java.util.concurrent.atomic.AtomicInteger
 
 /*
@@ -27,16 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 enum class Part(val byDefault: Boolean) {
     Shadows(true),
     BannerFade(true),
-
-    /** Each card kept by the graphics card as a ready picture, drawn again
-     *  only when something on it changes. */
-    CardLayers(false),
 }
-
-/** A card's picture kept ready by the graphics card while [Part.CardLayers]
- *  is on, read as the card composes so switching it shows at once. */
-fun Modifier.cardLayer(): Modifier =
-    if (Probe.shows(Part.CardLayers)) graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else this
 
 object Probe {
     private const val TAG = "MlxPerf"

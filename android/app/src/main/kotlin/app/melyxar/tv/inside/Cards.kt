@@ -49,10 +49,10 @@ import app.melyxar.tv.look.WideWidth
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.halo
+import app.melyxar.tv.look.keptReady
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowTile
-import app.melyxar.tv.probe.cardLayer
 
 /** The corner a watched card folds over, as a triangle. */
 private val Corner = GenericShape { size, _ ->
@@ -157,7 +157,7 @@ fun PictureCard(
                 .boxShadow(CardShape, *palette.shadowTile) { 1f - lit }
                 .halo(CardShape, palette) { lit }
                 .clip(CardShape)
-                .cardLayer()
+                .keptReady()
                 .background(ground)
                 .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
         ) {
