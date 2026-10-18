@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.Dp
 import app.melyxar.server.Api
 import app.melyxar.server.Picture
 import app.melyxar.server.fitting
+import app.melyxar.tv.probe.PictureProbe
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -30,6 +31,7 @@ fun rememberPictures(api: Api): ImageLoader {
     return remember(api) {
         ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { api.http })) }
+            .eventListener(PictureProbe)
             .build()
     }
 }
