@@ -90,6 +90,8 @@ class FilmPlayer(
     private var volume = 1f
     private var muted = false
     private var turn = 0
+    private var brightness = 1f
+    private var contrast = 1f
     private var filled = false
     private var metadataSaid = false
     private var seeking = false
@@ -227,6 +229,7 @@ class FilmPlayer(
             player.volume = if (muted) 0f else volume
             player.setPlaybackSpeed(asked.rate)
             player.repeatMode = if (asked.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            light(asked.brightness, asked.contrast)
             shape(asked.fit, asked.turn)
             player.setMediaSource(sourceOf(address), (asked.start * 1000).toLong())
             player.playWhenReady = asked.autoplay
@@ -285,6 +288,9 @@ class FilmPlayer(
     fun setShape(id: Int, fit: String, turn: Int) = forFilm(id) { shape(fit, turn) }
 
     @JavascriptInterface
+    fun setLight(id: Int, brightness: Float, contrast: Float) = forFilm(id) { light(brightness, contrast) }
+
+    @JavascriptInterface
     fun close(id: Int) = forFilm(id) { closeFilm() }
 
     @JavascriptInterface
@@ -304,15 +310,27 @@ class FilmPlayer(
         }
         if (turn != this.turn) {
             this.turn = turn
-            // Media3 turns the other way round from the page.
-            player.setVideoEffects(
-                if (turn == 0) {
-                    emptyList()
-                } else {
-                    listOf(ScaleAndRotateTransformation.Builder().setRotationDegrees((360 - turn).toFloat()).build())
-                },
-            )
+            drawPicture()
         }
+    }
+
+    private fun light(brightness: Float, contrast: Float) {
+        if (brightness != this.brightness || contrast != this.contrast) {
+            this.brightness = brightness
+            this.contrast = contrast
+            drawPicture()
+        }
+    }
+
+    /** The picture turned and lit as the page asks. */
+    private fun drawPicture() {
+        player.setVideoEffects(
+            buildList {
+                // Media3 turns the other way round from the page.
+                if (turn != 0) add(ScaleAndRotateTransformation.Builder().setRotationDegrees((360 - turn).toFloat()).build())
+                addAll(lightEffects(brightness, contrast))
+            },
+        )
     }
 
     private fun closeFilm() {
@@ -430,6 +448,9 @@ private data class OpenSettings(
     val loop: Boolean,
     val fit: String,
     val turn: Int,
+    /** Missing from a page older than this application. */
+    val brightness: Float = 1f,
+    val contrast: Float = 1f,
 )
 
 /** What the page is told of the film. */
