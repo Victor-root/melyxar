@@ -15,10 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -170,14 +172,17 @@ fun WorksGrid(
     besides: LazyGridScope.(PageHead) -> Unit = {},
     top: @Composable (PageHead) -> Unit,
 ) {
-    var reached by remember(works) { mutableIntStateOf(0) }
-    LaunchedEffect(works, reached, works.cards) { works.reachedTo(reached) }
+    val reach = rememberReaching(works, works.cards, works::reachedTo)
+    // Filtered again only when the cards or what [belongs] reads change, not
+    // on every composition of the grid.
+    val belonging by rememberUpdatedState(belongs)
+    val shown by remember(works) { derivedStateOf { works.cards?.filter(belonging) } }
     if (works.failed) {
         Trouble(onRetry = works::retry)
         return
     }
     CardGrid(
-        cards = works.cards?.filter(belongs),
+        cards = shown,
         lying = lying,
         empty = empty,
         memory = memory,
@@ -186,7 +191,7 @@ fun WorksGrid(
         modifier = modifier,
         firstCard = firstCard,
         onReach = { at, card ->
-            reached = at
+            reach(at)
             onReach(card)
         },
         besides = besides,
@@ -260,6 +265,7 @@ fun CardGrid(
  * the head, the piece is part of the head, which stays shown whole while the
  * remote is on it.
  */
+@Composable
 fun Modifier.firstLineHoldsTheHead(grid: LazyGridState, head: PageHead, key: String): Modifier = onFocusChanged {
     val line = grid.layoutInfo.visibleItemsInfo.firstOrNull { item -> item.key == key }?.row
     head.hold(key, it.isFocused && line == 1)

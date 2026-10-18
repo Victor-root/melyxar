@@ -38,6 +38,7 @@ import app.melyxar.tv.inside.ScrollingPage
 import app.melyxar.tv.inside.TopBar
 import app.melyxar.tv.inside.head
 import app.melyxar.tv.inside.rememberFocusMemory
+import app.melyxar.tv.inside.rememberReaching
 import app.melyxar.tv.inside.remembered
 import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.Gutter
@@ -66,7 +67,6 @@ fun MoreTitlesScreen(catalogue: String, genreId: String?, genre: String?) {
     var page by remember { mutableIntStateOf(1) }
     var ended by remember { mutableStateOf(false) }
     var reading by remember { mutableStateOf(true) }
-    var reached by remember { mutableIntStateOf(0) }
     val memory = rememberFocusMemory()
     val first = remember { FocusRequester() }
     val grid = rememberLazyGridState()
@@ -86,8 +86,11 @@ fun MoreTitlesScreen(catalogue: String, genreId: String?, genre: String?) {
         reading = false
     }
     // One page at a time: the next is asked once this one is in.
-    LaunchedEffect(reached, reading, ended) {
-        if (!reading && !ended && reached >= titles.size - READ_AHEAD) page += 1
+    val reach = rememberReaching(Unit, reading to ended) { at ->
+        if (!reading && !ended && at >= titles.size - READ_AHEAD) {
+            reading = true
+            page += 1
+        }
     }
     ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
         LazyVerticalGrid(
@@ -114,7 +117,7 @@ fun MoreTitlesScreen(catalogue: String, genreId: String?, genre: String?) {
                     Modifier
                         .remembered(memory, one.tmdbId)
                         .then(if (at == 0) Modifier.focusRequester(first) else Modifier)
-                        .onFocusChanged { if (it.hasFocus) reached = at },
+                        .onFocusChanged { if (it.hasFocus) reach(at) },
                 )
             }
         }
