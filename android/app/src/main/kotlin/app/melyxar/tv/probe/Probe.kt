@@ -85,6 +85,8 @@ object Probe {
     private val keys = AtomicInteger()
     private val picturesFaded = AtomicInteger()
     private val picturesFromMemory = AtomicInteger()
+    private val litNow = AtomicInteger()
+    private val picturesSinceFrame = AtomicInteger()
     private var lastKey = 0L
     @Volatile
     private var lastKeyNs = 0L
@@ -259,13 +261,14 @@ object Probe {
         if (recent.size > RECENT) {
             recent.removeFirst()
         }
+        val pictures = picturesSinceFrame.getAndSet(0)
         opening?.let { follow(it, seen) }
         bench?.let { benchFrame(it, seen) }
         if (total > deadline) {
             janky++
             val parts = Phase.entries.joinToString(" ") { "${it.label}=${ms(metrics.getMetric(it.metric))}" }
             val gpu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) " gpu=${ms(metrics.getMetric(FrameMetrics.GPU_DURATION))}" else ""
-            Log.w(TAG_FRAME, "slow frame ${ms(total)} ms (deadline ${ms(deadline)}): $parts$gpu dropped=$dropped")
+            Log.w(TAG_FRAME, "slow frame ${ms(total)} ms (deadline ${ms(deadline)}): $parts$gpu dropped=$dropped lit=${litNow.get()} pictures=$pictures")
         }
     }
 
@@ -356,6 +359,7 @@ object Probe {
         val gap = if (lastKey == 0L) 0 else now - lastKey
         lastKey = now
         lastKeyNs = event.eventTime * 1_000_000
+        MainSampler.pressed()
         Log.d(TAG_KEY, "${KeyEvent.keyCodeToString(event.keyCode)} repeat=${event.repeatCount} waited=${now - event.eventTime} ms gap=$gap ms")
     }
 
@@ -384,7 +388,13 @@ object Probe {
     /** A picture handed to the screen from [source]: one from the memory
      *  cache shows at once, any other fades in. */
     fun pictureShown(source: String) {
+        picturesSinceFrame.incrementAndGet()
         (if (source == "MEMORY_CACHE") picturesFromMemory else picturesFaded).incrementAndGet()
+    }
+
+    /** A piece's lighting or fading starting, by 1, or ending, by -1. */
+    fun litRunning(by: Int) {
+        litNow.addAndGet(by)
     }
 
     /** A piece starting to light or fade. */
