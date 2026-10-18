@@ -75,7 +75,8 @@ internal val Whole: () -> Float = { 1f }
 /**
  * [shadows] round a piece of [shape], as strong as [shown] says, drawn
  * outside the piece only, as CSS draws them. Below Android 9 the graphics
- * card cannot blur, and they are left out rather than drawn hard.
+ * card cannot blur, and they are left out rather than drawn hard; drawn
+ * [Lighter], the blurred ones are.
  *
  * What is worked out for them is kept from one composition to the next
  * while the shape, the shadows and the piece's size stay the same, so a
@@ -129,8 +130,11 @@ private class BoxShadowNode(
         val strength = shown()
         if (strength > 0f && Probe.shows(Part.Shadows)) {
             Probe.shadowDrawn()
+            val lighter = Lighter.on
             drawIntoCanvas { canvas ->
                 layers.forEach { layer ->
+                    // Drawn lighter, only the crisp edges are left.
+                    if (lighter && layer.radius != null) return@forEach
                     val baked = layer.baked ?: BakedShadows.of(pieceSize, pieceCorner, layer).also { layer.baked = it }
                     layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
                     canvas.nativeCanvas.drawBitmap(baked.mask, baked.left, baked.top, layer.paint)

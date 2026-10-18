@@ -284,6 +284,9 @@
     <string name="tv_setting_sound_out">Son que la télévision ne décode pas</string>
     <string name="tv_sound_decoded">Converti par le serveur, volume réglable</string>
     <string name="tv_sound_passed_on">Envoyé tel quel à l’ampli</string>
+    <string name="tv_setting_lighter">Mode allégé</string>
+    <string name="tv_lighter_full">Complet</string>
+    <string name="tv_lighter_on">Allégé</string>
     <string name="tv_settings_probe">Test de fluidité</string>
     <string name="tv_setting_probe_shadows">Ombres</string>
     <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>
