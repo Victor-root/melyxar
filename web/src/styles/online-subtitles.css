@@ -112,3 +112,11 @@
   align-items: center;
   gap: var(--gap-tight);
 }
+
+/* The switch and what it says, pressed as one. */
+.subtitles-forced {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  cursor: pointer;
+}

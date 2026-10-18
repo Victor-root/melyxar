@@ -564,6 +564,8 @@ export interface SubtitleOffer {
   /** Timed on this very file, recognised by its fingerprint. */
   matches_the_file: boolean;
   fps: number | null;
+  /** Only the lines in another language than the film's. */
+  forced: boolean;
   /** Timed on a video of another speed than this copy, so it drifts. */
   other_speed: boolean;
 }
@@ -2148,9 +2150,9 @@ export const api = {
     get<PlaybackThumbnails>(`/api/v1/playback/${source}/thumbnails`, signal),
   subtitleTracks: (source: string, signal?: AbortSignal) =>
     get<SubtitleTrackInfo[]>(`/api/v1/playback/${source}/subtitles`, signal),
-  subtitleOffers: (source: string, languages: string[], signal?: AbortSignal) =>
+  subtitleOffers: (source: string, languages: string[], forcedOnly: boolean, signal?: AbortSignal) =>
     get<SubtitleOffer[]>(
-      `/api/v1/playback/${source}/subtitles/online?languages=${encodeURIComponent(languages.join(","))}`,
+      `/api/v1/playback/${source}/subtitles/online?languages=${encodeURIComponent(languages.join(","))}${forcedOnly ? "&forced_only=true" : ""}`,
       signal,
     ),
   downloadSubtitle: (source: string, offer: SubtitleOffer) =>

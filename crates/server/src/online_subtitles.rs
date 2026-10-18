@@ -142,6 +142,9 @@ struct OfferView {
     matches_the_file: bool,
     #[serde(default)]
     fps: Option<f64>,
+    /// Only the lines in another language than the film's.
+    #[serde(default)]
+    forced: bool,
     /// Timed on a video of another speed than this copy, so it drifts.
     #[serde(default, skip_deserializing)]
     other_speed: bool,
@@ -160,6 +163,7 @@ impl From<Offered> for OfferView {
             trusted: offer.trusted,
             matches_the_file: offer.matches_the_file,
             fps: offer.fps,
+            forced: offer.forced,
             other_speed: offered.other_speed,
         }
     }
@@ -169,6 +173,9 @@ impl From<Offered> for OfferView {
 struct Languages {
     /// Two letters each, separated by commas.
     languages: String,
+    /// Only forced subtitles.
+    #[serde(default)]
+    forced_only: bool,
 }
 
 async fn offers(
@@ -183,7 +190,7 @@ async fn offers(
         .map(|language| language.trim().to_string())
         .filter(|language| !language.is_empty())
         .collect();
-    let offers = melyxar_app::online_subtitles::offers(&state, &who, parse_source(&id)?, &languages).await?;
+    let offers = melyxar_app::online_subtitles::offers(&state, &who, parse_source(&id)?, &languages, asked.forced_only).await?;
     Ok(Json(offers.into_iter().map(OfferView::from).collect()))
 }
 
@@ -212,6 +219,7 @@ async fn download(
         trusted: offer.trusted,
         matches_the_file: offer.matches_the_file,
         fps: offer.fps,
+        forced: offer.forced,
     };
     let fetched = melyxar_app::online_subtitles::download(&state, &who, parse_source(&id)?, &offer).await?;
     Ok(Json(FetchedView {

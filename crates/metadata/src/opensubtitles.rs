@@ -67,6 +67,9 @@ pub struct SubtitleOffer {
     pub matches_the_file: bool,
     /// How many pictures a second the video it was timed on showed.
     pub fps: Option<f64>,
+    /// Only the lines in another language than the film's, as forced
+    /// subtitles are: a sign, a letter, a stretch of a foreign tongue.
+    pub forced: bool,
 }
 
 /// A subtitle downloaded, and how many more the day allows.
@@ -109,37 +112,23 @@ impl OpenSubtitlesClient {
         if self.login.is_some() {
             self.signed_in().await.map(|_| ())
         } else {
-            self.search(Searched::Film { tmdb_id: A_FILM_EVERYBODY_KNOWS }, &["en".to_string()], None)
+            self.search(Searched::Film { tmdb_id: A_FILM_EVERYBODY_KNOWS }, &["en".to_string()], None, false)
                 .await
                 .map(|_| ())
         }
     }
 
     /// The subtitles offered for a work in these languages, the most
-    /// downloaded first.
+    /// downloaded first, [forced_only] keeping to forced ones.
     /// With the file's fingerprint, those timed on it come first.
     pub async fn search(
         &self,
         searched: Searched<'_>,
         languages: &[String],
         fingerprint: Option<&str>,
+        forced_only: bool,
     ) -> Result<Vec<SubtitleOffer>> {
-        let mut query: Vec<(&str, String)> = vec![("languages", languages.join(","))];
-        if let Some(fingerprint) = fingerprint {
-            query.push(("moviehash", fingerprint.to_string()));
-        }
-        match searched {
-            Searched::Film { tmdb_id } => {
-                query.push(("tmdb_id", tmdb_id.to_string()));
-                query.push(("type", "movie".to_string()));
-            }
-            Searched::Episode { series_tmdb_id, season, episode } => {
-                query.push(("parent_tmdb_id", series_tmdb_id.to_string()));
-                query.push(("season_number", season.to_string()));
-                query.push(("episode_number", episode.to_string()));
-                query.push(("type", "episode".to_string()));
-            }
-        }
+        let query = search_query(searched, languages, fingerprint, forced_only);
         let response = self
             .client
             .get(format!("{}/subtitles", self.base_url))
@@ -216,6 +205,36 @@ impl OpenSubtitlesClient {
     }
 }
 
+/// What a search asks OpenSubtitles.
+fn search_query(
+    searched: Searched<'_>,
+    languages: &[String],
+    fingerprint: Option<&str>,
+    forced_only: bool,
+) -> Vec<(&'static str, String)> {
+    let mut query: Vec<(&str, String)> = vec![("languages", languages.join(","))];
+    if let Some(fingerprint) = fingerprint {
+        query.push(("moviehash", fingerprint.to_string()));
+    }
+    // OpenSubtitles' own name for forced subtitles.
+    if forced_only {
+        query.push(("foreign_parts_only", "only".to_string()));
+    }
+    match searched {
+        Searched::Film { tmdb_id } => {
+            query.push(("tmdb_id", tmdb_id.to_string()));
+            query.push(("type", "movie".to_string()));
+        }
+        Searched::Episode { series_tmdb_id, season, episode } => {
+            query.push(("parent_tmdb_id", series_tmdb_id.to_string()));
+            query.push(("season_number", season.to_string()));
+            query.push(("episode_number", episode.to_string()));
+            query.push(("type", "episode".to_string()));
+        }
+    }
+    query
+}
+
 /// A request that did not reach OpenSubtitles, said without its address.
 fn unreachable(error: reqwest::Error) -> ProviderError {
     ProviderError::Unreachable(error.without_url().to_string())
@@ -285,6 +304,8 @@ struct Attributes {
     #[serde(default)]
     fps: Option<f64>,
     #[serde(default)]
+    foreign_parts_only: bool,
+    #[serde(default)]
     files: Vec<FoundFile>,
 }
 
@@ -319,6 +340,7 @@ impl Found {
                     trusted: attributes.from_trusted,
                     matches_the_file: attributes.moviehash_match,
                     fps: attributes.fps.filter(|fps| *fps > 0.0),
+                    forced: attributes.foreign_parts_only,
                 })
             })
             .collect()
@@ -345,6 +367,7 @@ mod tests {
                 {"attributes": {"language": "fr", "release": "Quiet.Harbour.2019.1080p",
                     "download_count": 1200, "hearing_impaired": true, "ai_translated": true,
                     "from_trusted": true, "moviehash_match": true, "fps": 23.976,
+                    "foreign_parts_only": true,
                     "files": [{"file_id": 7, "file_name": "a.srt"}]}},
                 {"attributes": {"language": "fr", "release": "",
                     "download_count": 3, "files": [{"file_id": 8, "file_name": "b.srt"}]}},
@@ -367,6 +390,7 @@ mod tests {
                     trusted: true,
                     matches_the_file: true,
                     fps: Some(23.976),
+                    forced: true,
                 },
                 SubtitleOffer {
                     file_id: 8,
@@ -378,9 +402,22 @@ mod tests {
                     trusted: false,
                     matches_the_file: false,
                     fps: None,
+                    forced: false,
                 },
             ],
             "a release in several files, or of no language, is left out"
         );
+    }
+
+    #[test]
+    fn forced_only_is_asked_only_when_wanted() {
+        let film = Searched::Film { tmdb_id: "42" };
+        let languages = ["fr".to_string()];
+        let forced = search_query(film, &languages, None, true);
+        assert!(forced.contains(&("foreign_parts_only", "only".to_string())));
+        let every = search_query(film, &languages, Some("00ff"), false);
+        assert!(every.iter().all(|(name, _)| *name != "foreign_parts_only"));
+        assert!(every.contains(&("moviehash", "00ff".to_string())));
+        assert!(every.contains(&("tmdb_id", "42".to_string())));
     }
 }
