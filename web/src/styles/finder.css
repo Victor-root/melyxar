@@ -1,0 +1,269 @@
+/*
+ * The windows that look something up online and take one of what came back:
+ * the lyrics of a song, the subtitles of a film. What it is for on top, on a
+ * card of glass with where it stands; the search under it; then what came
+ * back, one card each, which alone scrolls.
+ */
+
+.finder {
+  width: min(920px, 100%);
+  height: min(820px, 100%);
+}
+
+.finder .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: hidden;
+}
+
+.finder .notice,
+.finder .panel-notice {
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* What the window is for: its picture, its name, where it stands, and on the
+   side one figure that matters and what can be done to it. */
+.finder-head {
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+}
+
+.finder-head-words {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.finder-head-title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-head-by {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-head-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 6px;
+}
+
+/* Said, without the colour of a state. */
+.finder-pill-plain {
+  background: var(--surface-hover);
+  color: var(--text-soft);
+}
+
+.finder-head-note {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.finder-head-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.finder-figure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.finder-figure-name {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.finder-figure-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.finder-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finder-forget {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.finder-forget:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.finder-search {
+  flex: none;
+}
+
+/* The one part that scrolls, its bar against the edge of the panel. */
+.finder-offers {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--gap-wide)) calc(-1 * var(--gap-wide));
+  padding: 2px var(--gap-wide) var(--gap-wide);
+  overflow-y: auto;
+}
+
+.finder-quiet {
+  margin: 0;
+  padding: var(--gap-wide) 0;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.finder-offer {
+  display: grid;
+  flex: none;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 86px;
+}
+
+.finder-offer:hover,
+.finder-offer-taken {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.finder-offer:hover {
+  box-shadow: 0 0 14px 2px var(--accent-glow);
+}
+
+/* What tells one offer from the next at a glance, on its left. */
+.finder-offer-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.finder-offer-lead-main {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-offer-lead-note {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.finder-offer-words {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.finder-offer-title {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-offer-by {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finder-offer-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+@media (max-width: 600px) {
+  .finder-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .finder-head-side {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .finder-figure {
+    align-items: flex-start;
+  }
+
+  .finder-figure-value {
+    font-size: 20px;
+  }
+
+  .finder-offer {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+  }
+
+  .finder-offer-lead {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+}
