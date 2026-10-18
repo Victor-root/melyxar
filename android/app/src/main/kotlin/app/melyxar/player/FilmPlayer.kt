@@ -126,6 +126,7 @@ class FilmPlayer(
     private fun makePlayer() = ExoPlayer.Builder(activity, DefaultRenderersFactory(activity).setEnableDecoderFallback(true))
         .setAudioAttributes(sound, true)
         .setHandleAudioBecomingNoisy(true)
+        .setLoadControl(boundedLoading())
         .build()
         .apply {
             trackSelectionParameters = trackSelectionParameters.buildUpon()

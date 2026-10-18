@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.util.EventLogger
 import app.melyxar.BuildConfig
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
+import app.melyxar.player.boundedLoading
 import app.melyxar.player.lightEffects
 import app.melyxar.player.measuredProfile
 import app.melyxar.server.Api
@@ -219,6 +220,7 @@ class Playback(
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
             .setAudioAttributes(sound, true)
             .setHandleAudioBecomingNoisy(true)
+            .setLoadControl(boundedLoading())
             .build()
         // The words are read and drawn by Melyxar, which can move them.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
@@ -390,17 +392,22 @@ class Playback(
 
     private fun anotherPlayer(lighting: Boolean, carryOn: Boolean) {
         val before = player
+        val item = before.currentMediaItem.takeIf { carryOn }
+        val at = before.currentPosition
+        val going = before.playWhenReady
+        val speed = before.playbackParameters.speed
+        // Let go of first, so the two never hold a film ahead at once.
+        before.release()
         val next = newPlayer()
         if (lighting) next.setVideoEffects(lightEffects(brightness, contrast))
         throughEffects = lighting
-        next.setPlaybackSpeed(before.playbackParameters.speed)
-        if (carryOn) {
-            before.currentMediaItem?.let { next.setMediaItem(it, before.currentPosition) }
-            next.playWhenReady = before.playWhenReady
+        next.setPlaybackSpeed(speed)
+        item?.let {
+            next.setMediaItem(it, at)
+            next.playWhenReady = going
             next.prepare()
         }
         player = next
-        before.release()
     }
 
     fun chooseSpeed(chosen: Float) {
