@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BlurMaskFilter
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Build
 import android.util.LruCache
@@ -133,7 +134,7 @@ private class BoxShadowNode(
                 layers.forEach { layer ->
                     val baked = layer.baked ?: BakedShadows.of(pieceSize, pieceCorner, layer).also { layer.baked = it }
                     layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
-                    canvas.nativeCanvas.drawBitmap(baked.mask, baked.left, baked.top, layer.paint)
+                    baked.bands.forEach { (from, to) -> canvas.nativeCanvas.drawBitmap(baked.mask, from, to, layer.paint) }
                 }
             }
         }
@@ -174,8 +175,10 @@ private class DrawnShadow(
 }
 
 /** A shadow drawn once into a mask of its own, its blur and the cut of the
- *  piece out of it included, and where it sits from the piece's corner. */
-private class BakedShadow(val mask: Bitmap, val left: Float, val top: Float)
+ *  piece out of it included, and the bands of it drawn round the piece:
+ *  the middle of the piece, where the mask holds nothing, is left out, so
+ *  the graphics card does not paint every card once more for nothing. */
+private class BakedShadow(val mask: Bitmap, val bands: List<Pair<Rect, RectF>>)
 
 /** What a baked shadow is made from: two pieces of the same size wearing
  *  the same shadow share its mask, whatever its colour. */
@@ -206,6 +209,26 @@ private object BakedShadows {
         return kept.get(key) ?: bake(key).also { kept.put(key, it) }
     }
 
+    /** The parts of a mask round the piece's middle, as where they are in
+     *  the mask and where they are drawn from the piece's corner. */
+    private fun bandsOf(key: BakeKey, left: Int, top: Int, width: Int, height: Int): List<Pair<Rect, RectF>> {
+        // Inside the piece away from its rounded corners, by a pixel more
+        // for the cut's smoothed edge: there the mask was cleared whole.
+        val inset = ceil(key.pieceCorner).toInt() + 1
+        val middle = Rect(inset - left, inset - top, floor(key.width).toInt() - inset - left, floor(key.height).toInt() - inset - top)
+        val kept = if (!middle.intersect(0, 0, width, height) || middle.isEmpty) {
+            listOf(Rect(0, 0, width, height))
+        } else {
+            listOf(
+                Rect(0, 0, width, middle.top),
+                Rect(0, middle.bottom, width, height),
+                Rect(0, middle.top, middle.left, middle.bottom),
+                Rect(middle.right, middle.top, width, middle.bottom),
+            ).filterNot { it.isEmpty }
+        }
+        return kept.map { band -> band to RectF(band).apply { offset(left.toFloat(), top.toFloat()) } }
+    }
+
     private fun bake(key: BakeKey): BakedShadow {
         val began = System.nanoTime()
         // How far Android's blur reaches past the box: three deviations.
@@ -225,7 +248,7 @@ private object BakedShadows {
             })
         }
         Probe.shadowBaked(began)
-        return BakedShadow(mask, left.toFloat(), top.toFloat())
+        return BakedShadow(mask, bandsOf(key, left, top, mask.width, mask.height))
     }
 }
 
