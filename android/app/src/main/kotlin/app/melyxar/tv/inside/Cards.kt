@@ -53,6 +53,7 @@ import app.melyxar.tv.look.keptReady
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowTile
+import app.melyxar.tv.probe.Probe
 
 /** The corner a watched card folds over, as a triangle. */
 private val Corner = GenericShape { size, _ ->
@@ -77,6 +78,7 @@ fun WorkCard(
     note: String? = card.year?.toString(),
     trailing: String? = null,
 ) {
+    val began = System.nanoTime()
     val palette = LocalPalette.current
     val whereabouts = LocalMarks.current.whereabouts(card)
     val progress = whereabouts.resume?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) }
@@ -117,6 +119,7 @@ fun WorkCard(
             SeenCorner(whereabouts, card.episodes, Modifier.align(Alignment.TopEnd))
         }
     }
+    Probe.cardComposed(began)
 }
 
 /**
