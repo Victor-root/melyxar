@@ -17,7 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,6 +94,10 @@ fun LibraryScreen(library: Library, comebacks: Int) {
     // A grid read another way starts again from its top.
     val grid = rememberSaveable(browse, saver = LazyGridState.Saver) { LazyGridState() }
     var at by remember { mutableStateOf<String?>(null) }
+    // Where the letter last jumped to begins, until the grid is read
+    // another way.
+    var starts by remember(browse) { mutableStateOf<LetterStart?>(null) }
+    var jumps by remember { mutableIntStateOf(0) }
 
     /** Closes the list of choices, the remote back on what opened it. */
     fun closePicking() {
@@ -116,13 +122,21 @@ fun LibraryScreen(library: Library, comebacks: Int) {
             if (!works.readUntil(opening.id)) {
                 return@launch
             }
-            val index = works.cards.orEmpty().indexOfFirst { it.id == opening.id }
-            // The grid's head comes before its cards.
-            grid.scrollToItem(index + 1)
-            // The card can only take the remote once the grid has laid it out.
-            snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == opening.id } }.first { it }
-            memory.requester(opening.id).requestFocus()
+            starts = LetterStart(opening.id, letter)
+            jumps += 1
         }
+    }
+
+    // Once the grid holds the letter's mark: brought to the top, the remote
+    // on the work after it.
+    LaunchedEffect(jumps) {
+        val opening = starts ?: return@LaunchedEffect
+        val index = works.cards.orEmpty().indexOfFirst { it.id == opening.work }
+        // The grid's head comes before its cards, and the mark before the work.
+        grid.scrollToItem(index + 1)
+        // The card can only take the remote once the grid has laid it out.
+        snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == opening.work } }.first { it }
+        memory.requester(opening.work).requestFocus()
     }
 
     val letters = filters?.initials.orEmpty().map { it.name }.takeIf { order == "title" && it.size > 1 }
@@ -140,6 +154,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 modifier = Modifier.weight(1f),
                 firstCard = first,
                 onReach = { card -> at = card.initial },
+                startsAt = starts,
             ) {
                 Column {
                     // The grid keeps the page's margin already.

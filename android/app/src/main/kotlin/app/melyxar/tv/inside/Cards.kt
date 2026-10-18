@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.server.Card
@@ -65,10 +66,13 @@ private val Corner = GenericShape { size, _ ->
     close()
 }
 
+/** The frame of a card's picture: a still lying down when it [lies], a
+ *  poster standing otherwise. */
+fun frameOf(lies: Boolean): DpSize = if (lies) DpSize(WideWidth, WideWidth * 9 / 16) else DpSize(PosterWidth, PosterWidth * 3 / 2)
+
 /** The picture a card of [this] work draws, its still when it [lies] and
  *  has one, its poster otherwise, and how wide. */
-fun Card.drawn(lies: Boolean): Drawn =
-    Drawn(if (lies && wide.isNotEmpty()) wide else poster, if (lies) WideWidth else PosterWidth)
+fun Card.drawn(lies: Boolean): Drawn = Drawn(if (lies && wide.isNotEmpty()) wide else poster, frameOf(lies).width)
 
 /**
  * A work in a row or a grid, as the web draws it: its poster standing, or
@@ -92,7 +96,7 @@ fun WorkCard(
     val (pictures, across) = card.drawn(lying)
     PictureCard(
         across = across,
-        down = if (lying) across * 9 / 16 else across * 3 / 2,
+        down = frameOf(lying).height,
         title = title,
         note = note,
         trailing = trailing,
