@@ -36,16 +36,26 @@ private const val PICTURE_ACROSS = 640
 class WatchNext(private val context: Context) {
     private val pictures = File(context.filesDir, PICTURES)
 
+    /** Whether a picture could not be fetched, the row then placed again
+     *  the next time even when nothing else changed. */
+    private var missed = false
+
     /** Puts [rows] in the system's row, in their order, and takes out what
      *  is no longer among them. What the viewer took out of the row is left
-     *  out. Nothing on a television without the row. */
+     *  out. Nothing on a television without the row, and nothing again for
+     *  the rows it was last given whole: placing them reads and writes the
+     *  system's store of programs, in another process, for every row. */
     suspend fun show(api: Api, rows: List<WithCard<EpisodeMore>>) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             return
         }
         withContext(Dispatchers.IO) {
+            if (rows == lastPlaced) {
+                return@withContext
+            }
             try {
                 place(api, rows)
+                lastPlaced = if (missed) null else rows
             } catch (_: IllegalArgumentException) {
                 // A television whose system keeps no such row, Fire TV's.
             } catch (_: SecurityException) {
@@ -105,6 +115,7 @@ class WatchNext(private val context: Context) {
                 file.writeBytes(api.file(chosen.url))
             } catch (_: IOException) {
                 file.delete()
+                missed = true
                 return null
             }
         }
@@ -143,6 +154,10 @@ class WatchNext(private val context: Context) {
     }
 
     companion object {
+        /** The rows last placed whole while the application runs. */
+        @Volatile
+        private var lastPlaced: List<WithCard<EpisodeMore>>? = null
+
         /** Where the pictures handed to the system are kept. */
         const val PICTURES = "watch-next"
 
