@@ -12,7 +12,9 @@ import androidx.compose.ui.unit.Dp
 import app.melyxar.server.Api
 import app.melyxar.server.Picture
 import app.melyxar.server.fitting
+import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.PictureProbe
+import app.melyxar.tv.probe.Probe
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -53,9 +55,10 @@ fun ServerPicture(
     val context = LocalContext.current
     val pixels = with(LocalDensity.current) { across.roundToPx() }
     val chosen = remember(pictures, pixels) { pictures.fitting(pixels) } ?: return
+    val fades = Probe.shows(Part.PictureFade)
     AsyncImage(
-        model = remember(chosen) {
-            ImageRequest.Builder(context).data(api.address(chosen.url)).crossfade(240).build()
+        model = remember(chosen, fades) {
+            ImageRequest.Builder(context).data(api.address(chosen.url)).crossfade(if (fades) 240 else 0).build()
         },
         imageLoader = LocalPictures.current,
         contentDescription = null,

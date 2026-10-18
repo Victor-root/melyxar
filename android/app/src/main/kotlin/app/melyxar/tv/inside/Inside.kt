@@ -70,6 +70,7 @@ import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.KeepingSheets
 import app.melyxar.tv.play.PlayerScreen
+import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.requests.LocalRequests
 import app.melyxar.tv.requests.MoreTitlesScreen
 import app.melyxar.tv.requests.RequestedTitleScreen
@@ -487,7 +488,10 @@ fun Inside(
                     chosen?.let {
                         PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize().drawWithContent { if (!film) drawContent() })
                     }
-                    LaunchedEffect(here) { focusSaid { "screen shown: ${here.key}" } }
+                    LaunchedEffect(here) {
+                        focusSaid { "screen shown: ${here.key}" }
+                        Probe.screenShown(here.key)
+                    }
                     // The screen as one piece the remote comes back into where it
                     // left it, which the bar pinned over it leads down to.
                     Box(Modifier.fillMaxSize().focusRequester(screen).focusRestorer()) {

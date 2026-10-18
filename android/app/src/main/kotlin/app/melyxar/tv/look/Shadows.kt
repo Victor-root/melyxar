@@ -207,7 +207,7 @@ private object BakedShadows {
     }
 
     private fun bake(key: BakeKey): BakedShadow {
-        Probe.shadowBaked()
+        val began = System.nanoTime()
         // How far Android's blur reaches past the box: three deviations.
         val reach = key.radius?.let { ceil(3 * (0.57735f * it + 0.5f)).toInt() } ?: 0
         val left = floor(key.box.left).toInt() - reach - 1
@@ -224,6 +224,7 @@ private object BakedShadows {
                 xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
             })
         }
+        Probe.shadowBaked(began)
         return BakedShadow(mask, left.toFloat(), top.toFloat())
     }
 }
