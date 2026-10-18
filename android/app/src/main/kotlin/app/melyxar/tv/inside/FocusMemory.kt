@@ -60,7 +60,7 @@ fun RestoreFocus(memory: FocusMemory, first: FocusRequester, ready: Boolean, orE
         val restored = memory.restore()
         val onFirst = !restored && takes(first)
         val elsewhere = !restored && !onFirst && orElse?.let(::takes) == true
-        focusSaid("screen ready: back on ${memory.last} $restored, on its first $onFirst, elsewhere $elsewhere")
+        focusSaid { "screen ready: back on ${memory.last} $restored, on its first $onFirst, elsewhere $elsewhere" }
     }
 }
 
