@@ -42,6 +42,8 @@ object Probe {
     private val shadowsDrawn = AtomicInteger()
     private val litStarted = AtomicInteger()
     private val keys = AtomicInteger()
+    private val picturesFaded = AtomicInteger()
+    private val picturesFromMemory = AtomicInteger()
     private var lastKey = 0L
 
     private val frames = ArrayList<Long>()
@@ -108,6 +110,8 @@ object Probe {
         val drawn = shadowsDrawn.getAndSet(0)
         val lit = litStarted.getAndSet(0)
         val pressed = keys.getAndSet(0)
+        val faded = picturesFaded.getAndSet(0)
+        val remembered = picturesFromMemory.getAndSet(0)
         if (frames.isEmpty()) {
             return
         }
@@ -120,7 +124,7 @@ object Probe {
             TAG,
             "1s: $count frames, $janky janky (${janky * 100 / count}%), " +
                 "p50=${ms(frames[count / 2])} p90=${ms(frames[count * 9 / 10])} max=${ms(frames[count - 1])} ms | " +
-                "mean $means | keys=$pressed lit=$lit | shadows ${shadows.name} made=$made drawn=$drawn | heap=${heap} MB",
+                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | shadows ${shadows.name} made=$made drawn=$drawn | heap=${heap} MB",
         )
         frames.clear()
         phases.fill(0)
@@ -147,6 +151,12 @@ object Probe {
     /** A shadow drawn. */
     fun shadowDrawn() {
         shadowsDrawn.incrementAndGet()
+    }
+
+    /** A picture handed to the screen from [source]: one from the memory
+     *  cache shows at once, any other fades in. */
+    fun pictureShown(source: String) {
+        (if (source == "MEMORY_CACHE") picturesFromMemory else picturesFaded).incrementAndGet()
     }
 
     /** A piece starting to light or fade. */
