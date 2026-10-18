@@ -54,7 +54,14 @@ fun litBy(interaction: InteractionSource): State<Float> {
             }
             val target = if (focuses.isEmpty()) 0f else 1f
             Probe.litStarted()
-            launch { lit.animateTo(target, calm()) }
+            launch {
+                Probe.litRunning(1)
+                try {
+                    lit.animateTo(target, calm())
+                } finally {
+                    Probe.litRunning(-1)
+                }
+            }
         }
     }
     return lit.asState()
