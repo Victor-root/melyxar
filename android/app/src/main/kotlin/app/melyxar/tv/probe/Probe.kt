@@ -273,6 +273,7 @@ object Probe {
         Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, ${switched()}")
         val thread = HandlerThread("MlxPerf").apply { start() }
         val handler = Handler(thread.looper).also { handler = it }
+        handler.post(Clocks::find)
         activity.window.addOnFrameMetricsAvailableListener({ _, metrics, dropped ->
             frame(metrics, dropped, budgetNs)
         }, handler)
@@ -310,7 +311,7 @@ object Probe {
             janky++
             val parts = Phase.entries.joinToString(" ") { "${it.label}=${ms(metrics.getMetric(it.metric))}" }
             val gpu = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) " gpu=${ms(metrics.getMetric(FrameMetrics.GPU_DURATION))}" else ""
-            Log.w(TAG_FRAME, "slow frame ${ms(total)} ms (deadline ${ms(deadline)}): $parts$gpu dropped=$dropped lit=${litNow.get()} pictures=$pictures")
+            Log.w(TAG_FRAME, "slow frame ${ms(total)} ms (deadline ${ms(deadline)}): $parts$gpu dropped=$dropped lit=${litNow.get()} pictures=$pictures ${Clocks.now()}")
         }
     }
 
@@ -384,7 +385,7 @@ object Probe {
             TAG,
             "1s: $count frames, $janky janky (${janky * 100 / count}%), " +
                 "p50=${ms(frames[count / 2])} p90=${ms(frames[count * 9 / 10])} max=${ms(frames[count - 1])} ms | " +
-                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | ${switched()} | shadows made=$made baked=$baked in ${ms(baking)} ms drawn=$drawn | cards composed=$composed in ${ms(composing)} ms | heap=${heap} MB",
+                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | ${switched()} | shadows made=$made baked=$baked in ${ms(baking)} ms drawn=$drawn | cards composed=$composed in ${ms(composing)} ms | heap=${heap} MB | ${Clocks.now()}",
         )
         frames.clear()
         phases.fill(0)
