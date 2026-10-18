@@ -294,6 +294,7 @@
     <string name="tv_setting_probe_bar">Barre du haut</string>
     <string name="tv_setting_probe_band_glow">Halo des tuiles du bandeau</string>
     <string name="tv_setting_probe_fan_shadows">Ombres des affiches en éventail</string>
+    <string name="tv_setting_probe_pictures_ahead">Images chargées d\'avance</string>
     <string name="tv_setting_probe_bench">Mesurer l\'écran suivant</string>
     <string name="tv_probe_bench_waiting">En attente</string>
     <string name="tv_setting_probe_tour">Lancer le parcours de mesure</string>

@@ -85,6 +85,7 @@ private val PROBE_PARTS = listOf(
     Part.Bar to R.string.tv_setting_probe_bar,
     Part.BandGlow to R.string.tv_setting_probe_band_glow,
     Part.FanShadows to R.string.tv_setting_probe_fan_shadows,
+    Part.PicturesAhead to R.string.tv_setting_probe_pictures_ahead,
 )
 
 /** The lengths offered for a step of the player, or the way back on

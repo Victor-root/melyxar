@@ -66,6 +66,7 @@ import app.melyxar.tv.howFarIn
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Badge
+import app.melyxar.tv.look.Drawn
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
@@ -74,6 +75,7 @@ import app.melyxar.tv.look.PillShape
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.calm
+import app.melyxar.tv.look.rememberFetchAhead
 import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.probe.probed
@@ -91,6 +93,16 @@ private const val EACH_STANDS_FOR_MS = 9_000L
 
 /** The crossfade from one work of the banner to the next. */
 private const val CROSSFADE_MS = 700
+
+/** How wide a work's picture and its title's logo are drawn in the banner. */
+private val BACKDROP_ACROSS = 960.dp
+private val LOGO_ACROSS = 300.dp
+
+/** What the banner draws of [work]: its picture, and its title's logo. */
+fun bannerDrawnOf(work: WithCard<HeroMore>): List<Drawn> =
+    listOf(Drawn(backdropOf(work), BACKDROP_ACROSS), Drawn(work.more.logo, LOGO_ACROSS))
+
+private fun backdropOf(work: WithCard<HeroMore>) = work.more.backdrop.ifEmpty { work.card.wide }
 
 /**
  * The banner of the home screen, as the web's: a few works one after the
@@ -121,6 +133,13 @@ fun Hero(
         if (items.size > 1) {
             delay(EACH_STANDS_FOR_MS)
             step(1)
+        }
+    }
+    // The next work's pictures, while this one stands, so it comes in whole.
+    val fetchAhead = rememberFetchAhead()
+    LaunchedEffect(items, at) {
+        if (items.size > 1) {
+            fetchAhead(bannerDrawnOf(items[(at + 1) % items.size]))
         }
     }
     LaunchedEffect(at) {
@@ -186,8 +205,8 @@ private fun Backdrop(work: WithCard<HeroMore>) {
         }
     }) {
         ServerPicture(
-            work.more.backdrop.ifEmpty { work.card.wide },
-            960.dp,
+            backdropOf(work),
+            BACKDROP_ACROSS,
             Modifier.fillMaxSize(),
             alignment = WhereABandIsCut,
         )
@@ -256,8 +275,8 @@ private fun Words(
         if (more.logo.isNotEmpty()) {
             ServerPicture(
                 more.logo,
-                300.dp,
-                Modifier.heightIn(max = 56.dp).widthIn(max = 300.dp),
+                LOGO_ACROSS,
+                Modifier.heightIn(max = 56.dp).widthIn(max = LOGO_ACROSS),
                 contentScale = ContentScale.Fit,
                 alignment = Alignment.CenterStart,
             )

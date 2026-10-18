@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,15 +36,29 @@ import app.melyxar.server.albums
 import app.melyxar.tv.WatchNext
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.CardGap
+import app.melyxar.tv.look.Drawn
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.WideWidth
+import app.melyxar.tv.look.rememberFetchAhead
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** How many of the newest albums are asked for, for the tile of music to
  *  find covers among. */
 private const val COVERS_ASKED = 10
+
+/** How many cards of each row are fetched before the home screen first
+ *  shows: more than a row shows at once. */
+private const val CARDS_AHEAD = 10
+
+/** The longest the home screen waits on its pictures the first time. */
+private const val AHEAD_AT_MOST_MS = 4_000L
+
+/** Whether the home screen has been shown since the app started: only the
+ *  first time does it wait for its pictures. */
+private var shownOnce = false
 
 /**
  * The home screen, as the web's: the banner, the band of libraries, and the
@@ -76,11 +91,21 @@ fun HomeScreen(comebacks: Int) {
     LaunchedEffect(home) {
         home?.let { WatchNext(context).show(api, it.carryOn) }
     }
+    // The first time, the ring turns on while the pictures of the banner and
+    // the rows come into memory: drawn from there, they come at once.
+    val fetchAhead = rememberFetchAhead()
+    var shown by remember { mutableStateOf(shownOnce) }
+    LaunchedEffect(home) {
+        home ?: return@LaunchedEffect
+        withTimeoutOrNull(AHEAD_AT_MOST_MS) { fetchAhead(drawnOn(home)) }
+        shownOnce = true
+        shown = true
+    }
     val open = { card: Card -> chrome.go(Place.Opened(card.id)) }
     val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
         when {
-            home != null -> ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
+            home != null && shown -> ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
                 LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                     item("top") {
                         Box(Modifier.head(head, "top")) {
@@ -110,8 +135,14 @@ fun HomeScreen(comebacks: Int) {
             }
         }
     }
-    RestoreFocus(memory, if (home?.hero.isNullOrEmpty()) firstLibrary else first, ready = home != null, orElse = first)
+    RestoreFocus(memory, if (home?.hero.isNullOrEmpty()) firstLibrary else first, ready = home != null && shown, orElse = first)
 }
+
+/** What [home] draws first: its banner's first two works, and the first
+ *  cards of each of its rows. */
+private fun drawnOn(home: Home): List<Drawn> =
+    home.hero.take(2).flatMap(::bannerDrawnOf) +
+        home.sections.flatMap { section -> cardsIn(section, home).take(CARDS_AHEAD).map { it.drawn(liesIn(section)) } }
 
 private fun LazyListScope.sections(
     home: Home,
@@ -125,8 +156,8 @@ private fun LazyListScope.sections(
         when (laid) {
             is Laid.One -> section(laid.section, home, newestAlbums, open, memory, band, firstLibrary)
             is Laid.Two -> {
-                val first = cardsOf(laid.first, home)
-                val second = cardsOf(laid.second, home)
+                val first = cardsIn(laid.first, home).size
+                val second = cardsIn(laid.second, home).size
                 if (first == 0 || second == 0) {
                     section(laid.first, home, newestAlbums, open, memory, band, firstLibrary)
                     section(laid.second, home, newestAlbums, open, memory, band, firstLibrary)
@@ -140,8 +171,17 @@ private fun LazyListScope.sections(
     }
 }
 
-/** How many cards a row of what is under way holds. */
-private fun cardsOf(section: String, home: Home): Int = if (section == "carry_on") home.carryOn.size else home.upNext.size
+/** The cards of the row [section], none for the band. */
+private fun cardsIn(section: String, home: Home): List<Card> = when {
+    section == "carry_on" -> home.carryOn.map { it.card }
+    section == "up_next" -> home.upNext.map { it.card }
+    section == "recently_added" -> home.recentlyAdded
+    section.startsWith("newest:") -> home.shelves.firstOrNull { it.kind == section.removePrefix("newest:") }?.cards.orEmpty()
+    else -> emptyList()
+}
+
+/** Whether the cards of the row [section] lie down, their stills shown. */
+private fun liesIn(section: String) = section == "carry_on" || section == "up_next" || section == "newest:home_media"
 
 /**
  * The two rows of what is under way on one line while both hold on it, as
@@ -198,7 +238,7 @@ private fun LazyListScope.section(
                 Band(home.shelves, newestAlbums, chrome.libraries, home.kindOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory, firstLibrary)
             }
         }
-        section == "carry_on" || section == "up_next" -> if (cardsOf(section, home) > 0) {
+        section == "carry_on" || section == "up_next" -> if (cardsIn(section, home).isNotEmpty()) {
             item(section) { UnderWay(section, home, open, memory, Modifier) }
         }
         section == "recently_added" -> section(section, home.recentlyAdded) {
@@ -208,12 +248,12 @@ private fun LazyListScope.section(
         }
         section.startsWith("newest:") -> {
             val kind = section.removePrefix("newest:")
-            val cards = home.shelves.firstOrNull { it.kind == kind }?.cards.orEmpty()
+            val cards = cardsIn(section, home)
             section(section, cards) {
                 CardRow(newestOfKind(kind), Icons.ofKind(kind), cards, key = { it.id }) { card ->
                     WorkCard(
                         card,
-                        lying = kind == "home_media",
+                        lying = liesIn(section),
                         onClick = { open(card) },
                         modifier = Modifier.remembered(memory, "$section/${card.id}"),
                     )
@@ -232,7 +272,7 @@ private fun UnderWay(section: String, home: Home, open: (Card) -> Unit, memory: 
             val at = LocalMarks.current.whereabouts(card).resume?.toDouble() ?: 0.0
             WorkCard(
                 card = card,
-                lying = true,
+                lying = liesIn(section),
                 title = row.more.seriesTitle ?: card.title,
                 note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, card.title),
                 trailing = whatIsLeft(at, lengthOfAPlay(card)),
@@ -244,7 +284,7 @@ private fun UnderWay(section: String, home: Home, open: (Card) -> Unit, memory: 
         CardRow(stringResource(R.string.tv_up_next), Icons.Binoculars, home.upNext, key = { it.card.id }, modifier = modifier) { row ->
             WorkCard(
                 card = row.card,
-                lying = true,
+                lying = liesIn(section),
                 title = row.more.seriesTitle ?: row.card.title,
                 note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, row.card.title),
                 onClick = { open(row.card) },

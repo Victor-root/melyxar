@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import coil3.memory.MemoryCache
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -38,6 +39,7 @@ enum class Part(val byDefault: Boolean) {
     Bar(true),
     BandGlow(true),
     FanShadows(true),
+    PicturesAhead(true),
 }
 
 /** Drawn only while [part] is, read as it draws so the bench leaves it out
@@ -52,6 +54,7 @@ object Probe {
     private const val TAG_SCREEN = "MlxPerf.Screen"
     private const val TAG_BENCH = "MlxPerf.Bench"
     private const val TAG_TOUR = "MlxPerf.Tour"
+    private const val TAG_AHEAD = "MlxPerf.Ahead"
     private const val KEPT = "probe"
     private const val NS_PER_MS = 1_000_000.0
     private const val RECENT = 120
@@ -434,6 +437,13 @@ object Probe {
     fun pictureShown(source: String) {
         picturesSinceFrame.incrementAndGet()
         (if (source == "MEMORY_CACHE") picturesFromMemory else picturesFaded).incrementAndGet()
+    }
+
+    /** [pictures] fetched into memory ahead of the screen in [took] ms, and
+     *  how full that leaves the memory kept for pictures. */
+    fun fetchedAhead(pictures: Int, took: Long, memory: MemoryCache?) {
+        val mb = 1024 * 1024
+        Log.i(TAG_AHEAD, "$pictures pictures in $took ms, memory ${memory?.size?.div(mb)} of ${memory?.maxSize?.div(mb)} MB")
     }
 
     /** A piece's lighting or fading starting, by 1, or ending, by -1. */

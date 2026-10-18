@@ -290,6 +290,7 @@
     <string name="tv_setting_probe_bar">Top bar</string>
     <string name="tv_setting_probe_band_glow">Band tile glow</string>
     <string name="tv_setting_probe_fan_shadows">Fanned poster shadows</string>
+    <string name="tv_setting_probe_pictures_ahead">Pictures fetched ahead</string>
     <string name="tv_setting_probe_bench">Measure the next screen</string>
     <string name="tv_probe_bench_waiting">Waiting</string>
     <string name="tv_setting_probe_tour">Run the measuring tour</string>
