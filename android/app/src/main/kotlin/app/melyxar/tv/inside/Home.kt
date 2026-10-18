@@ -1,5 +1,6 @@
 package app.melyxar.tv.inside
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -56,6 +58,10 @@ private const val CARDS_AHEAD = 10
 /** The longest the home screen waits on its pictures the first time. */
 private const val AHEAD_AT_MOST_MS = 4_000L
 
+/** How many frames the page is drawn under the ring before it shows: its
+ *  first, and the lighting of what the remote lands on. */
+private const val FRAMES_UNDER_THE_RING = 24
+
 /** Whether the home screen has been shown since the app started: only the
  *  first time does it wait for its pictures. */
 private var shownOnce = false
@@ -92,20 +98,29 @@ fun HomeScreen(comebacks: Int) {
         home?.let { WatchNext(context).show(api, it.carryOn) }
     }
     // The first time, the ring turns on while the pictures of the banner and
-    // the rows come into memory: drawn from there, they come at once.
+    // the rows come into memory, then while the page is drawn under it, the
+    // remote already on it: the graphics card does its first drawing of each
+    // piece, and of a piece lit, out of sight, and the page comes smooth.
     val fetchAhead = rememberFetchAhead()
+    var fetched by remember { mutableStateOf(shownOnce) }
     var shown by remember { mutableStateOf(shownOnce) }
     LaunchedEffect(home) {
         home ?: return@LaunchedEffect
         withTimeoutOrNull(AHEAD_AT_MOST_MS) { fetchAhead(drawnOn(home)) }
-        shownOnce = true
-        shown = true
+        fetched = true
+    }
+    LaunchedEffect(fetched) {
+        if (fetched && !shown) {
+            repeat(FRAMES_UNDER_THE_RING) { withFrameNanos {} }
+            shownOnce = true
+            shown = true
+        }
     }
     val open = { card: Card -> chrome.go(Place.Opened(card.id)) }
     val list = rememberLazyListState()
     Box(Modifier.fillMaxSize()) {
-        when {
-            home != null && shown -> ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
+        if (home != null && fetched) {
+            ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
                 LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                     item("top") {
                         Box(Modifier.head(head, "top")) {
@@ -128,14 +143,17 @@ fun HomeScreen(comebacks: Int) {
                     sections(home, newestAlbums, open, memory, band, firstLibrary)
                 }
             }
-            loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
-            else -> {
+        }
+        if (loaded is Loaded.Failed) {
+            Trouble(onRetry = { tries += 1 })
+        } else if (home == null || !shown) {
+            Box(Modifier.fillMaxSize().background(LocalPalette.current.ground)) {
                 TopBar()
                 ArrivalLoader(Modifier.align(Alignment.Center))
             }
         }
     }
-    RestoreFocus(memory, if (home?.hero.isNullOrEmpty()) firstLibrary else first, ready = home != null && shown, orElse = first)
+    RestoreFocus(memory, if (home?.hero.isNullOrEmpty()) firstLibrary else first, ready = home != null && fetched, orElse = first)
 }
 
 /** What [home] draws first: its banner's first two works, and the first
