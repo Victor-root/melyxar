@@ -27,5 +27,11 @@ object PictureProbe : EventListener() {
         Log.w(TAG, "failed in ${took(request)} ms ${request.data}: ${result.throwable}")
     }
 
+    /** A picture no longer wanted, the screen asking for it gone: forgotten
+     *  too, or every one asked for and left was held for good. */
+    override fun onCancel(request: ImageRequest) {
+        started.remove(request)
+    }
+
     private fun took(request: ImageRequest) = started.remove(request)?.let { SystemClock.uptimeMillis() - it } ?: -1
 }

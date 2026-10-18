@@ -61,6 +61,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import app.melyxar.player.boundedLoading
 import app.melyxar.R
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.LocalChrome
@@ -113,6 +114,7 @@ fun TrailerScreen(title: String, url: String) {
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
             .setAudioAttributes(sound, true)
             .setHandleAudioBecomingNoisy(true)
+            .setLoadControl(boundedLoading())
             .build()
             .apply {
                 setMediaItem(MediaItem.fromUri(api.address(url)))
