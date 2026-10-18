@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.melyxar.server.Api
 import app.melyxar.server.Thumbnails
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
@@ -62,8 +63,8 @@ fun Thumbnails.heightAt(across: Dp): Dp = if (width > 0) across * height / width
 
 /**
  * The thumbnail covering [seconds], cut out of its sheet and drawn [across]
- * wide. Nothing until it is in: an empty box where a picture should be says
- * the player is broken, and it is not.
+ * wide. The one before stays until it is in: nothing at all where a picture
+ * should be says the player is broken, and it is not.
  */
 @Composable
 fun Thumbnail(thumbnails: Thumbnails, seconds: Double, across: Dp, modifier: Modifier = Modifier) {
@@ -82,9 +83,25 @@ fun FetchingThumbnails(thumbnails: Thumbnails, moments: List<Double>) {
     val api = LocalServer.current
     val sheets = LocalSheets.current
     LaunchedEffect(sheets, thumbnails, moments) {
-        moments.mapNotNull { thumbnails.spotAt(it) }.distinct().forEach { sheets.tile(api.address("${thumbnails.url}/${it.sheet}.jpg"), it, thumbnails) }
+        moments.mapNotNull { thumbnails.spotAt(it) }.distinct().forEach { sheets.tile(api.sheetOf(thumbnails, it.sheet), it, thumbnails) }
     }
 }
+
+/** Every sheet of [thumbnails] brought onto the device, not decoded: going
+ *  anywhere on the bar then costs only the reading of one. */
+@Composable
+fun FetchingSheets(thumbnails: Thumbnails) {
+    val api = LocalServer.current
+    val sheets = LocalSheets.current
+    LaunchedEffect(sheets, thumbnails) {
+        repeat(thumbnails.sheetsCounted()) { sheets.bringOver(api.sheetOf(thumbnails, it)) }
+    }
+}
+
+/** How many sheets the thumbnails take. */
+fun Thumbnails.sheetsCounted(): Int = (columns * rows).takeIf { it > 0 }?.let { (counted + it - 1) / it } ?: 0
+
+private fun Api.sheetOf(thumbnails: Thumbnails, sheet: Int): String = address("${thumbnails.url}/$sheet.jpg")
 
 /** How many sheets are kept decoded: the one the bar's picture is cut from,
  *  and the one it was cut from before, as the bar goes back and forth. */
@@ -93,6 +110,10 @@ private const val SHEETS_KEPT = 2
 /** How many thumbnails are kept cut out: a page's row of chapters and the
  *  player's, with the bar's last ones. */
 private const val TILES_KEPT = 48
+
+/** How wide a sheet brought over ahead is read, the reading being only the
+ *  way it lands on the device. */
+private const val BROUGHT_OVER_PX = 64
 
 /** A map keeping only the [most] last used of its entries. */
 private fun <K, V> lastUsed(most: Int) = object : LinkedHashMap<K, V>(most, 0.75f, true) {
@@ -108,20 +129,32 @@ private fun <K, V> lastUsed(most: Int) = object : LinkedHashMap<K, V>(most, 0.75
  */
 private class Sheets(private val pictures: ImageLoader, private val context: Context, private val scope: CoroutineScope) {
     private val sheets = lastUsed<String, Deferred<Bitmap?>>(SHEETS_KEPT)
-    private val tiles = lastUsed<Pair<String, Spot>, Deferred<ImageBitmap?>>(TILES_KEPT)
+    private val tiles = lastUsed<Pair<String, Spot>, ImageBitmap>(TILES_KEPT)
     private val cutting = Mutex()
 
-    /** The thumbnail at [spot] of the sheet at [address], cut unless it is
-     *  kept or on its way. */
-    fun tile(address: String, spot: Spot, thumbnails: Thumbnails): Deferred<ImageBitmap?> = tiles.getOrPut(address to spot) {
-        scope.async {
-            val cut = cutting.withLock {
-                sheet(address).await()?.let { sheet -> withContext(Dispatchers.Default) { cutOut(sheet, spot, thumbnails) } }
-            }
-            // One that did not come is asked again the next time.
-            if (cut == null) tiles.remove(address to spot)
-            cut
-        }
+    /**
+     * The thumbnail at [spot] of the sheet at [address], cut unless it is
+     * kept. Waiting its turn only while it is still wanted: the bar running
+     * past a hundred thumbnails asks for each, and cutting those it has
+     * already left kept the one it stopped on waiting behind them.
+     */
+    suspend fun tile(address: String, spot: Spot, thumbnails: Thumbnails): ImageBitmap? = tiles[address to spot] ?: cutting.withLock {
+        tiles[address to spot] ?: sheet(address).await()
+            ?.let { sheet -> withContext(Dispatchers.Default) { cutOut(sheet, spot, thumbnails) } }
+            ?.also { tiles[address to spot] = it }
+    }
+
+    /** The sheet at [address] onto the device, as small as it can be read
+     *  to get there: what is kept on the device is the file itself. */
+    suspend fun bringOver(address: String) {
+        pictures.execute(
+            ImageRequest.Builder(context)
+                .data(address)
+                .size(BROUGHT_OVER_PX)
+                .allowHardware(false)
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .build(),
+        )
     }
 
     /** The sheet at [address], fetched unless it is kept or on its way. */
@@ -175,8 +208,6 @@ private fun rememberTile(thumbnails: Thumbnails, spot: Spot): State<ImageBitmap?
     val api = LocalServer.current
     val sheets = LocalSheets.current
     return produceState(null, thumbnails, spot) {
-        // The one before stays out: its picture is not this one's.
-        value = null
-        value = sheets.tile(api.address("${thumbnails.url}/${spot.sheet}.jpg"), spot, thumbnails).await()
+        sheets.tile(api.sheetOf(thumbnails, spot.sheet), spot, thumbnails)?.let { value = it }
     }
 }
