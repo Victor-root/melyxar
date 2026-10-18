@@ -280,6 +280,11 @@
     <string name="tv_setting_sound_out">Sound the television cannot decode</string>
     <string name="tv_sound_decoded">Converted by the server, volume adjustable</string>
     <string name="tv_sound_passed_on">Sent as it is to the receiver</string>
+    <string name="tv_settings_probe">Smoothness test</string>
+    <string name="tv_setting_probe_shadows">Shadows</string>
+    <string name="tv_probe_shadows_normal">Normal</string>
+    <string name="tv_probe_shadows_hard">Without blur</string>
+    <string name="tv_probe_shadows_none">None</string>
     <plurals name="tv_seconds">
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>

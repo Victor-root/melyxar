@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withSave
 import app.melyxar.theme.Palette
+import app.melyxar.tv.probe.Probe
+import app.melyxar.tv.probe.ShadowTest
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -120,11 +122,17 @@ private class BoxShadowNode(
             make()
         }
         val strength = shown()
-        if (strength > 0f) {
+        val test = Probe.shadows
+        if (strength > 0f && test != ShadowTest.None) {
+            Probe.shadowDrawn()
             drawIntoCanvas { canvas ->
                 canvas.nativeCanvas.withSave {
                     clipOutPath(piece)
                     layers.forEach { layer ->
+                        val blur = if (test == ShadowTest.Hard) null else layer.blur
+                        if (layer.paint.maskFilter !== blur) {
+                            layer.paint.maskFilter = blur
+                        }
                         layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
                         drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
                     }
@@ -135,6 +143,7 @@ private class BoxShadowNode(
     }
 
     private fun DrawScope.make() {
+        Probe.shadowMade()
         val outline = shape.createOutline(size, layoutDirection, this)
         val corner = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
         piece = android.graphics.Path().apply {
@@ -148,16 +157,22 @@ private class BoxShadowNode(
                 box = RectF(x - spread, y - spread, size.width + x + spread, size.height + y + spread),
                 corner = max(0f, corner + spread),
                 alpha = shadow.color.alpha,
+                blur = blurOf(shadow.blur.toPx())?.let { BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) },
                 paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                     color = shadow.color.toArgb()
-                    blurOf(shadow.blur.toPx())?.let { maskFilter = BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) }
                 },
             )
         }
     }
 }
 
-private class DrawnShadow(val box: RectF, val corner: Float, val alpha: Float, val paint: android.graphics.Paint)
+private class DrawnShadow(
+    val box: RectF,
+    val corner: Float,
+    val alpha: Float,
+    val blur: BlurMaskFilter?,
+    val paint: android.graphics.Paint,
+)
 
 /** The size, density and direction what a piece's drawing works out was
  *  made for, to make it again only once one of them moves. */

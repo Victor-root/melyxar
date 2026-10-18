@@ -27,6 +27,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
+import app.melyxar.tv.probe.Probe
 import kotlinx.coroutines.launch
 
 /*
@@ -52,6 +53,7 @@ fun litBy(interaction: InteractionSource): State<Float> {
                 else -> return@collect
             }
             val target = if (focuses.isEmpty()) 0f else 1f
+            Probe.litStarted()
             launch { lit.animateTo(target, calm()) }
         }
     }
