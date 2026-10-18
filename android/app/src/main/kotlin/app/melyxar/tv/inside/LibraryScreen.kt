@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -47,10 +52,14 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.PillShape
 import app.melyxar.tv.look.PlainButton
+import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.litPast
+import app.melyxar.tv.look.rim
 import java.io.IOException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** The orders a grid can be read in, as the web offers them. */
@@ -110,46 +119,46 @@ fun LibraryScreen(library: Library, comebacks: Int) {
             val index = works.cards.orEmpty().indexOfFirst { it.id == opening.id }
             // The grid's head comes before its cards.
             grid.scrollToItem(index + 1)
-            withFrameNanos {}
+            // The card can only take the remote once the grid has laid it out.
+            snapshotFlow { grid.layoutInfo.visibleItemsInfo.any { it.key == opening.id } }.first { it }
             memory.requester(opening.id).requestFocus()
         }
     }
 
     val letters = filters?.initials.orEmpty().map { it.name }.takeIf { order == "title" && it.size > 1 }
     Box(Modifier.fillMaxSize()) {
-        WorksGrid(
-            works = works,
-            lying = library.kind == "home_media",
-            empty = stringResource(R.string.tv_empty_library),
-            memory = memory,
-            grid = grid,
-            onOpen = { chrome.go(Place.Opened(it.id)) },
-            firstCard = first,
-            onReach = { card -> at = card.initial },
-        ) {
-            Column {
-                // The grid keeps the page's margin already.
-                TopBar(inset = Gutter) { BarTitle(Icons.ofKind(library.kind), library.name, library.works) }
-                SortAndFilters(
-                    order = order,
-                    descending = descending,
-                    genre = genre,
-                    decade = decade,
-                    filters = filters,
-                    memory = memory,
-                    onPick = { picking = it },
-                    onTurn = { descending = !descending },
-                )
+        // The letters beside the grid rather than over it: drawn over it, the
+        // grid stood under them too, and nothing was ever to their left.
+        Row(Modifier.fillMaxSize()) {
+            WorksGrid(
+                works = works,
+                lying = library.kind == "home_media",
+                empty = stringResource(R.string.tv_empty_library),
+                memory = memory,
+                grid = grid,
+                onOpen = { chrome.go(Place.Opened(it.id)) },
+                modifier = Modifier.weight(1f),
+                firstCard = first,
+                onReach = { card -> at = card.initial },
+            ) {
+                Column {
+                    // The grid keeps the page's margin already.
+                    TopBar(inset = Gutter) { BarTitle(Icons.ofKind(library.kind), library.name, library.works) }
+                    SortAndFilters(
+                        order = order,
+                        descending = descending,
+                        genre = genre,
+                        decade = decade,
+                        filters = filters,
+                        memory = memory,
+                        onPick = { picking = it },
+                        onTurn = { descending = !descending },
+                    )
+                }
             }
-        }
-        letters?.let {
-            Letters(
-                it,
-                current = at,
-                onJump = ::jump,
-                // In the page's margin, beside the grid rather than over it.
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 78.dp, end = 2.dp),
-            )
+            letters?.let {
+                Letters(it, current = at, onJump = ::jump, modifier = Modifier.padding(top = LETTERS_TOP, end = LETTERS_END, bottom = Gutter))
+            }
         }
         when (picking) {
             Picking.Order -> ChoiceList(
@@ -243,44 +252,70 @@ private fun orderName(order: String): String = stringResource(
 @Composable
 private fun decadeName(decade: Int): String = stringResource(R.string.tv_decade_name, decade)
 
+/** Where the letters stand: level with the top of the grid, and just in
+ *  from the edge of the screen. */
+private val LETTERS_TOP = 78.dp
+private val LETTERS_END = 8.dp
+
+/** How tall a letter is at the most and at the least, and how wide. */
+private val LETTER_TALLEST = 26.dp
+private val LETTER_SHORTEST = 15.dp
+private val LETTER_WIDE = 28.dp
+
+/** The rail's own padding, around its letters. */
+private val RAIL_ACROSS = 4.dp
+private val RAIL_DOWN = 6.dp
+
 /**
  * The letters the library's titles start with, down the side of the grid as
- * the web's rail, the one the remote is under lit: choosing one brings its
- * first work to the remote.
+ * the web's rail: a piece of the bar's glass, always whole on the screen,
+ * each letter given an equal share of its height. The letter of the titles
+ * the remote is on is filled with the accent; choosing one brings its first
+ * work to the remote.
  */
 @Composable
 private fun Letters(letters: List<String>, current: String?, onJump: (String) -> Unit, modifier: Modifier) {
     val said = stringResource(R.string.tv_letters)
-    Column(modifier.semantics { contentDescription = said }, horizontalAlignment = Alignment.CenterHorizontally) {
-        letters.forEach { letter ->
-            Letter(letter, current = letter.equals(current, ignoreCase = true), onClick = { onJump(letter) })
+    BoxWithConstraints(modifier) {
+        val tall = ((maxHeight - RAIL_DOWN * 2) / letters.size).coerceIn(LETTER_SHORTEST, LETTER_TALLEST)
+        Column(
+            Modifier
+                .semantics { contentDescription = said }
+                .glassPiece(RoundedCornerShape(18.dp))
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = RAIL_ACROSS, vertical = RAIL_DOWN),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            letters.forEach { letter ->
+                Letter(letter, tall, current = letter.equals(current, ignoreCase = true), onClick = { onJump(letter) })
+            }
         }
     }
 }
 
 @Composable
-private fun Letter(letter: String, current: Boolean, onClick: () -> Unit) {
+private fun Letter(letter: String, tall: Dp, current: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val bright = litPast({ lit })
-    val shape = RoundedCornerShape(5.dp)
     Box(
         modifier = Modifier
-            .size(Gutter - 4.dp, 16.dp)
-            .clip(shape)
-            .drawBehind { drawRect(palette.accent.copy(alpha = lit)) }
+            .size(LETTER_WIDE, tall)
+            .clip(PillShape)
+            .drawBehind { drawRect(if (current) palette.accent else palette.accent.copy(alpha = 0.22f * lit)) }
+            .rim(PillShape, if (current) palette.accentContrast else palette.accentBright, 1.5.dp, { lit })
             .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             letter.uppercase(),
-            fontSize = 11.sp,
+            fontSize = minOf(12f, tall.value * 0.6f).sp,
             fontWeight = FontWeight.SemiBold,
             color = when {
-                bright -> palette.accentContrast
-                current -> palette.accentBright
-                else -> palette.textFaint
+                current -> palette.accentContrast
+                bright -> palette.accentBright
+                else -> palette.textSoft
             },
         )
     }
