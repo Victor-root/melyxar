@@ -19,6 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -81,7 +82,22 @@ class FilmPlayer(
         get() = made ?: makePlayer().also {
             made = it
             picture.player = it
+            settled = false
+            throughEffects = false
         }
+
+    /**
+     * Whether [made] has shown a film, and whether it passes the picture
+     * through Media3's effects, which turn and light it. Media3 settles the
+     * second as a player first shows a film and holds to it for as long as
+     * that player lives: effects asked of a player that took the plain way
+     * show only on a new one, which takes the film over where it is.
+     */
+    private var settled = false
+    private var throughEffects = false
+
+    /** The film's address, for a new player to take it over. */
+    private var address: String? = null
 
     private val beat = Handler(Looper.getMainLooper())
 
@@ -231,9 +247,11 @@ class FilmPlayer(
             player.repeatMode = if (asked.loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             light(asked.brightness, asked.contrast)
             shape(asked.fit, asked.turn)
+            this.address = address
             player.setMediaSource(sourceOf(address), (asked.start * 1000).toLong())
             player.playWhenReady = asked.autoplay
             player.prepare()
+            settled = true
             picture.visibility = View.VISIBLE
             page.setBackgroundColor(Color.TRANSPARENT)
             onShown(true)
@@ -322,15 +340,55 @@ class FilmPlayer(
         }
     }
 
-    /** The picture turned and lit as the page asks. */
+    /** The picture turned and lit as the page asks, on a new player when
+     *  this one cannot. One with nothing to do takes the plain way. */
     private fun drawPicture() {
-        player.setVideoEffects(
-            buildList {
-                // Media3 turns the other way round from the page.
-                if (turn != 0) add(ScaleAndRotateTransformation.Builder().setRotationDegrees((360 - turn).toFloat()).build())
-                addAll(lightEffects(brightness, contrast))
-            },
-        )
+        val effects = buildList {
+            // Media3 turns the other way round from the page.
+            if (turn != 0) add(ScaleAndRotateTransformation.Builder().setRotationDegrees((360 - turn).toFloat()).build())
+            addAll(lightEffects(brightness, contrast))
+        }
+        val through = effects.isNotEmpty()
+        when {
+            through == throughEffects -> if (through) player.setVideoEffects(effects)
+            settled -> anotherPlayer(effects)
+            // Not yet shown a film: set now, or let go of for a plain one.
+            through -> {
+                player.setVideoEffects(effects)
+                throughEffects = true
+            }
+            else -> {
+                made?.release()
+                made = null
+            }
+        }
+    }
+
+    /** A new player taking the film over where it is, through the effects
+     *  when there are any. */
+    private fun anotherPlayer(effects: List<Effect>) {
+        val before = made ?: return
+        val at = before.currentPosition
+        val going = before.playWhenReady
+        val speed = before.playbackParameters.speed
+        val looping = before.repeatMode
+        // A film closed is not taken over: the next one opens on its own.
+        val showing = before.currentMediaItem != null
+        made = null
+        before.release()
+        player.apply {
+            if (effects.isNotEmpty()) setVideoEffects(effects)
+            throughEffects = effects.isNotEmpty()
+            volume = if (muted) 0f else this@FilmPlayer.volume
+            setPlaybackSpeed(speed)
+            repeatMode = looping
+            address?.takeIf { showing }?.let {
+                setMediaSource(sourceOf(it), at)
+                playWhenReady = going
+                prepare()
+                settled = true
+            }
+        }
     }
 
     private fun closeFilm() {
