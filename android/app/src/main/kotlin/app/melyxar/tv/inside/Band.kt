@@ -31,7 +31,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -131,12 +130,13 @@ fun Band(
 ) {
     val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
     val nearest = rememberRowScrolling()
+    val row = remember { RowMemory() }
     // Coming into the band lands on the tile it left, or on the first.
     CompositionLocalProvider(LocalBringIntoViewSpec provides nearest) {
         LazyRow(
             contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 20.dp, bottom = SectionGap),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.focusRestorer(first),
+            modifier = Modifier.landsAsLeft(row, kinds.firstOrNull()),
         ) {
             itemsIndexed(kinds, key = { _, kind -> kind }) { at, kind ->
                 val library = libraries.first { it.kind == kind }
@@ -151,6 +151,7 @@ fun Band(
                     onClick = { onOpen(library) },
                     modifier = Modifier
                         .remembered(memory, "band/$kind")
+                        .inRow(row, kind)
                         .then(if (at == 0) Modifier.focusRequester(first) else Modifier),
                 )
             }
