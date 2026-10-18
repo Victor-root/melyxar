@@ -161,6 +161,10 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
                     }
                 }
             }
+            // What the files hold, for those who look after them, at the very end.
+            if (chrome.account.isAdministrator) {
+                work.versions.forEach { version -> item("media/${version.id}") { MediaInfo(version, memory) } }
+            }
         }
     }
 }
