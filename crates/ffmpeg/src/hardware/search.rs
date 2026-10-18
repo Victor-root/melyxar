@@ -261,7 +261,7 @@ impl CardSearch {
         });
         card.can_scale = can_scale;
 
-        card.tone_mapping = self
+        (card.tone_mapping, card.tone_mapping_when_refused) = self
             .how_it_converts_colour(ffmpeg, &card, &floor, wide_gamut)
             .await;
 
@@ -275,7 +275,9 @@ impl CardSearch {
     }
 
     /// Establishes how the card converts wide gamut colour, trying what its
-    /// path offers best first and keeping the first that works.
+    /// path offers best first and keeping the first that works, and when that
+    /// one needs every picture to say how bright the film was mastered, the
+    /// next that works without it.
     ///
     /// The one trial that cannot be run on a picture made on the spot: it is
     /// run on the sample, which is a real wide gamut film down to the ten bits
@@ -286,11 +288,17 @@ impl CardSearch {
         card: &Card,
         floor: &str,
         wide_gamut: Option<&Sample>,
-    ) -> Option<ToneMapping> {
+    ) -> (Option<ToneMapping>, Option<ToneMapping>) {
         // Said once already, when the sample could not be made.
-        let sample = wide_gamut?;
+        let Some(sample) = wide_gamut else {
+            return (None, None);
+        };
 
+        let mut worked_so_far = Vec::new();
         for recipe in card.way.driver().recipes() {
+            if !worth_trying(&worked_so_far, *recipe) {
+                continue;
+            }
             let reads = recipe.read_in_its_trial();
             let chain = card.chain(Some(TRIAL_HEIGHT), Some(*recipe), reads).join(",");
             let (worked, said) = try_it(
@@ -308,10 +316,10 @@ impl CardSearch {
                 said,
             });
             if worked {
-                return Some(*recipe);
+                worked_so_far.push(*recipe);
             }
         }
-        None
+        kept_recipes(&worked_so_far)
     }
 
     /// Establishes whether the card lays a subtitle made of pictures onto a
@@ -443,6 +451,24 @@ impl Kept<'_> {
             Self::Borrowed(sample) => sample.path(),
         }
     }
+}
+
+/// Whether a recipe is still worth a trial, given those that worked before
+/// it: none once one is kept that converts every film, and only one that
+/// converts a film not saying how bright it was mastered once the kept one
+/// needs that.
+fn worth_trying(worked_so_far: &[ToneMapping], recipe: ToneMapping) -> bool {
+    match worked_so_far {
+        [] => true,
+        [first] => first.needs_the_mastering_data() && !recipe.needs_the_mastering_data(),
+        _ => false,
+    }
+}
+
+/// The recipe a card keeps, and the one it falls back on for a film the
+/// first refuses, out of those that worked in the order they were tried.
+fn kept_recipes(worked: &[ToneMapping]) -> (Option<ToneMapping>, Option<ToneMapping>) {
+    (worked.first().copied(), worked.get(1).copied())
 }
 
 #[cfg(test)]
@@ -605,5 +631,25 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn a_card_whose_own_filter_converts_is_also_proved_on_a_way_that_needs_less() {
+        let own = ToneMapping::OwnFilter;
+        let vulkan = ToneMapping::VulkanBesideTheCard { vulkan_reads: true };
+        let vulkan_beside = ToneMapping::VulkanBesideTheCard {
+            vulkan_reads: false,
+        };
+
+        assert!(worth_trying(&[], own));
+        assert!(worth_trying(&[own], vulkan));
+        assert!(!worth_trying(&[own, vulkan], vulkan_beside));
+        assert!(!worth_trying(&[vulkan], vulkan_beside));
+        assert_eq!(
+            kept_recipes(&[own, vulkan_beside]),
+            (Some(own), Some(vulkan_beside))
+        );
+        assert_eq!(kept_recipes(&[vulkan]), (Some(vulkan), None));
+        assert_eq!(kept_recipes(&[]), (None, None));
     }
 }

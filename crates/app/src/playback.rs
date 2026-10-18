@@ -1052,20 +1052,23 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
                 &handed_up, plan, painted_on,
             )?));
         }
-        // The card's own conversion filter refuses a film that said how bright
-        // it was mastered on its first picture only, from anywhere but that
-        // picture: the processor converts it, and the card still encodes.
-        let converts_with_its_own_filter = rebuild.card.as_ref().is_some_and(|card| {
-            card.tone_mapping == Some(melyxar_ffmpeg::ToneMapping::OwnFilter)
-        });
-        if plan.decision.tone_map && converts_with_its_own_filter {
-            let handed_up = PictureRebuild {
-                reads_the_film: false,
+        // The card converting colour its other way, still on the card, for
+        // the film its own filter refuses when started part way through.
+        if plan.decision.tone_map
+            && let Some(card) = rebuild
+                .card
+                .as_ref()
+                .and_then(|card| card.converting_the_other_way())
+        {
+            let other_way = PictureRebuild {
+                reads_the_film: codec_of(&plan.tracks)
+                    .is_some_and(|codec| card.reads_for(&codec, true)),
+                card: Some(card),
                 ..rebuild.clone()
             };
-            let mut encode = encode_for(&handed_up, plan, painted_on)?;
-            encode.colours_converted_first = true;
-            if_the_card_refuses.push(VideoOutput::Encode(encode));
+            if_the_card_refuses.push(VideoOutput::Encode(encode_for(
+                &other_way, plan, painted_on,
+            )?));
         }
         if_the_card_refuses.push(VideoOutput::Encode(encode_for(
             &read_by_the_processor(height_of(&plan.tracks), &plan.decision),
@@ -2630,6 +2633,7 @@ mod tests {
             decoders: codecs.iter().map(|codec| (*codec).to_string()).collect(),
             can_scale: true,
             tone_mapping: can_tone_map.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
+            tone_mapping_when_refused: None,
             picture_subtitle_layout: Some("bgra".to_string()),
         }
     }
@@ -3048,10 +3052,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_card_converting_with_its_own_filter_can_leave_the_colours_to_the_processor() {
+    async fn a_film_the_cards_own_filter_refuses_is_converted_the_cards_other_way() {
         // That filter refuses a film said to be bright only on its first
         // picture, from anywhere else in it: started from a chapter, such a
-        // film is converted on the processor and still encoded on the card.
+        // film is converted through Vulkan, still on the card.
         use melyxar_ffmpeg::command::VideoOutput;
 
         let (_directory, state, user_id, source_id) =
@@ -3073,10 +3077,16 @@ mod tests {
         )
         .await
         .expect("a plan");
+        let other_way = melyxar_ffmpeg::ToneMapping::VulkanBesideTheCard {
+            vulkan_reads: false,
+        };
         plan.decision.tone_map = true;
         plan.rebuild = Some(PictureRebuild {
             codec: "hevc".to_string(),
-            card: Some(a_card(&["h264", "hevc"], true)),
+            card: Some(melyxar_ffmpeg::Card {
+                tone_mapping_when_refused: Some(other_way),
+                ..a_card(&["h264", "hevc"], true)
+            }),
             reads_the_film: true,
             height: Some(1080),
             bitrate: None,
@@ -3088,8 +3098,9 @@ mod tests {
         let VideoOutput::Encode(last) = &recipe.if_the_card_refuses[1] else {
             panic!("the picture is rebuilt");
         };
-        assert!(last.colours_converted_first);
-        assert_eq!(last.card().map(|(_, reads)| reads), Some(false));
+        let (card, reads) = last.card().expect("still on the card");
+        assert_eq!(card.tone_mapping, Some(other_way));
+        assert!(!reads, "Vulkan was not proved to read this film");
     }
 
     #[tokio::test]

@@ -115,15 +115,6 @@ pub struct VideoEncode {
     /// Not an option in practice: no browser shows wide gamut correctly today,
     /// so a picture left unconverted comes out washed out and grey.
     pub tone_map: bool,
-    /// On a card, convert the colours on the processor as it reads the film,
-    /// and hand the card a picture already in standard range to encode.
-    ///
-    /// For the card's own conversion filter, which refuses a picture that
-    /// does not say how bright it was mastered: many films say it on their
-    /// very first picture only, so a run set going part way through one has
-    /// never heard it, and the card refuses the film from any chapter while
-    /// it plays it from the beginning.
-    pub colours_converted_first: bool,
     /// Force a key frame at this interval, in milliseconds.
     ///
     /// This is what makes segments land on exact boundaries, which in turn is
@@ -182,7 +173,6 @@ impl VideoEncode {
             max_bitrate: None,
             scale_to_height: None,
             tone_map: false,
-            colours_converted_first: false,
             keyframe_interval: None,
             burn_in_subtitle: None,
             picture_size: None,
@@ -205,22 +195,10 @@ impl VideoEncode {
             max_bitrate: None,
             scale_to_height: None,
             tone_map: false,
-            colours_converted_first: false,
             keyframe_interval: None,
             burn_in_subtitle: None,
             picture_size: None,
         })
-    }
-
-    /// Whether the card converts the colours itself.
-    pub(crate) fn card_converts(&self) -> bool {
-        self.tone_map && !self.converted_on_the_processor_first()
-    }
-
-    /// Whether the processor reads the film and converts its colours before
-    /// the card is handed it.
-    fn converted_on_the_processor_first(&self) -> bool {
-        self.tone_map && self.colours_converted_first && self.card().is_some()
     }
 
     /// Whether what comes out is HEVC, whoever writes it.
@@ -574,7 +552,7 @@ impl Command {
         if let VideoOutput::Encode(encode) = &self.video
             && let Some((card, reads_the_film)) = encode.card()
         {
-            for argument in card.opening_arguments(reads_the_film, encode.card_converts()) {
+            for argument in card.opening_arguments(reads_the_film, encode.tone_map) {
                 push!(&argument);
             }
         }
@@ -975,39 +953,18 @@ pub(crate) const TONE_MAP_FILTER: &str = concat!(
 /// `until_it_comes_down` stops a card's chain where the picture comes down to
 /// the processor, for a subtitle laid there before it goes back up.
 fn picture_filter_chain(encode: &VideoEncode, until_it_comes_down: bool) -> Option<String> {
-    if encode.converted_on_the_processor_first()
-        && let Some((card, _)) = encode.card()
-    {
-        let mut filters = converted_in_software(encode);
-        filters.extend(match until_it_comes_down {
-            true => card.filters_until_it_comes_down(None, false, false),
-            false => card.filters_for(None, false, false),
-        });
-        return Some(filters.join(","));
-    }
-
     if let Some((card, reads_the_film)) = encode.card() {
         let filters = match until_it_comes_down {
             true => card.filters_until_it_comes_down(
                 encode.scale_to_height,
-                encode.card_converts(),
+                encode.tone_map,
                 reads_the_film,
             ),
-            false => card.filters_for(
-                encode.scale_to_height,
-                encode.card_converts(),
-                reads_the_film,
-            ),
+            false => card.filters_for(encode.scale_to_height, encode.tone_map, reads_the_film),
         };
         return (!filters.is_empty()).then(|| filters.join(","));
     }
 
-    let filters = converted_in_software(encode);
-    (!filters.is_empty()).then(|| filters.join(","))
-}
-
-/// The picture made smaller and its colours converted on the processor.
-fn converted_in_software(encode: &VideoEncode) -> Vec<String> {
     let mut filters: Vec<String> = Vec::new();
 
     // Made smaller first, converted afterwards. Converting colours is the most
@@ -1026,7 +983,7 @@ fn converted_in_software(encode: &VideoEncode) -> Vec<String> {
     if encode.tone_map {
         filters.push(TONE_MAP_FILTER.to_string());
     }
-    filters
+    (!filters.is_empty()).then(|| filters.join(","))
 }
 
 /// Builds the audio filter chain: loudness levelling, fold to stereo, gain,
@@ -1785,30 +1742,6 @@ mod tests {
             !filters.contains("zscale"),
             "converting colours on the processor is exactly the work the card exists to take: {filters}"
         );
-    }
-
-    #[test]
-    fn colours_converted_first_reach_the_card_already_in_standard_range() {
-        let mut encode =
-            VideoEncode::on_a_card(&a_card(), "hevc", false).expect("this card produces it");
-        encode.scale_to_height = Some(1080);
-        encode.tone_map = true;
-        encode.colours_converted_first = true;
-        let args = arguments(
-            &Command::new(
-                Input::new("/media/film.mkv"),
-                Output::File(PathBuf::from("/tmp/out.mp4")),
-            )
-            .with_video(VideoOutput::Encode(encode)),
-        );
-
-        let filters = &args[position(&args, "-vf").expect("a filter chain is present") + 1];
-        assert_eq!(
-            filters,
-            &format!("scale=-2:1080,{TONE_MAP_FILTER},format=nv12,hwupload")
-        );
-        assert!(!args.iter().any(|value| value == "-hwaccel"), "{args:?}");
-        assert!(args.iter().any(|value| value == "hevc_vaapi"), "{args:?}");
     }
 
     #[test]
