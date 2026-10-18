@@ -150,18 +150,18 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   const notice = refused ?? (offers.failure ? `lyrics_dialog.refused.${refusalOf(offers.failure)}` : null);
 
   return (
-    <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="lyrics-dialog">
-      <section className="lyrics-song" aria-label={t("lyrics_dialog.current")}>
+    <Modal title={t("lyrics_dialog.title", { title: song.title })} onClose={onClose} className="finder">
+      <section className="finder-head lyrics-song" aria-label={t("lyrics_dialog.current")}>
         <Cover song={song} />
-        <div className="lyrics-song-words">
-          <h3 className="lyrics-song-title">{song.title}</h3>
-          <span className="lyrics-song-by">
+        <div className="finder-head-words">
+          <h3 className="finder-head-title">{song.title}</h3>
+          <span className="finder-head-by">
             {[song.artists.map((artist) => artist.name).join(", "), song.album?.name]
               .filter((part) => part)
               .join(" · ")}
           </span>
           {!current.waiting && (
-            <div className="lyrics-song-state">
+            <div className="finder-head-state">
               {lyrics === null ? (
                 <span className="state-pill state-attention">{t("music.lyrics_none")}</span>
               ) : lyrics.instrumental && lyrics.plain === "" ? (
@@ -169,15 +169,15 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
               ) : (
                 <>
                   <span className="state-pill state-news">{t(`lyrics_dialog.origin.${lyrics.source}`)}</span>
-                  <span className={`state-pill${stamped ? " state-ok" : " lyrics-pill-plain"}`}>
+                  <span className={`state-pill${stamped ? " state-ok" : " finder-pill-plain"}`}>
                     {t(stamped ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
                   </span>
                 </>
               )}
               {stamped && !listeningRuns && lyrics.synchronised && (
-                <span className="lyrics-song-note">{syncSaid(t, language, lyrics.synchronised)}</span>
+                <span className="finder-head-note">{syncSaid(t, language, lyrics.synchronised)}</span>
               )}
-              {listeningRuns && <span className="lyrics-song-note">{t("lyrics_dialog.sync_running")}</span>}
+              {listeningRuns && <span className="finder-head-note">{t("lyrics_dialog.sync_running")}</span>}
             </div>
           )}
           {listeningRuns && listening?.ratio != null && (
@@ -186,14 +186,14 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
             </span>
           )}
         </div>
-        <div className="lyrics-song-side">
+        <div className="finder-head-side">
           {fileLength !== null && (
-            <span className="lyrics-length">
-              <span className="lyrics-length-name">{t("lyrics_dialog.file_length")}</span>
-              <span className="lyrics-length-time">{asPreciseClock(fileLength / 1000)}</span>
+            <span className="finder-figure">
+              <span className="finder-figure-name">{t("lyrics_dialog.file_length")}</span>
+              <span className="finder-figure-value">{asPreciseClock(fileLength / 1000)}</span>
             </span>
           )}
-          <div className="lyrics-song-actions">
+          <div className="finder-head-actions">
             {stamped &&
               (lyrics.synchronised?.conclusion === "aligned" && !listeningRuns ? (
                 <button
@@ -224,7 +224,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
             {lyrics?.source === "online" && (
               <button
                 type="button"
-                className="lyrics-forget"
+                className="finder-forget"
                 aria-label={t("lyrics_dialog.forget")}
                 title={t("lyrics_dialog.forget")}
                 onClick={forget}
@@ -237,7 +237,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
       </section>
 
       <form
-        className="search-pill lyrics-search"
+        className="search-pill finder-search lyrics-search"
         role="search"
         aria-label={t("lyrics_dialog.search")}
         onSubmit={(event) => {
@@ -266,40 +266,40 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
       {notice && <p className="notice">{t(notice)}</p>}
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
 
-      <div className="lyrics-offers" aria-busy={offers.waiting}>
-        {offers.waiting && found.length === 0 && <p className="lyrics-offers-quiet">{t("lyrics_dialog.searching")}</p>}
+      <div className="finder-offers" aria-busy={offers.waiting}>
+        {offers.waiting && found.length === 0 && <p className="finder-quiet">{t("lyrics_dialog.searching")}</p>}
         {!offers.waiting && !offers.failure && found.length === 0 && words.title.trim() !== "" && (
-          <p className="lyrics-offers-quiet">{t("lyrics_dialog.nothing")}</p>
+          <p className="finder-quiet">{t("lyrics_dialog.nothing")}</p>
         )}
         {found.map((offer) => {
           const gap = lengthGap(offer, fileLength);
           return (
-            <article key={offer.id} className={`lyrics-offer${taken === offer.id ? " lyrics-offer-taken" : ""}`}>
-              <div className="lyrics-offer-length">
-                <span className="lyrics-offer-time">
+            <article key={offer.id} className={`finder-offer${taken === offer.id ? " finder-offer-taken" : ""}`}>
+              <div className="finder-offer-lead">
+                <span className="finder-offer-lead-main">
                   {offer.duration_ms === null ? "?" : asPreciseClock(offer.duration_ms / 1000)}
                 </span>
                 {gap !== null && (
                   <span
-                    className={`lyrics-offer-gap${Math.abs(gap) <= SAME_LENGTH_MS ? " state-ok" : " state-attention"}`}
+                    className={`finder-offer-lead-note${Math.abs(gap) <= SAME_LENGTH_MS ? " state-ok" : " state-attention"}`}
                     title={t("lyrics_dialog.length_gap_why")}
                   >
                     {Math.round(gap / 100) === 0 ? t("lyrics_dialog.same_length") : `${shiftInSeconds(gap, language)} s`}
                   </span>
                 )}
               </div>
-              <div className="lyrics-offer-words">
-                <span className="lyrics-offer-title">{offer.title}</span>
-                <span className="lyrics-offer-by">
+              <div className="finder-offer-words">
+                <span className="finder-offer-title">{offer.title}</span>
+                <span className="finder-offer-by">
                   {offer.artist}
                   {offer.album ? ` · ${offer.album}` : ""}
                 </span>
-                <span className="lyrics-offer-marks">
+                <span className="finder-offer-marks">
                   {offer.instrumental ? (
                     <span className="state-pill state-news">{t("lyrics_dialog.instrumental")}</span>
                   ) : (
                     <>
-                      <span className={`state-pill${offer.synced ? " state-ok" : " lyrics-pill-plain"}`}>
+                      <span className={`state-pill${offer.synced ? " state-ok" : " finder-pill-plain"}`}>
                         {t(offer.synced ? "lyrics_dialog.synced" : "lyrics_dialog.plain")}
                       </span>
                       {offer.synced && <span>{t("lyrics_dialog.lines", { count: offer.synced_lines })}</span>}
@@ -317,7 +317,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
               ) : (
                 <button
                   type="button"
-                  className="button button-small lyrics-offer-take"
+                  className="button button-small"
                   disabled={busy !== null}
                   onClick={() => take(offer)}
                 >
