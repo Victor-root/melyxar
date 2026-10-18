@@ -1043,26 +1043,6 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
     // refusal would throw away most of what it was doing.
     let mut if_the_card_refuses = Vec::new();
     if let Some(rebuild) = plan.rebuild.as_ref().filter(|rebuild| rebuild.on_a_card()) {
-        // The card converting colour its other way first, still on the card:
-        // its own filter refuses a film started part way through the same
-        // way whoever reads the film, so asking it for less there is a wait
-        // for the same refusal.
-        if plan.decision.tone_map
-            && let Some(card) = rebuild
-                .card
-                .as_ref()
-                .and_then(|card| card.converting_the_other_way())
-        {
-            let other_way = PictureRebuild {
-                reads_the_film: codec_of(&plan.tracks)
-                    .is_some_and(|codec| card.reads_for(&codec, true)),
-                card: Some(card),
-                ..rebuild.clone()
-            };
-            if_the_card_refuses.push(VideoOutput::Encode(encode_for(
-                &other_way, plan, painted_on,
-            )?));
-        }
         if rebuild.reads_the_film {
             let handed_up = PictureRebuild {
                 reads_the_film: false,
@@ -2635,7 +2615,6 @@ mod tests {
             decoders: codecs.iter().map(|codec| (*codec).to_string()).collect(),
             can_scale: true,
             tone_mapping: can_tone_map.then_some(melyxar_ffmpeg::ToneMapping::OwnFilter),
-            tone_mapping_when_refused: None,
             picture_subtitle_layout: Some("bgra".to_string()),
         }
     }
@@ -3051,58 +3030,6 @@ mod tests {
         let mut kept = handed;
         keep_to_the_card(&mut kept);
         assert!(kept.if_the_card_refuses.is_empty());
-    }
-
-    #[tokio::test]
-    async fn a_film_the_cards_own_filter_refuses_is_converted_the_cards_other_way() {
-        // That filter refuses a film said to be bright only on its first
-        // picture, from anywhere else in it: started from a chapter, such a
-        // film is converted through Vulkan, still on the card.
-        use melyxar_ffmpeg::command::VideoOutput;
-
-        let (_directory, state, user_id, source_id) =
-            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
-                vec![video(id, "hevc", 2160), audio(id, "eac3", 6, true)]
-            })
-            .await;
-        let mut plan = plan(
-            &state,
-            &crate::an_ordinary_account(user_id),
-            &PlayRequest {
-                source_id,
-                profile: None,
-                audio_track_id: None,
-                subtitle: SubtitleAsked::Unsaid,
-                preferred_video_codec: None,
-                wide_gamut: None,
-            },
-        )
-        .await
-        .expect("a plan");
-        let other_way = melyxar_ffmpeg::ToneMapping::VulkanBesideTheCard {
-            vulkan_reads: false,
-        };
-        plan.decision.tone_map = true;
-        plan.rebuild = Some(PictureRebuild {
-            codec: "hevc".to_string(),
-            card: Some(melyxar_ffmpeg::Card {
-                tone_mapping_when_refused: Some(other_way),
-                ..a_card(&["h264", "hevc"], true)
-            }),
-            reads_the_film: true,
-            height: Some(1080),
-            bitrate: None,
-        });
-
-        let mut recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
-        keep_to_the_card(&mut recipe);
-        assert_eq!(recipe.if_the_card_refuses.len(), 2);
-        let VideoOutput::Encode(first) = &recipe.if_the_card_refuses[0] else {
-            panic!("the picture is rebuilt");
-        };
-        let (card, reads) = first.card().expect("still on the card");
-        assert_eq!(card.tone_mapping, Some(other_way));
-        assert!(!reads, "Vulkan was not proved to read this film");
     }
 
     #[tokio::test]
