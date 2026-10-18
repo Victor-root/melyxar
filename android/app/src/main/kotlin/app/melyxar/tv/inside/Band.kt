@@ -67,6 +67,7 @@ import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
+import app.melyxar.tv.probe.cardLayer
 import kotlinx.coroutines.flow.first
 
 /** As many covers as the other tiles fan out posters. */
@@ -180,6 +181,7 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
             .boxShadow(CardShape, BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 22.dp, spread = (-8).dp)) { 1f - lit }
             .boxShadow(CardShape, accentAir(palette.accent), accentBloom(palette.accent)) { lit }
             .clip(CardShape)
+            .cardLayer()
             // Laid out once for the tile; only the halo behind the fan is
             // drawn again as it lights.
             .drawWithCache {
