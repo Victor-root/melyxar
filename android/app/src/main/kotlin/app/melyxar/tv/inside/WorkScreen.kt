@@ -74,6 +74,7 @@ import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
+import app.melyxar.tv.look.keptReady
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
@@ -168,7 +169,9 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
 @Composable
 fun WorkBackdrop(pictures: List<Picture>) {
     val palette = LocalPalette.current
-    Box(Modifier.fillMaxSize().drawWithCache {
+    // Kept as one ready picture: its picture and its two shades are drawn
+    // once, not one over the other on every frame.
+    Box(Modifier.fillMaxSize().keptReady().drawWithCache {
         val words = Brush.horizontalGradient(
             0.18f to palette.ground,
             0.55f to palette.ground.copy(alpha = 0.7f),
