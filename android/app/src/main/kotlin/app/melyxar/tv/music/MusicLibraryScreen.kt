@@ -20,9 +20,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,6 +70,7 @@ import app.melyxar.tv.inside.firstLineHoldsTheHead
 import app.melyxar.tv.inside.focusTraced
 import app.melyxar.tv.inside.head
 import app.melyxar.tv.inside.ready
+import app.melyxar.tv.inside.rememberReaching
 import app.melyxar.tv.inside.rememberFocusMemory
 import app.melyxar.tv.inside.rememberLoaded
 import app.melyxar.tv.inside.remembered
@@ -451,14 +450,13 @@ private fun <T> paged(
     key: (T) -> String,
     tile: @Composable (T, Modifier) -> Unit,
 ): LazyGridScope.(GridSpot) -> Unit {
-    var reached by remember(list) { mutableIntStateOf(0) }
-    LaunchedEffect(list, reached, list.items) { list.reachedTo(reached) }
+    val reach = rememberReaching(list, list.items, list::reachedTo)
     if (list.failed) {
         return { wide("trouble") { Trouble(onRetry = list::retry) } }
     }
     val items = list.items
     return { spot ->
-        tiles(items, empty, spot, key = key, onReach = { reached = it }, tile = tile)
+        tiles(items, empty, spot, key = key, onReach = reach, tile = tile)
     }
 }
 
@@ -470,14 +468,13 @@ private fun pagedSongs(
     empty: String,
     onPlay: (List<Song>, Int) -> Unit,
 ): LazyGridScope.(GridSpot) -> Unit {
-    var reached by remember(list) { mutableIntStateOf(0) }
-    LaunchedEffect(list, reached, list.items) { list.reachedTo(reached) }
+    val reach = rememberReaching(list, list.items, list::reachedTo)
     if (list.failed) {
         return { wide("trouble") { Trouble(onRetry = list::retry) } }
     }
     val songs = list.items
     return { spot ->
-        songLines(songs, empty, spot, onReach = { reached = it }, onPlay = onPlay)
+        songLines(songs, empty, spot, onReach = reach, onPlay = onPlay)
     }
 }
 

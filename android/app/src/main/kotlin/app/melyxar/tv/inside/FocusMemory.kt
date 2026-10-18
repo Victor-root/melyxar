@@ -9,6 +9,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusState
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 
@@ -20,8 +21,13 @@ import androidx.compose.ui.focus.onFocusChanged
 @Stable
 class FocusMemory(var last: String?) {
     private val requesters = HashMap<String, FocusRequester>()
+    private val noters = HashMap<String, (FocusState) -> Unit>()
 
     fun requester(key: String): FocusRequester = requesters.getOrPut(key) { FocusRequester() }
+
+    /** What notes the remote coming to [key], the same each time, so the
+     *  piece's modifier is too and it is not composed again for it. */
+    fun noter(key: String): (FocusState) -> Unit = noters.getOrPut(key) { { if (it.isFocused) last = key } }
 
     /** Puts the remote back where it was; false when that piece is not
      *  there any more, or was never set. */
@@ -42,7 +48,7 @@ fun rememberFocusMemory(): FocusMemory =
 /** A piece the screen remembers the remote on, under a key unique on it. */
 fun Modifier.remembered(memory: FocusMemory, key: String): Modifier = this
     .focusRequester(memory.requester(key))
-    .onFocusChanged { if (it.isFocused) memory.last = key }
+    .onFocusChanged(memory.noter(key))
 
 /**
  * Once the screen is drawn, puts the remote back on its last piece, or on
