@@ -109,6 +109,11 @@ fun WorkScreen(id: String, comebacks: Int) {
 private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
     val chrome = LocalChrome.current
     val list = rememberLazyListState()
+    // A series and a season are nothing but what they hold: neither
+    // is played.
+    val chaptered = work.versions.firstOrNull()?.takeIf { !it.missing }?.id
+        ?.takeIf { work.kind != "series" && work.kind != "season" && work.children.isEmpty() }
+    chaptered?.let { ChaptersAhead(it) }
     WorkBackdrop(work.backdrop)
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
         LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
@@ -131,11 +136,8 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
                     CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
                 }
             }
-            // A series and a season are nothing but what they hold: neither
-            // is played.
-            val source = work.versions.firstOrNull()?.takeIf { !it.missing }?.id
-            if (source != null && work.kind != "series" && work.kind != "season" && work.children.isEmpty()) {
-                item("chapters") { WorkChapters(source, memory) { at -> chrome.play(Play(work.id, source, at)) } }
+            if (chaptered != null) {
+                item("chapters") { WorkChapters(chaptered, memory) { at -> chrome.play(Play(work.id, chaptered, at)) } }
             }
             if (work.kind == "episode" || work.kind == "season") {
                 theRestOfTheSeason(work, memory)

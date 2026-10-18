@@ -16,6 +16,7 @@ import app.melyxar.tv.clock
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.WideWidth
+import app.melyxar.tv.play.FetchingThumbnails
 import app.melyxar.tv.play.Thumbnail
 import kotlin.math.ceil
 
@@ -59,6 +60,15 @@ fun chaptersShownOf(plan: Plan): List<Chapter> = when {
     plan.chapters.isNotEmpty() -> plan.chapters
     plan.thumbnails == null -> emptyList()
     else -> inventedMoments(lengthOf(plan)).map { Chapter(it) }
+}
+
+/** The thumbnails of the chapters of the film of [source] fetched as its
+ *  page opens, rather than when the remote reaches their row. */
+@Composable
+fun ChaptersAhead(source: String) {
+    val plan = rememberLoaded("plan:$source") { planOf(source) }.value.ready ?: return
+    val thumbnails = plan.thumbnails ?: return
+    FetchingThumbnails(thumbnails, chaptersShownOf(plan).map { it.atSecond })
 }
 
 /**

@@ -1,10 +1,12 @@
 package app.melyxar.tv.play
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -16,7 +18,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.melyxar.server.Thumbnails
@@ -26,11 +27,17 @@ import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.request.bitmapConfig
 import coil3.size.Size
 import coil3.toBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /** Where the thumbnail of a moment sits: on which sheet, in which column
@@ -55,59 +62,99 @@ fun Thumbnails.heightAt(across: Dp): Dp = if (width > 0) across * height / width
 
 /**
  * The thumbnail covering [seconds], cut out of its sheet and drawn [across]
- * wide. Nothing until its sheet is in: an empty box where a picture should
- * be says the player is broken, and it is not.
+ * wide. Nothing until it is in: an empty box where a picture should be says
+ * the player is broken, and it is not.
  */
 @Composable
 fun Thumbnail(thumbnails: Thumbnails, seconds: Double, across: Dp, modifier: Modifier = Modifier) {
     val spot = thumbnails.spotAt(seconds) ?: return
-    val sheet by rememberSheet(thumbnails, spot.sheet)
+    val tile by rememberTile(thumbnails, spot)
     Canvas(modifier.size(across, thumbnails.heightAt(across))) {
-        val drawn = sheet ?: return@Canvas
-        // The sheet as it came, which the loader shrinks when it is wider
-        // than it takes: cut in its own pixels, or the cut slides into the
-        // next picture down.
-        val kept = drawn.width.toFloat() / (thumbnails.columns * thumbnails.width)
-        val keptDown = drawn.height.toFloat() / (thumbnails.rows * thumbnails.height)
-        drawImage(
-            drawn,
-            srcOffset = IntOffset((spot.column * thumbnails.width * kept).roundToInt(), (spot.row * thumbnails.height * keptDown).roundToInt()),
-            srcSize = IntSize((thumbnails.width * kept).roundToInt(), (thumbnails.height * keptDown).roundToInt()),
-            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-        )
+        val drawn = tile ?: return@Canvas
+        drawImage(drawn, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
     }
 }
 
-/** How many sheets are kept decoded: those of a stretch of chapters on the
- *  screen, with the one the bar's picture is cut from. */
-private const val SHEETS_KEPT = 3
+/** The thumbnails of [moments] fetched as the screen showing them opens, so
+ *  they are in by the time the remote reaches them. */
+@Composable
+fun FetchingThumbnails(thumbnails: Thumbnails, moments: List<Double>) {
+    val api = LocalServer.current
+    val sheets = LocalSheets.current
+    LaunchedEffect(sheets, thumbnails, moments) {
+        moments.mapNotNull { thumbnails.spotAt(it) }.distinct().forEach { sheets.tile(api.address("${thumbnails.url}/${it.sheet}.jpg"), it, thumbnails) }
+    }
+}
+
+/** How many sheets are kept decoded: the one the bar's picture is cut from,
+ *  and the one it was cut from before, as the bar goes back and forth. */
+private const val SHEETS_KEPT = 2
+
+/** How many thumbnails are kept cut out: a page's row of chapters and the
+ *  player's, with the bar's last ones. */
+private const val TILES_KEPT = 48
+
+/** A map keeping only the [most] last used of its entries. */
+private fun <K, V> lastUsed(most: Int) = object : LinkedHashMap<K, V>(most, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>) = size > most
+}
 
 /**
- * The sheets of thumbnails last fetched, each decoded once for every
- * picture cut from it, so going back along the bar draws at once. They stay
- * out of the posters' memory: a whole sheet weighs as much as a hundred
- * posters, and would push them out of it.
+ * The thumbnails last shown, each cut once out of its sheet. Only the little
+ * pictures go to the graphics card: a whole sheet weighs as much as a
+ * hundred posters, and sending one there held the screen still. The sheets
+ * stay out of the posters' memory too, and are decoded one at a time, a
+ * row of chapters touching most of them at once.
  */
 private class Sheets(private val pictures: ImageLoader, private val context: Context, private val scope: CoroutineScope) {
-    private val kept = object : LinkedHashMap<String, Deferred<ImageBitmap?>>(SHEETS_KEPT, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Deferred<ImageBitmap?>>) = size > SHEETS_KEPT
+    private val sheets = lastUsed<String, Deferred<Bitmap?>>(SHEETS_KEPT)
+    private val tiles = lastUsed<Pair<String, Spot>, Deferred<ImageBitmap?>>(TILES_KEPT)
+    private val cutting = Mutex()
+
+    /** The thumbnail at [spot] of the sheet at [address], cut unless it is
+     *  kept or on its way. */
+    fun tile(address: String, spot: Spot, thumbnails: Thumbnails): Deferred<ImageBitmap?> = tiles.getOrPut(address to spot) {
+        scope.async {
+            val cut = cutting.withLock {
+                sheet(address).await()?.let { sheet -> withContext(Dispatchers.Default) { cutOut(sheet, spot, thumbnails) } }
+            }
+            // One that did not come is asked again the next time.
+            if (cut == null) tiles.remove(address to spot)
+            cut
+        }
     }
 
     /** The sheet at [address], fetched unless it is kept or on its way. */
-    fun sheet(address: String): Deferred<ImageBitmap?> = kept.getOrPut(address) {
+    private fun sheet(address: String): Deferred<Bitmap?> = sheets.getOrPut(address) {
         scope.async {
-            // Whole, since a thumbnail is cut out of it by its pixels.
+            // Whole, since a thumbnail is cut out of it by its pixels, and
+            // kept in memory rather than on the graphics card, which only
+            // ever gets the pieces.
             val request = ImageRequest.Builder(context)
                 .data(address)
                 .size(Size.ORIGINAL)
+                .allowHardware(false)
+                .bitmapConfig(Bitmap.Config.RGB_565)
                 .memoryCachePolicy(CachePolicy.DISABLED)
                 .build()
-            val decoded = (pictures.execute(request) as? SuccessResult)?.image?.toBitmap()?.asImageBitmap()
-            // One that did not come is asked again the next time.
-            if (decoded == null) kept.remove(address)
+            val decoded = (pictures.execute(request) as? SuccessResult)?.image?.toBitmap()
+            if (decoded == null) sheets.remove(address)
             decoded
         }
     }
+}
+
+/** The thumbnail at [spot], cut out of [sheet] in its own pixels, which the
+ *  loader shrinks when it is wider than it takes: or the cut slides into the
+ *  next picture down. */
+private fun cutOut(sheet: Bitmap, spot: Spot, thumbnails: Thumbnails): ImageBitmap {
+    val kept = sheet.width.toFloat() / (thumbnails.columns * thumbnails.width)
+    val keptDown = sheet.height.toFloat() / (thumbnails.rows * thumbnails.height)
+    val left = (spot.column * thumbnails.width * kept).roundToInt()
+    val top = (spot.row * thumbnails.height * keptDown).roundToInt()
+    val wide = (thumbnails.width * kept).roundToInt().coerceAtMost(sheet.width - left)
+    val high = (thumbnails.height * keptDown).roundToInt().coerceAtMost(sheet.height - top)
+    return Bitmap.createBitmap(sheet, left, top, wide, high).asImageBitmap()
 }
 
 private val LocalSheets = staticCompositionLocalOf<Sheets> { error("no sheets") }
@@ -122,14 +169,14 @@ fun KeepingSheets(content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalSheets provides remember(pictures) { Sheets(pictures, context, scope) }, content = content)
 }
 
-/** One sheet of thumbnails, fetched as the posters are. */
+/** One thumbnail, fetched as the posters are. */
 @Composable
-private fun rememberSheet(thumbnails: Thumbnails, sheet: Int): State<ImageBitmap?> {
+private fun rememberTile(thumbnails: Thumbnails, spot: Spot): State<ImageBitmap?> {
     val api = LocalServer.current
     val sheets = LocalSheets.current
-    return produceState(null, thumbnails, sheet) {
-        // The sheet before stays out: its pictures are not this one's.
+    return produceState(null, thumbnails, spot) {
+        // The one before stays out: its picture is not this one's.
         value = null
-        value = sheets.sheet(api.address("${thumbnails.url}/$sheet.jpg")).await()
+        value = sheets.tile(api.address("${thumbnails.url}/${spot.sheet}.jpg"), spot, thumbnails).await()
     }
 }
