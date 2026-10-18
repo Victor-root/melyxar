@@ -46,6 +46,7 @@ import app.melyxar.theme.parseHex
 import app.melyxar.theme.wantsLight
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.look.PageBackdrop
 import app.melyxar.tv.look.TvLook
 import app.melyxar.tv.look.WindowGround
@@ -483,9 +484,10 @@ fun Inside(
                         },
                 ) {
                     // What the account chose to draw behind its pages, once
-                    // its choice is known; kept ready, but not drawn, under a film.
+                    // its choice is known; kept ready, but not drawn, under a
+                    // film or while the television draws lighter.
                     chosen?.let {
-                        PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize().drawWithContent { if (!film) drawContent() })
+                        PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize().drawWithContent { if (!film && !Lighter.on) drawContent() })
                     }
                     LaunchedEffect(here) {
                         focusSaid { "screen shown: ${here.key}" }
