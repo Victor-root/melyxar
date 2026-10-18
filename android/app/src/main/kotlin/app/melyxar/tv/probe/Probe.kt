@@ -36,6 +36,8 @@ enum class Part(val byDefault: Boolean) {
     Pictures(true),
     Titles(true),
     Bar(true),
+    BandGlow(true),
+    FanShadows(true),
 }
 
 /** Drawn only while [part] is, read as it draws so the bench leaves it out
