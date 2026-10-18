@@ -296,6 +296,8 @@
     <string name="tv_setting_probe_fan_shadows">Ombres des affiches en éventail</string>
     <string name="tv_setting_probe_bench">Mesurer l\'écran suivant</string>
     <string name="tv_probe_bench_waiting">En attente</string>
+    <string name="tv_setting_probe_tour">Lancer le parcours de mesure</string>
+    <string name="tv_probe_tour_running">En cours</string>
     <string name="tv_probe_shown">Oui</string>
     <string name="tv_probe_left_out">Non</string>
     <plurals name="tv_seconds">

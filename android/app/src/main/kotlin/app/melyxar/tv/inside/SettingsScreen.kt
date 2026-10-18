@@ -1,5 +1,7 @@
 package app.melyxar.tv.inside
 
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,6 +57,7 @@ import app.melyxar.tv.play.passSoundOn
 import app.melyxar.tv.play.soundPassedOn
 import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
+import app.melyxar.tv.probe.Tour
 import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -355,6 +358,15 @@ fun SettingsScreen(sessions: Sessions) {
                         stringResource(R.string.tv_probe_bench_waiting).takeIf { Probe.armed },
                         memory,
                     ) { Probe.armBench() }
+                }
+                group("probe-tour", null, null) {
+                    val activity = LocalActivity.current as? ComponentActivity
+                    Line(
+                        "probe-tour",
+                        stringResource(R.string.tv_setting_probe_tour),
+                        stringResource(R.string.tv_probe_tour_running).takeIf { Tour.running },
+                        memory,
+                    ) { activity?.let(Tour::start) }
                 }
             }
         }

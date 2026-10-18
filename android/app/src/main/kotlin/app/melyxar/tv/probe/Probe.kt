@@ -51,6 +51,7 @@ object Probe {
     private const val TAG_PART = "MlxPerf.Part"
     private const val TAG_SCREEN = "MlxPerf.Screen"
     private const val TAG_BENCH = "MlxPerf.Bench"
+    private const val TAG_TOUR = "MlxPerf.Tour"
     private const val KEPT = "probe"
     private const val NS_PER_MS = 1_000_000.0
     private const val RECENT = 120
@@ -107,6 +108,9 @@ object Probe {
     @Volatile
     private var bench: Bench? = null
 
+    /** Frames gathered under a name until they are told to stop. */
+    private var measuring: Measure? = null
+
     private val frames = ArrayList<Long>()
     private val phases = LongArray(Phase.entries.size)
     private var janky = 0
@@ -144,6 +148,12 @@ object Probe {
         val phases = LongArray(Phase.entries.size)
     }
 
+    /** The frames of a stretch of [Tour], under [name]. */
+    private class Measure(val name: String) {
+        val totals = ArrayList<Long>()
+        val phases = LongArray(Phase.entries.size)
+    }
+
     /** Whether [part] is drawn, read where it draws so it changes at once. */
     fun shows(part: Part) = shown.getValue(part).value
 
@@ -151,6 +161,28 @@ object Probe {
         shown.getValue(part).value = on
         kept?.edit()?.putBoolean(part.name, on)?.apply()
         Log.i(TAG_PART, "${part.name} ${if (on) "on" else "off"}")
+    }
+
+    /** What each part is now, to be put back after a measure that changes them. */
+    internal fun switches(): Map<Part, Boolean> = Part.entries.associateWith(::shows)
+
+    /** The parts as [before], with [left] left out, not remembered. */
+    internal fun leaveOut(left: Set<Part>, before: Map<Part, Boolean>) {
+        Part.entries.forEach { shown.getValue(it).value = it !in left && before[it] != false }
+        Log.i(TAG_PART, switched())
+    }
+
+    /** Gathers the frames drawn from now on under [name]. */
+    internal fun measure(name: String) {
+        handler?.post { measuring = Measure(name) }
+    }
+
+    /** Logs the frames gathered since [measure]. */
+    internal fun measured() {
+        handler?.post {
+            measuring?.let { Log.i(TAG_TOUR, "${it.name}: ${described(it.totals, it.phases)}") }
+            measuring = null
+        }
     }
 
     /** Measures the next screen shown once it is on time: redrawn whole on
@@ -167,8 +199,8 @@ object Probe {
     private fun startBench() {
         val view = screen ?: return
         armed = false
-        bench = Bench(Part.entries.associateWith(::shows))
-        Log.i(TAG_BENCH, "start: ${Part.entries.joinToString(" ") { "${it.name}=${if (shows(it)) "on" else "off"}" }}")
+        bench = Bench(switches())
+        Log.i(TAG_BENCH, "start: ${switched()}")
         applyBenchStep(0)
         Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
@@ -182,8 +214,7 @@ object Probe {
     }
 
     private fun applyBenchStep(step: Int) {
-        val left = BENCH[step].second
-        Part.entries.forEach { shown.getValue(it).value = it !in left && bench?.before?.get(it) != false }
+        bench?.let { leaveOut(BENCH[step].second, it.before) }
     }
 
     private fun benchFrame(running: Bench, seen: Seen) {
@@ -196,15 +227,7 @@ object Probe {
         if (running.totals.size < BENCH_MEASURED) {
             return
         }
-        val count = running.totals.size
-        running.totals.sort()
-        val late = running.totals.count { it > budget }
-        val means = Phase.entries.joinToString(" ") { "${it.label}=${ms(running.phases[it.ordinal] / count)}" }
-        Log.i(
-            TAG_BENCH,
-            "${BENCH[running.step].first}: $count frames, $late late, mean ${ms(running.totals.sum() / count)} " +
-                "p50=${ms(running.totals[count / 2])} p90=${ms(running.totals[count * 9 / 10])} ms | $means",
-        )
+        Log.i(TAG_BENCH, "${BENCH[running.step].first}: ${described(running.totals, running.phases)}")
         running.step++
         running.frames = 0
         running.totals.clear()
@@ -215,11 +238,24 @@ object Probe {
             main.post { applyBenchStep(step) }
         } else {
             main.post {
-                running.before.forEach { (part, on) -> shown.getValue(part).value = on }
+                leaveOut(emptySet(), running.before)
                 bench = null
                 Log.i(TAG_BENCH, "done")
             }
         }
+    }
+
+    /** [totals] and the [phases] summed over them, as a line. */
+    private fun described(totals: MutableList<Long>, phases: LongArray): String {
+        val count = totals.size
+        if (count == 0) {
+            return "no frames"
+        }
+        totals.sort()
+        val late = totals.count { it > budget }
+        val means = Phase.entries.joinToString(" ") { "${it.label}=${ms(phases[it.ordinal] / count)}" }
+        return "$count frames, $late late, mean ${ms(totals.sum() / count)} " +
+            "p50=${ms(totals[count / 2])} p90=${ms(totals[count * 9 / 10])} max=${ms(totals[count - 1])} ms | $means"
     }
 
     private fun switched() = Part.entries.joinToString(" ") { "${it.name}=${if (shows(it)) "on" else "off"}" }
@@ -266,6 +302,10 @@ object Probe {
         val pictures = picturesSinceFrame.getAndSet(0)
         opening?.let { follow(it, seen) }
         bench?.let { benchFrame(it, seen) }
+        measuring?.let { measure ->
+            measure.totals += total
+            each.forEachIndexed { at, ns -> measure.phases[at] += ns }
+        }
         if (total > deadline) {
             janky++
             val parts = Phase.entries.joinToString(" ") { "${it.label}=${ms(metrics.getMetric(it.metric))}" }
@@ -361,7 +401,9 @@ object Probe {
         val gap = if (lastKey == 0L) 0 else now - lastKey
         lastKey = now
         lastKeyNs = event.eventTime * 1_000_000
-        MainSampler.pressed()
+        if (!Tour.running) {
+            MainSampler.pressed()
+        }
         Log.d(TAG_KEY, "${KeyEvent.keyCodeToString(event.keyCode)} repeat=${event.repeatCount} waited=${now - event.eventTime} ms gap=$gap ms")
     }
 
