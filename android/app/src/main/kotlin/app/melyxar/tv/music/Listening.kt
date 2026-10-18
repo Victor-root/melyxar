@@ -81,8 +81,11 @@ class Listening(private val context: Context, private val api: Api, private val 
     private var forms: String? = null
     private val measuring = scope.async(Dispatchers.Default, start = CoroutineStart.LAZY) { measuredMusicForms() }
 
-    /** The song waiting for [forms] to be known before it is loaded. */
+    /** The song waiting for [forms] to be known before it is loaded, and
+     *  whether it starts playing once it is, which play and pause change
+     *  meanwhile. */
     private var waiting: Job? = null
+    private var startsPlaying = true
 
     var queue by mutableStateOf(Queue())
         private set
@@ -169,6 +172,7 @@ class Listening(private val context: Context, private val api: Api, private val 
     fun toggle() {
         when {
             queue.current == null -> Unit
+            waiting?.isActive == true -> startsPlaying = !startsPlaying
             over -> start(queue.jumpTo(0))
             playing -> engine.pause(deck)
             else -> engine.play(deck)
@@ -273,10 +277,11 @@ class Listening(private val context: Context, private val api: Api, private val 
         if (known != null) {
             engine.load(deck, api.soundOf(song.id, known, from), andPlay = true)
         } else {
+            startsPlaying = true
             waiting = scope.launch {
                 val measured = measuring.await()
                 forms = measured
-                engine.load(deck, api.soundOf(song.id, measured, from), andPlay = true)
+                engine.load(deck, api.soundOf(song.id, measured, from), andPlay = startsPlaying)
             }
         }
         describe()
