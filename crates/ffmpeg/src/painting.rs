@@ -70,7 +70,7 @@ impl<'a> Place<'a> {
     pub(crate) fn of(encode: &'a VideoEncode) -> Self {
         let proved = encode
             .card()
-            .filter(|(card, _)| !card.brings_the_picture_down(encode.tone_map))
+            .filter(|(card, _)| !card.brings_the_picture_down(encode.card_converts()))
             .and_then(|(card, _)| card.picture_subtitle_layout().map(|layout| (card, layout)));
         match proved {
             Some((card, layout)) => Self::Card {
@@ -88,7 +88,7 @@ impl<'a> Place<'a> {
                     .map(|picture| fitted(CANVAS, picture)),
                 back_up: encode
                     .card()
-                    .and_then(|(card, _)| card.back_up(encode.tone_map)),
+                    .and_then(|(card, _)| card.back_up(encode.card_converts())),
             },
         }
     }
@@ -181,7 +181,7 @@ pub fn announce(session: &str, index: u32, command: &Command) {
     let place = Place::of(encode);
     let painted_by = match (&place, encode.card()) {
         (Place::Card { .. }, _) => "card",
-        (Place::Processor { .. }, Some((card, _))) if card.brings_the_picture_down(encode.tone_map) => {
+        (Place::Processor { .. }, Some((card, _))) if card.brings_the_picture_down(encode.card_converts()) => {
             "processor, the picture comes down from the card once its colours are converted"
         }
         (Place::Processor { .. }, Some(_)) => "processor, this card was never proved to paint",

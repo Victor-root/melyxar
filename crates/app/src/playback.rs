@@ -1052,6 +1052,21 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
                 &handed_up, plan, painted_on,
             )?));
         }
+        // The card's own conversion filter refuses a film that said how bright
+        // it was mastered on its first picture only, from anywhere but that
+        // picture: the processor converts it, and the card still encodes.
+        let converts_with_its_own_filter = rebuild.card.as_ref().is_some_and(|card| {
+            card.tone_mapping == Some(melyxar_ffmpeg::ToneMapping::OwnFilter)
+        });
+        if plan.decision.tone_map && converts_with_its_own_filter {
+            let handed_up = PictureRebuild {
+                reads_the_film: false,
+                ..rebuild.clone()
+            };
+            let mut encode = encode_for(&handed_up, plan, painted_on)?;
+            encode.colours_converted_first = true;
+            if_the_card_refuses.push(VideoOutput::Encode(encode));
+        }
         if_the_card_refuses.push(VideoOutput::Encode(encode_for(
             &read_by_the_processor(height_of(&plan.tracks), &plan.decision),
             plan,
@@ -3030,6 +3045,51 @@ mod tests {
         let mut kept = handed;
         keep_to_the_card(&mut kept);
         assert!(kept.if_the_card_refuses.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_card_converting_with_its_own_filter_can_leave_the_colours_to_the_processor() {
+        // That filter refuses a film said to be bright only on its first
+        // picture, from anywhere else in it: started from a chapter, such a
+        // film is converted on the processor and still encoded on the card.
+        use melyxar_ffmpeg::command::VideoOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "hevc", 2160), audio(id, "eac3", 6, true)]
+            })
+            .await;
+        let mut plan = plan(
+            &state,
+            &crate::an_ordinary_account(user_id),
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
+                preferred_video_codec: None,
+                wide_gamut: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        plan.decision.tone_map = true;
+        plan.rebuild = Some(PictureRebuild {
+            codec: "hevc".to_string(),
+            card: Some(a_card(&["h264", "hevc"], true)),
+            reads_the_film: true,
+            height: Some(1080),
+            bitrate: None,
+        });
+
+        let mut recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        keep_to_the_card(&mut recipe);
+        assert_eq!(recipe.if_the_card_refuses.len(), 2);
+        let VideoOutput::Encode(last) = &recipe.if_the_card_refuses[1] else {
+            panic!("the picture is rebuilt");
+        };
+        assert!(last.colours_converted_first);
+        assert_eq!(last.card().map(|(_, reads)| reads), Some(false));
     }
 
     #[tokio::test]
