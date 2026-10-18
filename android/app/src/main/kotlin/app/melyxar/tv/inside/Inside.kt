@@ -70,7 +70,9 @@ import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
 import app.melyxar.tv.play.KeepingSheets
 import app.melyxar.tv.play.PlayerScreen
+import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
+import app.melyxar.tv.probe.probed
 import app.melyxar.tv.requests.LocalRequests
 import app.melyxar.tv.requests.MoreTitlesScreen
 import app.melyxar.tv.requests.RequestedTitleScreen
@@ -533,7 +535,7 @@ fun Inside(
                             }
                         }
                     }
-                    PinnedTopBar(screen, Modifier.align(Alignment.TopCenter))
+                    PinnedTopBar(screen, Modifier.align(Alignment.TopCenter).probed(Part.Bar))
                     cardMenus.open?.let { card -> CardMenu(card, onClose = { cardMenus.open = null }) }
                     // Over every screen, the film's included, which only
                     // what is urgent is said over.

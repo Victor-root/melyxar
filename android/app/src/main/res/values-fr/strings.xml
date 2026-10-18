@@ -288,6 +288,8 @@
     <string name="tv_setting_probe_shadows">Ombres</string>
     <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>
     <string name="tv_setting_probe_picture_fade">Fondu des images</string>
+    <string name="tv_setting_probe_bench">Mesurer l\'écran suivant</string>
+    <string name="tv_probe_bench_waiting">En attente</string>
     <string name="tv_probe_shown">Oui</string>
     <string name="tv_probe_left_out">Non</string>
     <plurals name="tv_seconds">

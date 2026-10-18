@@ -338,6 +338,14 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
+                group("probe-bench", null, null) {
+                    Line(
+                        "probe-bench",
+                        stringResource(R.string.tv_setting_probe_bench),
+                        stringResource(R.string.tv_probe_bench_waiting).takeIf { Probe.armed },
+                        memory,
+                    ) { Probe.armBench() }
+                }
             }
         }
         asked?.let {

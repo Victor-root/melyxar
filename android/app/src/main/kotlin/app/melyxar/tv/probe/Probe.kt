@@ -7,9 +7,15 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import android.util.Log
+import android.view.Choreographer
 import android.view.FrameMetrics
 import android.view.KeyEvent
+import android.view.View
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -26,7 +32,15 @@ enum class Part(val byDefault: Boolean) {
     Shadows(true),
     BannerFade(true),
     PictureFade(true),
+    Banner(true),
+    Pictures(true),
+    Titles(true),
+    Bar(true),
 }
+
+/** Drawn only while [part] is, read as it draws so the bench leaves it out
+ *  at once. */
+fun Modifier.probed(part: Part): Modifier = drawWithContent { if (Probe.shows(part)) drawContent() }
 
 object Probe {
     private const val TAG = "MlxPerf"
@@ -34,12 +48,28 @@ object Probe {
     private const val TAG_KEY = "MlxPerf.Key"
     private const val TAG_PART = "MlxPerf.Part"
     private const val TAG_SCREEN = "MlxPerf.Screen"
+    private const val TAG_BENCH = "MlxPerf.Bench"
     private const val KEPT = "probe"
     private const val NS_PER_MS = 1_000_000.0
     private const val RECENT = 120
     private const val CALM_FRAMES = 10
     private const val FOLLOWED_NS = 5_000_000_000L
     private const val ASKED_WITHIN_NS = 1_000_000_000L
+    private const val BENCH_WARMUP = 20
+    private const val BENCH_MEASURED = 90
+
+    /** What the bench leaves out in turn, the screen redrawn whole on every
+     *  frame each time. */
+    private val BENCH = listOf<Pair<String, Set<Part>>>(
+        "everything" to emptySet(),
+        "no shadows" to setOf(Part.Shadows),
+        "no banner" to setOf(Part.Banner),
+        "no pictures" to setOf(Part.Pictures),
+        "no titles" to setOf(Part.Titles),
+        "no bar" to setOf(Part.Bar),
+        "none of these" to setOf(Part.Shadows, Part.Banner, Part.Pictures, Part.Titles, Part.Bar),
+        "everything again" to emptySet(),
+    )
 
     private var kept: android.content.SharedPreferences? = null
 
@@ -59,10 +89,19 @@ object Probe {
     @Volatile
     private var lastKeyNs = 0L
     private var handler: Handler? = null
+    private var budget = 0L
 
     private val recent = ArrayDeque<Seen>()
     private val visits = HashMap<String, Int>()
     private var opening: Opening? = null
+    private var screen: View? = null
+
+    /** Whether the next screen shown is measured by the bench. */
+    var armed by mutableStateOf(false)
+        private set
+
+    @Volatile
+    private var bench: Bench? = null
 
     private val frames = ArrayList<Long>()
     private val phases = LongArray(Phase.entries.size)
@@ -92,6 +131,15 @@ object Probe {
         val phases = LongArray(Phase.entries.size)
     }
 
+    /** The bench under way: which of [BENCH] it is at, what each part was
+     *  before it, and the frames of this step so far. */
+    private class Bench(val before: Map<Part, Boolean>) {
+        var step = 0
+        var frames = 0
+        val totals = ArrayList<Long>()
+        val phases = LongArray(Phase.entries.size)
+    }
+
     /** Whether [part] is drawn, read where it draws so it changes at once. */
     fun shows(part: Part) = shown.getValue(part).value
 
@@ -101,6 +149,75 @@ object Probe {
         Log.i(TAG_PART, "${part.name} ${if (on) "on" else "off"}")
     }
 
+    /** Measures the next screen shown once it is on time: redrawn whole on
+     *  every frame, with each of [BENCH] left out in turn. */
+    fun armBench() {
+        // The screen this is asked from is not the one measured.
+        handler?.post {
+            opening = null
+            screen?.post { armed = true }
+        }
+        Log.i(TAG_BENCH, "armed for the next screen")
+    }
+
+    private fun startBench() {
+        val view = screen ?: return
+        armed = false
+        bench = Bench(Part.entries.associateWith(::shows))
+        Log.i(TAG_BENCH, "start: ${Part.entries.joinToString(" ") { "${it.name}=${if (shows(it)) "on" else "off"}" }}")
+        applyBenchStep(0)
+        Choreographer.getInstance().postFrameCallback(object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                if (bench == null) {
+                    return
+                }
+                view.invalidate()
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        })
+    }
+
+    private fun applyBenchStep(step: Int) {
+        val left = BENCH[step].second
+        Part.entries.forEach { shown.getValue(it).value = it !in left && bench?.before?.get(it) != false }
+    }
+
+    private fun benchFrame(running: Bench, seen: Seen) {
+        running.frames++
+        if (running.frames <= BENCH_WARMUP) {
+            return
+        }
+        running.totals += seen.total
+        seen.phases.forEachIndexed { at, ns -> running.phases[at] += ns }
+        if (running.totals.size < BENCH_MEASURED) {
+            return
+        }
+        val count = running.totals.size
+        running.totals.sort()
+        val late = running.totals.count { it > budget }
+        val means = Phase.entries.joinToString(" ") { "${it.label}=${ms(running.phases[it.ordinal] / count)}" }
+        Log.i(
+            TAG_BENCH,
+            "${BENCH[running.step].first}: $count frames, $late late, mean ${ms(running.totals.sum() / count)} " +
+                "p50=${ms(running.totals[count / 2])} p90=${ms(running.totals[count * 9 / 10])} ms | $means",
+        )
+        running.step++
+        running.frames = 0
+        running.totals.clear()
+        running.phases.fill(0)
+        val main = screen ?: return
+        if (running.step < BENCH.size) {
+            val step = running.step
+            main.post { applyBenchStep(step) }
+        } else {
+            main.post {
+                running.before.forEach { (part, on) -> shown.getValue(part).value = on }
+                bench = null
+                Log.i(TAG_BENCH, "done")
+            }
+        }
+    }
+
     private fun switched() = Part.entries.joinToString(" ") { "${it.name}=${if (shows(it)) "on" else "off"}" }
 
     /** Starts logging every frame [activity] draws, with a summary each second. */
@@ -108,9 +225,11 @@ object Probe {
         kept = activity.getSharedPreferences(KEPT, Context.MODE_PRIVATE).also { prefs ->
             Part.entries.forEach { part -> shown.getValue(part).value = prefs.getBoolean(part.name, part.byDefault) }
         }
+        screen = activity.window.decorView
         @Suppress("DEPRECATION")
         val refresh = activity.windowManager.defaultDisplay.refreshRate
         val budgetNs = (1e9 / refresh).toLong()
+        budget = budgetNs
         Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, ${switched()}")
         val thread = HandlerThread("MlxPerf").apply { start() }
         val handler = Handler(thread.looper).also { handler = it }
@@ -141,6 +260,7 @@ object Probe {
             recent.removeFirst()
         }
         opening?.let { follow(it, seen) }
+        bench?.let { benchFrame(it, seen) }
         if (total > deadline) {
             janky++
             val parts = Phase.entries.joinToString(" ") { "${it.label}=${ms(metrics.getMetric(it.metric))}" }
@@ -185,6 +305,9 @@ object Probe {
 
     private fun report(followed: Opening) {
         opening = null
+        if (armed && bench == null) {
+            screen?.post(::startBench)
+        }
         val sums = Phase.entries.joinToString(" ") { "${it.label}=${ms(followed.phases[it.ordinal])}" }
         Log.i(
             TAG_SCREEN,

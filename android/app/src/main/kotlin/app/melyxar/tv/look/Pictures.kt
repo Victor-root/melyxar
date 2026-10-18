@@ -15,6 +15,7 @@ import app.melyxar.server.fitting
 import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.PictureProbe
 import app.melyxar.tv.probe.Probe
+import app.melyxar.tv.probe.probed
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -64,6 +65,6 @@ fun ServerPicture(
         contentDescription = null,
         contentScale = contentScale,
         alignment = alignment,
-        modifier = modifier,
+        modifier = modifier.probed(Part.Pictures),
     )
 }
