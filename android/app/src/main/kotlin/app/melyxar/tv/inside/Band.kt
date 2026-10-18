@@ -68,6 +68,8 @@ import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
+import app.melyxar.tv.probe.Part
+import app.melyxar.tv.probe.Probe
 import kotlinx.coroutines.flow.first
 
 /** As many covers as the other tiles fan out posters. */
@@ -178,8 +180,15 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
             .grows({ lit }, 1.035f)
             // At rest `0 0 22px -8px` of the accent at 45%, giving way to the
             // halo of a card as the tile lights.
-            .boxShadow(CardShape, BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 22.dp, spread = (-8).dp)) { 1f - lit }
-            .boxShadow(CardShape, accentAir(palette.accent), accentBloom(palette.accent)) { lit }
+            .then(
+                if (Probe.shows(Part.BandGlow)) {
+                    Modifier
+                        .boxShadow(CardShape, BoxShadow(palette.accent.copy(alpha = 0.45f), blur = 22.dp, spread = (-8).dp)) { 1f - lit }
+                        .boxShadow(CardShape, accentAir(palette.accent), accentBloom(palette.accent)) { lit }
+                } else {
+                    Modifier
+                },
+            )
             .clip(CardShape)
             .keptReady()
             // Laid out once for the tile; only the halo behind the fan is
@@ -315,7 +324,9 @@ private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -
                         // afresh at every frame of it, which a television
                         // cannot keep up with.
                         .then(
-                            if (at == 0) {
+                            if (!Probe.shows(Part.FanShadows)) {
+                                Modifier
+                            } else if (at == 0) {
                                 Modifier.boxShadow(
                                     shape,
                                     palette.shadowRaised,
