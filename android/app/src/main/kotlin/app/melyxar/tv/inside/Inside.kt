@@ -68,6 +68,7 @@ import app.melyxar.tv.notes.LocalNotes
 import app.melyxar.tv.notes.Notes
 import app.melyxar.tv.notes.NotesCorner
 import app.melyxar.tv.notes.NotesScreen
+import app.melyxar.tv.play.KeepingSheets
 import app.melyxar.tv.play.PlayerScreen
 import app.melyxar.tv.requests.LocalRequests
 import app.melyxar.tv.requests.MoreTitlesScreen
@@ -498,7 +499,7 @@ fun Inside(
                                 } else {
                                     LibraryScreen(here.library, comebacks)
                                 }
-                                is Place.Opened -> WorkScreen(here.work, comebacks)
+                                is Place.Opened -> KeepingSheets { WorkScreen(here.work, comebacks) }
                                 is Place.Person -> PersonScreen(here.id, comebacks)
                                 is Place.Search -> SearchScreen(here.library, comebacks)
                                 is Place.Listed -> ShortlistScreen(here.list, comebacks)
@@ -516,11 +517,13 @@ fun Inside(
                                 // The film is always shown dark, as the web's player is.
                                 is Place.Playing -> key(here.play) {
                                     TvLook(paletteOf(chosenAccent, light = false)) {
-                                        PlayerScreen(
-                                            here.play,
-                                            onDone = { backTo(trail.size - 1) },
-                                            onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
-                                        )
+                                        KeepingSheets {
+                                            PlayerScreen(
+                                                here.play,
+                                                onDone = { backTo(trail.size - 1) },
+                                                onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
+                                            )
+                                        }
                                     }
                                 }
                             }

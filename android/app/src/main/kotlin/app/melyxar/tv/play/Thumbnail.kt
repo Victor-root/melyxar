@@ -1,11 +1,16 @@
 package app.melyxar.tv.play
 
+import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -17,10 +22,15 @@ import androidx.compose.ui.unit.dp
 import app.melyxar.server.Thumbnails
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
+import coil3.ImageLoader
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.size.Size
 import coil3.toBitmap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlin.math.roundToInt
 
 /** Where the thumbnail of a moment sits: on which sheet, in which column
@@ -68,21 +78,58 @@ fun Thumbnail(thumbnails: Thumbnails, seconds: Double, across: Dp, modifier: Mod
     }
 }
 
-/** One sheet of thumbnails, fetched as the posters are and kept by the same
- *  memory, so going back along the bar draws at once. */
+/** How many sheets are kept decoded: those of a stretch of chapters on the
+ *  screen, with the one the bar's picture is cut from. */
+private const val SHEETS_KEPT = 3
+
+/**
+ * The sheets of thumbnails last fetched, each decoded once for every
+ * picture cut from it, so going back along the bar draws at once. They stay
+ * out of the posters' memory: a whole sheet weighs as much as a hundred
+ * posters, and would push them out of it.
+ */
+private class Sheets(private val pictures: ImageLoader, private val context: Context, private val scope: CoroutineScope) {
+    private val kept = object : LinkedHashMap<String, Deferred<ImageBitmap?>>(SHEETS_KEPT, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Deferred<ImageBitmap?>>) = size > SHEETS_KEPT
+    }
+
+    /** The sheet at [address], fetched unless it is kept or on its way. */
+    fun sheet(address: String): Deferred<ImageBitmap?> = kept.getOrPut(address) {
+        scope.async {
+            // Whole, since a thumbnail is cut out of it by its pixels.
+            val request = ImageRequest.Builder(context)
+                .data(address)
+                .size(Size.ORIGINAL)
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .build()
+            val decoded = (pictures.execute(request) as? SuccessResult)?.image?.toBitmap()?.asImageBitmap()
+            // One that did not come is asked again the next time.
+            if (decoded == null) kept.remove(address)
+            decoded
+        }
+    }
+}
+
+private val LocalSheets = staticCompositionLocalOf<Sheets> { error("no sheets") }
+
+/** [content] with the sheets its thumbnails are cut from kept, for as long
+ *  as it is shown and no longer. */
+@Composable
+fun KeepingSheets(content: @Composable () -> Unit) {
+    val pictures = LocalPictures.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    CompositionLocalProvider(LocalSheets provides remember(pictures) { Sheets(pictures, context, scope) }, content = content)
+}
+
+/** One sheet of thumbnails, fetched as the posters are. */
 @Composable
 private fun rememberSheet(thumbnails: Thumbnails, sheet: Int): State<ImageBitmap?> {
     val api = LocalServer.current
-    val pictures = LocalPictures.current
-    val context = LocalContext.current
+    val sheets = LocalSheets.current
     return produceState(null, thumbnails, sheet) {
         // The sheet before stays out: its pictures are not this one's.
         value = null
-        // Whole, since a thumbnail is cut out of it by its pixels.
-        val request = ImageRequest.Builder(context)
-            .data(api.address("${thumbnails.url}/$sheet.jpg"))
-            .size(Size.ORIGINAL)
-            .build()
-        value = (pictures.execute(request) as? SuccessResult)?.image?.toBitmap()?.asImageBitmap()
+        value = sheets.sheet(api.address("${thumbnails.url}/$sheet.jpg")).await()
     }
 }
