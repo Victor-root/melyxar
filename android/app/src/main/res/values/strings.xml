@@ -292,6 +292,8 @@
     <string name="tv_setting_probe_fan_shadows">Fanned poster shadows</string>
     <string name="tv_setting_probe_bench">Measure the next screen</string>
     <string name="tv_probe_bench_waiting">Waiting</string>
+    <string name="tv_setting_probe_tour">Run the measuring tour</string>
+    <string name="tv_probe_tour_running">Running</string>
     <string name="tv_probe_shown">On</string>
     <string name="tv_probe_left_out">Off</string>
     <plurals name="tv_seconds">
