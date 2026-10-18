@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -62,12 +63,13 @@ fun Synopsis(
     var reading by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val shape = RoundedCornerShape(8.dp)
     Text(
         text,
         fontSize = fontSize,
         lineHeight = lineHeight,
-        color = if (lit > 0.5f) palette.text else palette.textSoft,
+        color = if (bright) palette.text else palette.textSoft,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         onTextLayout = { cut = it.hasVisualOverflow },
@@ -75,7 +77,7 @@ fun Synopsis(
         // layout can be come to before the screen is drawn again.
         modifier = modifier
             .clip(shape)
-            .background(palette.accent.copy(alpha = 0.14f * lit))
+            .drawBehind { drawRect(palette.accent.copy(alpha = 0.14f * lit)) }
             .rim(shape, palette.accentBright, 1.5.dp) { lit }
             .focusProperties { canFocus = cut }
             .clickable(interaction, indication = null) { reading = cut },

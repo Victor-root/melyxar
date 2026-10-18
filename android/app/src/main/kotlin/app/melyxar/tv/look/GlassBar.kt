@@ -103,6 +103,7 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     Box(
         modifier = modifier.glassPress(PillShape, on, interaction, { lit }, onClick).padding(horizontal = 16.dp),
         contentAlignment = Alignment.Center,
@@ -113,7 +114,7 @@ fun GlassTab(text: String, on: Boolean, onClick: () -> Unit, modifier: Modifier 
             fontWeight = FontWeight.SemiBold,
             color = when {
                 on -> palette.accentContrast
-                lit > 0.5f -> palette.text
+                bright -> palette.text
                 else -> palette.textSoft
             },
             maxLines = 1,

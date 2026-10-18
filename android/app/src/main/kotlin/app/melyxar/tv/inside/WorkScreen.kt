@@ -58,6 +58,7 @@ import app.melyxar.server.Picture
 import app.melyxar.server.Work
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.lengthOfAPlay
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.trailer.TrailerButton
 import app.melyxar.tv.trailer.trailerOf
 import app.melyxar.tv.look.AccentButton
@@ -417,6 +418,7 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val shape = RoundedCornerShape(percent = 50)
     Text(
         name,
@@ -424,7 +426,7 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
         fontWeight = FontWeight.SemiBold,
         color = when {
             active -> palette.accentContrast
-            lit > 0.5f -> palette.text
+            bright -> palette.text
             else -> palette.textSoft
         },
         modifier = modifier

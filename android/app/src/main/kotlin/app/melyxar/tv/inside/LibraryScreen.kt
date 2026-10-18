@@ -1,6 +1,5 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +24,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -49,6 +49,7 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -262,12 +263,13 @@ private fun Letter(letter: String, current: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val shape = RoundedCornerShape(5.dp)
     Box(
         modifier = Modifier
             .size(Gutter - 4.dp, 16.dp)
             .clip(shape)
-            .background(palette.accent.copy(alpha = lit))
+            .drawBehind { drawRect(palette.accent.copy(alpha = lit)) }
             .clickable(interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -276,7 +278,7 @@ private fun Letter(letter: String, current: Boolean, onClick: () -> Unit) {
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = when {
-                lit > 0.5f -> palette.accentContrast
+                bright -> palette.accentContrast
                 current -> palette.accentBright
                 else -> palette.textFaint
             },

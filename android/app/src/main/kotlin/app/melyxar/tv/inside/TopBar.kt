@@ -89,6 +89,7 @@ import app.melyxar.tv.look.PillShape
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.glassPiece
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.music.LocalListening
 import app.melyxar.tv.music.NowDisc
@@ -409,11 +410,12 @@ private fun Brand() {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     Row(
         modifier = Modifier
             .height(46.dp)
             .glassPiece()
-            .background(palette.accent.copy(alpha = 0.22f * lit))
+            .drawBehind { drawRect(palette.accent.copy(alpha = 0.22f * lit)) }
             .rim(PillShape, palette.text, 2.dp) { lit }
             .focusProperties { canFocus = chrome.canGoBack }
             .clickable(interaction, indication = null, enabled = chrome.canGoBack) { chrome.go(Place.Home) }
@@ -422,7 +424,7 @@ private fun Brand() {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         if (chrome.canGoBack) {
-            Glyph(Icons.Back, if (lit > 0.5f) palette.text else palette.textSoft, 22.dp)
+            Glyph(Icons.Back, if (bright) palette.text else palette.textSoft, 22.dp)
         }
         val logo = chrome.branding.logo
         if (logo != null) {
@@ -485,7 +487,7 @@ private fun PlayingNow(modifier: Modifier, onClick: () -> Unit) {
         Cover(song)
         // Made only under the remote: its bars keep the song's levels
         // running while they are shown.
-        if (lit() > 0f) {
+        if (litPast(lit, over = 0f)) {
             NowDisc(now, Modifier.graphicsLayer { alpha = lit() })
         }
     }
@@ -533,7 +535,7 @@ private fun Account(modifier: Modifier) {
             modifier = modifier
                 .height(38.dp)
                 .clip(PillShape)
-                .background(palette.accent.copy(alpha = 0.22f * lit))
+                .drawBehind { drawRect(palette.accent.copy(alpha = 0.22f * lit)) }
                 .rim(PillShape, palette.text, 2.dp) { lit }
                 .clickable(interaction, indication = null) { open = true }
                 .padding(start = 12.dp, end = 3.dp),

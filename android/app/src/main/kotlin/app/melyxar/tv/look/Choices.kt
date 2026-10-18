@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -132,13 +133,14 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val shape = RoundedCornerShape(8.dp)
     Row(
         modifier = modifier
             .padding(top = 2.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(palette.accent.copy(alpha = 0.26f * lit))
+            .drawBehind { drawRect(palette.accent.copy(alpha = 0.26f * lit)) }
             .border(1.dp, palette.accent.copy(alpha = 0.45f * lit), shape)
             .clickable(interaction, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp),
@@ -149,7 +151,7 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
             Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
                 when {
                     chosen -> Glyph(Icons.Tick, palette.accentBright, 18.dp)
-                    icon != null -> Glyph(icon, if (lit > 0.5f) palette.text else palette.textSoft, 18.dp)
+                    icon != null -> Glyph(icon, if (bright) palette.text else palette.textSoft, 18.dp)
                 }
             }
         }
