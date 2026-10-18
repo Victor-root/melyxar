@@ -104,12 +104,6 @@ class Playback(
     /** The server holds where the film was left, once it is left. */
     private val onLeft: () -> Unit,
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context, DecodedSound(context))
-        .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
-        .setAudioAttributes(sound, true)
-        .setHandleAudioBecomingNoisy(true)
-        .build()
-
     var plan by mutableStateOf<Plan?>(null)
         private set
 
@@ -138,10 +132,6 @@ class Playback(
         private set
     var contrast by mutableFloatStateOf(keptLight.contrast())
         private set
-
-    /** Whether lighting effects are set on the player, which draws the film
-     *  straight while none ever were. */
-    private var lit = false
 
     /** Whether the picture is shown in standard range, the only one lit
      *  here: a film shown in HDR is the screen's to light. */
@@ -194,7 +184,42 @@ class Playback(
     private val clock = StartClock()
     private var keeping: Job? = null
 
+    /**
+     * What plays the film. Made anew, where the film is, when the picture has
+     * to start or stop going through Media3's effects, which light it: Media3
+     * settles that once, as a player first shows a film, and holds to it for
+     * as long as that player lives, so lighting chosen on a player that took
+     * the plain way showed only on the next film.
+     */
+    var player: ExoPlayer by mutableStateOf(newPlayer())
+        private set
+
+    /** Whether [player] passes the picture through Media3's effects. */
+    private var throughEffects = false
+
     init {
+        scope.launch {
+            try {
+                clock.mark("screen open, measuring the device")
+                val asking = asked(TrackChoice.Unsaid)
+                clock.mark("device measured, asking the plan")
+                val first = api.plan(source, asking)
+                clock.mark("plan received: ${first.method}, quality held to $quality, because ${first.reasons}")
+                audio = first.chosenAudioId
+                subtitle = first.chosenSubtitleId
+                open(first, from ?: first.resumeFromSeconds ?: 0.0)
+            } catch (_: IOException) {
+                failed = true
+            }
+        }
+    }
+
+    private fun newPlayer(): ExoPlayer {
+        val player = ExoPlayer.Builder(context, DecodedSound(context))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
+            .setAudioAttributes(sound, true)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
         // The words are read and drawn by Melyxar, which can move them.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -242,20 +267,7 @@ class Playback(
                 }
             }
         })
-        scope.launch {
-            try {
-                clock.mark("screen open, measuring the device")
-                val asking = asked(TrackChoice.Unsaid)
-                clock.mark("device measured, asking the plan")
-                val first = api.plan(source, asking)
-                clock.mark("plan received: ${first.method}, quality held to $quality, because ${first.reasons}")
-                audio = first.chosenAudioId
-                subtitle = first.chosenSubtitleId
-                open(first, from ?: first.resumeFromSeconds ?: 0.0)
-            } catch (_: IOException) {
-                failed = true
-            }
-        }
+        return player
     }
 
     /** Where the film is, in seconds. */
@@ -301,8 +313,8 @@ class Playback(
             .apply { if (plan.method != "direct_play") setMimeType(MimeTypes.APPLICATION_M3U8) }
             .build()
         clock.mark("film handed to the player at $at s")
+        drawPicture(carryOn = false)
         player.setMediaItem(item, (at * 1000).toLong())
-        drawPicture()
         player.prepare()
         player.play()
         keepTheStream()
@@ -353,16 +365,42 @@ class Playback(
         this.brightness = brightness
         this.contrast = contrast
         keptLight.keep(brightness, contrast)
-        drawPicture()
+        drawPicture(carryOn = true)
     }
 
-    /** The picture lit as chosen, while it is shown in standard range. */
-    private fun drawPicture() {
-        val effects = if (lightsThePicture) lightEffects(brightness, contrast) else emptyList()
-        if (effects.isNotEmpty() || lit) {
-            player.setVideoEffects(effects)
-            lit = effects.isNotEmpty()
+    /**
+     * The picture lit as chosen while it is shown in standard range, at once
+     * on a player already passing it through the effects. Otherwise on a new
+     * player, [carryOn] taking the film over to it where it is; a player
+     * passing through the effects is also let go of for a picture shown in
+     * HDR, which the effects would draw wrong.
+     */
+    private fun drawPicture(carryOn: Boolean) {
+        val lighting = lightsThePicture && (brightness != 1f || contrast != 1f)
+        when {
+            // Nothing shown yet: this one takes whichever way is set now.
+            player.currentMediaItem == null -> {
+                if (lighting) player.setVideoEffects(lightEffects(brightness, contrast))
+                throughEffects = lighting
+            }
+            lighting && !throughEffects || !lightsThePicture && throughEffects -> anotherPlayer(lighting, carryOn)
+            throughEffects -> player.setVideoEffects(lightEffects(brightness, contrast))
         }
+    }
+
+    private fun anotherPlayer(lighting: Boolean, carryOn: Boolean) {
+        val before = player
+        val next = newPlayer()
+        if (lighting) next.setVideoEffects(lightEffects(brightness, contrast))
+        throughEffects = lighting
+        next.setPlaybackSpeed(before.playbackParameters.speed)
+        if (carryOn) {
+            before.currentMediaItem?.let { next.setMediaItem(it, before.currentPosition) }
+            next.playWhenReady = before.playWhenReady
+            next.prepare()
+        }
+        player = next
+        before.release()
     }
 
     fun chooseSpeed(chosen: Float) {

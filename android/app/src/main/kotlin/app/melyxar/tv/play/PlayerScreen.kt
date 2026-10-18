@@ -152,7 +152,10 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     LaunchedEffect(playing) { if (playing) played = true }
     if (played) playback.plan?.thumbnails?.let { FetchingSheets(it) }
 
-    DisposableEffect(playback) {
+    // Heard on the player playing now: one is made anew when the picture
+    // starts or stops being lit.
+    val player = playback.player
+    DisposableEffect(player) {
         val heard = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 playing = isPlaying
@@ -163,8 +166,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 waiting = state == Player.STATE_BUFFERING || state == Player.STATE_IDLE
             }
         }
-        playback.player.addListener(heard)
-        onDispose { playback.player.removeListener(heard) }
+        player.addListener(heard)
+        onDispose { player.removeListener(heard) }
     }
     // Over with no next episode to announce: back to where it came from.
     LaunchedEffect(ended, declined) {
