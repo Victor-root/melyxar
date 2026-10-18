@@ -14,6 +14,7 @@ import { BACKGROUNDS, COLOURS, DEFAULT_APPEARANCE, EDGES, HEIGHTS, SIZES } from 
 import { AUTOMATIC, CODECS, codecName } from "./codec";
 import type { SheetName } from "./drawer";
 import { SPEEDS } from "./engine";
+import { LIGHTS, lightName, lightsThePicture } from "./picture-light";
 import type { Playback } from "./engine";
 import { Line, Menu, OffsetSlider, offsetSaid } from "./menu";
 import type { Surroundings } from "./overlay";
@@ -42,6 +43,8 @@ export type Panel =
   | "settings.quality"
   | "settings.codec"
   | "settings.wide_gamut"
+  | "settings.brightness"
+  | "settings.contrast"
   | "settings.shape"
   | "settings.turn"
   | "settings.repeat"
@@ -414,6 +417,26 @@ function sheetFor(
                 onPick={() => onPanel("settings.wide_gamut")}
               />
             )}
+            {/* Only while the picture is shown in standard range: a film
+                shown in HDR is the screen's to light. */}
+            {lightsThePicture(plan) && (
+              <>
+                <Line
+                  label={t("player.brightness")}
+                  value={lightName(surroundings.settings.brightness, surroundings.language)}
+                  changed={surroundings.settings.brightness !== 1}
+                  into
+                  onPick={() => onPanel("settings.brightness")}
+                />
+                <Line
+                  label={t("player.contrast")}
+                  value={lightName(surroundings.settings.contrast, surroundings.language)}
+                  changed={surroundings.settings.contrast !== 1}
+                  into
+                  onPick={() => onPanel("settings.contrast")}
+                />
+              </>
+            )}
             <Line
               label={t("player.repeat")}
               value={t(playback.repeat ? "player.repeat.film" : "player.repeat.none")}
@@ -484,6 +507,23 @@ function sheetFor(
           />
         )),
       };
+
+    case "settings.brightness":
+    case "settings.contrast": {
+      const which = panel === "settings.brightness" ? "brightness" : "contrast";
+      return {
+        title: t(`player.${which}`),
+        from: "settings",
+        lines: LIGHTS.map((light) => (
+          <Line
+            key={light}
+            label={lightName(light, surroundings.language)}
+            chosen={surroundings.settings[which] === light}
+            onPick={() => surroundings.onSettings({ [which]: light })}
+          />
+        )),
+      };
+    }
 
     case "settings.speed":
       return {

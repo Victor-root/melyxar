@@ -46,6 +46,7 @@ import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
 import type { Panel, Shape, Turn } from "./panels";
+import { lightFilter, lightsThePicture } from "./picture-light";
 import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
@@ -261,6 +262,11 @@ function Film({
     [t, language],
   );
 
+  /* How bright and contrasted this device shows the picture, only while it
+     is shown in standard range. */
+  const lit = plan ? lightsThePicture(plan) : false;
+  const brightness = lit ? settings.brightness : 1;
+  const contrast = lit ? settings.contrast : 1;
   const pictureClass = `player-video player-video-${shape}${turn === 0 ? "" : ` player-video-turned player-video-turned-${turn}`}`;
   /* The picture itself starts and stops the film, the way every player does
      it: the button is a long way from where the eyes are. Twice puts it
@@ -304,6 +310,8 @@ function Film({
             src={canBePlayedAsItIs(plan) ? plan.url : undefined}
             fit={shape}
             turn={turn}
+            brightness={brightness}
+            contrast={contrast}
             onClick={pictureClick}
             onDoubleClick={pictureDoubleClick}
           >
@@ -318,6 +326,7 @@ function Film({
             className={pictureClass}
             src={canBePlayedAsItIs(plan) ? plan.url : undefined}
             autoPlay
+            style={{ filter: lightFilter(brightness, contrast) }}
             onClick={pictureClick}
             onDoubleClick={pictureDoubleClick}
           >

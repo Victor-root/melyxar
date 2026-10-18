@@ -16,6 +16,7 @@
  */
 
 import { safeRead, safeWrite } from "../i18n";
+import { LIGHTS, type Light } from "./picture-light";
 
 /**
  * How long the controls stay up once a hand stops moving, in thousandths.
@@ -47,12 +48,26 @@ export interface PlayerSettings {
    * true if the sheets are ever made larger.
    */
   previewScale: PreviewScale;
+  /**
+   * How bright and how contrasted the picture is shown, as a share of what
+   * comes: this screen's answer to a film converted to standard range that
+   * comes out too dark on it.
+   */
+  brightness: Light;
+  contrast: Light;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
   keepTheControlsUp: false,
   previewScale: 1,
+  brightness: 1,
+  contrast: 1,
 };
+
+/** A step of light read back, or the usual one for anything else. */
+function lightRead(value: unknown): Light {
+  return (LIGHTS as readonly unknown[]).includes(value) ? (value as Light) : 1;
+}
 
 const STORED = "melyxar.player";
 
@@ -79,6 +94,8 @@ export function storedSettings(): PlayerSettings {
     previewScale: (PREVIEW_SCALES as readonly number[]).includes(values.previewScale as number)
       ? (values.previewScale as PreviewScale)
       : DEFAULT_SETTINGS.previewScale,
+    brightness: lightRead(values.brightness),
+    contrast: lightRead(values.contrast),
   };
 }
 

@@ -28,6 +28,10 @@ export interface AppPlayer {
   /** How the picture is fitted into the screen (`auto`, `cover`, `stretch`)
    *  and how far it is turned clockwise, in degrees. */
   setShape(id: number, fit: string, turn: number): void;
+  /** How bright and contrasted the picture is drawn, as a share of what
+   *  comes, 1 leaving it as it is. Absent from an application older than
+   *  this page, which then draws the picture as it comes. */
+  setLight?(id: number, brightness: number, contrast: number): void;
   close(id: number): void;
   /** What this device decodes, as the JSON of the profile the server reads,
    *  measured by the application rather than guessed by the page. */
@@ -45,6 +49,8 @@ export interface OpenSettings {
   loop: boolean;
   fit: Shape;
   turn: Turn;
+  brightness: number;
+  contrast: number;
 }
 
 /** What the application's player says about the picture numbered `id`. */

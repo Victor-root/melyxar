@@ -136,6 +136,8 @@ export class NativePicture extends HTMLElement implements Picture {
   private looping = false;
   private fitting: Shape = "auto";
   private turning: Turn = 0;
+  private lightness = 1;
+  private contrasting = 1;
   autoplay = true;
   readonly textTracks = new NativeWordsTracks();
 
@@ -170,6 +172,8 @@ export class NativePicture extends HTMLElement implements Picture {
         loop: this.looping,
         fit: this.fitting,
         turn: this.turning,
+        brightness: this.lightness,
+        contrast: this.contrasting,
       }),
     );
   }
@@ -315,6 +319,26 @@ export class NativePicture extends HTMLElement implements Picture {
     this.ask((player, id) => player.setShape(id, this.fitting, turn));
   }
 
+  /** How bright and contrasted the picture is drawn, by the application
+   *  too, as a share of what comes. */
+  get brightness() {
+    return this.lightness;
+  }
+
+  set brightness(brightness: number) {
+    this.lightness = brightness;
+    this.ask((player, id) => player.setLight?.(id, brightness, this.contrasting));
+  }
+
+  get contrast() {
+    return this.contrasting;
+  }
+
+  set contrast(contrast: number) {
+    this.contrasting = contrast;
+    this.ask((player, id) => player.setLight?.(id, this.lightness, contrast));
+  }
+
   get videoWidth() {
     return this.told.width;
   }
@@ -391,7 +415,12 @@ type Tag<T> = React.HTMLAttributes<HTMLElement> & {
 declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
-      "melyxar-picture": Tag<NativePicture> & { fit?: Shape; turn?: Turn };
+      "melyxar-picture": Tag<NativePicture> & {
+        fit?: Shape;
+        turn?: Turn;
+        brightness?: number;
+        contrast?: number;
+      };
       "melyxar-words": Tag<WordsHolder>;
     }
   }
