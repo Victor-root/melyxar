@@ -6,10 +6,21 @@
  * Saying by hand what a work is
  * ----------------------------------------------------------------------- */
 
+/* What to look for, on the same glass as the work above it: the name across
+   the whole width, the three narrower ways to say it side by side. */
 .identify-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--gap);
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+}
+
+.identify-form > .identify-said,
+.identify-form > .identify-field:first-of-type {
+  grid-column: 1 / -1;
 }
 
 .identify-said {
@@ -29,37 +40,17 @@
   color: var(--text-soft);
 }
 
-/* Which work this is, by its files, at the head of every step. The name
-   first and read in full, the folder under it quieter; both long, so they
-   wrap rather than being cut. */
+/* Which work this is, by its files: the name first and read in full, the
+   folder under it quieter; both long, so they wrap rather than being cut. */
+.identify-work {
+  align-items: start;
+}
+
 .identify-files {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: var(--gap);
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-}
-
-.identify-files-mark {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-  color: var(--accent-bright);
-}
-
-.identify-files-words {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 0;
+  margin-top: 6px;
 }
 
 .identify-file {
@@ -70,7 +61,7 @@
 
 .identify-file-name {
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -99,8 +90,9 @@
 }
 
 .identify-heading {
-  margin: 0 0 var(--gap);
-  font-size: 19px;
+  flex: none;
+  margin: 0;
+  font-size: 17px;
   font-weight: 650;
 }
 
@@ -108,6 +100,7 @@
    same year are told apart by their artwork and by nothing else. */
 .identify-found {
   display: grid;
+  flex: none;
   grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
   gap: var(--gap);
   list-style: none;
@@ -120,25 +113,26 @@
   flex-direction: column;
   gap: 3px;
   width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
   text-align: left;
-  transition: transform var(--quick) var(--ease);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
 }
 
 .identify-choice:hover {
-  transform: scale(1.035);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 14px 2px var(--accent-glow);
 }
 
 .identify-poster {
   display: block;
   aspect-ratio: 2 / 3;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border);
+  margin-bottom: 4px;
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
   overflow: hidden;
-}
-
-.identify-choice:hover .identify-poster {
-  border-color: var(--accent);
 }
 
 .identify-poster img {
@@ -165,28 +159,27 @@
 }
 
 /* The one that was chosen, large enough to be sure of before agreeing to it. */
-.identify-agreeing {
+.finder-offer.identify-chosen {
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   gap: var(--gap-wide);
-}
-
-.identify-chosen {
-  display: flex;
-  gap: var(--gap-wide);
+  content-visibility: visible;
 }
 
 .identify-chosen .identify-poster {
   flex: 0 0 160px;
+  margin: 0;
 }
 
 .identify-chosen .identify-said {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 .identify-chosen .identify-name {
+  color: var(--text);
   font-size: 19px;
 }
 
@@ -197,6 +190,16 @@
   -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .identify-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .identify-chosen .identify-poster {
+    flex-basis: 110px;
+  }
 }
 
 /* The two ways a work can be deleted, each with what it means under it. */
@@ -241,6 +244,7 @@
 
 .identify-also {
   display: flex;
+  flex: none;
   align-items: center;
   gap: var(--gap-tight);
   cursor: pointer;
