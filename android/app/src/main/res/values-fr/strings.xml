@@ -287,6 +287,7 @@
     <string name="tv_settings_probe">Test de fluidité</string>
     <string name="tv_setting_probe_shadows">Ombres</string>
     <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>
+    <string name="tv_setting_probe_card_layers">Cartes gardées en image</string>
     <string name="tv_probe_shown">Oui</string>
     <string name="tv_probe_left_out">Non</string>
     <plurals name="tv_seconds">

@@ -10,6 +10,9 @@ import android.util.Log
 import android.view.FrameMetrics
 import android.view.KeyEvent
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import java.util.concurrent.atomic.AtomicInteger
 
 /*
@@ -19,8 +22,21 @@ import java.util.concurrent.atomic.AtomicInteger
  * found and removed whole.
  */
 
-/** A part of the screens the probe can leave out, to measure its cost. */
-enum class Part { Shadows, BannerFade }
+/** A way of drawing the screens the probe switches on and off, to
+ *  measure its cost, and whether it is on until it is switched. */
+enum class Part(val byDefault: Boolean) {
+    Shadows(true),
+    BannerFade(true),
+
+    /** Each card kept by the graphics card as a ready picture, drawn again
+     *  only when something on it changes. */
+    CardLayers(false),
+}
+
+/** A card's picture kept ready by the graphics card while [Part.CardLayers]
+ *  is on, read as the card composes so switching it shows at once. */
+fun Modifier.cardLayer(): Modifier =
+    if (Probe.shows(Part.CardLayers)) graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen } else this
 
 object Probe {
     private const val TAG = "MlxPerf"
@@ -32,7 +48,7 @@ object Probe {
 
     private var kept: android.content.SharedPreferences? = null
 
-    private val shown = Part.entries.associateWith { mutableStateOf(true) }
+    private val shown = Part.entries.associateWith { mutableStateOf(it.byDefault) }
 
     private val shadowsMade = AtomicInteger()
     private val shadowsDrawn = AtomicInteger()
@@ -64,20 +80,20 @@ object Probe {
     fun show(part: Part, on: Boolean) {
         shown.getValue(part).value = on
         kept?.edit()?.putBoolean(part.name, on)?.apply()
-        Log.i(TAG_PART, "${part.name} ${if (on) "shown" else "left out"}")
+        Log.i(TAG_PART, "${part.name} ${if (on) "on" else "off"}")
     }
 
-    private fun leftOut() = Part.entries.filterNot(::shows).joinToString(",") { it.name }.ifEmpty { "none" }
+    private fun switched() = Part.entries.joinToString(" ") { "${it.name}=${if (shows(it)) "on" else "off"}" }
 
     /** Starts logging every frame [activity] draws, with a summary each second. */
     fun watch(activity: Activity) {
         kept = activity.getSharedPreferences(KEPT, Context.MODE_PRIVATE).also { prefs ->
-            Part.entries.forEach { part -> shown.getValue(part).value = prefs.getBoolean(part.name, true) }
+            Part.entries.forEach { part -> shown.getValue(part).value = prefs.getBoolean(part.name, part.byDefault) }
         }
         @Suppress("DEPRECATION")
         val refresh = activity.windowManager.defaultDisplay.refreshRate
         val budgetNs = (1e9 / refresh).toLong()
-        Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, left out: ${leftOut()}")
+        Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, ${switched()}")
         val thread = HandlerThread("MlxPerf").apply { start() }
         val handler = Handler(thread.looper)
         activity.window.addOnFrameMetricsAvailableListener({ _, metrics, dropped ->
@@ -127,7 +143,7 @@ object Probe {
             TAG,
             "1s: $count frames, $janky janky (${janky * 100 / count}%), " +
                 "p50=${ms(frames[count / 2])} p90=${ms(frames[count * 9 / 10])} max=${ms(frames[count - 1])} ms | " +
-                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | left out: ${leftOut()} | shadows made=$made baked=$baked drawn=$drawn | heap=${heap} MB",
+                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | ${switched()} | shadows made=$made baked=$baked drawn=$drawn | heap=${heap} MB",
         )
         frames.clear()
         phases.fill(0)
