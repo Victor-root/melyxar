@@ -284,6 +284,11 @@
     <string name="tv_setting_sound_out">Son que la télévision ne décode pas</string>
     <string name="tv_sound_decoded">Converti par le serveur, volume réglable</string>
     <string name="tv_sound_passed_on">Envoyé tel quel à l’ampli</string>
+    <string name="tv_settings_probe">Test de fluidité</string>
+    <string name="tv_setting_probe_shadows">Ombres</string>
+    <string name="tv_probe_shadows_normal">Normales</string>
+    <string name="tv_probe_shadows_hard">Sans flou</string>
+    <string name="tv_probe_shadows_none">Aucune</string>
     <plurals name="tv_seconds">
         <item quantity="one">%d seconde</item>
         <item quantity="many">%d de secondes</item>

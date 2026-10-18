@@ -2,6 +2,7 @@ package app.melyxar.tv
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
@@ -15,6 +16,7 @@ import app.melyxar.server.KnownServers
 import app.melyxar.server.Sessions
 import app.melyxar.server.network
 import app.melyxar.tv.look.TvScale
+import app.melyxar.tv.probe.Probe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -31,6 +33,7 @@ class TvActivity : ComponentActivity() {
         // and lift what is typed in above it, on every version of Android.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        Probe.watch(this)
         // Built while the window comes up rather than in its first frame:
         // making the client readies everything a secure connection needs.
         lifecycleScope.launch(Dispatchers.IO) { network }
@@ -41,6 +44,11 @@ class TvActivity : ComponentActivity() {
         val sessions = Sessions(this)
         opening = intent.getStringExtra(OPENING)
         setContent { TvScale { TvApp(servers, sessions, opening, onOpened = { opening = null }, onLeave = ::finish) } }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        Probe.key(event)
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onNewIntent(intent: Intent) {

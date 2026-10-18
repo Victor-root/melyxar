@@ -53,6 +53,8 @@ import app.melyxar.tv.look.listLine
 import app.melyxar.tv.music.LocalListening
 import app.melyxar.tv.play.passSoundOn
 import app.melyxar.tv.play.soundPassedOn
+import app.melyxar.tv.probe.Probe
+import app.melyxar.tv.probe.ShadowTest
 import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -320,6 +322,14 @@ fun SettingsScreen(sessions: Sessions) {
                             passSoundOn(context, passed)
                             passedOn = passed
                         }
+                    }
+                }
+                group("probe-shadows", R.string.tv_settings_probe, Icons.Eye) {
+                    val title = stringResource(R.string.tv_setting_probe_shadows)
+                    val tests = ShadowTest.entries
+                    val names = listOf(R.string.tv_probe_shadows_normal, R.string.tv_probe_shadows_hard, R.string.tv_probe_shadows_none).map { stringResource(it) }
+                    Line("probe-shadows", title, names[tests.indexOf(Probe.shadows)], memory) {
+                        ask(title, tests, names, Probe.shadows, choose = Probe::chooseShadows)
                     }
                 }
             }
