@@ -38,6 +38,17 @@
   background: var(--panel-glass);
 }
 
+/* In place of a picture, the mark of what is looked up, on the accent. */
+.finder-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-bright);
+}
+
 .finder-head-words {
   display: flex;
   flex-direction: column;
