@@ -18,9 +18,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -71,7 +68,7 @@ fun <T> CardRow(
 ) {
     val scrolling = rememberRowScrolling()
     val ahead = cardsAcross()
-    val first = remember { FocusRequester() }
+    val row = remember { RowMemory() }
     // The room the cards are given above and below, to grow into as the
     // remote comes, counts in the gap to what follows.
     Column(modifier.padding(bottom = SectionGap - ROW_ROOM)) {
@@ -81,10 +78,10 @@ fun <T> CardRow(
                 state = rememberLazyListState(prefetchStrategy = remember(ahead) { LazyListPrefetchStrategy(nestedPrefetchItemCount = ahead) }),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                modifier = Modifier.focusRestorer(first),
+                modifier = Modifier.landsAsLeft(row, items.firstOrNull()?.let(key)),
             ) {
                 items(items.size, key = { key(items[it]) }) { at ->
-                    Box(if (at == 0) Modifier.focusRequester(first) else Modifier) { card(items[at]) }
+                    Box(Modifier.inRow(row, key(items[at]))) { card(items[at]) }
                 }
             }
         }

@@ -1,5 +1,6 @@
 package app.melyxar.tv.inside
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusState
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 
@@ -49,6 +51,43 @@ fun rememberFocusMemory(): FocusMemory =
 fun Modifier.remembered(memory: FocusMemory, key: String): Modifier = this
     .focusRequester(memory.requester(key))
     .onFocusChanged(memory.noter(key))
+
+/**
+ * Which piece of a row the remote was last on. Coming into the row with the
+ * remote's arrows lands there again, or on its first piece; a piece put back
+ * by name, as a screen coming back puts its last one, is let be, where the
+ * system's own restorer sends it to the first piece it knows of.
+ */
+@Stable
+class RowMemory {
+    private var last: Any? = null
+    private val requesters = HashMap<Any, FocusRequester>()
+    private val noters = HashMap<Any, (FocusState) -> Unit>()
+
+    fun requester(key: Any): FocusRequester = requesters.getOrPut(key) { FocusRequester() }
+
+    fun noter(key: Any): (FocusState) -> Unit = noters.getOrPut(key) { { if (it.hasFocus) last = key } }
+
+    /** Puts the remote on the piece it left, or on [first]; false when
+     *  neither is there. */
+    fun land(first: Any?): Boolean = listOfNotNull(last, first).any { key -> requesters[key]?.let(::takes) == true }
+}
+
+/** The row holding the pieces of [row], [first] the key of its first. */
+fun Modifier.landsAsLeft(row: RowMemory, first: Any?): Modifier = this
+    .focusProperties {
+        onEnter = {
+            if (requestedFocusDirection != FocusDirection.Enter) {
+                row.land(first)
+            }
+        }
+    }
+    .focusGroup()
+
+/** A piece of [row], under a [key] unique in it. */
+fun Modifier.inRow(row: RowMemory, key: Any): Modifier = this
+    .focusRequester(row.requester(key))
+    .onFocusChanged(row.noter(key))
 
 /**
  * Once the screen is drawn, puts the remote back on its last piece, or on
