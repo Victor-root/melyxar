@@ -1209,6 +1209,8 @@ impl Session {
         let began = Instant::now();
         let deadline = began + PATIENCE;
         let mut appeared: Option<Instant> = None;
+        let mut set_going_again = false;
+        let rungs_down_at_first = self.stepped_down.load(Ordering::SeqCst);
         loop {
             let tool_is_gone = self.the_tool_is_gone().await;
             if path.exists() && appeared.is_none() {
@@ -1227,7 +1229,26 @@ impl Session {
             // out the deadline only delays the same answer, and answers it
             // with the wrong reason: a tool that died on its first frame
             // looked exactly like a machine that was merely slow.
+            //
+            // Unless the tool is gone because whoever else waited on the same
+            // run already read why it stopped, and is asking the card for less:
+            // answered as a failure here, the first segment of a film started
+            // from a chapter came back as an error while the run that would
+            // have produced it was being set going, and the page never asked
+            // for it again. Set going once more from here, and waited for.
             if tool_is_gone {
+                if !set_going_again && self.running.lock().await.is_none() {
+                    // The other waiter steps down the moment it has read why.
+                    tokio::time::sleep(LOOK_AGAIN_EVERY).await;
+                    let rungs_down = self.stepped_down.load(Ordering::SeqCst);
+                    if rungs_down != rungs_down_at_first
+                        && rungs_down <= self.recipe.if_the_card_refuses.len()
+                    {
+                        set_going_again = true;
+                        self.make_sure_someone_is_producing(index).await?;
+                        continue;
+                    }
+                }
                 return Err(self.why_nothing_came(index).await);
             }
 
