@@ -84,10 +84,19 @@ class Works(
         tries += 1
     }
 
-    /** Reads the grid again from its top, as far as it had been read: what
-     *  was watched meanwhile shows on its card. */
+    /** Reads the grid again from its top, as far as it had been read, up to
+     *  [FURTHEST]: what was watched meanwhile shows on its card, and the
+     *  card the remote is on stays in the grid. Shown once read whole. */
     suspend fun refresh() {
-        read(null, (cards?.size ?: PAGE).coerceIn(PAGE, MOST), emptyList())
+        val wanted = (cards?.size ?: PAGE).coerceIn(PAGE, FURTHEST)
+        var fresh = emptyList<Card>()
+        var after: String? = null
+        do {
+            val page = ask { api.works(browse, after, minOf(MOST, wanted - fresh.size)) } ?: return
+            fresh = fresh + page.cards
+            after = page.next
+        } while (after != null && page.cards.isNotEmpty() && fresh.size < wanted)
+        show(Pages(fresh, after))
     }
 
     /** The remote is on the card at [at]: the next page is read when it
@@ -115,20 +124,28 @@ class Works(
         }
     }
 
-    private suspend fun read(after: String?, limit: Int, adding: List<Card>): Boolean = try {
-        val page = api.works(browse, after, limit)
-        val pages = Pages(adding + page.cards, page.next)
+    private suspend fun read(after: String?, limit: Int, adding: List<Card>): Boolean {
+        val page = ask { api.works(browse, after, limit) } ?: return false
+        show(Pages(adding + page.cards, page.next))
+        return true
+    }
+
+    private fun show(pages: Pages) {
         answers[question] = pages
         next = pages.next
         cards = pages.cards
         failed = false
-        true
+    }
+
+    /** What the server answers, or nothing when it does not. */
+    private suspend fun <T> ask(asking: suspend () -> T): T? = try {
+        asking()
     } catch (refused: Refusal) {
         if (refused.signedOut) signedOut() else failed = cards == null
-        false
+        null
     } catch (_: IOException) {
         failed = cards == null
-        false
+        null
     }
 }
 
