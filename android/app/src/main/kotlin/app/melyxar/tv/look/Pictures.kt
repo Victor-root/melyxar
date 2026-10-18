@@ -21,12 +21,17 @@ import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.probe.probed
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+
+/** The share of the app's memory the pictures already drawn are kept in:
+ *  the home screen's alone fill the usual fifth. */
+private const val PICTURES_KEPT = 0.35
 
 /** The server the screens are drawn from, and the pictures fetched from it
  *  with its session. */
@@ -41,6 +46,7 @@ fun rememberPictures(api: Api): ImageLoader {
         ImageLoader.Builder(context)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { api.http })) }
             .eventListener(PictureProbe)
+            .memoryCache { MemoryCache.Builder().maxSizePercent(context, PICTURES_KEPT).build() }
             .build()
     }
 }
