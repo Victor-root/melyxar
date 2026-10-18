@@ -327,7 +327,7 @@ fun SettingsScreen(sessions: Sessions) {
                 group("probe-shadows", R.string.tv_settings_probe, Icons.Eye) {
                     val title = stringResource(R.string.tv_setting_probe_shadows)
                     val tests = ShadowTest.entries
-                    val names = listOf(R.string.tv_probe_shadows_normal, R.string.tv_probe_shadows_hard, R.string.tv_probe_shadows_none).map { stringResource(it) }
+                    val names = listOf(R.string.tv_probe_shadows_baked, R.string.tv_probe_shadows_live, R.string.tv_probe_shadows_none).map { stringResource(it) }
                     Line("probe-shadows", title, names[tests.indexOf(Probe.shadows)], memory) {
                         ask(title, tests, names, Probe.shadows, choose = Probe::chooseShadows)
                     }

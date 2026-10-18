@@ -21,8 +21,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * found and removed whole.
  */
 
-/** How the cards' shadows are drawn, to compare their cost on the box. */
-enum class ShadowTest { Normal, Hard, None }
+/** How the cards' shadows are drawn, to compare their cost on the box:
+ *  from masks made once, blurred and cut live each frame, or not at all. */
+enum class ShadowTest { Baked, Live, None }
 
 object Probe {
     private const val TAG = "MlxPerf"
@@ -35,11 +36,12 @@ object Probe {
 
     private var kept: android.content.SharedPreferences? = null
 
-    var shadows by mutableStateOf(ShadowTest.Normal)
+    var shadows by mutableStateOf(ShadowTest.Baked)
         private set
 
     private val shadowsMade = AtomicInteger()
     private val shadowsDrawn = AtomicInteger()
+    private val shadowsBaked = AtomicInteger()
     private val litStarted = AtomicInteger()
     private val keys = AtomicInteger()
     private val picturesFaded = AtomicInteger()
@@ -70,7 +72,7 @@ object Probe {
     /** Starts logging every frame [activity] draws, with a summary each second. */
     fun watch(activity: Activity) {
         kept = activity.getSharedPreferences(KEPT, Context.MODE_PRIVATE).also { prefs ->
-            shadows = prefs.getString(KEPT_SHADOWS, null)?.let { name -> ShadowTest.entries.firstOrNull { it.name == name } } ?: ShadowTest.Normal
+            shadows = prefs.getString(KEPT_SHADOWS, null)?.let { name -> ShadowTest.entries.firstOrNull { it.name == name } } ?: ShadowTest.Baked
         }
         @Suppress("DEPRECATION")
         val refresh = activity.windowManager.defaultDisplay.refreshRate
@@ -108,6 +110,7 @@ object Probe {
     private fun summary() {
         val made = shadowsMade.getAndSet(0)
         val drawn = shadowsDrawn.getAndSet(0)
+        val baked = shadowsBaked.getAndSet(0)
         val lit = litStarted.getAndSet(0)
         val pressed = keys.getAndSet(0)
         val faded = picturesFaded.getAndSet(0)
@@ -124,7 +127,7 @@ object Probe {
             TAG,
             "1s: $count frames, $janky janky (${janky * 100 / count}%), " +
                 "p50=${ms(frames[count / 2])} p90=${ms(frames[count * 9 / 10])} max=${ms(frames[count - 1])} ms | " +
-                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | shadows ${shadows.name} made=$made drawn=$drawn | heap=${heap} MB",
+                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | shadows ${shadows.name} made=$made baked=$baked drawn=$drawn | heap=${heap} MB",
         )
         frames.clear()
         phases.fill(0)
@@ -146,6 +149,11 @@ object Probe {
     /** A shadow's drawing worked out anew. */
     fun shadowMade() {
         shadowsMade.incrementAndGet()
+    }
+
+    /** A shadow's mask drawn anew rather than found made. */
+    fun shadowBaked() {
+        shadowsBaked.incrementAndGet()
     }
 
     /** A shadow drawn. */
