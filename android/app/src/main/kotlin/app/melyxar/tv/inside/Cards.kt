@@ -40,6 +40,7 @@ import app.melyxar.theme.parseHex
 import app.melyxar.tv.howFarIn
 import app.melyxar.tv.lengthOfAPlay
 import app.melyxar.tv.look.CardShape
+import app.melyxar.tv.look.Drawn
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
@@ -64,6 +65,11 @@ private val Corner = GenericShape { size, _ ->
     close()
 }
 
+/** The picture a card of [this] work draws, its still when it [lies] and
+ *  has one, its poster otherwise, and how wide. */
+fun Card.drawn(lies: Boolean): Drawn =
+    Drawn(if (lies && wide.isNotEmpty()) wide else poster, if (lies) WideWidth else PosterWidth)
+
 /**
  * A work in a row or a grid, as the web draws it: its poster standing, or
  * its still lying down for what is told apart by the still, with how far in
@@ -83,7 +89,7 @@ fun WorkCard(
     val palette = LocalPalette.current
     val whereabouts = LocalMarks.current.whereabouts(card)
     val progress = whereabouts.resume?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) }
-    val across = if (lying) WideWidth else PosterWidth
+    val (pictures, across) = card.drawn(lying)
     PictureCard(
         across = across,
         down = if (lying) across * 9 / 16 else across * 3 / 2,
@@ -94,7 +100,6 @@ fun WorkCard(
         onClick = onClick,
         modifier = modifier.offersMenuOf(Offered.Work(card)),
     ) { glowing ->
-        val pictures = if (lying && card.wide.isNotEmpty()) card.wide else card.poster
         if (pictures.isEmpty()) {
             NoPicture(card, across)
         } else {
