@@ -213,7 +213,15 @@ class Playback(
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) reached(LoadingStage.Done)
+                if (state == Player.STATE_READY || state == Player.STATE_ENDED) reached(LoadingStage.Done)
+                // Waiting again in the middle of a film the server rebuilds,
+                // after a jump or a stall: counted again from what it says.
+                if (state == Player.STATE_BUFFERING && stage == LoadingStage.Done) {
+                    stream?.let {
+                        stage = LoadingStage.ManifestParsed
+                        countTheWait(it.id, afresh = true)
+                    }
+                }
             }
         })
         scope.launch {
@@ -266,7 +274,7 @@ class Playback(
                 clock.mark("stream opened")
                 stream = it
                 reached(LoadingStage.SessionOpened)
-                countTheWait(it.id)
+                countTheWait(it.id, afresh = false)
             }.let { api.address(it.playlistUrl) }
         }
         readTheWords()
@@ -435,23 +443,34 @@ class Playback(
         }
     }
 
-    /** Reads how far the server has got with the first piece, and moves the
-     *  number shown toward it, until the film plays. */
-    private fun countTheWait(id: String) {
+    /**
+     * Reads how far the server has got with the first piece, and moves the
+     * number shown toward it, until the film plays. Waiting [afresh] in the
+     * middle of a film, the server tells of the piece the film was playing
+     * from until it starts its tool again where the film went, counting that
+     * piece from nothing: no number is shown before, rather than a wrong one.
+     */
+    private fun countTheWait(id: String, afresh: Boolean) {
         counting?.cancel()
         counting = scope.launch {
             var written = 0f
+            var heard = !afresh
             while (isActive && stage != LoadingStage.Done) {
                 try {
                     val seen = api.preparation(id)
-                    written = maxOf(written, seen.firstWritten)
-                    reached(if (seen.firstWritten >= 1f) LoadingStage.Produced else if (seen.step != "starting") LoadingStage.Producing else stage)
+                    heard = heard || seen.firstWritten < 1f
+                    if (heard) {
+                        written = maxOf(written, seen.firstWritten)
+                        reached(if (seen.firstWritten >= 1f) LoadingStage.Produced else if (seen.step != "starting") LoadingStage.Producing else stage)
+                    }
                 } catch (_: IOException) {
                     // The next look carries the same news.
                 } catch (_: Refusal) {
                     // Nor is a refused look worth troubling the viewer with.
                 }
-                loading?.let { shown -> loading = glideToward(shown, percentOf(stage, written)) }
+                if (heard && stage != LoadingStage.Done) {
+                    loading = glideToward(loading ?: stage.floor, percentOf(stage, written))
+                }
                 delay(PREPARATION_EVERY_MS)
             }
         }
