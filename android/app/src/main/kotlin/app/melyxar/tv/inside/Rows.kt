@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,6 +22,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -29,8 +32,10 @@ import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.PosterWidth
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.rememberRowScrolling
+import kotlin.math.ceil
 
 /** The room a row of cards keeps above and below them. */
 private val ROW_ROOM = 18.dp
@@ -65,6 +70,7 @@ fun <T> CardRow(
     card: @Composable (T) -> Unit,
 ) {
     val scrolling = rememberRowScrolling()
+    val ahead = cardsAcross()
     val first = remember { FocusRequester() }
     // The room the cards are given above and below, to grow into as the
     // remote comes, counts in the gap to what follows.
@@ -72,7 +78,7 @@ fun <T> CardRow(
         title?.let { RowHead(it, icon) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides scrolling) {
             LazyRow(
-                state = rememberLazyListState(),
+                state = rememberLazyListState(prefetchStrategy = remember(ahead) { LazyListPrefetchStrategy(nestedPrefetchItemCount = ahead) }),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
                 modifier = Modifier.focusRestorer(first),
@@ -83,6 +89,15 @@ fun <T> CardRow(
             }
         }
     }
+}
+
+/** How many of the narrowest cards a screen shows across: as many of a row
+ *  are composed ahead while the page brings it near, rather than in the
+ *  frame that scrolls it in. */
+@Composable
+private fun cardsAcross(): Int {
+    val across = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    return ceil((across - Gutter) / (PosterWidth + CardGap)).toInt().coerceAtLeast(1)
 }
 
 /** A section of a page, only when it has something to show. */

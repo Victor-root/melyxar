@@ -93,7 +93,7 @@ private val TileWidth = 208.dp
 private val TileHeight = TileWidth * 9 / 16
 
 /** A picture of a fan: a poster standing, or a square cover of music. */
-private class Leafed(val pictures: List<Picture>, val color: String?)
+private data class Leafed(val pictures: List<Picture>, val color: String?)
 
 /** Each poster of a fan, from the front one out: its height in the tile, how
  *  far it stands from the middle in its own widths, how far it leans, and how
@@ -195,7 +195,9 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
                 onDrawBehind {
                     drawRect(ground)
                     pools.forEach { drawRect(it) }
-                    drawRect(halo, alpha = lit)
+                    if (lit > 0f) {
+                        drawRect(halo, alpha = lit)
+                    }
                 }
             }
             .clickable(interaction, indication = null, onClick = onClick),
