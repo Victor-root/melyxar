@@ -1,9 +1,10 @@
 package app.melyxar.tv.look
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.interaction.InteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.launch
 
 /*
  * What the web does on hover, done when the remote comes to a piece: it
@@ -35,11 +37,25 @@ import androidx.compose.ui.unit.Dp
  */
 
 /** How lit a piece is, from 0 at rest to 1 when the remote is on it, eased
- *  the way the web eases its hover. */
+ *  the way the web eases its hover. The remote coming or going starts the
+ *  easing straight from [interaction], without composing the piece again
+ *  first. */
 @Composable
 fun litBy(interaction: InteractionSource): State<Float> {
-    val focused by interaction.collectIsFocusedAsState()
-    return animateFloatAsState(if (focused) 1f else 0f, calm(), label = "lit")
+    val lit = remember(interaction) { Animatable(0f) }
+    LaunchedEffect(interaction) {
+        val focuses = mutableListOf<FocusInteraction.Focus>()
+        interaction.interactions.collect { said ->
+            when (said) {
+                is FocusInteraction.Focus -> focuses += said
+                is FocusInteraction.Unfocus -> focuses -= said.focus
+                else -> return@collect
+            }
+            val target = if (focuses.isEmpty()) 0f else 1f
+            launch { lit.animateTo(target, calm()) }
+        }
+    }
+    return lit.asState()
 }
 
 /** Whether [lit] is past [over]: what reads it is composed again only as
