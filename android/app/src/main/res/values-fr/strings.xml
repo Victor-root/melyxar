@@ -288,6 +288,10 @@
     <string name="tv_setting_probe_shadows">Ombres</string>
     <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>
     <string name="tv_setting_probe_picture_fade">Fondu des images</string>
+    <string name="tv_setting_probe_banner">Bannière</string>
+    <string name="tv_setting_probe_pictures">Images</string>
+    <string name="tv_setting_probe_titles">Titres des cartes</string>
+    <string name="tv_setting_probe_bar">Barre du haut</string>
     <string name="tv_setting_probe_bench">Mesurer l\'écran suivant</string>
     <string name="tv_probe_bench_waiting">En attente</string>
     <string name="tv_probe_shown">Oui</string>
