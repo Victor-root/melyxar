@@ -5,14 +5,21 @@ import android.graphics.RectF
 import android.os.Build
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withSave
 import app.melyxar.theme.Palette
@@ -29,54 +36,111 @@ import kotlin.math.roundToInt
 
 /** One shadow of CSS's `box-shadow: x y blur spread color`. */
 @Immutable
-class BoxShadow(val color: Color, val blur: Dp, val spread: Dp = 0.dp, val x: Dp = 0.dp, val y: Dp = 0.dp)
+data class BoxShadow(val color: Color, val blur: Dp, val spread: Dp = 0.dp, val x: Dp = 0.dp, val y: Dp = 0.dp)
 
 /** The ink of the light theme's shadows, `rgb(20, 22, 27)`. */
 private val LightInk = Color(0xFF14161B)
 
+private val LightCard = BoxShadow(LightInk.copy(alpha = 0.14f), blur = 14.dp, y = 4.dp)
+private val DarkCard = BoxShadow(Color.Black.copy(alpha = 0.35f), blur = 18.dp, y = 6.dp)
+private val LightRaised = BoxShadow(LightInk.copy(alpha = 0.18f), blur = 32.dp, y = 12.dp)
+private val DarkRaised = BoxShadow(Color.Black.copy(alpha = 0.45f), blur = 40.dp, y = 14.dp)
+private val LightTile = arrayOf(BoxShadow(LightInk.copy(alpha = 0.2f), blur = 3.dp, y = 1.dp))
+private val DarkTile = arrayOf(
+    BoxShadow(Color.White.copy(alpha = 0.06f), blur = 0.dp, spread = 1.dp),
+    BoxShadow(Color.Black.copy(alpha = 0.45f), blur = 3.dp, y = 1.dp),
+)
+
 /** `--shadow-card`, in each theme. */
 val Palette.shadowCard: BoxShadow
-    get() = if (light) {
-        BoxShadow(LightInk.copy(alpha = 0.14f), blur = 14.dp, y = 4.dp)
-    } else {
-        BoxShadow(Color.Black.copy(alpha = 0.35f), blur = 18.dp, y = 6.dp)
-    }
+    get() = if (light) LightCard else DarkCard
 
 /** `--shadow-raised`, in each theme. */
 val Palette.shadowRaised: BoxShadow
-    get() = if (light) {
-        BoxShadow(LightInk.copy(alpha = 0.18f), blur = 32.dp, y = 12.dp)
-    } else {
-        BoxShadow(Color.Black.copy(alpha = 0.45f), blur = 40.dp, y = 14.dp)
-    }
+    get() = if (light) LightRaised else DarkRaised
 
 /** `--shadow-tile`, in each theme: what a card rests on. */
 val Palette.shadowTile: Array<BoxShadow>
-    get() = if (light) {
-        arrayOf(BoxShadow(LightInk.copy(alpha = 0.2f), blur = 3.dp, y = 1.dp))
-    } else {
-        arrayOf(
-            BoxShadow(Color.White.copy(alpha = 0.06f), blur = 0.dp, spread = 1.dp),
-            BoxShadow(Color.Black.copy(alpha = 0.45f), blur = 3.dp, y = 1.dp),
-        )
-    }
+    get() = if (light) LightTile else DarkTile
+
+/** Shown whole, the same every time it is passed. */
+internal val Whole: () -> Float = { 1f }
 
 /**
  * [shadows] round a piece of [shape], as strong as [shown] says, drawn
  * outside the piece only, as CSS draws them. Below Android 9 the graphics
  * card cannot blur, and they are left out rather than drawn hard.
+ *
+ * What is worked out for them is kept from one composition to the next
+ * while the shape, the shadows and the piece's size stay the same, so a
+ * card composed again does not make its shadows anew.
  */
-fun Modifier.boxShadow(shape: Shape, vararg shadows: BoxShadow, shown: () -> Float = { 1f }): Modifier {
+fun Modifier.boxShadow(shape: Shape, vararg shadows: BoxShadow, shown: () -> Float = Whole): Modifier {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
         return this
     }
-    return drawWithCache {
+    return this then BoxShadowElement(shape, shadows.asList(), shown)
+}
+
+private data class BoxShadowElement(
+    val shape: Shape,
+    val shadows: List<BoxShadow>,
+    val shown: () -> Float,
+) : ModifierNodeElement<BoxShadowNode>() {
+    override fun create() = BoxShadowNode(shape, shadows, shown)
+
+    override fun update(node: BoxShadowNode) = node.update(shape, shadows, shown)
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "boxShadow"
+    }
+}
+
+private class BoxShadowNode(
+    private var shape: Shape,
+    private var shadows: List<BoxShadow>,
+    private var shown: () -> Float,
+) : Modifier.Node(), DrawModifierNode {
+    private val made = MadeFor()
+    private var piece = android.graphics.Path()
+    private var layers = emptyList<DrawnShadow>()
+
+    fun update(shape: Shape, shadows: List<BoxShadow>, shown: () -> Float) {
+        if (shape != this.shape || shadows != this.shadows) {
+            this.shape = shape
+            this.shadows = shadows
+            made.forget()
+        }
+        this.shown = shown
+        invalidateDraw()
+    }
+
+    override fun ContentDrawScope.draw() {
+        if (made.isStale(this)) {
+            make()
+        }
+        val strength = shown()
+        if (strength > 0f) {
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.withSave {
+                    clipOutPath(piece)
+                    layers.forEach { layer ->
+                        layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
+                        drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
+                    }
+                }
+            }
+        }
+        drawContent()
+    }
+
+    private fun DrawScope.make() {
         val outline = shape.createOutline(size, layoutDirection, this)
         val corner = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
-        val piece = android.graphics.Path().apply {
+        piece = android.graphics.Path().apply {
             addRoundRect(0f, 0f, size.width, size.height, corner, corner, android.graphics.Path.Direction.CW)
         }
-        val layers = shadows.map { shadow ->
+        layers = shadows.map { shadow ->
             val spread = shadow.spread.toPx()
             val x = shadow.x.toPx()
             val y = shadow.y.toPx()
@@ -90,25 +154,34 @@ fun Modifier.boxShadow(shape: Shape, vararg shadows: BoxShadow, shown: () -> Flo
                 },
             )
         }
-        onDrawBehind {
-            val strength = shown()
-            if (strength <= 0f) {
-                return@onDrawBehind
-            }
-            drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.withSave {
-                    clipOutPath(piece)
-                    layers.forEach { layer ->
-                        layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
-                        drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
-                    }
-                }
-            }
-        }
     }
 }
 
 private class DrawnShadow(val box: RectF, val corner: Float, val alpha: Float, val paint: android.graphics.Paint)
+
+/** The size, density and direction what a piece's drawing works out was
+ *  made for, to make it again only once one of them moves. */
+internal class MadeFor {
+    private var size = Size.Unspecified
+    private var density = 0f
+    private var direction: LayoutDirection? = null
+
+    /** What was made no longer holds, whatever the piece is drawn at. */
+    fun forget() {
+        direction = null
+    }
+
+    /** Whether what was made is not for [scope], taking it as made for it. */
+    fun isStale(scope: DrawScope): Boolean {
+        if (scope.size == size && scope.density == density && scope.layoutDirection == direction) {
+            return false
+        }
+        size = scope.size
+        density = scope.density
+        direction = scope.layoutDirection
+        return true
+    }
+}
 
 /**
  * The radius Android's blur takes for a CSS blur of [cssBlur] pixels, or
