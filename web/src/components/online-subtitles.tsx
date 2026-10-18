@@ -17,7 +17,7 @@ import { useMarks } from "../marks";
 import { howManyVoted } from "../readable";
 import { useSettings } from "../settings";
 import { Modal } from "./modal";
-import { Picker } from "./panel";
+import { Picker, Toggle } from "./panel";
 
 export function OnlineSubtitlesDialog({
   sourceId,
@@ -34,6 +34,8 @@ export function OnlineSubtitlesDialog({
   const tracks = useAsked((signal) => api.subtitleTracks(sourceId, signal), [sourceId, again]);
   const settings = useAsked((signal) => api.openSubtitles(signal), []);
   const [wanted, setWanted] = useState<string>(METADATA_LANGUAGES.includes(language) ? language : "en");
+  /* Only forced subtitles: the lines in another language than the film's. */
+  const [forcedOnly, setForcedOnly] = useState(false);
   const [offers, setOffers] = useState<SubtitleOffer[] | null>(null);
   const [busy, setBusy] = useState<number | "search" | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function OnlineSubtitlesDialog({
     setBusy("search");
     setSaid(null);
     void attempt(async () => {
-      setOffers(await api.subtitleOffers(sourceId, [wanted]));
+      setOffers(await api.subtitleOffers(sourceId, [wanted], forcedOnly));
     });
   };
 
@@ -132,6 +134,17 @@ export function OnlineSubtitlesDialog({
               setOffers(null);
             }}
           />
+          <label className="subtitles-forced">
+            <Toggle
+              checked={forcedOnly}
+              label={t("online_subtitles.forced_only")}
+              onChange={(only) => {
+                setForcedOnly(only);
+                setOffers(null);
+              }}
+            />
+            <span>{t("online_subtitles.forced_only")}</span>
+          </label>
           <button type="button" className="button button-small button-accent" disabled={busy !== null} onClick={search}>
             {t("online_subtitles.look")}
           </button>
@@ -156,6 +169,7 @@ export function OnlineSubtitlesDialog({
                   </span>
                 )}
                 <span>{t("online_subtitles.downloads", { count: howManyVoted(offer.downloads, language) })}</span>
+                {offer.forced && <span className="work-badge">{t("online_subtitles.forced")}</span>}
                 {offer.hearing_impaired && <span className="work-badge">{t("online_subtitles.hearing_impaired")}</span>}
                 {offer.machine_translated && <span className="work-badge">{t("online_subtitles.machine")}</span>}
                 {offer.trusted && <span className="work-badge">{t("online_subtitles.trusted")}</span>}

@@ -115,12 +115,13 @@ pub async fn forget_account(state: &AppState) -> Result<()> {
 }
 
 /// The subtitles OpenSubtitles offers for the work of this copy, in these
-/// languages, written with two letters.
+/// languages, written with two letters, [forced_only] keeping to forced ones.
 pub async fn offers(
     state: &AppState,
     who: &User,
     source_id: MediaSourceId,
     languages: &[String],
+    forced_only: bool,
 ) -> Result<Vec<Offered>> {
     may_manage(who)?;
     if languages.is_empty() || !languages.iter().all(|language| is_a_language(language)) {
@@ -141,7 +142,7 @@ pub async fn offers(
     };
     let fingerprint = fingerprint_of(&source.path).await;
     let offers = client
-        .search(asking, languages, fingerprint.as_deref())
+        .search(asking, languages, fingerprint.as_deref(), forced_only)
         .await
         .map_err(said)?;
     let speed = pictures_a_second(state, source_id).await?;
@@ -246,7 +247,7 @@ pub async fn download(
         language: Some(normalise_language(&offer.language)),
         title: Some(offer.release.clone()).filter(|release| !release.is_empty()),
         is_default: false,
-        is_forced: false,
+        is_forced: offer.forced,
         kind: TrackKind::Subtitle(SubtitleDetails {
             codec: "subrip".to_string(),
             layout: SubtitleLayout::Text,
