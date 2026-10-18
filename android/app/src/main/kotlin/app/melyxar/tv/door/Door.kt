@@ -86,11 +86,8 @@ import app.melyxar.tv.look.rememberPictures
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
 import java.io.IOException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 
 /** What the door knows of its server, once it has answered. */
 private sealed interface Answer {
@@ -128,13 +125,8 @@ fun Door(
 
     LaunchedEffect(tries) {
         answer = try {
-            // Asked together: the door waits for the slower, not for both.
-            val (branding, names) = coroutineScope {
-                val branding = async { api.branding() }
-                val names = async { api.names() }
-                branding.await() to names.await()
-            }
-            val offered = names.names
+            val branding = api.branding()
+            val offered = api.names().names
             val kept = sessions.of(api.origin).map { DoorName(it.name) }
             Answer.Open(branding, offered + kept.filter { one -> offered.none { it.name == one.name } })
         } catch (_: IOException) {
@@ -159,13 +151,8 @@ fun Door(
         scope.launch {
             try {
                 val theirs = api.signedInAs(kept.token)
-                // Asked together, each answer then read in turn as before.
-                val (account, coded) = supervisorScope {
-                    val account = async { theirs.me() }
-                    val coded = async { theirs.hasTvCode() }
-                    account.await() to coded.await()
-                }
-                if (coded) {
+                val account = theirs.me()
+                if (theirs.hasTvCode()) {
                     locked = Locked(kept, account)
                 } else {
                     signedIn(kept, account, branding)
