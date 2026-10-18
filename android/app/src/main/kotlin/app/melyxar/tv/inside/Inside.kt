@@ -290,8 +290,10 @@ fun Inside(
         LocalSongLevels provides remember(api) { SongLevels() },
     ) {
         FollowSongLevels(LocalSongLevels.current)
-        val held = rememberLoaded("preferences", comebacks, looksMoved) { preferences() }
-        val branding = rememberLoaded("branding", comebacks, looksMoved) { branding() }.value.ready ?: signedInWith
+        // How Melyxar looks has its own word on the live line: what the
+        // libraries hold moving changes nothing of it.
+        val held = rememberLoaded("preferences", comebacks, looksMoved, followsRows = false) { preferences() }
+        val branding = rememberLoaded("branding", comebacks, looksMoved, followsRows = false) { branding() }.value.ready ?: signedInWith
         val chosen = held.value.ready
         val preferences = remember(api, held) { AccountPreferences(api, scope, onSignedOut, held) }
         val libraries = rememberLoaded("libraries", comebacks) { libraries() }.value.ready
