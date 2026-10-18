@@ -123,6 +123,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     /** Whether only the bar is up, as when the arrows step through the film. */
     var barOnly by remember { mutableStateOf(false) }
     var nudges by remember { mutableIntStateOf(0) }
+    /** Whether the bar is taken somewhere the film has not gone yet. */
+    var aiming by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf<Menu?>(null) }
     var left by remember { mutableStateOf<Menu?>(null) }
     var playing by remember { mutableStateOf(false) }
@@ -162,10 +164,11 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     LaunchedEffect(ended, declined) {
         if (ended && (next == null || declined)) onDone()
     }
-    // Away a moment after the remote stops, while the film plays. Each
-    // press starts the wait again without composing the screen again.
-    LaunchedEffect(shown, playing, menu) {
-        if (shown && playing && menu == null) {
+    // Away a moment after the remote stops, while the film plays and the
+    // bar is not waiting for the middle button. Each press starts the wait
+    // again without composing the screen again.
+    LaunchedEffect(shown, playing, menu, aiming) {
+        if (shown && playing && menu == null && !aiming) {
             snapshotFlow { nudges }.collectLatest {
                 delay(CONTROLS_FOR_MS)
                 shown = false
@@ -334,6 +337,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 memory = memory,
                 onMenu = ::openMenu,
                 onNext = next?.let { { playNext(it) } },
+                onAiming = { aiming = it },
             )
         }
         skippable?.let { stretch ->

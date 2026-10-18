@@ -23,10 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -115,6 +115,8 @@ fun Controls(
     memory: FocusMemory,
     onMenu: (Menu) -> Unit,
     onNext: (() -> Unit)?,
+    /** Told whether the bar is taken somewhere the film has not gone yet. */
+    onAiming: (Boolean) -> Unit,
 ) {
     val palette = LocalPalette.current
     var at by remember { mutableDoubleStateOf(playback.seconds) }
@@ -150,7 +152,7 @@ fun Controls(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(clock(at), style = Times, color = palette.text)
-                SeekBar(at, length, playback, Modifier.weight(1f).remembered(memory, BAR))
+                SeekBar(at, length, playback, onAiming, Modifier.weight(1f).remembered(memory, BAR))
                 Text(length?.let { "-" + clock(it - at) } ?: "", style = Times, color = palette.text)
             }
             if (!barOnly) Row(
@@ -268,17 +270,21 @@ private fun Who() {
 /**
  * Where the film is. While the remote is on the bar its arrows take it along,
  * the film's picture there shown above it as the web shows it under the hand,
- * and the film goes there once the remote rests or the middle button is
- * pressed.
+ * and the film goes there only once the middle button is pressed: the back
+ * key, or the remote leaving the bar, leaves the film where it was.
  */
 @Composable
-private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: Modifier) {
+private fun SeekBar(at: Double, length: Double?, playback: Playback, onAiming: (Boolean) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     val thick by animateDpAsState(if (litPast({ lit })) 14.dp else 10.dp, label = "bar")
     var target by remember { mutableStateOf<Double?>(null) }
-    var moves by remember { mutableIntStateOf(0) }
+    val aiming = target != null
+    DisposableEffect(aiming) {
+        onAiming(aiming)
+        onDispose { onAiming(false) }
+    }
     /** Where the film was sent, held on the bar until the clock read from
      *  the film catches up with it, so the bar never jumps back first. */
     var landing by remember { mutableStateOf<Double?>(null) }
@@ -294,12 +300,6 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
         target = null
     }
 
-    LaunchedEffect(moves) {
-        if (target != null) {
-            delay(SCRUB_SETTLES_MS)
-            settle()
-        }
-    }
     val shareOf = { seconds: Double -> length?.takeIf { it > 0 }?.let { (seconds / it).toFloat().coerceIn(0f, 1f) } ?: 0f }
     val done = shareOf(target ?: landing ?: at)
     val buffered = shareOf(playback.player.bufferedPosition / 1000.0)
@@ -317,14 +317,18 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
                         settle()
                         return@onPreviewKeyEvent true
                     }
+                    Key.Back -> {
+                        if (target == null) return@onPreviewKeyEvent false
+                        target = null
+                        return@onPreviewKeyEvent true
+                    }
                     else -> return@onPreviewKeyEvent false
                 }
                 val moved = (target ?: at) + by * scrubStep(event.nativeKeyEvent.repeatCount)
                 target = moved.coerceIn(0.0, length ?: moved.coerceAtLeast(0.0))
-                moves += 1
                 true
             }
-            .onFocusChanged { if (!it.isFocused) settle() }
+            .onFocusChanged { if (!it.isFocused) target = null }
             .focusable(interactionSource = interaction)
             .drawBehind {
                 rail(thick.toPx(), Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.32f) to buffered, palette.accent to done)
