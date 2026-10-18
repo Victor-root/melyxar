@@ -125,6 +125,11 @@ fun Controls(
         }
     }
     val length = playback.length
+    // Read once for the controls rather than on each tick of the clock.
+    val context = LocalContext.current
+    val hours = remember(context) { DateFormat.getTimeFormat(context) }
+    val named = playback.plan?.chapters.orEmpty()
+    val hasChapters = remember(named, length) { chaptersOf(named, length).isNotEmpty() }
     Box(Modifier.fillMaxSize()) {
         if (!barOnly) Row(
             modifier = Modifier
@@ -172,7 +177,7 @@ fun Controls(
                 onNext?.let { PlayerButton(Icons.NextEpisode, onClick = it, modifier = Modifier.remembered(memory, "next")) }
                 length?.let { endsAt(it - at, playback.speed, System.currentTimeMillis()) }?.let { end ->
                     Text(
-                        stringResource(R.string.tv_ends_at, DateFormat.getTimeFormat(LocalContext.current).format(Date(end))),
+                        stringResource(R.string.tv_ends_at, hours.format(Date(end))),
                         fontSize = 15.sp,
                         color = palette.textSoft,
                         modifier = Modifier.padding(start = 14.dp),
@@ -185,7 +190,7 @@ fun Controls(
                         PlayerButton(Icons.People, onClick = { onMenu(Menu.Cast) }, modifier = Modifier.remembered(memory, "cast"))
                     }
                 }
-                if (chaptersOf(playback.plan?.chapters.orEmpty(), length).isNotEmpty()) {
+                if (hasChapters) {
                     PlayerButton(Icons.Chapters, onClick = { onMenu(Menu.Chapters) }, modifier = Modifier.remembered(memory, "chapters"))
                 }
                 if ((playback.plan?.audio?.size ?: 0) > 1) {

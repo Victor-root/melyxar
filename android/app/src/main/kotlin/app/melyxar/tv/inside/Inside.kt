@@ -22,6 +22,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -329,7 +330,8 @@ fun Inside(
         val screen = remember { FocusRequester() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
-        notes.filmOnScreen = here is Place.Playing || here is Place.Trailer
+        val film = here is Place.Playing || here is Place.Trailer
+        notes.filmOnScreen = film
         val kept = rememberSaveableStateHolder()
 
         /** Takes the screens above [depth] off the trail, forgetting them. */
@@ -414,7 +416,9 @@ fun Inside(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(LocalPalette.current.ground)
+                        // A film covers the whole screen in black: nothing
+                        // under it would be seen, only drawn again with it.
+                        .then(if (film) Modifier else Modifier.background(LocalPalette.current.ground))
                         .onPreviewKeyEvent { event ->
                             if (event.type == KeyEventType.KeyDown) focusSaid { "key ${event.key}" }
                             false
@@ -476,8 +480,10 @@ fun Inside(
                         },
                 ) {
                     // What the account chose to draw behind its pages, once
-                    // its choice is known.
-                    chosen?.let { PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize()) }
+                    // its choice is known; kept ready, but not drawn, under a film.
+                    chosen?.let {
+                        PageBackdrop(it.backdrop, it.backdropLight, Modifier.fillMaxSize().drawWithContent { if (!film) drawContent() })
+                    }
                     LaunchedEffect(here) { focusSaid { "screen shown: ${here.key}" } }
                     // The screen as one piece the remote comes back into where it
                     // left it, which the bar pinned over it leads down to.

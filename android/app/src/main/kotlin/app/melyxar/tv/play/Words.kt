@@ -116,6 +116,11 @@ fun WordsOverFilm(playback: Playback, raised: Boolean, modifier: Modifier = Modi
     )
     LaunchedEffect(words, view) {
         val shownOn = view ?: return@LaunchedEffect
+        // Without words, nothing to follow the film for.
+        if (words.isEmpty()) {
+            shownOn.setCues(emptyList())
+            return@LaunchedEffect
+        }
         var shown: List<Cue>? = null
         while (true) {
             val at = playback.player.currentPosition * 1000 - (playback.wordsOffset * 1_000_000).toLong()

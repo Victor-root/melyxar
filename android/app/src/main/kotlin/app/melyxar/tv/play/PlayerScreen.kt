@@ -25,6 +25,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +65,7 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.roundToInt
 
 /** How long the controls stay up once the remote stops. */
@@ -160,11 +162,14 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     LaunchedEffect(ended, declined) {
         if (ended && (next == null || declined)) onDone()
     }
-    // Away a moment after the remote stops, while the film plays.
-    LaunchedEffect(shown, nudges, playing, menu) {
+    // Away a moment after the remote stops, while the film plays. Each
+    // press starts the wait again without composing the screen again.
+    LaunchedEffect(shown, playing, menu) {
         if (shown && playing && menu == null) {
-            delay(CONTROLS_FOR_MS)
-            shown = false
+            snapshotFlow { nudges }.collectLatest {
+                delay(CONTROLS_FOR_MS)
+                shown = false
+            }
         }
     }
     // The controls come up with nothing chosen on them: the remote is
