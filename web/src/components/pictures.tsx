@@ -105,70 +105,92 @@ export function PicturesDialog({
     }
   };
 
-  const ofKind = (kind: PictureKind) => held?.find((picture) => picture.kind === kind);
+  const ofKind = (kind: PictureKind) =>
+    held?.find((picture) => picture.kind === kind);
 
   return (
     <Modal
       title={t("pictures.title")}
+      className="finder"
       onBack={choosing ? () => setChoosing(null) : undefined}
       onClose={onClose}
     >
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}
 
       {!choosing && (
-        <ul className="pictures-held">
-          {KINDS.map((kind) => {
-            const picture = ofKind(kind);
-            return (
-              <li className={`pictures-tile pictures-tile-${kind}`} key={kind}>
-                <span className="pictures-frame">
-                  {picture ? (
-                    <img src={picture.url} alt="" />
-                  ) : (
-                    <span className="pictures-none">{t("pictures.none")}</span>
-                  )}
-                </span>
-                <span className="pictures-what">
-                  <span className="pictures-kind">{t(`pictures.kind.${kind}`)}</span>
-                  <span className="pictures-size">
-                    {picture && picture.width && picture.height
-                      ? `${picture.width} × ${picture.height}`
-                      : t("pictures.nothing_here")}
+        <div className="finder-offers">
+          <ul className="pictures-held">
+            {KINDS.map((kind) => {
+              const picture = ofKind(kind);
+              return (
+                <li
+                  className={`pictures-tile pictures-tile-${kind}`}
+                  key={kind}
+                >
+                  <span className="pictures-frame">
+                    {picture ? (
+                      <img src={picture.url} alt="" />
+                    ) : (
+                      <span className="pictures-none">
+                        {t("pictures.none")}
+                      </span>
+                    )}
                   </span>
-                </span>
-                <span className="pictures-doing">
-                  <button
-                    className="pictures-act"
-                    onClick={() => look(kind)}
-                    disabled={busy}
-                    aria-label={t("pictures.look")}
-                    title={t("pictures.look")}
-                  >
-                    <SearchIcon size={18} />
-                  </button>
-                  {picture && (
+                  <span className="pictures-what">
+                    <span className="pictures-kind">
+                      {t(`pictures.kind.${kind}`)}
+                    </span>
+                    <span className="pictures-size">
+                      {picture && picture.width && picture.height
+                        ? `${picture.width} × ${picture.height}`
+                        : t("pictures.nothing_here")}
+                    </span>
+                  </span>
+                  <span className="pictures-doing">
                     <button
                       className="pictures-act"
-                      onClick={() => forget(kind)}
+                      onClick={() => look(kind)}
                       disabled={busy}
-                      aria-label={t("pictures.forget")}
-                      title={t("pictures.forget")}
+                      aria-label={t("pictures.look")}
+                      title={t("pictures.look")}
                     >
-                      <DeleteIcon size={18} />
+                      <SearchIcon size={18} />
                     </button>
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                    {picture && (
+                      <button
+                        className="pictures-act"
+                        onClick={() => forget(kind)}
+                        disabled={busy}
+                        aria-label={t("pictures.forget")}
+                        title={t("pictures.forget")}
+                      >
+                        <DeleteIcon size={18} />
+                      </button>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       {choosing && (
         <>
-          <h3 className="pictures-heading">{t(`pictures.kind.${choosing}`)}</h3>
+          <section className="finder-head">
+            <span className="finder-mark" aria-hidden="true">
+              <SearchIcon size={28} />
+            </span>
+            <div className="finder-head-words">
+              <h3 className="finder-head-title">
+                {t(`pictures.kind.${choosing}`)}
+              </h3>
+            </div>
+          </section>
           {offered === null ? (
-            <p className="notice">{t(busy ? "pictures.looking" : "pictures.nothing")}</p>
+            <p className="finder-quiet">
+              {t(busy ? "pictures.looking" : "pictures.nothing")}
+            </p>
           ) : (
             <Offered
               kind={choosing}
@@ -204,29 +226,33 @@ function Offered({
     .sort((left, right) => (right.width ?? 0) - (left.width ?? 0));
 
   if (shown.length === 0) {
-    return <p className="notice">{t("pictures.nothing")}</p>;
+    return <p className="finder-quiet">{t("pictures.nothing")}</p>;
   }
   return (
-    <ul className={`pictures-offered pictures-offered-${kind}`}>
-      {shown.map((picture) => (
-        <li key={picture.path}>
-          <button
-            className="pictures-choice"
-            onClick={() => onChoose(picture.path)}
-            disabled={busy}
-          >
-            <span className="pictures-frame">
-              <img src={picture.url} alt="" loading="lazy" />
-            </span>
-            <span className="pictures-size">
-              {picture.width && picture.height
-                ? `${picture.width} × ${picture.height}`
-                : ""}
-              {picture.language && <span className="pictures-tongue">{picture.language}</span>}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <div className="finder-offers">
+      <ul className={`pictures-offered pictures-offered-${kind}`}>
+        {shown.map((picture) => (
+          <li key={picture.path}>
+            <button
+              className="pictures-choice"
+              onClick={() => onChoose(picture.path)}
+              disabled={busy}
+            >
+              <span className="pictures-frame">
+                <img src={picture.url} alt="" loading="lazy" />
+              </span>
+              <span className="pictures-size">
+                {picture.width && picture.height
+                  ? `${picture.width} × ${picture.height}`
+                  : ""}
+                {picture.language && (
+                  <span className="pictures-tongue">{picture.language}</span>
+                )}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

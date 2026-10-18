@@ -13,11 +13,27 @@
    one asks for anyway. */
 .pictures-held {
   display: grid;
+  flex: none;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: var(--gap-wide);
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.pictures-tile,
+.pictures-choice {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--panel-glass);
+  transition: border-color var(--quick) var(--ease), box-shadow var(--quick) var(--ease);
+}
+
+.pictures-tile:hover,
+.pictures-choice:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 14px 2px var(--accent-glow);
 }
 
 .pictures-tile {
@@ -30,8 +46,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  border-radius: var(--radius-card);
-  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
 
@@ -115,16 +130,11 @@
   opacity: 0.5;
 }
 
-.pictures-heading {
-  margin: 0 0 var(--gap);
-  font-size: 19px;
-  font-weight: 650;
-}
-
 /* What the provider offers of one kind, largest first. Wide pictures need
    fewer and larger tiles than posters do. */
 .pictures-offered {
   display: grid;
+  flex: none;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--gap);
   list-style: none;
@@ -144,15 +154,6 @@
   gap: 4px;
   width: 100%;
   text-align: left;
-  transition: transform var(--quick) var(--ease);
-}
-
-.pictures-choice:hover:not(:disabled) {
-  transform: scale(1.035);
-}
-
-.pictures-choice:hover:not(:disabled) .pictures-frame {
-  border-color: var(--accent);
 }
 
 .pictures-choice:disabled {

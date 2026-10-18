@@ -103,15 +103,24 @@ export function IdentifyDialog({
   return (
     <Modal
       title={t("identify.title")}
+      className="finder"
       onBack={back}
       onClose={onClose}
       footer={
         step === "asking" ? (
-          <button className="button button-accent button-large" onClick={look} disabled={busy}>
+          <button
+            className="button button-accent button-large"
+            onClick={look}
+            disabled={busy}
+          >
             {t("identify.look")}
           </button>
         ) : step === "agreeing" ? (
-          <button className="button button-accent button-large" onClick={agree} disabled={busy}>
+          <button
+            className="button button-accent button-large"
+            onClick={agree}
+            disabled={busy}
+          >
             {t("identify.agree")}
           </button>
         ) : undefined
@@ -119,33 +128,42 @@ export function IdentifyDialog({
     >
       {/* Above every step, so the work being named never goes out of sight
           while the results are being read. */}
-      {files.length > 0 && (
-        <div className="identify-files">
-          <span className="identify-files-mark" aria-hidden="true">
-            <FilmIcon size={18} />
-          </span>
-          <div className="identify-files-words">
-            <span className="identify-label">
-              {t(files.length > 1 ? "identify.paths" : "identify.path")}
-            </span>
-            {files.map((path) => {
-              const cut = path.lastIndexOf("/");
-              return (
-                <span key={path} className="identify-file">
-                  <span className="identify-file-name">{path.slice(cut + 1)}</span>
-                  {cut > 0 && <span className="identify-file-folder">{path.slice(0, cut)}</span>}
-                </span>
-              );
-            })}
-          </div>
+      <section className="finder-head identify-work">
+        <span className="finder-mark" aria-hidden="true">
+          <FilmIcon size={28} />
+        </span>
+        <div className="finder-head-words">
+          <h3 className="finder-head-title">{title}</h3>
+          {files.length > 0 && (
+            <div className="identify-files">
+              <span className="identify-label">
+                {t(files.length > 1 ? "identify.paths" : "identify.path")}
+              </span>
+              {files.map((path) => {
+                const cut = path.lastIndexOf("/");
+                return (
+                  <span key={path} className="identify-file">
+                    <span className="identify-file-name">
+                      {path.slice(cut + 1)}
+                    </span>
+                    {cut > 0 && (
+                      <span className="identify-file-folder">
+                        {path.slice(0, cut)}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </section>
 
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}
 
       {step === "asking" && (
         <form
-          className="identify-form"
+          className="finder-search identify-form"
           onSubmit={(event) => {
             event.preventDefault();
             look();
@@ -160,7 +178,12 @@ export function IdentifyDialog({
 
           <label className="identify-field">
             <span className="identify-label">{t("identify.year")}</span>
-            <input type="text" inputMode="numeric" maxLength={4} {...field("year")} />
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              {...field("year")}
+            />
           </label>
 
           <label className="identify-field">
@@ -183,9 +206,9 @@ export function IdentifyDialog({
 
       {step === "results" &&
         (candidates.length === 0 ? (
-          <p className="notice">{t("identify.nothing")}</p>
+          <p className="finder-quiet">{t("identify.nothing")}</p>
         ) : (
-          <>
+          <div className="finder-offers">
             <h3 className="identify-heading">{t("identify.results")}</h3>
             <ul className="identify-found">
               {candidates.map((candidate) => (
@@ -199,7 +222,12 @@ export function IdentifyDialog({
                   >
                     <span className="identify-poster">
                       {candidate.poster ? (
-                        <img src={candidate.poster} alt="" loading="lazy" sizes="140px" />
+                        <img
+                          src={candidate.poster}
+                          alt=""
+                          loading="lazy"
+                          sizes="140px"
+                        />
                       ) : (
                         <span className="identify-blank" aria-hidden="true" />
                       )}
@@ -207,9 +235,12 @@ export function IdentifyDialog({
                     <span className="identify-name">{candidate.title}</span>
                     {/* The title it was shot under, when it differs: that is
                         often how the file was named in the first place. */}
-                    {candidate.original_title && candidate.original_title !== candidate.title && (
-                      <span className="identify-original">{candidate.original_title}</span>
-                    )}
+                    {candidate.original_title &&
+                      candidate.original_title !== candidate.title && (
+                        <span className="identify-original">
+                          {candidate.original_title}
+                        </span>
+                      )}
                     {candidate.year !== null && (
                       <span className="identify-year">{candidate.year}</span>
                     )}
@@ -217,12 +248,12 @@ export function IdentifyDialog({
                 </li>
               ))}
             </ul>
-          </>
+          </div>
         ))}
 
       {step === "agreeing" && chosen && (
-        <div className="identify-agreeing">
-          <div className="identify-chosen">
+        <div className="finder-offers">
+          <div className="finder-offer finder-offer-taken identify-chosen">
             <span className="identify-poster">
               {chosen.poster ? (
                 <img src={chosen.poster} alt="" sizes="160px" />
@@ -232,8 +263,12 @@ export function IdentifyDialog({
             </span>
             <span className="identify-said">
               <span className="identify-name">{chosen.title}</span>
-              {chosen.year !== null && <span className="identify-year">{chosen.year}</span>}
-              {chosen.overview && <span className="identify-overview">{chosen.overview}</span>}
+              {chosen.year !== null && (
+                <span className="identify-year">{chosen.year}</span>
+              )}
+              {chosen.overview && (
+                <span className="identify-overview">{chosen.overview}</span>
+              )}
             </span>
           </div>
 
