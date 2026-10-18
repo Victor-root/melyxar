@@ -34,14 +34,15 @@ val LocalAnswers = staticCompositionLocalOf<MutableMap<String, Any?>> { HashMap(
 /**
  * Asks the server [question], named so its last answer is shown straight
  * away when the screen comes back, and asks again whenever the screen comes
- * on, one of [keys] changes, or what the server's rows hold moved.
+ * on, one of [keys] changes, or, unless it does not [followsRows], what the
+ * server's rows hold moved.
  */
 @Composable
-fun <T> rememberLoaded(question: String, vararg keys: Any?, ask: suspend Api.() -> T): MutableState<Loaded<T>> {
+fun <T> rememberLoaded(question: String, vararg keys: Any?, followsRows: Boolean = true, ask: suspend Api.() -> T): MutableState<Loaded<T>> {
     val api = LocalServer.current
     val signedOut = LocalSignedOut.current
     val answers = LocalAnswers.current
-    val moved = LocalMarks.current.rowsMoved
+    val moved = if (followsRows) LocalMarks.current.rowsMoved else 0
     val loaded = remember(question) {
         @Suppress("UNCHECKED_CAST")
         val kept = answers[question] as Loaded.Ready<T>?
