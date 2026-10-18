@@ -63,6 +63,7 @@ import app.melyxar.tv.look.accentBloom
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
@@ -240,7 +241,7 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
 @Composable
 private fun Arrow(lit: () -> Float) {
     val palette = LocalPalette.current
-    val shown = lit() > 0.5f
+    val shown = litPast(lit)
     Box(
         Modifier
             .size(30.dp * ARROW_SCALE)

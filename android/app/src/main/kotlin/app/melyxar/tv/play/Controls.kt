@@ -74,6 +74,7 @@ import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rail
 import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
@@ -270,7 +271,7 @@ private fun SeekBar(at: Double, length: Double?, playback: Playback, modifier: M
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    val thick by animateDpAsState(if (lit > 0.5f) 14.dp else 10.dp, label = "bar")
+    val thick by animateDpAsState(if (litPast({ lit })) 14.dp else 10.dp, label = "bar")
     var target by remember { mutableStateOf<Double?>(null) }
     var moves by remember { mutableIntStateOf(0) }
     /** Where the film was sent, held on the bar until the clock read from
@@ -402,7 +403,7 @@ private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modif
                 .fillMaxSize()
                 .padding(5.dp)
                 .clip(shape)
-                .background(palette.accent.copy(alpha = 0.16f * lit))
+                .drawBehind { drawRect(palette.accent.copy(alpha = 0.16f * lit)) }
                 .border(2.dp, palette.accent.copy(alpha = lit), shape),
         )
         Glyph(icon, palette.text, if (large) 34.dp else 27.dp)

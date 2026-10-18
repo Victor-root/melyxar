@@ -61,6 +61,7 @@ import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.grows
 import app.melyxar.tv.look.halo
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowCard
 import app.melyxar.tv.look.shadowTile
@@ -92,6 +93,7 @@ private fun Tile(
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val now = rememberNow(owns)
     Column(modifier.width(TileWidth).clickable(interaction, indication = null, onClick = onClick)) {
         Box(
@@ -122,7 +124,7 @@ private fun Tile(
             title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = if (lit > 0.5f) palette.text else palette.text.copy(alpha = 0.92f),
+            color = if (bright) palette.text else palette.text.copy(alpha = 0.92f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 10.dp),
@@ -257,6 +259,7 @@ fun SongLine(
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val bright = litPast({ lit })
     val now = rememberNow { it.id == song.id }
     val playing = now != Now.Other
     Row(
@@ -267,7 +270,7 @@ fun SongLine(
             .heightIn(min = LINE_TALL)
             .then(if (afterAnother) Modifier.drawBehind { lineBetween(palette.accent) } else Modifier)
             .clip(ControlShape)
-            .background(palette.accent.copy(alpha = 0.26f * lit))
+            .drawBehind { drawRect(palette.accent.copy(alpha = 0.26f * lit)) }
             .rim(ControlShape, palette.accent.copy(alpha = 0.45f), 1.dp) { lit }
             .then(if (onClick != null) Modifier.clickable(interaction, indication = null, onClick = onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -278,7 +281,7 @@ fun SongLine(
             if (playing) {
                 NowDisc(now)
             } else {
-                Glyph(Icons.Play, if (lit > 0.5f) palette.accentBright else palette.textSoft, 18.dp)
+                Glyph(Icons.Play, if (bright) palette.accentBright else palette.textSoft, 18.dp)
             }
         }
         number?.let {

@@ -62,6 +62,7 @@ import app.melyxar.tv.look.RoundMark
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.litPast
 import app.melyxar.tv.look.rail
 import app.melyxar.tv.look.seekHandle
 import app.melyxar.tv.look.shadowRaised
@@ -253,7 +254,7 @@ private fun Rail(listening: Listening, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
-    val thick by animateDpAsState(if (lit > 0.5f) 10.dp else 6.dp, label = "rail")
+    val thick by animateDpAsState(if (litPast({ lit })) 10.dp else 6.dp, label = "rail")
     val length = listening.length
     val done = length?.takeIf { it > 0 }?.let { (listening.position / it).toFloat().coerceIn(0f, 1f) } ?: 0f
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {

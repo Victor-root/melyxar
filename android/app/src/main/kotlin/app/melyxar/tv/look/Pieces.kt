@@ -78,11 +78,12 @@ fun PlainButton(
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
+    val raised = litPast({ lit })
     Row(
         modifier = modifier
             .grows({ lit }, BUTTON_GROWTH)
             .clip(ControlShape)
-            .background(if (lit > 0.5f) palette.surfaceHover else palette.surfaceRaised)
+            .background(if (raised) palette.surfaceHover else palette.surfaceRaised)
             // Gone under the rim, or its grey shows round it.
             .rim(ControlShape, palette.border, 1.dp) { 1f - lit }
             .rim(ControlShape, palette.accentBright, 3.dp) { lit }

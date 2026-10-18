@@ -5,7 +5,9 @@ import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -38,6 +40,14 @@ import androidx.compose.ui.unit.Dp
 fun litBy(interaction: InteractionSource): State<Float> {
     val focused by interaction.collectIsFocusedAsState()
     return animateFloatAsState(if (focused) 1f else 0f, calm(), label = "lit")
+}
+
+/** Whether [lit] is past [over]: what reads it is composed again only as
+ *  the piece crosses it, not on every frame of the easing. */
+@Composable
+fun litPast(lit: () -> Float, over: Float = 0.5f): Boolean {
+    val past by remember(lit, over) { derivedStateOf { lit() > over } }
+    return past
 }
 
 /** Grows by [growth] when lit. */
