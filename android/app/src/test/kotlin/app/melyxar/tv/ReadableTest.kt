@@ -118,4 +118,24 @@ class ReadableTest {
         assertEquals("0.75×", speedName(0.75f))
         assertEquals("2×", speedName(2f))
     }
+
+    @Test
+    fun namesWhatAFileIsAsPeopleDo() {
+        assertEquals("MKV", containerName("matroska,webm"))
+        assertEquals("MP4", containerName("mov,mp4,m4a,3gp,3g2,mj2"))
+        assertEquals("AVI", containerName("avi"))
+        assertEquals("Dolby Vision", rangeName("dolby_vision"))
+        assertEquals("HDR10", rangeName("hdr10"))
+    }
+
+    @Test
+    fun keepsRatesAndSizesToAFewFigures() {
+        assertEquals("24.6 Mb/s", readableBitrate(24_600_000))
+        assertEquals("640 kb/s", readableBitrate(640_000))
+        assertNull(readableBitrate(0))
+        assertNull(readableBitrate(null))
+        assertEquals("512 B", readableSize(512))
+        assertEquals("1.5 kB", readableSize(1500))
+        assertEquals("23.4 GB", readableSize(23_400_000_000))
+    }
 }

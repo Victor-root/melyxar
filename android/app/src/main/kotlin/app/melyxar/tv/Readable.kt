@@ -76,11 +76,14 @@ fun soundName(sound: String?): String? = when {
     else -> SOUND_NAMES[sound.lowercase()] ?: sound
 }
 
+/** A range of light under its makers' own name: "Dolby Vision", "HDR10". */
+fun rangeName(hdr: String): String = RANGE_NAMES[hdr] ?: hdr.uppercase()
+
 /** The badges of what a file holds: its size, its range and its sound,
  *  under their makers' own names, never translated. */
 fun fileBadges(width: Int?, height: Int?, hdr: String?, sound: String?): List<String> = listOfNotNull(
     pictureName(width, height),
-    hdr?.let { RANGE_NAMES[it] ?: it.uppercase() },
+    hdr?.let(::rangeName),
     soundName(sound),
 )
 
@@ -185,3 +188,32 @@ fun instantOf(written: String): Long? {
  *  not playing forward. */
 fun endsAt(remaining: Double, speed: Float, now: Long): Long? =
     if (remaining > 0 && speed > 0) now + (remaining / speed * 1000).toLong() else null
+
+private val CONTAINER_NAMES = mapOf("matroska" to "MKV", "mov" to "MP4", "mpegts" to "MPEG-TS", "mpeg" to "MPEG-PS", "asf" to "WMV")
+
+/** A container as somebody calls it rather than as the analyser does: the
+ *  first of the names it gives. */
+fun containerName(format: String): String {
+    val first = format.split(",").first().trim()
+    return CONTAINER_NAMES[first] ?: first.uppercase()
+}
+
+/** A rate, in the unit that keeps it to a few figures; nothing for none. */
+fun readableBitrate(bits: Long?): String? = when {
+    bits == null || bits <= 0 -> null
+    bits >= 1_000_000 -> String.format(Locale.ROOT, "%.1f Mb/s", bits / 1_000_000.0)
+    else -> "${(bits / 1000.0).roundToInt()} kb/s"
+}
+
+private val SIZE_UNITS = listOf("B", "kB", "MB", "GB", "TB")
+
+/** A size, in the unit that keeps it to a few figures. */
+fun readableSize(bytes: Long): String {
+    var value = bytes.toDouble()
+    var unit = 0
+    while (value >= 1000 && unit < SIZE_UNITS.lastIndex) {
+        value /= 1000
+        unit += 1
+    }
+    return if (unit == 0) "$bytes ${SIZE_UNITS[0]}" else String.format(Locale.ROOT, "%.1f %s", value, SIZE_UNITS[unit])
+}
