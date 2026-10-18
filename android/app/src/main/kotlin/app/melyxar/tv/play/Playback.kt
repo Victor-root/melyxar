@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.util.EventLogger
 import app.melyxar.BuildConfig
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
+import app.melyxar.player.lightEffects
 import app.melyxar.player.measuredProfile
 import app.melyxar.server.Api
 import app.melyxar.server.Asked
@@ -128,6 +129,23 @@ class Playback(
     /** What the picture is held to, as this television was left. */
     var quality by mutableStateOf(keptQuality.read())
         private set
+
+    private val keptLight = KeptLight(context)
+
+    /** How bright and contrasted the picture is shown, as this television
+     *  was left, while it is shown in standard range. */
+    var brightness by mutableFloatStateOf(keptLight.brightness())
+        private set
+    var contrast by mutableFloatStateOf(keptLight.contrast())
+        private set
+
+    /** Whether lighting effects are set on the player, which draws the film
+     *  straight while none ever were. */
+    private var lit = false
+
+    /** Whether the picture is shown in standard range, the only one lit
+     *  here: a film shown in HDR is the screen's to light. */
+    val lightsThePicture: Boolean get() = plan?.wideGamut?.converted != false
 
     /** What to do with the film's HDR for this film alone: automatic,
      *  always_convert or never_convert, or the account's own choice. */
@@ -284,6 +302,7 @@ class Playback(
             .build()
         clock.mark("film handed to the player at $at s")
         player.setMediaItem(item, (at * 1000).toLong())
+        drawPicture()
         player.prepare()
         player.play()
         keepTheStream()
@@ -328,6 +347,22 @@ class Playback(
         }
         wideGamut = choice
         again(paintedChoice)
+    }
+
+    fun chooseLight(brightness: Float, contrast: Float) {
+        this.brightness = brightness
+        this.contrast = contrast
+        keptLight.keep(brightness, contrast)
+        drawPicture()
+    }
+
+    /** The picture lit as chosen, while it is shown in standard range. */
+    private fun drawPicture() {
+        val effects = if (lightsThePicture) lightEffects(brightness, contrast) else emptyList()
+        if (effects.isNotEmpty() || lit) {
+            player.setVideoEffects(effects)
+            lit = effects.isNotEmpty()
+        }
     }
 
     fun chooseSpeed(chosen: Float) {

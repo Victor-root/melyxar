@@ -482,4 +482,6 @@
     <string name="tv_track_hearing_impaired">For the hearing impaired</string>
     <string name="tv_track_external">External file</string>
     <string name="tv_track_burns_in">Burned into video</string>
+    <string name="tv_brightness">Brightness</string>
+    <string name="tv_contrast">Contrast</string>
 </resources>

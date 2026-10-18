@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.melyxar.R
+import app.melyxar.player.LIGHTS
 import app.melyxar.server.Track
 import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
@@ -16,6 +17,7 @@ import app.melyxar.tv.offsetName
 import app.melyxar.tv.soundName
 import app.melyxar.tv.speakersName
 import app.melyxar.tv.speedName
+import java.text.NumberFormat
 
 /** Which list is open over the film, and the list it leads back to. */
 enum class Menu(val from: Menu? = null) {
@@ -30,6 +32,8 @@ enum class Menu(val from: Menu? = null) {
     Speed(Settings),
     Quality(Settings),
     WideGamut(Settings),
+    Brightness(Settings),
+    Contrast(Settings),
     WordsOffset(Settings),
     /** What is happening to the film, drawn by the player itself. */
     Diagnostics(Settings),
@@ -87,6 +91,8 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
                 wideGamut?.let {
                     Menu.WideGamut to stringResource(if (it.converted) R.string.tv_wide_gamut_converted else R.string.tv_wide_gamut_kept)
                 },
+                (Menu.Brightness to lightName(playback.brightness)).takeIf { playback.lightsThePicture },
+                (Menu.Contrast to lightName(playback.contrast)).takeIf { playback.lightsThePicture },
                 Menu.WordsOffset to offsetName(playback.wordsOffset),
                 // Opens a window rather than a list, with nothing to be on.
                 Menu.Diagnostics to "",
@@ -116,6 +122,22 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             choices = QUALITIES.map { it.name(asItIs) },
             chosen = QUALITIES.indexOf(playback.quality),
             onChoose = { playback.chooseQuality(QUALITIES[it]) },
+            onClose = back,
+            modifier = placed,
+        )
+        Menu.Brightness -> ChoiceList(
+            title = settingName(menu),
+            choices = LIGHTS.map(::lightName),
+            chosen = LIGHTS.indexOf(playback.brightness),
+            onChoose = { playback.chooseLight(LIGHTS[it], playback.contrast) },
+            onClose = back,
+            modifier = placed,
+        )
+        Menu.Contrast -> ChoiceList(
+            title = settingName(menu),
+            choices = LIGHTS.map(::lightName),
+            chosen = LIGHTS.indexOf(playback.contrast),
+            onChoose = { playback.chooseLight(playback.brightness, LIGHTS[it]) },
             onClose = back,
             modifier = placed,
         )
@@ -165,10 +187,15 @@ private fun settingName(menu: Menu): String = stringResource(
         Menu.Quality -> R.string.tv_quality
         Menu.WideGamut -> R.string.tv_wide_gamut
         Menu.WordsOffset -> R.string.tv_words_offset
+        Menu.Brightness -> R.string.tv_brightness
+        Menu.Contrast -> R.string.tv_contrast
         Menu.Diagnostics -> R.string.tv_facts
         else -> R.string.tv_speed
     },
 )
+
+/** A step of light as the reader's language writes a share: "120%". */
+private fun lightName(light: Float): String = NumberFormat.getPercentInstance().format(light)
 
 /** A track as a viewer tells it apart: its language, then what the sound is
  *  made of, then its own title. */
