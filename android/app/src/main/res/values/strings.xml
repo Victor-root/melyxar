@@ -284,6 +284,10 @@
     <string name="tv_setting_probe_shadows">Shadows</string>
     <string name="tv_setting_probe_banner_fade">Banner fade</string>
     <string name="tv_setting_probe_picture_fade">Picture fade</string>
+    <string name="tv_setting_probe_banner">Banner</string>
+    <string name="tv_setting_probe_pictures">Pictures</string>
+    <string name="tv_setting_probe_titles">Card titles</string>
+    <string name="tv_setting_probe_bar">Top bar</string>
     <string name="tv_setting_probe_bench">Measure the next screen</string>
     <string name="tv_probe_bench_waiting">Waiting</string>
     <string name="tv_probe_shown">On</string>

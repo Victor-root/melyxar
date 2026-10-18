@@ -55,7 +55,6 @@ import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowTile
 import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
-import app.melyxar.tv.probe.probed
 
 /** The corner a watched card folds over, as a triangle. */
 private val Corner = GenericShape { size, _ ->
@@ -168,35 +167,37 @@ fun PictureCard(
         ) {
             picture(glowing)
         }
-        Text(
-            title,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            lineHeight = 18.sp,
-            color = if (glowing) palette.text else palette.text.copy(alpha = 0.92f),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp).probed(Part.Titles),
-        )
-        Row(Modifier.probed(Part.Titles)) {
-            note?.let {
-                Text(
-                    it,
-                    fontSize = 12.sp,
-                    color = palette.textFaint,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-            }
-            trailing?.let {
-                Text(
-                    it,
-                    fontSize = 12.sp,
-                    color = palette.textFaint,
-                    maxLines = 1,
-                    modifier = Modifier.padding(start = if (note != null) 8.dp else 0.dp),
-                )
+        if (Probe.shows(Part.Titles)) {
+            Text(
+                title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 18.sp,
+                color = if (glowing) palette.text else palette.text.copy(alpha = 0.92f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Row {
+                note?.let {
+                    Text(
+                        it,
+                        fontSize = 12.sp,
+                        color = palette.textFaint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                trailing?.let {
+                    Text(
+                        it,
+                        fontSize = 12.sp,
+                        color = palette.textFaint,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = if (note != null) 8.dp else 0.dp),
+                    )
+                }
             }
         }
     }

@@ -72,7 +72,15 @@ private val LIGHT_NAMES = listOf(
 )
 
 /** What the smoothness probe can leave out, and what it is called. */
-private val PROBE_PARTS = listOf(Part.Shadows to R.string.tv_setting_probe_shadows, Part.BannerFade to R.string.tv_setting_probe_banner_fade, Part.PictureFade to R.string.tv_setting_probe_picture_fade)
+private val PROBE_PARTS = listOf(
+    Part.Shadows to R.string.tv_setting_probe_shadows,
+    Part.BannerFade to R.string.tv_setting_probe_banner_fade,
+    Part.PictureFade to R.string.tv_setting_probe_picture_fade,
+    Part.Banner to R.string.tv_setting_probe_banner,
+    Part.Pictures to R.string.tv_setting_probe_pictures,
+    Part.Titles to R.string.tv_setting_probe_titles,
+    Part.Bar to R.string.tv_setting_probe_bar,
+)
 
 /** The lengths offered for a step of the player, or the way back on
  *  resuming, as long as the server lets them be. */
