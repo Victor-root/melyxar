@@ -53,8 +53,8 @@ import app.melyxar.tv.look.listLine
 import app.melyxar.tv.music.LocalListening
 import app.melyxar.tv.play.passSoundOn
 import app.melyxar.tv.play.soundPassedOn
+import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
-import app.melyxar.tv.probe.ShadowTest
 import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
@@ -70,6 +70,9 @@ private val LIGHT_NAMES = listOf(
     R.string.tv_light_1, R.string.tv_light_2, R.string.tv_light_3, R.string.tv_light_4, R.string.tv_light_5,
     R.string.tv_light_6, R.string.tv_light_7, R.string.tv_light_8, R.string.tv_light_9, R.string.tv_light_10,
 )
+
+/** What the smoothness probe can leave out, and what it is called. */
+private val PROBE_PARTS = listOf(Part.Shadows to R.string.tv_setting_probe_shadows, Part.BannerFade to R.string.tv_setting_probe_banner_fade)
 
 /** The lengths offered for a step of the player, or the way back on
  *  resuming, as long as the server lets them be. */
@@ -324,12 +327,15 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
-                group("probe-shadows", R.string.tv_settings_probe, Icons.Eye) {
-                    val title = stringResource(R.string.tv_setting_probe_shadows)
-                    val tests = ShadowTest.entries
-                    val names = listOf(R.string.tv_probe_shadows_baked, R.string.tv_probe_shadows_live, R.string.tv_probe_shadows_none).map { stringResource(it) }
-                    Line("probe-shadows", title, names[tests.indexOf(Probe.shadows)], memory) {
-                        ask(title, tests, names, Probe.shadows, choose = Probe::chooseShadows)
+                PROBE_PARTS.forEachIndexed { index, (part, name) ->
+                    group("probe-${part.name}", R.string.tv_settings_probe.takeIf { index == 0 }, Icons.Eye.takeIf { index == 0 }) {
+                        val title = stringResource(name)
+                        val ways = listOf(true, false)
+                        val names = listOf(stringResource(R.string.tv_probe_shown), stringResource(R.string.tv_probe_left_out))
+                        val now = Probe.shows(part)
+                        Line("probe-${part.name}", title, names[ways.indexOf(now)], memory) {
+                            ask(title, ways, names, now) { Probe.show(part, it) }
+                        }
                     }
                 }
             }

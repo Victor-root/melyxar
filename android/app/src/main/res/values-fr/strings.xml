@@ -286,9 +286,9 @@
     <string name="tv_sound_passed_on">Envoyé tel quel à l’ampli</string>
     <string name="tv_settings_probe">Test de fluidité</string>
     <string name="tv_setting_probe_shadows">Ombres</string>
-    <string name="tv_probe_shadows_baked">Pré-dessinées (nouveau)</string>
-    <string name="tv_probe_shadows_live">Dessinées en direct (ancien)</string>
-    <string name="tv_probe_shadows_none">Aucune</string>
+    <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>
+    <string name="tv_probe_shown">Oui</string>
+    <string name="tv_probe_left_out">Non</string>
     <plurals name="tv_seconds">
         <item quantity="one">%d seconde</item>
         <item quantity="many">%d de secondes</item>

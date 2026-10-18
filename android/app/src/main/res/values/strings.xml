@@ -282,9 +282,9 @@
     <string name="tv_sound_passed_on">Sent as it is to the receiver</string>
     <string name="tv_settings_probe">Smoothness test</string>
     <string name="tv_setting_probe_shadows">Shadows</string>
-    <string name="tv_probe_shadows_baked">Pre-drawn (new)</string>
-    <string name="tv_probe_shadows_live">Drawn live (old)</string>
-    <string name="tv_probe_shadows_none">None</string>
+    <string name="tv_setting_probe_banner_fade">Banner fade</string>
+    <string name="tv_probe_shown">On</string>
+    <string name="tv_probe_left_out">Off</string>
     <plurals name="tv_seconds">
         <item quantity="one">%d second</item>
         <item quantity="other">%d seconds</item>
