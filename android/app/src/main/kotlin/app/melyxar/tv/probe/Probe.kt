@@ -55,6 +55,7 @@ object Probe {
     private const val TAG_BENCH = "MlxPerf.Bench"
     private const val TAG_TOUR = "MlxPerf.Tour"
     private const val TAG_AHEAD = "MlxPerf.Ahead"
+    private const val TAG_THUMB = "MlxPerf.Thumb"
     private const val KEPT = "probe"
     private const val NS_PER_MS = 1_000_000.0
     private const val RECENT = 120
@@ -444,6 +445,17 @@ object Probe {
     fun fetchedAhead(pictures: Int, took: Long, memory: MemoryCache?) {
         val mb = 1024 * 1024
         Log.i(TAG_AHEAD, "$pictures pictures in $took ms, memory ${memory?.size?.div(mb)} of ${memory?.maxSize?.div(mb)} MB")
+    }
+
+    /** A sheet of thumbnails made ready to cut from, [bytes] long, in [took]
+     *  ms; no bytes when it did not come. */
+    fun sheetOpened(sheet: String, bytes: Int?, took: Long) {
+        Log.i(TAG_THUMB, "sheet $sheet ${bytes?.let { "${it / 1024} KB" } ?: "failed"} in $took ms")
+    }
+
+    /** A thumbnail cut out of its sheet in [took] ms. */
+    fun thumbnailCut(took: Long) {
+        Log.d(TAG_THUMB, "cut in $took ms")
     }
 
     /** A piece's lighting or fading starting, by 1, or ending, by -1. */
