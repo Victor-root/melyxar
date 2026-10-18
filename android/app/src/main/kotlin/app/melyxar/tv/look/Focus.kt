@@ -7,17 +7,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
 
 /*
@@ -50,19 +55,53 @@ private const val BLEED = 1f
  *  itself stroked twice as wide and cut a pixel outside it, so it follows
  *  every curve of the shape exactly and covers the edge's last pixels,
  *  where the piece's own ground would otherwise show through as a thin
- *  line round it. */
-fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = { 1f }) = drawWithCache {
-    val outline = shape.createOutline(size, layoutDirection, this)
-    val edge = Path().apply {
-        addOutline(shape.createOutline(Size(size.width + 2 * BLEED, size.height + 2 * BLEED), layoutDirection, this@drawWithCache))
-        translate(Offset(-BLEED, -BLEED))
+ *  line round it. Its paths are kept while the piece keeps its size. */
+fun Modifier.rim(shape: Shape, color: Color, width: Dp, lit: () -> Float = Whole) = this then RimElement(shape, color, width, lit)
+
+private data class RimElement(val shape: Shape, val color: Color, val width: Dp, val lit: () -> Float) : ModifierNodeElement<RimNode>() {
+    override fun create() = RimNode(shape, color, width, lit)
+
+    override fun update(node: RimNode) = node.update(shape, color, width, lit)
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "rim"
     }
-    val stroke = Stroke(width.toPx() * 2)
-    onDrawWithContent {
+}
+
+private class RimNode(
+    private var shape: Shape,
+    private var color: Color,
+    private var width: Dp,
+    private var lit: () -> Float,
+) : Modifier.Node(), DrawModifierNode {
+    private val made = MadeFor()
+    private var outline: Outline? = null
+    private val edge = Path()
+    private var stroke = Stroke()
+
+    fun update(shape: Shape, color: Color, width: Dp, lit: () -> Float) {
+        if (shape != this.shape || width != this.width) {
+            this.shape = shape
+            this.width = width
+            made.forget()
+        }
+        this.color = color
+        this.lit = lit
+        invalidateDraw()
+    }
+
+    override fun ContentDrawScope.draw() {
+        if (made.isStale(this)) {
+            outline = shape.createOutline(size, layoutDirection, this)
+            edge.rewind()
+            edge.addOutline(shape.createOutline(Size(size.width + 2 * BLEED, size.height + 2 * BLEED), layoutDirection, this))
+            edge.translate(Offset(-BLEED, -BLEED))
+            stroke = Stroke(width.toPx() * 2)
+        }
         drawContent()
         val shown = lit()
         if (shown > 0f) {
-            clipPath(edge) { drawOutline(outline, color, alpha = shown, style = stroke) }
+            clipPath(edge) { drawOutline(outline!!, color, alpha = shown, style = stroke) }
         }
     }
 }
