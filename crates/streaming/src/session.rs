@@ -547,7 +547,16 @@ impl Session {
             return Ok(path);
         }
         tracing::debug!(session = %self.id, "the header was asked for");
-        self.wait_for_the_header(&path).await?;
+        // The header and the first segment wait on the same run, and the one
+        // that reads why the tool stopped is the one that steps down: left to
+        // the segment alone, a refusal the header read was retried unchanged.
+        match self.wait_for_the_header(&path).await {
+            Ok(()) => {}
+            Err(error) if self.step_down_from_the_card(&error) => {
+                self.wait_for_the_header(&path).await?;
+            }
+            Err(error) => return Err(error),
+        }
         Ok(path)
     }
 

@@ -1043,17 +1043,10 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
     // refusal would throw away most of what it was doing.
     let mut if_the_card_refuses = Vec::new();
     if let Some(rebuild) = plan.rebuild.as_ref().filter(|rebuild| rebuild.on_a_card()) {
-        if rebuild.reads_the_film {
-            let handed_up = PictureRebuild {
-                reads_the_film: false,
-                ..rebuild.clone()
-            };
-            if_the_card_refuses.push(VideoOutput::Encode(encode_for(
-                &handed_up, plan, painted_on,
-            )?));
-        }
-        // The card converting colour its other way, still on the card, for
-        // the film its own filter refuses when started part way through.
+        // The card converting colour its other way first, still on the card:
+        // its own filter refuses a film started part way through the same
+        // way whoever reads the film, so asking it for less there is a wait
+        // for the same refusal.
         if plan.decision.tone_map
             && let Some(card) = rebuild
                 .card
@@ -1068,6 +1061,15 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
             };
             if_the_card_refuses.push(VideoOutput::Encode(encode_for(
                 &other_way, plan, painted_on,
+            )?));
+        }
+        if rebuild.reads_the_film {
+            let handed_up = PictureRebuild {
+                reads_the_film: false,
+                ..rebuild.clone()
+            };
+            if_the_card_refuses.push(VideoOutput::Encode(encode_for(
+                &handed_up, plan, painted_on,
             )?));
         }
         if_the_card_refuses.push(VideoOutput::Encode(encode_for(
@@ -3095,10 +3097,10 @@ mod tests {
         let mut recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
         keep_to_the_card(&mut recipe);
         assert_eq!(recipe.if_the_card_refuses.len(), 2);
-        let VideoOutput::Encode(last) = &recipe.if_the_card_refuses[1] else {
+        let VideoOutput::Encode(first) = &recipe.if_the_card_refuses[0] else {
             panic!("the picture is rebuilt");
         };
-        let (card, reads) = last.card().expect("still on the card");
+        let (card, reads) = first.card().expect("still on the card");
         assert_eq!(card.tone_mapping, Some(other_way));
         assert!(!reads, "Vulkan was not proved to read this film");
     }
