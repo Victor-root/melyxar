@@ -1,15 +1,23 @@
 package app.melyxar.tv.inside
 
 import android.text.format.DateFormat
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -18,7 +26,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
@@ -30,11 +37,15 @@ import app.melyxar.tv.containerName
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.instantOf
 import app.melyxar.tv.languageName
+import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.Glyph
+import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.listLine
+import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.litBy
+import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.rangeName
 import app.melyxar.tv.readableBitrate
 import app.melyxar.tv.readableSize
@@ -42,9 +53,11 @@ import java.text.NumberFormat
 import java.util.Date
 import java.util.Locale
 
-/** How wide a panel of a track is, and the file's, which carries its path. */
-private val PANEL_WIDE = 300.dp
-private val FILE_PANEL_WIDE = 440.dp
+/** How wide every panel is, the file's with its path as a track's. */
+private val PANEL_WIDE = 340.dp
+
+/** The room round the panels for their edge to light in. */
+private val PANELS_ROOM = 8.dp
 
 /** One panel: what it is about, a line saying which, its facts, each a
  *  label and its value, those the analysis found nothing for left out, and
@@ -55,7 +68,6 @@ private class Panel(
     val title: String,
     val lead: String?,
     val facts: List<Pair<String, String>>,
-    val wide: Dp = PANEL_WIDE,
     val warnings: List<String> = emptyList(),
 )
 
@@ -64,12 +76,38 @@ private class Panel(
  * web shows it to its administrators: the file first, where it is and what
  * it is, then a panel for each track, side by side, everything the analysis
  * recorded. Each panel takes the remote in turn, so the page reaches them.
+ *
+ * Every panel as wide and as tall as the tallest: of their own sizes, the
+ * row jumped up and down as the remote went along it. They are few, so laid
+ * out all at once, which is what lets them be measured against each other.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaInfo(version: Version, memory: FocusMemory) {
     val panels = panelsOf(version)
-    CardRow(stringResource(R.string.tv_media_info), Icons.Info, panels, key = { it.key }) { panel ->
-        PanelOf(panel, Modifier.remembered(memory, "media/${version.id}/${panel.key}"))
+    val row = remember { RowMemory() }
+    Column(Modifier.padding(bottom = SectionGap - PANELS_ROOM)) {
+        RowHead(stringResource(R.string.tv_media_info), Icons.Info)
+        CompositionLocalProvider(LocalBringIntoViewSpec provides rememberRowScrolling()) {
+            Row(
+                modifier = Modifier
+                    .landsAsLeft(row, panels.first().key)
+                    .horizontalScroll(rememberScrollState())
+                    .height(IntrinsicSize.Max)
+                    .padding(horizontal = Gutter, vertical = PANELS_ROOM),
+                horizontalArrangement = Arrangement.spacedBy(CardGap),
+            ) {
+                panels.forEach { panel ->
+                    PanelOf(
+                        panel,
+                        Modifier
+                            .fillMaxHeight()
+                            .inRow(row, panel.key)
+                            .remembered(memory, "media/${version.id}/${panel.key}"),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -103,7 +141,6 @@ private fun filePanel(version: Version): Panel {
             stringResource(R.string.tv_media_bitrate) to readableBitrate(version.overallBitrate),
             stringResource(R.string.tv_chapters) to version.chapters.takeIf { it > 0 }?.toString(),
         ),
-        wide = FILE_PANEL_WIDE,
         warnings = warnings,
     )
 }
@@ -191,7 +228,7 @@ private fun PanelOf(panel: Panel, modifier: Modifier) {
     val lit by litBy(interaction)
     Column(
         modifier = modifier
-            .width(panel.wide)
+            .width(PANEL_WIDE)
             .listLine { lit }
             .focusable(interactionSource = interaction)
             .padding(16.dp),
