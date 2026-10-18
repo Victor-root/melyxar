@@ -284,6 +284,8 @@
     <string name="tv_setting_probe_shadows">Shadows</string>
     <string name="tv_setting_probe_banner_fade">Banner fade</string>
     <string name="tv_setting_probe_picture_fade">Picture fade</string>
+    <string name="tv_setting_probe_bench">Measure the next screen</string>
+    <string name="tv_probe_bench_waiting">Waiting</string>
     <string name="tv_probe_shown">On</string>
     <string name="tv_probe_left_out">Off</string>
     <plurals name="tv_seconds">
