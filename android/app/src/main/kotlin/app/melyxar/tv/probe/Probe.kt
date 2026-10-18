@@ -9,9 +9,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.view.FrameMetrics
 import android.view.KeyEvent
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import java.util.concurrent.atomic.AtomicInteger
 
 /*
@@ -21,23 +19,20 @@ import java.util.concurrent.atomic.AtomicInteger
  * found and removed whole.
  */
 
-/** How the cards' shadows are drawn, to compare their cost on the box:
- *  from masks made once, blurred and cut live each frame, or not at all. */
-enum class ShadowTest { Baked, Live, None }
+/** A part of the screens the probe can leave out, to measure its cost. */
+enum class Part { Shadows, BannerFade }
 
 object Probe {
     private const val TAG = "MlxPerf"
     private const val TAG_FRAME = "MlxPerf.Frame"
     private const val TAG_KEY = "MlxPerf.Key"
-    private const val TAG_SHADOW = "MlxPerf.Shadow"
+    private const val TAG_PART = "MlxPerf.Part"
     private const val KEPT = "probe"
-    private const val KEPT_SHADOWS = "shadows"
     private const val NS_PER_MS = 1_000_000.0
 
     private var kept: android.content.SharedPreferences? = null
 
-    var shadows by mutableStateOf(ShadowTest.Baked)
-        private set
+    private val shown = Part.entries.associateWith { mutableStateOf(true) }
 
     private val shadowsMade = AtomicInteger()
     private val shadowsDrawn = AtomicInteger()
@@ -63,21 +58,26 @@ object Probe {
         Swap(FrameMetrics.SWAP_BUFFERS_DURATION, "swap"),
     }
 
-    fun chooseShadows(test: ShadowTest) {
-        shadows = test
-        kept?.edit()?.putString(KEPT_SHADOWS, test.name)?.apply()
-        Log.i(TAG_SHADOW, "shadows now ${test.name}")
+    /** Whether [part] is drawn, read where it draws so it changes at once. */
+    fun shows(part: Part) = shown.getValue(part).value
+
+    fun show(part: Part, on: Boolean) {
+        shown.getValue(part).value = on
+        kept?.edit()?.putBoolean(part.name, on)?.apply()
+        Log.i(TAG_PART, "${part.name} ${if (on) "shown" else "left out"}")
     }
+
+    private fun leftOut() = Part.entries.filterNot(::shows).joinToString(",") { it.name }.ifEmpty { "none" }
 
     /** Starts logging every frame [activity] draws, with a summary each second. */
     fun watch(activity: Activity) {
         kept = activity.getSharedPreferences(KEPT, Context.MODE_PRIVATE).also { prefs ->
-            shadows = prefs.getString(KEPT_SHADOWS, null)?.let { name -> ShadowTest.entries.firstOrNull { it.name == name } } ?: ShadowTest.Baked
+            Part.entries.forEach { part -> shown.getValue(part).value = prefs.getBoolean(part.name, true) }
         }
         @Suppress("DEPRECATION")
         val refresh = activity.windowManager.defaultDisplay.refreshRate
         val budgetNs = (1e9 / refresh).toLong()
-        Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, shadows ${shadows.name}")
+        Log.i(TAG, "watching: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}, ${"%.2f".format(refresh)} Hz, budget ${"%.1f".format(budgetNs / NS_PER_MS)} ms, left out: ${leftOut()}")
         val thread = HandlerThread("MlxPerf").apply { start() }
         val handler = Handler(thread.looper)
         activity.window.addOnFrameMetricsAvailableListener({ _, metrics, dropped ->
@@ -127,7 +127,7 @@ object Probe {
             TAG,
             "1s: $count frames, $janky janky (${janky * 100 / count}%), " +
                 "p50=${ms(frames[count / 2])} p90=${ms(frames[count * 9 / 10])} max=${ms(frames[count - 1])} ms | " +
-                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | shadows ${shadows.name} made=$made baked=$baked drawn=$drawn | heap=${heap} MB",
+                "mean $means | keys=$pressed lit=$lit | pictures faded=$faded memory=$remembered | left out: ${leftOut()} | shadows made=$made baked=$baked drawn=$drawn | heap=${heap} MB",
         )
         frames.clear()
         phases.fill(0)

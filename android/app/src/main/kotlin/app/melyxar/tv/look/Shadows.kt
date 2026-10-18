@@ -25,10 +25,9 @@ import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.withSave
 import app.melyxar.theme.Palette
+import app.melyxar.tv.probe.Part
 import app.melyxar.tv.probe.Probe
-import app.melyxar.tv.probe.ShadowTest
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -109,7 +108,6 @@ private class BoxShadowNode(
     private var shown: () -> Float,
 ) : Modifier.Node(), DrawModifierNode {
     private val made = MadeFor()
-    private var piece = android.graphics.Path()
     private var pieceCorner = 0f
     private var pieceSize = Size.Zero
     private var layers = emptyList<DrawnShadow>()
@@ -129,25 +127,13 @@ private class BoxShadowNode(
             make()
         }
         val strength = shown()
-        val test = Probe.shadows
-        if (strength > 0f && test != ShadowTest.None) {
+        if (strength > 0f && Probe.shows(Part.Shadows)) {
             Probe.shadowDrawn()
             drawIntoCanvas { canvas ->
-                val native = canvas.nativeCanvas
-                if (test == ShadowTest.Baked) {
-                    layers.forEach { layer ->
-                        val baked = layer.baked ?: BakedShadows.of(pieceSize, pieceCorner, layer).also { layer.baked = it }
-                        layer.bakedPaint.alpha = (layer.alpha * strength * 255).roundToInt()
-                        native.drawBitmap(baked.mask, baked.left, baked.top, layer.bakedPaint)
-                    }
-                } else {
-                    native.withSave {
-                        clipOutPath(piece)
-                        layers.forEach { layer ->
-                            layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
-                            drawRoundRect(layer.box, layer.corner, layer.corner, layer.paint)
-                        }
-                    }
+                layers.forEach { layer ->
+                    val baked = layer.baked ?: BakedShadows.of(pieceSize, pieceCorner, layer).also { layer.baked = it }
+                    layer.paint.alpha = (layer.alpha * strength * 255).roundToInt()
+                    canvas.nativeCanvas.drawBitmap(baked.mask, baked.left, baked.top, layer.paint)
                 }
             }
         }
@@ -160,24 +146,16 @@ private class BoxShadowNode(
         val corner = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 0f
         pieceCorner = corner
         pieceSize = size
-        piece = android.graphics.Path().apply {
-            addRoundRect(0f, 0f, size.width, size.height, corner, corner, android.graphics.Path.Direction.CW)
-        }
         layers = shadows.map { shadow ->
             val spread = shadow.spread.toPx()
             val x = shadow.x.toPx()
             val y = shadow.y.toPx()
-            val radius = blurOf(shadow.blur.toPx())
             DrawnShadow(
                 box = RectF(x - spread, y - spread, size.width + x + spread, size.height + y + spread),
                 corner = max(0f, corner + spread),
                 alpha = shadow.color.alpha,
-                radius = radius,
-                paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    color = shadow.color.toArgb()
-                    radius?.let { maskFilter = BlurMaskFilter(it, BlurMaskFilter.Blur.NORMAL) }
-                },
-                bakedPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+                radius = blurOf(shadow.blur.toPx()),
+                paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
                     color = shadow.color.toArgb()
                 },
             )
@@ -191,7 +169,6 @@ private class DrawnShadow(
     val alpha: Float,
     val radius: Float?,
     val paint: android.graphics.Paint,
-    val bakedPaint: android.graphics.Paint,
 ) {
     var baked: BakedShadow? = null
 }

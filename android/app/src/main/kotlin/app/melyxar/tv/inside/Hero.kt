@@ -74,6 +74,8 @@ import app.melyxar.tv.look.PillShape
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.calm
+import app.melyxar.tv.probe.Part
+import app.melyxar.tv.probe.Probe
 import kotlinx.coroutines.delay
 
 /** The height of the banner, under which the first row shows. */
@@ -131,7 +133,7 @@ fun Hero(
             targetState = at,
             transitionSpec = { fadeIn(tween(CROSSFADE_MS)) togetherWith fadeOut(tween(CROSSFADE_MS)) },
             label = "hero",
-            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().fadesIntoThePage(),
+            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().then(if (Probe.shows(Part.BannerFade)) Modifier.fadesIntoThePage() else Modifier),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }
