@@ -1,0 +1,10 @@
+# The FFmpeg ffmpeg-melyxar is built from, read by build.sh.
+#
+# Always the latest stable release of FFmpeg. Moving to a newer one is these
+# three lines: the version, the SHA-256 of its .tar.xz as published on
+# ffmpeg.org, and the revision back to 1. The revision counts our own changes
+# on one version (a patch added or changed, an option) and is what the
+# version string ends with: "9.0.2-melyxar1".
+FFMPEG_VERSION="9.0.2"
+FFMPEG_SHA256="8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
+MELYXAR_REVISION="1"

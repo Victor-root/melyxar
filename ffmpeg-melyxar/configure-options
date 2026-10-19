@@ -1,0 +1,33 @@
+# What ffmpeg-melyxar is built with, one option per line, handed to FFmpeg's
+# configure. Only what Melyxar uses: the cards, the encoders it writes with,
+# the filters its commands name, and the formats it reads and writes.
+#
+# libplacebo is left out: FFmpeg 9 wants a newer one than Debian 13 has. A
+# card that converts colour only through it is then proved unable to at
+# start-up, and its wide gamut films go to the processor.
+--enable-gpl
+--disable-debug
+--disable-doc
+--disable-ffplay
+--enable-vaapi
+--enable-libdrm
+--enable-vulkan
+--enable-ffnvcodec
+--enable-nvenc
+--enable-nvdec
+--enable-cuvid
+--enable-cuda-llvm
+--enable-libx264
+--enable-libx265
+--enable-libsvtav1
+--enable-libdav1d
+--enable-libzimg
+--enable-libass
+--enable-libfreetype
+--enable-libfontconfig
+--enable-libfribidi
+--enable-libharfbuzz
+--enable-libopus
+--enable-libmp3lame
+--enable-libvorbis
+--enable-libwebp

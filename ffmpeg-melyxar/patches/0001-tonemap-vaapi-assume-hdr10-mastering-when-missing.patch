@@ -1,0 +1,46 @@
+tonemap_vaapi: assume the usual HDR10 mastering display when none is given
+
+The filter refused every picture that did not carry mastering display side
+data. Many HDR10 films carry it on their first picture only, so a run started
+anywhere but the very beginning (a chapter, a jump) was refused outright,
+while the same film played from its start converted fine. A 1000 cd/m2
+BT.2020 mastering display is assumed instead, which is what nearly every
+HDR10 film is graded on; values the stream gave earlier are kept.
+
+Same idea as Jellyfin's "allow-vpp-tonemap-without-hdr10-metadata" patch to
+their FFmpeg (jellyfin-ffmpeg), which lets the filter go on without any
+values at all.
+
+--- a/libavfilter/vf_tonemap_vaapi.c
++++ b/libavfilter/vf_tonemap_vaapi.c
+@@ -121,9 +121,27 @@
+                    ctx->in_metadata.white_point_x,
+                    ctx->in_metadata.white_point_y);
+         }
+-    } else {
+-        av_log(avctx, AV_LOG_ERROR, "No mastering display data from input\n");
+-        return AVERROR(EINVAL);
++    } else if (!ctx->in_metadata.max_display_mastering_luminance) {
++        /* Many HDR10 streams carry the mastering display SEI on their first
++         * picture only, so decoding that starts anywhere else never sees it.
++         * Assume the usual HDR10 mastering display (BT.2020 primaries, D65
++         * white point, 1000 to 0.005 cd/m2) rather than refusing the stream.
++         * Values seen earlier in the stream are kept as they are. */
++        static const uint16_t bt2020_x[3] = { 8500, 6550, 35400 };  // G, B, R
++        static const uint16_t bt2020_y[3] = { 39850, 2300, 14600 };
++        int i;
++
++        for (i = 0; i < 3; i++) {
++            ctx->in_metadata.display_primaries_x[i] = bt2020_x[i];
++            ctx->in_metadata.display_primaries_y[i] = bt2020_y[i];
++        }
++        ctx->in_metadata.white_point_x = 15635;
++        ctx->in_metadata.white_point_y = 16450;
++        ctx->in_metadata.max_display_mastering_luminance = 10000000;
++        ctx->in_metadata.min_display_mastering_luminance = 50;
++
++        av_log(avctx, AV_LOG_VERBOSE, "No mastering display data from input, "
++               "assuming a 1000 cd/m2 BT.2020 mastering display\n");
+     }
+ 
+     ctx->src_light = av_frame_get_side_data(input_frame,
