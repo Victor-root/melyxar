@@ -296,7 +296,7 @@ pub(super) async fn try_reading(
     sample: &Path,
     filters: &str,
 ) -> (bool, String) {
-    let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
+    let arguments = QUIET
         .map(str::to_string)
         .into_iter()
         .chain(opening)
@@ -333,7 +333,22 @@ pub(super) async fn try_it(
     input: TrialInput<'_>,
     filters: &str,
 ) -> (bool, String) {
-    let read = match input {
+    let arguments = QUIET
+        .map(str::to_string)
+        .into_iter()
+        .chain(opening)
+        .chain(reading(&input))
+        .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
+
+    match run_briefly(ffmpeg, arguments).await {
+        Ok(outcome) => outcome,
+        Err(said) => (false, said),
+    }
+}
+
+/// What the tool is told to read a trial's input from.
+fn reading(input: &TrialInput) -> Vec<String> {
+    match input {
         TrialInput::Generated => vec![
             "-f".to_string(),
             "lavfi".to_string(),
@@ -341,19 +356,45 @@ pub(super) async fn try_it(
             A_GENERATED_PICTURE.to_string(),
         ],
         TrialInput::File(path) => vec!["-i".to_string(), path.display().to_string()],
-    };
+    }
+}
 
-    let arguments = ["-hide_banner", "-nostdin", "-loglevel", "error"]
+/// Writes the generated picture with one of the card's encoders, handed up
+/// the way `filters` hands it, and says whether what it wrote looks like the
+/// picture itself.
+///
+/// An encoder that runs can still write a picture no reader decodes: AMD's
+/// HEVC encoder wrote its stream with settings other than those the tool
+/// announced in its headers, and an RX 6600 showed a stripe of scattered
+/// colour above black, film after film, while every trial that wrote H.264
+/// came out right.
+pub(super) async fn writes_it_right(
+    ffmpeg: &Path,
+    opening: Vec<String>,
+    encoder: &str,
+    filters: &str,
+) -> (bool, String) {
+    let made = Sample::named("melyxar-card-written");
+    let writing = QUIET
         .map(str::to_string)
         .into_iter()
         .chain(opening)
-        .chain(read)
-        .chain(["-vf", filters, "-c:v", encoder, "-f", "null", "-"].map(str::to_string));
-
-    match run_briefly(ffmpeg, arguments).await {
-        Ok(outcome) => outcome,
-        Err(said) => (false, said),
+        .chain(reading(&TrialInput::Generated))
+        .chain(
+            [
+                "-vf",
+                filters,
+                "-c:v",
+                encoder,
+                "-y",
+                &made.path().display().to_string(),
+            ]
+            .map(str::to_string),
+        );
+    if let Ok((false, said)) | Err(said) = run_briefly(ffmpeg, writing).await {
+        return (false, said);
     }
+    looked_alike(ffmpeg, &TrialInput::File(made.path()), &TrialInput::Generated).await
 }
 
 /// How small a picture is brought before it is looked at: enough to tell its
@@ -423,10 +464,10 @@ pub(super) async fn looks_right(
         return (false, said);
     }
 
-    let card = looked_at(ffmpeg, made.path(), "").await;
+    let card = looked_at(ffmpeg, &TrialInput::File(made.path()), "").await;
     let processor = looked_at(
         ffmpeg,
-        sample,
+        &TrialInput::File(sample),
         &format!("{WHAT_THE_SAMPLE_IS},{},", crate::command::TONE_MAP_FILTER),
     )
     .await;
@@ -435,7 +476,7 @@ pub(super) async fn looks_right(
         // A card is never refused for want of something to compare it with:
         // the sample as it was read keeps the shapes, and a right picture
         // stays near no colour at all on average.
-        (Ok(card), Err(said)) => match looked_at(ffmpeg, sample, "").await {
+        (Ok(card), Err(said)) => match looked_at(ffmpeg, &TrialInput::File(sample), "").await {
             Ok(read) => alike(&card, &colourless_beside(&read)).map(|alike| {
                 format!(
                     "{alike}, judged on the sample as read, the processor's conversion \
@@ -448,23 +489,34 @@ pub(super) async fn looks_right(
         },
         (Err(said), _) => Err(said),
     };
-    match judged {
-        Ok(said) => (true, said),
-        Err(said) => (false, said),
-    }
+    told(judged)
 }
 
 /// Sets a picture a card wrote beside the same written by the processor and
 /// says whether they look alike, both being of the same picture with no
 /// colours to convert.
 pub(super) async fn written_alike(ffmpeg: &Path, card: &Path, processor: &Path) -> (bool, String) {
-    let judged = match (
+    looked_alike(ffmpeg, &TrialInput::File(card), &TrialInput::File(processor)).await
+}
+
+/// Whether what a card made looks like what the processor made, both being
+/// of the same picture with no colours to convert.
+async fn looked_alike(
+    ffmpeg: &Path,
+    card: &TrialInput<'_>,
+    processor: &TrialInput<'_>,
+) -> (bool, String) {
+    told(match (
         looked_at(ffmpeg, card, "").await,
         looked_at(ffmpeg, processor, "").await,
     ) {
         (Ok(card), Ok(processor)) => alike(&card, &processor),
         (Err(said), _) | (_, Err(said)) => Err(said),
-    };
+    })
+}
+
+/// A judgement as a trial reports it.
+fn told(judged: std::result::Result<String, String>) -> (bool, String) {
     match judged {
         Ok(said) => (true, said),
         Err(said) => (false, said),
@@ -480,12 +532,14 @@ const QUIET: [&str; 4] = ["-hide_banner", "-nostdin", "-loglevel", "error"];
 /// The last rather than the first: a card writes every picture of a trial as
 /// it does a film's, one after the other, and a picture passed across while
 /// the one before is still in use comes out wrong only after the first.
-async fn looked_at(ffmpeg: &Path, input: &Path, before: &str) -> std::result::Result<Vec<u8>, String> {
+async fn looked_at(
+    ffmpeg: &Path,
+    input: &TrialInput<'_>,
+    before: &str,
+) -> std::result::Result<Vec<u8>, String> {
     let (across, down) = LOOKED_AT;
-    let arguments = QUIET.map(str::to_string).into_iter().chain(
+    let arguments = QUIET.map(str::to_string).into_iter().chain(reading(input)).chain(
         [
-            "-i",
-            &input.display().to_string(),
             "-vf",
             &format!("{before}scale={across}:{down},format=yuv420p,reverse"),
             "-frames:v",
@@ -697,6 +751,26 @@ mod tests {
         let (alike, said) = written_alike(&tools.ffmpeg, painted.path(), painted.path()).await;
         assert!(alike, "{said}");
         assert!(said.contains("shapes 1.00"), "{said}");
+    }
+
+    #[tokio::test]
+    async fn an_encoder_is_kept_only_when_what_it_writes_looks_like_the_picture() {
+        // Written by a software encoder on every machine: kept when it is
+        // the picture, refused when what comes out has lost its shapes, as a
+        // stream whose headers misdescribe it does.
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let (worked, said) =
+            writes_it_right(&tools.ffmpeg, Vec::new(), "libx264", "format=yuv420p").await;
+        assert!(worked, "{said}");
+        assert!(said.contains("shapes"), "{said}");
+        let (worked, said) = writes_it_right(
+            &tools.ffmpeg,
+            Vec::new(),
+            "libx264",
+            "format=yuv420p,lutyuv=y=16",
+        )
+        .await;
+        assert!(!worked, "{said}");
     }
 
     #[tokio::test]

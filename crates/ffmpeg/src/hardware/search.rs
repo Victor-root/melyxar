@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use super::trials::{
     looks_right, run_briefly, sample_in, try_it, try_reading, wide_gamut_sample, witness_writer,
-    written_alike, Sample, TrialInput, LOOKED_AT_HEIGHT, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
+    writes_it_right, written_alike, Sample, TrialInput, LOOKED_AT_HEIGHT, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
 };
 use super::{encoder_name, Card, CardPath, ToneMapping};
 use crate::painting;
@@ -217,11 +217,10 @@ impl CardSearch {
             if !built_with.contains(&encoder) {
                 continue;
             }
-            let (worked, said) = try_it(
+            let (worked, said) = writes_it_right(
                 ffmpeg,
                 card.opening_arguments(false, false),
                 &encoder,
-                TrialInput::Generated,
                 "format=nv12,hwupload",
             )
             .await;
