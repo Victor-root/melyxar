@@ -160,9 +160,9 @@ data class EpisodeMore(
     val episodeNumber: Int? = null,
 )
 
-/** The works of one kind, for the category strip under the banner. */
+/** The newest works of one library, for its row and its tile under the banner. */
 @Serializable
-data class Shelf(val kind: String, val cards: List<Card> = emptyList(), val fan: List<Card> = emptyList())
+data class Shelf(val library: String, val kind: String, val cards: List<Card> = emptyList(), val fan: List<Card> = emptyList())
 
 @Serializable
 data class Home(
@@ -171,10 +171,12 @@ data class Home(
     val upNext: List<WithCard<EpisodeMore>> = emptyList(),
     val recentlyAdded: List<Card> = emptyList(),
     val shelves: List<Shelf> = emptyList(),
-    /** band, carry_on, up_next, recently_added and newest:<kind>, in the
+    /** band, carry_on, up_next, recently_added and newest:<library>, in the
      *  account's order, those it hid left out. */
     val sections: List<String> = emptyList(),
-    val kindOrder: List<String> = emptyList(),
+    /** The libraries in the account's order, music's among them, for the
+     *  tiles under the banner. */
+    val libraryOrder: List<String> = emptyList(),
 )
 
 @Serializable

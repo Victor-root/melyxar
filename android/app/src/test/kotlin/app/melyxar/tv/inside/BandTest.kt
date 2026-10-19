@@ -17,10 +17,4 @@ class BandTest {
         assertEquals(5, fan.size)
         assertEquals(listOf("Tide", "Harbour", "Lantern 1"), fan.take(3).map { it.title })
     }
-
-    @Test
-    fun everyLibraryTakesItsTurn() {
-        assertEquals(listOf(1, 10, 2, 20, 3), inTurn(listOf(listOf(1, 2, 3), listOf(10, 20)), 5))
-        assertEquals(listOf(1, 10), inTurn(listOf(listOf(1, 2, 3), listOf(10, 20)), 2))
-    }
 }

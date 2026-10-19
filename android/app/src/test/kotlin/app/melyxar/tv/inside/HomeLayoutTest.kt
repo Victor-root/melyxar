@@ -10,8 +10,8 @@ class HomeLayoutTest {
     @Test
     fun pairsTheTwoRowsOfWhatIsUnderWayWhenTheyFollowEachOther() {
         assertEquals(
-            listOf(Laid.One("band"), Laid.Two("carry_on", "up_next"), Laid.One("newest:movies"), Laid.One("recently_added")),
-            laidOut(listOf("band", "carry_on", "up_next", "newest:movies", "recently_added")),
+            listOf(Laid.One("band"), Laid.Two("carry_on", "up_next"), Laid.One("newest:films-library"), Laid.One("recently_added")),
+            laidOut(listOf("band", "carry_on", "up_next", "newest:films-library", "recently_added")),
         )
         assertEquals(listOf(Laid.Two("up_next", "carry_on")), laidOut(listOf("up_next", "carry_on")))
     }

@@ -78,11 +78,6 @@ private const val IN_A_FAN = 5
  *  as the other tiles put their posters ahead of the holes. */
 fun coversOf(albums: List<Album>): List<Album> = albums.sortedBy { it.cover.isEmpty() }.take(IN_A_FAN)
 
-/** The newest albums of every library of music, one from each in turn, as
- *  the web's home takes them. */
-fun <T> inTurn(lists: List<List<T>>, most: Int): List<T> =
-    (0 until (lists.maxOfOrNull { it.size } ?: 0)).flatMap { at -> lists.mapNotNull { it.getOrNull(at) } }.take(most)
-
 /** How many covers, from the middle out, have a record behind them. */
 private const val WITH_A_RECORD = 3
 
@@ -111,16 +106,17 @@ private val FAN = listOf(
 )
 
 /**
- * The band under the banner, as the web's: a tile for each kind of library,
- * a fan of its newest posters standing in the accent's light, opening when
- * the remote comes to it. Music, which the server's shelves know nothing of,
- * fans out the covers of its newest [albums], square as a cover is.
+ * The band under the banner, as the web's: a tile for each library, in the
+ * account's [order], a fan of its newest posters standing in the accent's
+ * light, opening when the remote comes to it. A library of music, which the
+ * server's shelves know nothing of, fans out the covers of its newest
+ * [albums], square as a cover is.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Band(
     shelves: List<Shelf>,
-    albums: List<Album>,
+    albums: Map<String, List<Album>>,
     libraries: List<Library>,
     order: List<String>,
     onOpen: (Library) -> Unit,
@@ -128,7 +124,7 @@ fun Band(
     /** Given to the first tile, for a home that starts the remote there. */
     first: FocusRequester,
 ) {
-    val kinds = order.filter { kind -> libraries.any { it.kind == kind } }
+    val shown = order.mapNotNull { id -> libraries.firstOrNull { it.id == id } }
     val nearest = rememberRowScrolling()
     val row = remember { RowMemory() }
     // Coming into the band lands on the tile it left, or on the first.
@@ -136,22 +132,23 @@ fun Band(
         LazyRow(
             contentPadding = PaddingValues(start = Gutter, end = Gutter, top = 20.dp, bottom = SectionGap),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.landsAsLeft(row, kinds.firstOrNull()),
+            modifier = Modifier.landsAsLeft(row, shown.firstOrNull()?.id),
         ) {
-            itemsIndexed(kinds, key = { _, kind -> kind }) { at, kind ->
-                val library = libraries.first { it.kind == kind }
+            itemsIndexed(shown, key = { _, library -> library.id }) { at, library ->
+                val music = library.kind == "music"
                 BandTile(
-                    kind = kind,
-                    fan = if (kind == "music") {
-                        coversOf(albums).map { Leafed(it.cover, it.color) }
+                    kind = library.kind,
+                    name = library.name,
+                    fan = if (music) {
+                        coversOf(albums[library.id].orEmpty()).map { Leafed(it.cover, it.color) }
                     } else {
-                        shelves.firstOrNull { it.kind == kind }?.fan.orEmpty().map { Leafed(it.poster, it.color) }
+                        shelves.firstOrNull { it.library == library.id }?.fan.orEmpty().map { Leafed(it.poster, it.color) }
                     },
-                    square = kind == "music",
+                    square = music,
                     onClick = { onOpen(library) },
                     modifier = Modifier
-                        .remembered(memory, "band/$kind")
-                        .inRow(row, kind)
+                        .remembered(memory, "band/${library.id}")
+                        .inRow(row, library.id)
                         .then(if (at == 0) Modifier.focusRequester(first) else Modifier),
                 )
             }
@@ -160,7 +157,7 @@ fun Band(
 }
 
 @Composable
-private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun BandTile(kind: String, name: String, fan: List<Leafed>, square: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -238,7 +235,7 @@ private fun BandTile(kind: String, fan: List<Leafed>, square: Boolean, onClick: 
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Glyph(Icons.ofKind(kind), palette.accentBright, 17.dp)
-            Text(kindName(kind), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = palette.text, maxLines = 1, modifier = Modifier.weight(1f))
             Arrow({ lit })
         }
         Box(Modifier.fillMaxSize().rim(CardShape, palette.accent.copy(alpha = 0.62f), 1.dp).rim(CardShape, palette.accentBright, 1.5.dp) { lit })
