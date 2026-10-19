@@ -1,0 +1,24 @@
+# Debian packages needed to build ffmpeg-melyxar, one per line, installed by
+# the installation script before building. Each library here goes with its
+# option in configure-options.
+nasm
+clang
+libva-dev
+libdrm-dev
+libvulkan-dev
+libffmpeg-nvenc-dev
+libx264-dev
+libx265-dev
+libsvtav1enc-dev
+libdav1d-dev
+libzimg-dev
+libass-dev
+libfreetype-dev
+libfontconfig-dev
+libfribidi-dev
+libharfbuzz-dev
+libopus-dev
+libmp3lame-dev
+libvorbis-dev
+libwebp-dev
+zlib1g-dev
