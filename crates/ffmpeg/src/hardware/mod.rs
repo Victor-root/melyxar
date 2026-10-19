@@ -135,7 +135,7 @@ pub(crate) trait Driver: Sync {
     fn chain(
         &self,
         card: &Card,
-        scale_to_height: Option<i32>,
+        sizing: Sizing,
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String>;
@@ -195,6 +195,45 @@ pub enum WorkTally {
     /// NVIDIA's management library, asked about the card at this slot on the
     /// machine.
     NvidiaLibrary { slot: String },
+}
+
+/// How large the picture comes out of the card's filters.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Sizing {
+    /// Made this tall, keeping its shape.
+    pub height: Option<i32>,
+    /// Cut out of the larger frame the card hands it on in.
+    pub cut: Option<Cut>,
+}
+
+/// Where a picture sits in the frame a film carries it in, and how large it
+/// comes out once cut from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cut {
+    pub left: i32,
+    pub top: i32,
+    pub width: i32,
+    pub height: i32,
+    /// Its size once made smaller, as the tool would make it.
+    pub out: (i32, i32),
+}
+
+impl From<Option<i32>> for Sizing {
+    fn from(height: Option<i32>) -> Self {
+        Self { height, cut: None }
+    }
+}
+
+impl Sizing {
+    /// What a filter that sizes the picture is told, when it is told
+    /// anything: the size worked out for a cut picture, since the filter
+    /// would otherwise keep the shape of the whole frame.
+    pub(crate) fn size(&self) -> Option<String> {
+        match self.cut {
+            Some(Cut { out: (width, height), .. }) => Some(format!("w={width}:h={height}")),
+            None => self.height.map(|height| format!("w=-2:h={height}")),
+        }
+    }
 }
 
 /// How a card converts wide gamut colour to standard range.
@@ -464,12 +503,12 @@ impl Card {
     /// The filters the picture goes through on the card.
     pub fn filters_for(
         &self,
-        scale_to_height: Option<i32>,
+        sizing: impl Into<Sizing>,
         tone_map: bool,
         reads_the_film: bool,
     ) -> Vec<String> {
         self.chain(
-            scale_to_height,
+            sizing.into(),
             self.tone_mapping.filter(|_| tone_map),
             reads_the_film,
         )
@@ -479,13 +518,13 @@ impl Card {
     /// processor: what a subtitle the processor lays is laid after.
     pub fn filters_until_it_comes_down(
         &self,
-        scale_to_height: Option<i32>,
+        sizing: impl Into<Sizing>,
         tone_map: bool,
         reads_the_film: bool,
     ) -> Vec<String> {
         self.way.driver().chain(
             self,
-            scale_to_height,
+            sizing.into(),
             self.tone_mapping.filter(|_| tone_map),
             reads_the_film,
         )
@@ -503,12 +542,12 @@ impl Card {
     /// the end when the recipe brought it down.
     fn chain(
         &self,
-        scale_to_height: Option<i32>,
+        sizing: Sizing,
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
         let driver = self.way.driver();
-        let mut filters = driver.chain(self, scale_to_height, recipe, reads_the_film);
+        let mut filters = driver.chain(self, sizing, recipe, reads_the_film);
         filters.extend(driver.back_up(recipe).map(str::to_string));
         filters
     }
@@ -564,19 +603,28 @@ fn vulkan_on_the_card() -> Vec<String> {
     ]
 }
 
-/// Vulkan making the picture smaller and converting its colours in one pass.
-fn converted_by_vulkan(scale_to_height: Option<i32>) -> String {
-    let size = scale_to_height
-        .map(|height| format!("w=-2:h={height}:"))
+/// Vulkan making the picture smaller and converting its colours in one pass,
+/// cutting it out of its frame on the way when it comes in one: Vulkan reads
+/// none of what the film says about its frame, only what it is told here.
+fn converted_by_vulkan(sizing: Sizing) -> String {
+    let cut = sizing
+        .cut
+        .map(|cut| {
+            format!(
+                "crop_x={}:crop_y={}:crop_w={}:crop_h={}:",
+                cut.left, cut.top, cut.width, cut.height
+            )
+        })
         .unwrap_or_default();
-    format!("libplacebo={size}format={VULKAN_LAYOUT}:{VULKAN_COLOURS}")
+    let size = sizing.size().map(|size| format!("{size}:")).unwrap_or_default();
+    format!("libplacebo={cut}{size}format={VULKAN_LAYOUT}:{VULKAN_COLOURS}")
 }
 
 /// The same, brought down to the processor at its final size and to the
 /// layout every encoder takes.
-fn converted_by_vulkan_and_brought_down(scale_to_height: Option<i32>) -> Vec<String> {
+fn converted_by_vulkan_and_brought_down(sizing: Sizing) -> Vec<String> {
     vec![
-        converted_by_vulkan(scale_to_height),
+        converted_by_vulkan(sizing),
         "hwdownload".to_string(),
         format!("format={VULKAN_LAYOUT}"),
         BROUGHT_TO_THE_ENCODERS_LAYOUT.to_string(),
@@ -591,7 +639,7 @@ fn converted_by_vulkan_and_brought_down(scale_to_height: Option<i32>) -> Vec<Str
 /// card: the conversion starts from those bits.
 fn handed_up_and_made_smaller(
     card: &Card,
-    scale_to_height: Option<i32>,
+    sizing: Sizing,
     keeps_ten_bits: bool,
     reads_the_film: bool,
 ) -> Vec<String> {
@@ -615,12 +663,16 @@ fn handed_up_and_made_smaller(
     // Made smaller first for the same reason as in software: converting
     // colours is the most expensive thing done to a picture, so doing it on
     // fewer pixels costs less.
-    match (scale_to_height.filter(|_| card.can_scale), keeps_ten_bits) {
+    //
+    // A picture cut out of its frame is always given its size: the card's
+    // filter reads the cut the film asks for, but would size what comes out by
+    // the whole frame, and stretch the picture to it.
+    match (sizing.size().filter(|_| card.can_scale), keeps_ten_bits) {
         // Converting the colours is what leaves the picture in the layout the
         // encoder takes, so the resize before it must not throw away the bits
         // that conversion works from.
-        (Some(height), true) => filters.push(format!("scale_{way}=w=-2:h={height}")),
-        (Some(height), false) => filters.push(format!("scale_{way}=w=-2:h={height}:format=nv12")),
+        (Some(size), true) => filters.push(format!("scale_{way}={size}")),
+        (Some(size), false) => filters.push(format!("scale_{way}={size}:format=nv12")),
         // A film the card read itself is handed over in the layout it was
         // written in, and anything worth a card is written with ten bits to a
         // channel where the encoder takes eight. One more pass on the card

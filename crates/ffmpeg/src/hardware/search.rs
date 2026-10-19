@@ -243,7 +243,7 @@ impl CardSearch {
         // something that resembles it: a filter that works on its own and
         // refuses what comes out of the one before it is exactly the failure
         // that only shows up in the middle of somebody's film.
-        let chain = card.chain(Some(TRIAL_HEIGHT), None, false).join(",");
+        let chain = card.chain(Some(TRIAL_HEIGHT).into(), None, false).join(",");
         let (can_scale, said) = try_it(
             ffmpeg,
             card.opening_arguments(false, false),
@@ -291,7 +291,7 @@ impl CardSearch {
 
         for recipe in card.way.driver().recipes() {
             let reads = recipe.read_in_its_trial();
-            let chain = card.chain(Some(TRIAL_HEIGHT), Some(*recipe), reads).join(",");
+            let chain = card.chain(Some(TRIAL_HEIGHT).into(), Some(*recipe), reads).join(",");
             let (worked, said) = try_it(
                 ffmpeg,
                 card.opening(reads, Some(*recipe)),
@@ -338,7 +338,7 @@ impl CardSearch {
             true => LOOKED_AT_HEIGHT,
             false => TRIAL_HEIGHT,
         };
-        let chain = card.chain(Some(height), Some(recipe), reads).join(",");
+        let chain = card.chain(Some(height).into(), Some(recipe), reads).join(",");
         let (looks, said) = looks_right(
             ffmpeg,
             card.opening(reads, Some(recipe)),

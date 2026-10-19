@@ -14,7 +14,7 @@ use std::path::Path;
 use super::trials::WIDE_GAMUT_CODEC;
 use super::{
     converted_by_vulkan_and_brought_down, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
-    CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
+    CardPath, Driver, Sizing, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
 };
 use crate::painting::{AT_THE_FOOT, PAINTED};
 
@@ -78,15 +78,15 @@ impl Driver for Cuda {
     fn chain(
         &self,
         card: &Card,
-        scale_to_height: Option<i32>,
+        sizing: Sizing,
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
         match recipe {
             Some(ToneMapping::ThroughVulkan { .. }) => {
-                converted_by_vulkan_and_brought_down(scale_to_height)
+                converted_by_vulkan_and_brought_down(sizing)
             }
-            _ => handed_up_and_made_smaller(card, scale_to_height, false, reads_the_film),
+            _ => handed_up_and_made_smaller(card, sizing, false, reads_the_film),
         }
     }
 
@@ -325,14 +325,14 @@ mod tests {
         // In one plane, then to the layout the encoder takes on the way: a
         // picture of two planes came out of Vulkan green.
         let down = through_vulkan(true).filters_for(Some(1080), true, true);
-        assert_eq!(down, converted_by_vulkan_and_brought_down(Some(1080)));
+        assert_eq!(down, converted_by_vulkan_and_brought_down(Some(1080).into()));
         assert!(down[0].contains("format=rgba"), "{down:?}");
         assert_eq!(down.last().map(String::as_str), Some("format=nv12"));
         // Read by the processor, the same chain: Vulkan takes the picture
         // from wherever it was read.
         assert_eq!(
             through_vulkan(false).filters_for(None, true, false),
-            converted_by_vulkan_and_brought_down(None)
+            converted_by_vulkan_and_brought_down(Sizing::default())
         );
     }
 

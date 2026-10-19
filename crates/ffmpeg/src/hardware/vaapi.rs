@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use super::trials::WIDE_GAMUT_CODEC;
 use super::{
     converted_by_vulkan, converted_by_vulkan_and_brought_down, handed_up_and_made_smaller,
-    opening_with, vulkan_on_the_card, Card, CardPath, Driver, ToneMapping, WorkTally,
-    DEVICE_NAME, VULKAN_DEVICE_NAME,
+    opening_with, vulkan_on_the_card, Card, CardPath, Driver, Sizing, ToneMapping,
+    WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
 };
 use crate::painting::PAINTED;
 
@@ -114,12 +114,12 @@ impl Driver for Vaapi {
     fn chain(
         &self,
         card: &Card,
-        scale_to_height: Option<i32>,
+        sizing: Sizing,
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::VulkanBesideTheCard { .. }) => return through_vulkan(scale_to_height),
+            Some(ToneMapping::VulkanBesideTheCard { .. }) => return through_vulkan(sizing),
             // Handed a picture the processor read, Vulkan converts it and
             // hands it back to the processor, where the card cannot take it
             // without a copy: it is handed up first, with its ten bits.
@@ -128,14 +128,14 @@ impl Driver for Vaapi {
                     true => Vec::new(),
                     false => vec!["format=p010".to_string(), "hwupload".to_string()],
                 };
-                filters.push(converted_by_vulkan(scale_to_height));
+                filters.push(converted_by_vulkan(sizing));
                 return filters;
             }
             _ => {}
         }
         let tone_map = recipe == Some(ToneMapping::OwnFilter);
         let mut filters =
-            handed_up_and_made_smaller(card, scale_to_height, tone_map, reads_the_film);
+            handed_up_and_made_smaller(card, sizing, tone_map, reads_the_film);
         if tone_map {
             filters.push("tonemap_vaapi=format=nv12".to_string());
         }
@@ -243,8 +243,8 @@ impl Driver for Vaapi {
 /// The conversion takes the picture from wherever it was read, makes it
 /// smaller as it converts, and it comes down at its final size to be handed
 /// back up to the card. Handing it back up is `back_up`'s.
-fn through_vulkan(scale_to_height: Option<i32>) -> Vec<String> {
-    converted_by_vulkan_and_brought_down(scale_to_height)
+fn through_vulkan(sizing: Sizing) -> Vec<String> {
+    converted_by_vulkan_and_brought_down(sizing)
 }
 
 /// The cards driven by the open interface: every working device under
@@ -537,7 +537,7 @@ mod tests {
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
             .to_string();
         let read_by_vulkan = on_the_card(true).filters_for(Some(1080), true, true);
-        assert_eq!(read_by_vulkan, vec![converted_by_vulkan(Some(1080)), passed_on.clone()]);
+        assert_eq!(read_by_vulkan, vec![converted_by_vulkan(Some(1080).into()), passed_on.clone()]);
         // Vulkan hands a picture the processor read back to the processor,
         // where the card cannot map it from: it goes up first.
         let read_by_the_processor = on_the_card(false).filters_for(Some(1080), true, false);
@@ -546,7 +546,7 @@ mod tests {
             vec![
                 "format=p010".to_string(),
                 "hwupload".to_string(),
-                converted_by_vulkan(Some(1080)),
+                converted_by_vulkan(Some(1080).into()),
                 passed_on,
             ]
         );
@@ -555,8 +555,8 @@ mod tests {
         }
         // One plane, full range, which is what passes across whole; the
         // card's filter brings it to the encoder's layout in standard range.
-        assert!(converted_by_vulkan(None).contains("format=rgba"));
-        assert!(converted_by_vulkan(None).contains("range=pc"));
+        assert!(converted_by_vulkan(Sizing::default()).contains("format=rgba"));
+        assert!(converted_by_vulkan(Sizing::default()).contains("range=pc"));
         // A film whose colours are left alone is not touched by any of it.
         assert_eq!(
             on_the_card(true).filters_for(None, false, true),
@@ -574,7 +574,7 @@ mod tests {
         assert!(!converting.takes_a_picture_subtitle(false));
         assert_eq!(
             converting.filters_until_it_comes_down(Some(720), true, true),
-            vec![converted_by_vulkan(Some(720))]
+            vec![converted_by_vulkan(Some(720).into())]
         );
     }
 
@@ -618,7 +618,7 @@ mod tests {
         // Read by Vulkan or by the processor, the same chain: the conversion
         // takes the picture from wherever it was read.
         for reads_the_film in [true, false] {
-            let mut expected = converted_by_vulkan_and_brought_down(Some(1080));
+            let mut expected = converted_by_vulkan_and_brought_down(Some(1080).into());
             expected.push("format=nv12,hwupload=derive_device=vaapi".to_string());
             assert_eq!(
                 through_vulkan(true).filters_for(Some(1080), true, reads_the_film),
@@ -636,7 +636,7 @@ mod tests {
         assert!(!converting.takes_a_picture_subtitle(false), "the picture stays up");
         assert_eq!(
             converting.filters_until_it_comes_down(Some(720), true, true),
-            converted_by_vulkan_and_brought_down(Some(720))
+            converted_by_vulkan_and_brought_down(Some(720).into())
         );
         assert_eq!(
             converting.back_up(true),
