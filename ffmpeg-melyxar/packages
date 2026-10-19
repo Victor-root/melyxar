@@ -5,6 +5,7 @@ nasm
 meson
 ninja-build
 libshaderc-dev
+glslang-tools
 python3-jinja2
 patchelf
 clang

@@ -26,8 +26,8 @@ Un nouveau fichier dans `patches/`, numéroté à la suite, au format `diff -u` 
 
 Melyxar doit tout faire sur la carte, qu'elle soit Intel, AMD ou NVIDIA, et pas seulement sur le matériel du mainteneur. Ce que FFmpeg officiel empêche encore, relevé dans le code du serveur, du plus utile au plus lourd :
 
-1. **`overlay_vulkan` écrit des heures mille fois trop grandes** (unité de temps de sa sortie non réglée). Le serveur pose donc les sous-titres en images sur le processeur quand le HDR passe par Vulkan (AMD, NVIDIA). Correction petite ; Jellyfin a la sienne.
-2. **Le passage d'une image de Vulkan à l'encodeur VAAPI** se fait par un aller-retour complet carte, processeur, carte à chaque image (`hwdownload` puis `hwupload`), et a rendu une image verte sur une carte Intel. Jellyfin corrige l'échange VAAPI et Vulkan (environ 300 lignes).
+1. **`overlay_vulkan` écrivait des heures mille fois trop grandes** : corrigé (correction 0002). En attente de l'essai sur une vraie carte AMD.
+2. **Le passage d'une image de Vulkan à l'encodeur VAAPI** faisait un aller-retour complet carte, processeur, carte : corrigé par trois corrections reprises de Jellyfin (0003 à 0005), et le serveur essaie maintenant de garder l'image sur la carte, en vérifiant ses couleurs. L'image verte venait d'ailleurs : Vulkan rend mal une image à deux couches, le serveur lui en demande désormais une seule. En attente de l'essai sur de vraies cartes Intel et AMD.
 3. **Aucune conversion HDR propre aux cartes NVIDIA** : elles passent par Vulkan, avec un aller-retour de l'image et parfois une lecture par le processeur, faute de pouvoir passer une image du lecteur NVIDIA à Vulkan. Jellyfin a son filtre `tonemap_cuda` (environ 2 700 lignes).
 4. **Le découpeur en morceaux de FFmpeg 7.1** refusait une image recopiée plus longue que l'écart réel ; le serveur corrige la durée de chaque image (`setts`). À vérifier sur 9.0.2 avant de retirer.
 5. **Taille visible d'un HEVC écrit par VAAPI** (`hevc_metadata`) : corrigé dans FFmpeg depuis la 8.0, le contournement du serveur peut partir.

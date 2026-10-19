@@ -2,7 +2,10 @@
 # configure. Only what Melyxar uses: the cards, the encoders it writes with,
 # the filters its commands name, and the formats it reads and writes.
 #
-# libplacebo is the one built by build.sh, found beside the tools.
+# libplacebo is the one built by build.sh, found beside the tools. The Vulkan
+# filters' shaders are compiled at build time by glslang, named here because
+# the tool tries glslc first and gives up on Vulkan's own filters when the
+# glslc it finds is too old for them, rather than trying glslang next.
 --enable-gpl
 --disable-debug
 --disable-doc
@@ -11,6 +14,7 @@
 --enable-libdrm
 --enable-vulkan
 --enable-libplacebo
+--glslc=glslang
 --enable-ffnvcodec
 --enable-nvenc
 --enable-nvdec
