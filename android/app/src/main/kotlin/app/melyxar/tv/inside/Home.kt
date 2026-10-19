@@ -298,7 +298,7 @@ private fun UnderWay(section: String, home: Home, open: (Card) -> Unit, memory: 
             val at = LocalMarks.current.whereabouts(card).resume?.toDouble() ?: 0.0
             WorkCard(
                 card = card,
-                lying = liesIn(section),
+                lying = liesIn(section, home),
                 title = row.more.seriesTitle ?: card.title,
                 note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, card.title),
                 trailing = whatIsLeft(at, lengthOfAPlay(card)),
@@ -310,7 +310,7 @@ private fun UnderWay(section: String, home: Home, open: (Card) -> Unit, memory: 
         CardRow(stringResource(R.string.tv_up_next), Icons.Binoculars, home.upNext, key = { it.card.id }, modifier = modifier) { row ->
             WorkCard(
                 card = row.card,
-                lying = liesIn(section),
+                lying = liesIn(section, home),
                 title = row.more.seriesTitle ?: row.card.title,
                 note = whichEpisode(row.more.seasonNumber, row.more.episodeNumber, row.card.title),
                 onClick = { open(row.card) },
