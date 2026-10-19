@@ -372,8 +372,10 @@ const SHORTER_THAN_ANY_PICTURE: Millis = Millis::new(1);
 /// one before, and a picture lasting longer than the gap to the next one
 /// fails that check. The key picture opening the segment is then given its
 /// decoding time as its showing time, three pictures early, and players drop
-/// it: measured, a picture lost at two joins in three on a television. A
-/// picture with no decoding time to measure from, just after a jump or at the
+/// it: measured, a picture lost at two joins in three on a television.
+/// FFmpeg 9 no longer moves the key picture, but still starts one segment in
+/// two a millisecond before the film's own time; measured, with this every
+/// segment starts exactly on it. A picture with no decoding time to measure from, just after a jump or at the
 /// very end, keeps the length the film gives it. The commas are escaped
 /// because the tool splits a chain of filters on them.
 const COPIED_PICTURE_LASTS_UNTIL_THE_NEXT: &str = r"setts=pts=PTS:dts=DTS:duration=if(eq(DTS\,NOPTS)+eq(NEXT_DTS\,NOPTS)\,DURATION\,NEXT_DTS-DTS)";
