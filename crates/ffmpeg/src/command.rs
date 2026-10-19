@@ -203,7 +203,7 @@ impl VideoEncode {
 
     /// Whether what comes out is HEVC, whoever writes it.
     pub(crate) fn writes_hevc(&self) -> bool {
-        self.encoder.starts_with("hevc_") || self.encoder == "libx265"
+        writes_hevc(&self.encoder)
     }
 
     /// How large the picture comes out, when the size it is read at is known.
@@ -731,11 +731,8 @@ impl Command {
 
                 push!("-c:v");
                 push!(&encode.encoder);
-                // The label every reader of an MP4 knows HEVC by; left alone,
-                // the tool writes one some refuse.
-                if encode.writes_hevc() {
-                    push!("-tag:v");
-                    push!("hvc1");
+                for argument in labelled(&encode.encoder) {
+                    push!(argument);
                 }
 
                 match &encode.how {
@@ -928,6 +925,20 @@ impl Command {
 /// three seconds, and the three seconds before it are silence rather than
 /// nothing at all.
 const SILENCE_UP_TO_THE_PICTURE: &str = "aresample=first_pts=0";
+
+/// Whether an encoder writes HEVC, whoever's it is.
+fn writes_hevc(encoder: &str) -> bool {
+    encoder.starts_with("hevc_") || encoder == "libx265"
+}
+
+/// What labels the stream an encoder writes: the label every reader of an
+/// MP4 knows HEVC by, where the tool left alone writes one some refuse.
+pub(crate) fn labelled(encoder: &str) -> &'static [&'static str] {
+    match writes_hevc(encoder) {
+        true => &["-tag:v", "hvc1"],
+        false => &[],
+    }
+}
 
 /// Filter that maps a wide gamut picture into standard range.
 ///

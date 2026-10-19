@@ -375,21 +375,18 @@ pub(super) async fn writes_it_right(
     filters: &str,
 ) -> (bool, String) {
     let made = Sample::named("melyxar-card-written");
+    let written_to = made.path().display().to_string();
     let writing = QUIET
         .map(str::to_string)
         .into_iter()
         .chain(opening)
         .chain(reading(&TrialInput::Generated))
         .chain(
-            [
-                "-vf",
-                filters,
-                "-c:v",
-                encoder,
-                "-y",
-                &made.path().display().to_string(),
-            ]
-            .map(str::to_string),
+            ["-vf", filters, "-c:v", encoder]
+                .into_iter()
+                .chain(crate::command::labelled(encoder).iter().copied())
+                .chain(["-y", written_to.as_str()])
+                .map(str::to_string),
         );
     if let Ok((false, said)) | Err(said) = run_briefly(ffmpeg, writing).await {
         return (false, said);
@@ -526,12 +523,14 @@ fn told(judged: std::result::Result<String, String>) -> (bool, String) {
 /// What a trial that writes no more than it must says to the tool first.
 const QUIET: [&str; 4] = ["-hide_banner", "-nostdin", "-loglevel", "error"];
 
-/// The last picture of `input`, after `before`, brought to `LOOKED_AT` in
-/// the layout of four brightness samples to one of each colour.
+/// Every picture of `input`, after `before`, brought to `LOOKED_AT` in the
+/// layout of four brightness samples to one of each colour, one after the
+/// other.
 ///
-/// The last rather than the first: a card writes every picture of a trial as
-/// it does a film's, one after the other, and a picture passed across while
-/// the one before is still in use comes out wrong only after the first.
+/// Every one rather than one: a card writes the pictures of a trial one
+/// after the other as it does a film's, and those between two key pictures
+/// can come out wrong where the key pictures do not. AMD's HEVC did, read
+/// back as a film is.
 async fn looked_at(
     ffmpeg: &Path,
     input: &TrialInput<'_>,
@@ -541,9 +540,7 @@ async fn looked_at(
     let arguments = QUIET.map(str::to_string).into_iter().chain(reading(input)).chain(
         [
             "-vf",
-            &format!("{before}scale={across}:{down},format=yuv420p,reverse"),
-            "-frames:v",
-            "1",
+            &format!("{before}scale={across}:{down},format=yuv420p"),
             "-f",
             "rawvideo",
             "-",
@@ -564,31 +561,55 @@ async fn looked_at(
 const WHAT_THE_SAMPLE_IS: &str =
     "setparams=range=tv:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc";
 
-/// The shapes of `picture` with no colour at all, which is what a picture
+/// The shapes of `pictures` with no colour at all, which is what a picture
 /// whose colours are right averages out near.
-fn colourless_beside(picture: &[u8]) -> Vec<u8> {
-    let (across, down) = LOOKED_AT;
-    let brightness = (across * down).min(picture.len());
-    let mut colourless = picture[..brightness].to_vec();
-    colourless.resize(picture.len(), 128);
-    colourless
-}
-
-/// Whether two pictures of `LOOKED_AT` in the layout of four brightness
-/// samples to one of each colour look alike, in colour and in shape, saying
-/// how they compare either way.
-fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
+fn colourless_beside(pictures: &[u8]) -> Vec<u8> {
     let (across, down) = LOOKED_AT;
     let brightness = across * down;
-    let colour = brightness / 4;
-    if card.len() != brightness + 2 * colour || processor.len() != card.len() {
+    pictures
+        .chunks(brightness * 3 / 2)
+        .flat_map(|picture| {
+            let shown = brightness.min(picture.len());
+            picture[..shown]
+                .iter()
+                .copied()
+                .chain(std::iter::repeat_n(128, picture.len() - shown))
+        })
+        .collect()
+}
+
+/// Whether two runs of pictures of `LOOKED_AT`, in the layout of four
+/// brightness samples to one of each colour, look alike picture by picture,
+/// saying how the least alike compare, or the first that does not.
+fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
+    let (across, down) = LOOKED_AT;
+    let picture = across * down * 3 / 2;
+    if card.is_empty() || !card.len().is_multiple_of(picture) || processor.len() != card.len() {
         return Err(format!(
-            "a picture of {} bytes was expected, the card's has {} and the processor's {}",
-            brightness + 2 * colour,
+            "pictures of {picture} bytes were expected, the card's come to {} bytes and the \
+             processor's to {}",
             card.len(),
             processor.len()
         ));
     }
+    let count = card.len() / picture;
+    let mut least_alike: Option<(f64, String)> = None;
+    for (at, (card, processor)) in card.chunks(picture).zip(processor.chunks(picture)).enumerate() {
+        let (shape, said) = alike_once(card, processor)
+            .map_err(|said| format!("picture {} of {count}: {said}", at + 1))?;
+        if least_alike.as_ref().is_none_or(|(least, _)| shape < *least) {
+            least_alike = Some((shape, format!("{count} pictures, the least alike: {said}")));
+        }
+    }
+    Ok(least_alike.map(|(_, said)| said).unwrap_or_default())
+}
+
+/// Whether one picture looks like another, in colour and in shape, with how
+/// alike their shapes are and how they compare either way.
+fn alike_once(card: &[u8], processor: &[u8]) -> std::result::Result<(f64, String), String> {
+    let (across, down) = LOOKED_AT;
+    let brightness = across * down;
+    let colour = brightness / 4;
     let averages = |picture: &[u8]| {
         (
             mean(&picture[..brightness]),
@@ -608,7 +629,7 @@ fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
         && (card_v - processor_v).abs() <= ALLOWED_COLOUR
         && shape >= ALIKE_IN_SHAPE;
     match close {
-        true => Ok(said),
+        true => Ok((shape, said)),
         false => Err(format!("the card's picture does not look like the processor's: {said}")),
     }
 }
@@ -681,6 +702,19 @@ mod tests {
         assert!(alike(&picture_of(0, 0, 0), &processor).is_err(), "black");
         assert!(alike(&picture_of(79, 137, 190), &processor).is_err(), "too red");
         assert!(alike(&[0; 10], &processor).is_err(), "not a whole picture");
+    }
+
+    #[test]
+    fn one_wrong_picture_among_right_ones_is_caught_and_named() {
+        // Key pictures right and one between them broken up, as AMD's HEVC
+        // came out once its stream's own descriptions had been dropped.
+        let right = picture_of(144, 114, 115);
+        let processor = [right.clone(), right.clone(), right.clone()].concat();
+        assert!(alike(&processor, &processor).expect("alike").starts_with("3 pictures"));
+        let broken = [right.clone(), picture_of(129, 1, 1), right].concat();
+        let said = alike(&broken, &processor).expect_err("the second is wrong");
+        assert!(said.starts_with("picture 2 of 3"), "{said}");
+        assert!(alike(&processor[..10], &processor[..10]).is_err(), "not a whole picture");
     }
 
     #[test]
