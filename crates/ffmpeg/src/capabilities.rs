@@ -243,7 +243,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_installed_tool_reports_what_it_can_do() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let capabilities = Capabilities::detect(&tools)
             .await
             .expect("capabilities are readable");
@@ -269,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_installed_tool_can_reach_the_targets_the_first_version_needs() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let capabilities = Capabilities::detect(&tools)
             .await
             .expect("capabilities are readable");

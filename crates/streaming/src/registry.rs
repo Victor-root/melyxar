@@ -573,7 +573,7 @@ mod tests {
     fn sessions(folder: PathBuf) -> Sessions {
         Sessions::new(
             folder,
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
     }
 

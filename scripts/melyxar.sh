@@ -75,9 +75,10 @@ WHISPER_MINUTES="30"
 
 # FFmpeg as Melyxar runs it (ffmpeg-melyxar): the latest stable release with
 # Melyxar's own changes, built from the folder of that name in the source,
-# which says which release, which changes and which options. Debian's FFmpeg
-# stays installed beside it as the fallback, and the server takes this one
-# first. Rebuilt only when that folder changed since it was last built.
+# which says which release, which changes and which options. The only FFmpeg
+# Melyxar runs: the distribution's is not installed, and removed where an
+# earlier version of this script put it. Rebuilt only when that folder changed
+# since it was last built.
 MEDIA_TOOLS_DIR="/opt/melyxar/ffmpeg"
 # The deadline given to the download and the build together.
 MEDIA_TOOLS_MINUTES="60"
@@ -232,8 +233,8 @@ en|check_port_busy|Port %s is already in use
 fr|check_port_busy|Le port %s est déjà utilisé
 en|check_ffmpeg_ok|Media tools available: %s
 fr|check_ffmpeg_ok|Outils multimédias disponibles : %s
-en|check_ffmpeg_missing|Media tools not found. They will be installed.
-fr|check_ffmpeg_missing|Outils multimédias absents. Ils seront installés.
+en|check_ffmpeg_missing|ffmpeg-melyxar not found. It will be built.
+fr|check_ffmpeg_missing|ffmpeg-melyxar absent. Il sera compilé.
 en|check_dri_ok|Graphics device detected. Hardware acceleration may be available.
 fr|check_dri_ok|Périphérique graphique détecté. L’accélération matérielle pourrait être disponible.
 en|check_dri_missing|No graphics device detected
@@ -324,8 +325,10 @@ en|media_tools_installed|ffmpeg-melyxar installed: %s
 fr|media_tools_installed|ffmpeg-melyxar installé : %s
 en|media_tools_too_long|Building ffmpeg-melyxar timed out after %s minutes.
 fr|media_tools_too_long|La compilation de ffmpeg-melyxar a dépassé le délai de %s minutes.
-en|media_tools_failed|ffmpeg-melyxar could not be built. Melyxar keeps using Debian’s FFmpeg, with which an HDR film started from a chapter may not play. Everything else is installed, and the next update tries again.
-fr|media_tools_failed|ffmpeg-melyxar n’a pas pu être compilé. Melyxar continue avec le FFmpeg de Debian, avec lequel un film HDR lancé depuis un chapitre peut ne pas démarrer. Tout le reste est installé, et la prochaine mise à jour réessaiera.
+en|media_tools_failed|ffmpeg-melyxar could not be built. Melyxar keeps the one already in place; without one, films cannot be played until it is. Everything else is installed, and the next update tries again.
+fr|media_tools_failed|ffmpeg-melyxar n’a pas pu être compilé. Melyxar garde celui déjà en place ; s’il n’y en a aucun, les films ne peuvent pas être lus tant qu’il ne l’est pas. Tout le reste est installé, et la prochaine mise à jour réessaiera.
+en|step_media_tools_debian|Removing Debian’s FFmpeg, which Melyxar no longer uses
+fr|step_media_tools_debian|Suppression du FFmpeg de Debian, dont Melyxar ne se sert plus
 en|section_account|Preparing the system account and folders
 fr|section_account|Préparation du compte système et des dossiers
 en|step_user|Creating the system account
@@ -400,6 +403,8 @@ en|prompt_test_films_folder|Folder for the test films
 fr|prompt_test_films_folder|Dossier des films d’essai
 en|err_test_films_space|Not enough room in %s: about %s GB are needed.
 fr|err_test_films_space|Pas assez de place dans %s : il faut environ %s Go.
+en|err_test_films_no_tools|ffmpeg-melyxar is not installed: run an update first.
+fr|err_test_films_no_tools|ffmpeg-melyxar n’est pas installé : lancez d’abord une mise à jour.
 en|step_test_films|Downloading and making the test films
 fr|step_test_films|Téléchargement et fabrication des films d’essai
 en|test_films_done|Test films ready in %s. Add this folder as a Films library in Melyxar. What each film tests is described in scripts/test-films/README.md.
@@ -829,8 +834,8 @@ check_system() {
     warn "$(tr_msg warn_disk_low)"
   fi
 
-  if command -v ffmpeg >/dev/null 2>&1; then
-    success "$(tr_fmt check_ffmpeg_ok "$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)")"
+  if [[ -x "${MEDIA_TOOLS_DIR}/bin/ffmpeg" ]]; then
+    success "$(tr_fmt check_ffmpeg_ok "$("${MEDIA_TOOLS_DIR}/bin/ffmpeg" -version 2>/dev/null | head -1 | cut -d' ' -f1-3)")"
   else
     info "$(tr_msg check_ffmpeg_missing)"
   fi
@@ -874,7 +879,7 @@ install_packages() {
   step "$(tr_msg step_apt_update)" apt-get update -qq
 
   step "$(tr_msg step_apt_install)" apt-get install -y --no-install-recommends \
-    build-essential cmake pkg-config git curl ca-certificates xz-utils ffmpeg sqlite3 mesa-va-drivers mesa-vulkan-drivers vainfo
+    build-essential cmake pkg-config git curl ca-certificates xz-utils sqlite3 mesa-va-drivers mesa-vulkan-drivers vainfo
 
   # Node comes from its own source rather than from the distribution, for the
   # reason written above install_node. It gives up only when this machine ends
@@ -1139,9 +1144,9 @@ speech_build() {
   printf '%s\n' "$WHISPER_COMMIT" > "${INSTALLED_DIR}/whisper"
 }
 
-# FFmpeg as Melyxar runs it, which is optional in the same way: without it
-# the server runs on Debian's FFmpeg, as it did before, so a failure here is
-# said and left behind and the next update tries again.
+# FFmpeg as Melyxar runs it, the only one it runs. A build that fails leaves
+# the one in place, if any, and is said and left behind: everything else is
+# installed, and the next update tries again.
 install_media_tools() {
   section "$(tr_msg section_media_tools)"
 
@@ -1149,6 +1154,7 @@ install_media_tools() {
   label="$(media_tools_label)"
   if media_tools_are_current; then
     success "$(tr_fmt media_tools_present "$label")"
+    remove_debian_ffmpeg
     return 0
   fi
 
@@ -1160,8 +1166,17 @@ install_media_tools() {
     step "$(tr_msg step_media_tools)" media_tools_from_source; then
     BUILT_MEDIA_TOOLS=1
     success "$(tr_fmt media_tools_installed "$label")"
+    remove_debian_ffmpeg
   else
     warn "$(tr_msg media_tools_failed)"
+  fi
+}
+
+# The distribution's FFmpeg, installed by earlier versions of this script as a
+# fallback the server no longer looks for. Only once ours is in place.
+remove_debian_ffmpeg() {
+  if dpkg-query -W -f='${Status}' ffmpeg 2>/dev/null | grep -q 'install ok installed'; then
+    step "$(tr_msg step_media_tools_debian)" apt-get remove -y ffmpeg || true
   fi
 }
 
@@ -1819,7 +1834,7 @@ action_test_films() {
   ((free_gb >= TEST_FILMS_GB)) || die "$(tr_fmt err_test_films_space "$folder" "$TEST_FILMS_GB")"
 
   ffmpeg="${MEDIA_TOOLS_DIR}/bin/ffmpeg"
-  [[ -x "$ffmpeg" ]] || ffmpeg="$(command -v ffmpeg)"
+  [[ -x "$ffmpeg" ]] || die "$(tr_msg err_test_films_no_tools)"
 
   if step "$(tr_msg step_test_films)" bash "${SOURCE_DIR}/scripts/test-films/build.sh" "$ffmpeg" "$folder"; then
     chmod -R a+rX "$folder"

@@ -13,5 +13,6 @@ melyxar-ffmpeg = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+melyxar-ffmpeg = { workspace = true, features = ["testing"] }
 tokio = { workspace = true }
 tempfile = { workspace = true }

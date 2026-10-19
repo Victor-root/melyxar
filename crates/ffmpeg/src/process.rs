@@ -516,7 +516,6 @@ fn absorb_progress_line(current: &mut Progress, line: &str) -> Option<Progress> 
 mod tests {
     use super::*;
     use crate::command::{AudioOutput, Input, Output, VideoOutput, WhereToCut};
-    use crate::ToolPaths;
     use std::path::Path;
 
     #[test]
@@ -613,7 +612,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 1).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let destination = directory.path().join("copy.mp4");
         let command = Command::new(Input::new(&source), Output::File(destination.clone()));
 
@@ -630,7 +629,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failing_command_carries_the_reason_rather_than_a_bare_status() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let command = Command::new(
             Input::new("/nowhere/missing.mkv"),
             Output::File(std::path::PathBuf::from("/tmp/never-written.mp4")),
@@ -657,7 +656,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 3).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let command = Command::new(
             Input::new(&source),
             Output::File(directory.path().join("out.mp4")),
@@ -700,7 +699,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 30).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         // Slow preset on purpose, so the process is still working when asked
         // to stop.
         let mut encode = crate::command::VideoEncode::software_h264();
@@ -738,7 +737,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 1).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let mut builder = TokioCommand::new(&tools.ffprobe);
         builder
             .args(["-hide_banner", "-loglevel", "error"])
@@ -752,7 +751,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_reading_already_called_off_never_starts_the_tool_at_all() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let (asked_to_stop, listening) = tokio::sync::watch::channel(true);
 
         let mut builder = TokioCommand::new(&tools.ffprobe);
@@ -771,7 +770,7 @@ mod tests {
         // A sound without end, read on a thread of its own: called off, the
         // tool is killed and the thread finds the end of what it reads,
         // rather than the two going on for nobody.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let mut builder = TokioCommand::new(&tools.ffmpeg);
         builder.args([
             "-hide_banner", "-loglevel", "error", "-re", "-f", "lavfi", "-i", "sine", "-f",
@@ -813,7 +812,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 1).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let (asked_to_stop, listening) = tokio::sync::watch::channel(false);
         drop(asked_to_stop);
 
@@ -834,7 +833,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         make_clip(&source, 8).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let session = directory.path().join("session");
         std::fs::create_dir_all(&session).expect("session directory");
 

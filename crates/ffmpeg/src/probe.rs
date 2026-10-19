@@ -688,7 +688,7 @@ mod tests {
             .expect("the tool runs");
         assert!(made.status.success());
 
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let furthest = std::sync::atomic::AtomicI64::new(0);
         let found = key_frames_reporting(&tools, &source, AskedToStop::never(), &|position| {
             furthest.fetch_max(position.get(), std::sync::atomic::Ordering::Relaxed);
@@ -890,10 +890,7 @@ mod tests {
         // looks like an ordinary video. The tool recognises such a list by
         // what it holds, whatever the name says, and goes and reads the file
         // it names: here a film beside it, elsewhere any file it can reach.
-        let Ok(tools) = ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, nothing was probed");
-            return;
-        };
+        let tools = crate::testing::tools();
         let directory = tempfile::tempdir().expect("temporary directory");
         make_clip(&directory.path().join("another.mkv")).await;
         let disguised = directory.path().join("looks-like-a-film.mkv");
@@ -921,10 +918,7 @@ mod tests {
     async fn a_build_that_lists_no_formats_still_reads_every_file() {
         // The guard turned off, never turned into a refusal of everything:
         // an empty whitelist would have the analyser turn every film away.
-        let Ok(found) = ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, nothing was probed");
-            return;
-        };
+        let found = crate::testing::tools();
         let tools = ToolPaths {
             allowed_formats: String::new().into(),
             ..found
@@ -942,7 +936,7 @@ mod tests {
         let media = directory.path().join("sample.mp4");
         make_clip(&media).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let report = probe(&tools, &media)
             .await
             .expect("the file analyses");
@@ -977,7 +971,7 @@ mod tests {
 
     #[tokio::test]
     async fn analysing_a_missing_file_fails_with_a_reason() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let error = probe(&tools, Path::new("/nowhere/missing.mkv"))
             .await
             .expect_err("a missing file must fail");

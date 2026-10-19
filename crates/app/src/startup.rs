@@ -23,7 +23,7 @@ pub async fn bring_up(config: Config) -> Result<AppState> {
 
     let database = Database::open(&config.directories.database_file()).await?;
 
-    let (tools, capabilities) = detect_media_tools(&config).await;
+    let (tools, capabilities) = media_tools(ToolPaths::discover()).await;
 
     reconcile_libraries(&database, &config).await?;
     refresh_root_access(&database).await?;
@@ -242,15 +242,14 @@ pub fn prepare_directories(config: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Finds the media tools and asks them what they can do.
+/// Asks the media tools found what they can do.
 ///
 /// Returns nothing rather than failing when they are absent: the server comes
 /// up, the diagnostic says what is missing, and browsing still works.
-pub async fn detect_media_tools(config: &Config) -> (Option<ToolPaths>, Option<Capabilities>) {
-    let tools = match ToolPaths::discover(
-        config.media_tools.ffmpeg_path.as_deref(),
-        config.media_tools.ffprobe_path.as_deref(),
-    ) {
+pub async fn media_tools(
+    found: melyxar_ffmpeg::Result<ToolPaths>,
+) -> (Option<ToolPaths>, Option<Capabilities>) {
+    let tools = match found {
         Ok(tools) => tools,
         Err(error) => {
             tracing::warn!(
@@ -269,13 +268,6 @@ pub async fn detect_media_tools(config: &Config) -> (Option<ToolPaths>, Option<C
                 hardware = capabilities.hardware.len(),
                 "media tools ready"
             );
-            if tools.ffmpeg != std::path::Path::new(melyxar_ffmpeg::FFMPEG_MELYXAR) {
-                tracing::warn!(
-                    encoder = %tools.ffmpeg.display(),
-                    "not ffmpeg-melyxar: a wide gamut film started part way through may be \
-                     refused by the card"
-                );
-            }
             report_the_card(&capabilities);
             (Some(tools), Some(capabilities))
         }
@@ -991,7 +983,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_media_tools_are_detected_and_report_what_they_can_do() {
-        let (tools, capabilities) = detect_media_tools(&Config::default()).await;
+        let (tools, capabilities) = media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         assert!(
             tools.is_some(),
             "the tools are installed in this environment"
@@ -1002,15 +994,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_missing_media_tool_does_not_stop_the_server_from_coming_up() {
-        let config = Config {
-            media_tools: melyxar_config::MediaToolsConfig {
-                ffmpeg_path: Some(PathBuf::from("/nowhere/ffmpeg")),
-                ffprobe_path: None,
-                whisper_path: None,
-            },
-            ..Config::default()
-        };
-        let (tools, capabilities) = detect_media_tools(&config).await;
+        let (tools, capabilities) =
+            media_tools(ToolPaths::at(std::path::Path::new("/nowhere/ffmpeg"))).await;
         assert!(tools.is_none());
         assert!(capabilities.is_none());
     }

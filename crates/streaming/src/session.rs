@@ -1515,7 +1515,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens")
@@ -1650,7 +1650,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             folder.clone(),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -1692,7 +1692,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -1752,7 +1752,7 @@ mod tests {
                 )],
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -1795,7 +1795,7 @@ mod tests {
                 )],
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -1844,7 +1844,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -1928,7 +1928,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 directory.path().join(format!("session-{attempt}")),
-                ToolPaths::discover(None, None).expect("the tools are installed here"),
+                melyxar_ffmpeg::testing::tools(),
             )
             .await
             .expect("the session opens");
@@ -2293,7 +2293,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -2339,7 +2339,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 directory.path().join("session"),
-                ToolPaths::discover(None, None).expect("the tools are installed here"),
+                melyxar_ffmpeg::testing::tools(),
             )
             .await
             .expect("the session opens"),
@@ -2406,7 +2406,7 @@ mod tests {
                     if_the_card_refuses: Vec::new(),
                 },
                 directory.path().join("session"),
-                ToolPaths::discover(None, None).expect("the tools are installed here"),
+                melyxar_ffmpeg::testing::tools(),
             )
             .await
             .expect("the session opens"),
@@ -2546,7 +2546,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens")
@@ -2895,7 +2895,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -2945,7 +2945,7 @@ mod tests {
                 if_the_card_refuses: Vec::new(),
             },
             directory.path().join("session"),
-            ToolPaths::discover(None, None).expect("the tools are installed here"),
+            melyxar_ffmpeg::testing::tools(),
         )
         .await
         .expect("the session opens");
@@ -2974,7 +2974,7 @@ mod tests {
         let source = directory.path().join("source.mp4");
         clip_with_key_frames_every(&source, 60, 240).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = melyxar_ffmpeg::testing::tools();
         let found = melyxar_ffmpeg::probe::key_frames(
             &tools,
             &source,
@@ -3064,7 +3064,7 @@ mod tests {
         ];
         clip_with_key_frames_at(&source, 90, &close_together).await;
 
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = melyxar_ffmpeg::testing::tools();
         let found = melyxar_ffmpeg::probe::key_frames(
             &tools,
             &source,

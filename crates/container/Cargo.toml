@@ -12,5 +12,5 @@ melyxar-core = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
+melyxar-ffmpeg = { workspace = true, features = ["testing"] }
 tempfile = { workspace = true }
-melyxar-ffmpeg = { workspace = true }

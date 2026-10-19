@@ -116,62 +116,34 @@ impl ToolPaths {
 }
 
 impl ToolPaths {
-    /// Locates the tools, honouring an explicit configuration first, then
-    /// ffmpeg-melyxar where the installation script puts it, then whatever
-    /// the system has: the distribution's stays installed as the fallback for
-    /// a build of ours that failed.
-    ///
-    /// The analyser is derived from the encoder when it is not given
-    /// separately: the two ship together, and a maintainer who points at a
-    /// specific build almost certainly wants both from the same place. A build
-    /// maintained for media servers usually carries hardware support that a
-    /// distribution package lacks, which is why the path is configurable at
-    /// all.
-    pub fn discover(
-        configured_ffmpeg: Option<&std::path::Path>,
-        configured_ffprobe: Option<&std::path::Path>,
-    ) -> Result<Self> {
-        let ffmpeg = match configured_ffmpeg {
-            Some(path) => {
-                if !path.exists() {
-                    return Err(FfmpegError::ToolsMissing(format!(
-                        "the configured encoder path does not exist: {}",
-                        path.display()
-                    )));
-                }
-                path.to_path_buf()
-            }
-            None => ours_or_on_path(std::path::Path::new(FFMPEG_MELYXAR)).ok_or_else(|| {
-                FfmpegError::ToolsMissing(
-                    "no encoder found; install one or set its path in the configuration".into(),
-                )
-            })?,
-        };
+    /// ffmpeg-melyxar, where the installation script puts it, and nothing
+    /// else: no other build is looked for, so no other build can be run by
+    /// mistake, and every film is played by the one tool whose behaviour is
+    /// known.
+    pub fn discover() -> Result<Self> {
+        Self::at(std::path::Path::new(FFMPEG_MELYXAR))
+    }
 
-        let ffprobe = match configured_ffprobe {
-            Some(path) => {
-                if !path.exists() {
-                    return Err(FfmpegError::ToolsMissing(format!(
-                        "the configured analyser path does not exist: {}",
-                        path.display()
-                    )));
-                }
-                path.to_path_buf()
-            }
-            None => sibling(&ffmpeg, "ffprobe")
-                .or_else(|| find_on_path("ffprobe"))
-                .ok_or_else(|| {
-                    FfmpegError::ToolsMissing(
-                        "no analyser found next to the encoder nor on the search path".into(),
-                    )
-                })?,
-        };
+    /// The encoder at `ffmpeg` and its analyser beside it, as the two ship.
+    pub fn at(ffmpeg: &std::path::Path) -> Result<Self> {
+        if !ffmpeg.is_file() {
+            return Err(FfmpegError::ToolsMissing(format!(
+                "ffmpeg-melyxar is not installed at {}",
+                ffmpeg.display()
+            )));
+        }
+        let ffprobe = sibling(ffmpeg, "ffprobe").ok_or_else(|| {
+            FfmpegError::ToolsMissing(format!(
+                "no analyser beside the encoder at {}",
+                ffmpeg.display()
+            ))
+        })?;
 
         // Asked once, here, rather than on every reading. A build with no
         // listing to give is held to nothing rather than refused: the tool is
         // there and works, and the guard is one defence among others. Said in
         // the journal, since a defence that is off must never be off quietly.
-        let allowed_formats: String = std::process::Command::new(&ffmpeg)
+        let allowed_formats: String = std::process::Command::new(ffmpeg)
             .args(["-hide_banner", "-demuxers"])
             .stdin(std::process::Stdio::null())
             .output()
@@ -186,12 +158,11 @@ impl ToolPaths {
                  the formats they may be"
             );
         }
-        let allowed_formats = allowed_formats.into();
 
         Ok(Self {
-            ffmpeg,
+            ffmpeg: ffmpeg.to_path_buf(),
             ffprobe,
-            allowed_formats,
+            allowed_formats: allowed_formats.into(),
         })
     }
 }
@@ -202,15 +173,6 @@ fn sibling(reference: &std::path::Path, name: &str) -> Option<PathBuf> {
     candidate.exists().then_some(candidate)
 }
 
-/// ffmpeg-melyxar when it is installed at `ours`, the encoder on the search
-/// path otherwise.
-fn ours_or_on_path(ours: &std::path::Path) -> Option<PathBuf> {
-    match ours.is_file() {
-        true => Some(ours.to_path_buf()),
-        false => find_on_path("ffmpeg"),
-    }
-}
-
 /// Searches the directories listed in the environment search path.
 fn find_on_path(name: &str) -> Option<PathBuf> {
     let search_path = std::env::var_os("PATH")?;
@@ -219,44 +181,45 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+/// The tools the tests run against.
+#[cfg(any(test, feature = "testing"))]
+pub mod testing {
+    use super::{find_on_path, ToolPaths, FFMPEG_MELYXAR};
+
+    /// ffmpeg-melyxar where it is installed, and on a machine that only
+    /// develops Melyxar, the encoder on its search path. The server itself
+    /// never looks there.
+    pub fn tools() -> ToolPaths {
+        let ours = std::path::Path::new(FFMPEG_MELYXAR);
+        let ffmpeg = if ours.is_file() {
+            ours.to_path_buf()
+        } else {
+            find_on_path("ffmpeg").expect("an encoder is installed on the machine running the tests")
+        };
+        ToolPaths::at(&ffmpeg).expect("its analyser is installed beside it")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn the_tools_are_found_on_the_search_path() {
-        let paths = ToolPaths::discover(None, None).expect("the tools are installed here");
-        assert!(paths.ffmpeg.exists());
-        assert!(paths.ffprobe.exists());
+    fn the_analyser_is_taken_from_beside_the_encoder() {
+        let tools = testing::tools();
+        assert!(tools.ffmpeg.exists());
+        assert_eq!(
+            tools.ffprobe.parent(),
+            tools.ffmpeg.parent(),
+            "both tools ship together and must come from the same place"
+        );
     }
 
     #[test]
-    fn ffmpeg_melyxar_is_taken_before_the_one_on_the_search_path() {
-        let folder = tempfile::tempdir().expect("a folder");
-        let ours = folder.path().join("ffmpeg");
-        let on_path = find_on_path("ffmpeg").expect("the tools are installed here");
-
-        assert_eq!(ours_or_on_path(&ours), Some(on_path), "ours is not installed yet");
-        std::fs::write(&ours, b"").expect("ours is installed");
-        assert_eq!(ours_or_on_path(&ours), Some(ours));
-    }
-
-    #[test]
-    fn a_configured_path_that_does_not_exist_is_reported_clearly() {
-        let error = ToolPaths::discover(Some(std::path::Path::new("/nowhere/ffmpeg")), None)
+    fn a_build_that_is_not_there_is_reported_clearly() {
+        let error = ToolPaths::at(std::path::Path::new("/nowhere/ffmpeg"))
             .expect_err("a missing tool must be reported");
         assert!(matches!(error, FfmpegError::ToolsMissing(_)));
         assert!(error.to_string().contains("/nowhere/ffmpeg"));
-    }
-
-    #[test]
-    fn the_analyser_is_taken_from_beside_the_configured_encoder() {
-        let discovered = ToolPaths::discover(None, None).expect("the tools are installed here");
-        let paths = ToolPaths::discover(Some(&discovered.ffmpeg), None).expect("tools resolve");
-        assert_eq!(
-            paths.ffprobe.parent(),
-            discovered.ffmpeg.parent(),
-            "both tools ship together and must come from the same place"
-        );
     }
 }

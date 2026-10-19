@@ -527,7 +527,6 @@ impl Kept<'_> {
 mod tests {
     use super::super::test_cards::{intel as card, nvidia as nvidia_card};
     use super::*;
-    use crate::ToolPaths;
 
     #[test]
     fn the_chosen_card_does_the_work_when_it_passed_here() {
@@ -660,7 +659,7 @@ mod tests {
     async fn a_machine_with_no_card_says_so_without_claiming_one() {
         // What a container that was never given the graphics device looks
         // like, and what this working environment is.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let encoders = ["h264_vaapi".to_string(), "h264_nvenc".to_string()]
             .into_iter()
             .collect();

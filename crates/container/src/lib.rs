@@ -130,7 +130,7 @@ mod tests {
     /// answer every one of these is measured against.
     async fn by_reading_it_through(path: &Path) -> Vec<Millis> {
         let tools =
-            melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are installed here");
+            melyxar_ffmpeg::testing::tools();
         melyxar_ffmpeg::probe::key_frames(
             &tools,
             path,

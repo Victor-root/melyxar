@@ -197,7 +197,7 @@ mod tests {
     /// A file carrying two sound tracks at two different pitches, so that
     /// reading the wrong one is something a test can notice.
     async fn a_film_with_two_tracks(directory: &Path) -> PathBuf {
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = directory.join("Quiet.Harbour.S01E02.mkv");
         let mut making = tokio::process::Command::new(&tools.ffmpeg);
         making.args(["-hide_banner", "-loglevel", "error", "-y"]);
@@ -222,7 +222,7 @@ mod tests {
     #[tokio::test]
     async fn a_real_stretch_comes_back_as_the_number_of_samples_it_should() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let samples = samples_of(
@@ -253,7 +253,7 @@ mod tests {
         // The whole reason the caller names the track: two episodes of a
         // season do not always carry their languages in the same order.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let mut read = Vec::new();
@@ -291,7 +291,7 @@ mod tests {
     #[tokio::test]
     async fn a_stretch_past_the_end_of_the_film_comes_back_empty() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let samples = samples_of(
@@ -310,7 +310,7 @@ mod tests {
     #[tokio::test]
     async fn a_reading_nobody_wants_any_more_is_given_up_rather_than_finished() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = a_film_with_two_tracks(directory.path()).await;
 
         let (say, asked) = tokio::sync::watch::channel(true);
@@ -331,7 +331,7 @@ mod tests {
     #[tokio::test]
     async fn a_file_that_holds_no_such_track_says_so() {
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let film = a_film_with_two_tracks(directory.path()).await;
 
         assert!(

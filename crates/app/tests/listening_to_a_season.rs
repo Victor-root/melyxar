@@ -213,7 +213,7 @@ async fn a_server(directory: &Path, root: PathBuf) -> (AppState, Library) {
         .expect("read")
         .expect("the library was declared");
 
-    let (tools, capabilities) = melyxar_app::startup::detect_media_tools(&config).await;
+    let (tools, capabilities) = melyxar_app::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
     (
         AppState::new(config, database, tools, capabilities),
         library,
@@ -288,7 +288,7 @@ fn about(found: Millis, expected: f32) -> bool {
 async fn a_season_whose_episodes_share_an_opening_gets_a_button_over_it() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     a_season_on_disk(&tools.ffmpeg, &root, true).await;
 
     let (state, library) = a_server(directory.path(), root).await;
@@ -349,7 +349,7 @@ async fn a_season_already_settled_is_read_again_when_it_is_asked_for_by_name() {
     // than on a whole collection in an evening.
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     a_season_on_disk(&tools.ffmpeg, &root, true).await;
 
     let (state, library) = a_server(directory.path(), root).await;
@@ -406,7 +406,7 @@ async fn a_season_whose_episodes_share_nothing_gets_no_button_at_all() {
     // button over its first scene.
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     a_season_on_disk(&tools.ffmpeg, &root, false).await;
 
     let (state, library) = a_server(directory.path(), root).await;
@@ -441,7 +441,7 @@ async fn a_season_whose_titles_sit_past_the_first_four_minutes_is_listened_to_fu
     // are listened to a second time and further in.
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     a_season_that_opens_late_on_disk(&tools.ffmpeg, &root).await;
 
     let (state, library) = a_server(directory.path(), root).await;

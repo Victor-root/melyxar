@@ -280,7 +280,7 @@ mod tests {
         // The whole point of the single reading, on a real film with real
         // tracks: every one of them lands, and each holds its own words.
         let directory = tempfile::tempdir().expect("temporary directory");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
 
         let said = ["Bonsoir.", "Good evening.", "Buenas noches."];
         let mut beside = Vec::new();
@@ -361,7 +361,7 @@ mod tests {
         )
         .expect("a subtitle file");
 
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let destination = directory.path().join("out.vtt");
         to_web_vtt(&tools, &subtitle, &destination, None)
             .await
@@ -387,7 +387,7 @@ mod tests {
         let nothing = directory.path().join("not-a-film.mkv");
         std::fs::write(&nothing, b"not a film at all").expect("a file");
 
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         assert!(
             to_web_vtt(
                 &tools,

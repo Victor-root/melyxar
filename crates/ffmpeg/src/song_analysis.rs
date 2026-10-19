@@ -242,10 +242,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_real_song_is_read_once_for_both() {
-        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, nothing was measured");
-            return;
-        };
+        let tools = crate::testing::tools();
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
         // Counted, and where: the test runs on the one thread of its runtime,
@@ -274,10 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_song_whose_loudness_is_known_is_only_read_for_its_sound() {
-        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, nothing was read");
-            return;
-        };
+        let tools = crate::testing::tools();
         let song =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../tags/tests/fixtures/one-second.flac");
         let wanted = Wanted {

@@ -11,6 +11,6 @@ description = "Writing a stretch of sound down small enough to compare it with a
 melyxar-core = { workspace = true }
 
 [dev-dependencies]
-melyxar-ffmpeg = { workspace = true }
+melyxar-ffmpeg = { workspace = true, features = ["testing"] }
 tokio = { workspace = true }
 tempfile = { workspace = true }

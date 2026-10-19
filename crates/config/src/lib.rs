@@ -160,12 +160,6 @@ impl Directories {
 /// Where the external processing tools are and how they behave.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaToolsConfig {
-    /// Path of the encoder binary. Left empty to search the usual locations.
-    #[serde(default)]
-    pub ffmpeg_path: Option<PathBuf>,
-    /// Path of the analyser binary. Left empty to derive it from the encoder.
-    #[serde(default)]
-    pub ffprobe_path: Option<PathBuf>,
     /// Path of the speech recognition tool. Left empty to search the usual
     /// locations, which include where the installation script puts it.
     #[serde(default)]

@@ -410,7 +410,7 @@ mod tests {
             ..Config::default()
         };
         crate::startup::prepare_directories(&config).expect("directories prepared");
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         let Some(ffmpeg) = tools.as_ref().map(|tools| tools.ffmpeg.clone()) else {
             eprintln!("no media tool here, a picture was not made");
             return;
@@ -484,7 +484,7 @@ mod tests {
             ..Config::default()
         };
         crate::startup::prepare_directories(&config).expect("directories prepared");
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         let Some(ffmpeg) = tools.as_ref().map(|tools| tools.ffmpeg.clone()) else {
             eprintln!("no media tool here, a logo was not made");
             return;

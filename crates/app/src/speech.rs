@@ -564,7 +564,6 @@ pub(crate) mod tests {
         let config = melyxar_config::Config {
             media_tools: melyxar_config::MediaToolsConfig {
                 whisper_path: Some(tool),
-                ..Default::default()
             },
             directories: state.config().directories.clone(),
             ..melyxar_config::Config::default()

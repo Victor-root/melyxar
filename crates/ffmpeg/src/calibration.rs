@@ -246,7 +246,7 @@ mod tests {
         // and really writes a readable film: what is worth proving here is
         // the command, not the twelve seconds a calibration actually asks
         // for, which the argument test above already pins.
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let directory = tempfile::tempdir().expect("temporary directory");
         let into = directory.path().join("reference.mkv");
 
