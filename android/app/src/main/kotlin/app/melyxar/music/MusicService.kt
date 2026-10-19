@@ -1,6 +1,9 @@
 package app.melyxar.music
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.os.Build
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSourceBitmapLoader
@@ -28,7 +31,13 @@ class MusicService : MediaSessionService() {
         SoundTrace.lookAround(this, "service created")
         val engine = MusicEngine.ifMade() ?: return
         // Melyxar's own mark in the status bar, rather than a player's.
-        setMediaNotificationProvider(DefaultMediaNotificationProvider(this).apply { setSmallIcon(R.drawable.ic_launcher_monochrome) })
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(silentChannel())
+                .setChannelName(R.string.music_card_channel)
+                .build()
+                .apply { setSmallIcon(R.drawable.ic_launcher_monochrome) },
+        )
         session = MediaSession.Builder(this, engine.face)
             // The covers are the server's, fetched signed in as the page is.
             .setBitmapLoader(DataSourceBitmapLoader.Builder(this).setDataSourceFactory(engine.fetching).build())
@@ -48,11 +57,40 @@ class MusicService : MediaSessionService() {
         SoundTrace.lookAround(this, "notification updated")
     }
 
+    /**
+     * The category the card is posted in, made silent here rather than left
+     * to Media3. Its own came out loud on some phones (measured on an Oppo:
+     * high importance with the notification sound, rung each time the card
+     * first appeared), and a category keeps what it was made with for good,
+     * so that one is deleted and this one is made silent from the start.
+     */
+    private fun silentChannel(): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.deleteNotificationChannel(MEDIA3_CHANNEL)
+            if (manager.getNotificationChannel(CHANNEL) == null) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL, getString(R.string.music_card_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                        setSound(null, null)
+                        enableVibration(false)
+                        setShowBadge(false)
+                    },
+                )
+            }
+        }
+        return CHANNEL
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
         session?.release()
         session = null
         super.onDestroy()
+    }
+
+    private companion object {
+        const val CHANNEL = "music_card"
+        const val MEDIA3_CHANNEL = "default_channel_id"
     }
 }
