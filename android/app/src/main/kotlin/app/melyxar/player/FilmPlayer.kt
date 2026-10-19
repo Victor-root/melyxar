@@ -264,9 +264,9 @@ class FilmPlayer(
     private fun sourceOf(address: String): MediaSource {
         val item = MediaItem.fromUri(address)
         return if (address.substringBefore('?').endsWith(".m3u8")) {
-            HlsMediaSource.Factory(fetching).createMediaSource(item)
+            HlsMediaSource.Factory(fetching).setLoadErrorHandlingPolicy(RidesOutARestart()).createMediaSource(item)
         } else {
-            ProgressiveMediaSource.Factory(fetching).createMediaSource(item)
+            ProgressiveMediaSource.Factory(fetching).setLoadErrorHandlingPolicy(RidesOutARestart()).createMediaSource(item)
         }
     }
 
