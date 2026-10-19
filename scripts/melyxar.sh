@@ -73,6 +73,15 @@ WHISPER_DIR="/opt/melyxar/whisper"
 # The deadline given to the download and, separately, to the build.
 WHISPER_MINUTES="30"
 
+# FFmpeg as Melyxar runs it (ffmpeg-melyxar): the latest stable release with
+# Melyxar's own changes, built from the folder of that name in the source,
+# which says which release, which changes and which options. Debian's FFmpeg
+# stays installed beside it as the fallback, and the server takes this one
+# first. Rebuilt only when that folder changed since it was last built.
+MEDIA_TOOLS_DIR="/opt/melyxar/ffmpeg"
+# The deadline given to the download and the build together.
+MEDIA_TOOLS_MINUTES="60"
+
 # Whether every command shows its own output as it goes.
 #
 # On while Melyxar is being built, because "it did not work" with nothing to
@@ -299,6 +308,22 @@ en|speech_too_long|Building the speech recognition tool timed out after %s minut
 fr|speech_too_long|La compilation de l’outil de reconnaissance vocale a dépassé le délai de %s minutes.
 en|speech_failed|The speech recognition tool could not be installed. Automatic subtitles will be unavailable until it is. Everything else is installed, and the next update tries again.
 fr|speech_failed|L’outil de reconnaissance vocale n’a pas pu être installé. Les sous-titres automatiques seront indisponibles tant qu’il ne l’est pas. Tout le reste est installé, et la prochaine mise à jour réessaiera.
+en|section_media_tools|Media tools (ffmpeg-melyxar)
+fr|section_media_tools|Outils multimédias (ffmpeg-melyxar)
+en|media_tools_notice|FFmpeg is built from source with Melyxar’s own changes. The first build usually takes several minutes.
+fr|media_tools_notice|FFmpeg est compilé depuis les sources avec les modifications propres à Melyxar. La première compilation prend généralement plusieurs minutes.
+en|step_media_tools_packages|Installing what building FFmpeg needs
+fr|step_media_tools_packages|Installation de ce dont la compilation de FFmpeg a besoin
+en|step_media_tools|Building ffmpeg-melyxar
+fr|step_media_tools|Compilation de ffmpeg-melyxar
+en|media_tools_present|ffmpeg-melyxar is up to date: %s
+fr|media_tools_present|ffmpeg-melyxar est à jour : %s
+en|media_tools_installed|ffmpeg-melyxar installed: %s
+fr|media_tools_installed|ffmpeg-melyxar installé : %s
+en|media_tools_too_long|Building ffmpeg-melyxar timed out after %s minutes.
+fr|media_tools_too_long|La compilation de ffmpeg-melyxar a dépassé le délai de %s minutes.
+en|media_tools_failed|ffmpeg-melyxar could not be built. Melyxar keeps using Debian’s FFmpeg, with which an HDR film started from a chapter may not play. Everything else is installed, and the next update tries again.
+fr|media_tools_failed|ffmpeg-melyxar n’a pas pu être compilé. Melyxar continue avec le FFmpeg de Debian, avec lequel un film HDR lancé depuis un chapitre peut ne pas démarrer. Tout le reste est installé, et la prochaine mise à jour réessaiera.
 en|section_account|Preparing the system account and folders
 fr|section_account|Préparation du compte système et des dossiers
 en|step_user|Creating the system account
@@ -1098,6 +1123,96 @@ speech_build() {
   printf '%s\n' "$WHISPER_COMMIT" > "${INSTALLED_DIR}/whisper"
 }
 
+# FFmpeg as Melyxar runs it, which is optional in the same way: without it
+# the server runs on Debian's FFmpeg, as it did before, so a failure here is
+# said and left behind and the next update tries again.
+install_media_tools() {
+  section "$(tr_msg section_media_tools)"
+
+  local label
+  label="$(media_tools_label)"
+  if media_tools_are_current; then
+    success "$(tr_fmt media_tools_present "$label")"
+    return 0
+  fi
+
+  info "$(tr_msg media_tools_notice)"
+  local needed=()
+  mapfile -t needed < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${SOURCE_DIR}/ffmpeg-melyxar/packages")
+  if step "$(tr_msg step_media_tools_packages)" \
+      apt-get install -y --no-install-recommends "${needed[@]}" &&
+    step "$(tr_msg step_media_tools)" media_tools_from_source; then
+    BUILT_MEDIA_TOOLS=1
+    success "$(tr_fmt media_tools_installed "$label")"
+  else
+    warn "$(tr_msg media_tools_failed)"
+  fi
+}
+
+# What is about to be built, as the tool will name itself: "9.0.2-melyxar1".
+media_tools_label() {
+  (
+    # shellcheck source=/dev/null
+    source "${SOURCE_DIR}/ffmpeg-melyxar/release"
+    printf '%s-melyxar%s' "$FFMPEG_VERSION" "$MELYXAR_REVISION"
+  )
+}
+
+# What the folder it is built from holds, as git sums it up: anything changed
+# in it, a patch, an option or the release, changes this.
+media_tools_recipe() {
+  git -C "$SOURCE_DIR" rev-parse HEAD:ffmpeg-melyxar
+}
+
+# Whether the tool in place was built from the folder as it is now. The marker
+# is written only once the tool is in place, so a build that stopped halfway
+# is redone.
+media_tools_are_current() {
+  local record="${INSTALLED_DIR}/ffmpeg"
+  [[ -x "${MEDIA_TOOLS_DIR}/bin/ffmpeg" && -f "$record" ]] || return 1
+  [[ "$(<"$record")" == "$(media_tools_recipe)" ]]
+}
+
+# Built in a folder of its own, removed whatever happens to the build.
+media_tools_from_source() {
+  local work rc=0
+  work="$(mktemp -d)" || return 1
+  media_tools_build "$work" || rc=$?
+  rm -rf "$work"
+  return "$rc"
+}
+
+# How it is built is the folder's own business (its build.sh); putting it in
+# place is this script's.
+media_tools_build() {
+  local work="$1"
+  local recipe staged="${MEDIA_TOOLS_DIR}.new" rc=0
+  recipe="$(media_tools_recipe)" || return 1
+
+  timeout "${MEDIA_TOOLS_MINUTES}m" \
+    bash "${SOURCE_DIR}/ffmpeg-melyxar/build.sh" "$work" || rc=$?
+  if [[ "$rc" -eq 124 ]]; then
+    error "$(tr_fmt media_tools_too_long "$MEDIA_TOOLS_MINUTES")"
+  fi
+  [[ "$rc" -eq 0 ]] || return 1
+
+  # Swapped in whole, so the server never finds one tool of the pair without
+  # the other.
+  rm -rf "$staged"
+  mkdir -p "${staged}/bin" "$INSTALLED_DIR" || return 1
+  if ! install -m 0755 "${work}/bin/ffmpeg" "${work}/bin/ffprobe" "${staged}/bin/"; then
+    rm -rf "$staged"
+    return 1
+  fi
+  rm -rf "${MEDIA_TOOLS_DIR}.old"
+  if [[ -d "$MEDIA_TOOLS_DIR" ]]; then
+    mv "$MEDIA_TOOLS_DIR" "${MEDIA_TOOLS_DIR}.old" || return 1
+  fi
+  mv "$staged" "$MEDIA_TOOLS_DIR" || return 1
+  rm -rf "${MEDIA_TOOLS_DIR}.old"
+  printf '%s\n' "$recipe" > "${INSTALLED_DIR}/ffmpeg"
+}
+
 create_account_and_folders() {
   section "$(tr_msg section_account)"
 
@@ -1147,7 +1262,7 @@ fetch_source() {
 # what is left out rather than what is in: a folder added one day is counted
 # as the server's until somebody says otherwise.
 INTERFACE_SOURCES=(web)
-ENGINE_SOURCES=(. ':(exclude)web' ':(exclude)android' ':(exclude)docs' ':(exclude)scripts'
+ENGINE_SOURCES=(. ':(exclude)web' ':(exclude)android' ':(exclude)docs' ':(exclude)scripts' ':(exclude)ffmpeg-melyxar'
   ':(exclude)README.md' ':(exclude)CLAUDE.md' ':(exclude)LICENSE')
 
 # Whether a part is still the one the source would build now.
@@ -1172,6 +1287,9 @@ mark_installed() {
 BUILT_ENGINE=0
 # Set when the service file written is not the one that was there.
 UNIT_CHANGED=0
+# Set when a new ffmpeg-melyxar was put in place, which the server picks up
+# only when it starts.
+BUILT_MEDIA_TOOLS=0
 
 build_and_install() {
   section "$(tr_msg section_build)"
@@ -1481,6 +1599,7 @@ action_install() {
   fetch_source
   build_and_install
   install_speech
+  install_media_tools
   write_configuration "$port"
   install_service
   restart_service
@@ -1549,6 +1668,7 @@ action_update() {
 
   build_and_install
   install_speech
+  install_media_tools
   # Written again so that what the service is started with reaches a machine
   # installed before it changed. Taken up at the next restart.
   install_service
@@ -1558,7 +1678,7 @@ action_update() {
   if [[ -f "$WRITES_FILE" ]]; then
     write_media_writes
   fi
-  if [[ "$BUILT_ENGINE" -eq 1 || "$UNIT_CHANGED" -eq 1 ]]; then
+  if [[ "$BUILT_ENGINE" -eq 1 || "$UNIT_CHANGED" -eq 1 || "$BUILT_MEDIA_TOOLS" -eq 1 ]]; then
     restart_service
   fi
   if [[ "$BUILT_ENGINE" -eq 1 ]]; then
