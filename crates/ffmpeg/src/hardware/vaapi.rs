@@ -120,8 +120,16 @@ impl Driver for Vaapi {
     ) -> Vec<String> {
         match recipe {
             Some(ToneMapping::VulkanBesideTheCard { .. }) => return through_vulkan(scale_to_height),
+            // Handed a picture the processor read, Vulkan converts it and
+            // hands it back to the processor, where the card cannot take it
+            // without a copy: it is handed up first, with its ten bits.
             Some(ToneMapping::VulkanOnTheCard { .. }) => {
-                return vec![converted_by_vulkan(scale_to_height)];
+                let mut filters = match reads_the_film {
+                    true => Vec::new(),
+                    false => vec!["format=p010".to_string(), "hwupload".to_string()],
+                };
+                filters.push(converted_by_vulkan(scale_to_height));
+                return filters;
             }
             _ => {}
         }
@@ -526,17 +534,24 @@ mod tests {
 
     #[test]
     fn on_the_card_the_converted_picture_passes_to_the_encoder_without_coming_down() {
-        for reads_the_film in [true, false] {
-            let filters = on_the_card(true).filters_for(Some(1080), true, reads_the_film);
-            assert_eq!(
-                filters,
-                vec![
-                    converted_by_vulkan(Some(1080)),
-                    "hwmap=derive_device=vaapi,format=vaapi,\
-                     scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
-                        .to_string(),
-                ]
-            );
+        let passed_on = "hwmap=derive_device=vaapi,format=vaapi,\
+             scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
+            .to_string();
+        let read_by_vulkan = on_the_card(true).filters_for(Some(1080), true, true);
+        assert_eq!(read_by_vulkan, vec![converted_by_vulkan(Some(1080)), passed_on.clone()]);
+        // Vulkan hands a picture the processor read back to the processor,
+        // where the card cannot map it from: it goes up first.
+        let read_by_the_processor = on_the_card(false).filters_for(Some(1080), true, false);
+        assert_eq!(
+            read_by_the_processor,
+            vec![
+                "format=p010".to_string(),
+                "hwupload".to_string(),
+                converted_by_vulkan(Some(1080)),
+                passed_on,
+            ]
+        );
+        for filters in [read_by_vulkan, read_by_the_processor] {
             assert!(!filters.iter().any(|value| value.contains("hwdownload")), "{filters:?}");
         }
         // One plane, full range, which is what passes across whole; the

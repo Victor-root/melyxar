@@ -429,19 +429,48 @@ pub(super) async fn looks_right(
     let card = run_keeping(ffmpeg, looking(made.path(), ""), true).await;
     let processor = run_keeping(
         ffmpeg,
-        looking(sample, &format!("{},", crate::command::TONE_MAP_FILTER)),
+        looking(
+            sample,
+            &format!("{WHAT_THE_SAMPLE_IS},{},", crate::command::TONE_MAP_FILTER),
+        ),
         true,
     )
     .await;
-    match (card, processor) {
-        (Ok((true, _, card)), Ok((true, _, processor))) => match alike(&card, &processor) {
-            Ok(said) => (true, said),
-            Err(said) => (false, said),
-        },
-        (Ok((false, said, _)) | Err(said), _) | (_, Ok((false, said, _)) | Err(said)) => {
-            (false, format!("the picture could not be looked at: {said}"))
+    let judged = match (card, processor) {
+        (Ok((true, _, card)), Ok((true, _, processor))) => alike(&card, &processor),
+        // A card is never refused for want of something to compare it with:
+        // the green picture it is looked at for is told by its colour alone.
+        (Ok((true, _, card)), Ok((false, said, _)) | Err(said)) => {
+            alike(&card, &colourless_beside(&card)).map(|alike| {
+                format!(
+                    "{alike}, judged on colour alone, the processor's conversion failed: {said}"
+                )
+            })
         }
+        (Ok((false, said, _)) | Err(said), _) => {
+            Err(format!("the picture could not be looked at: {said}"))
+        }
+    };
+    match judged {
+        Ok(said) => (true, said),
+        Err(said) => (false, said),
     }
+}
+
+/// What the sample is, told to the processor's conversion rather than left
+/// to what its reader finds in the file: that conversion refused it on a
+/// machine where it found nothing there.
+const WHAT_THE_SAMPLE_IS: &str =
+    "setparams=range=tv:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc";
+
+/// A picture as bright as `picture` everywhere it is and with no colour at
+/// all, which is what a picture whose colours are right averages out near.
+fn colourless_beside(picture: &[u8]) -> Vec<u8> {
+    let (across, down) = LOOKED_AT;
+    let brightness = (across * down).min(picture.len());
+    let mut colourless = picture[..brightness].to_vec();
+    colourless.resize(picture.len(), 128);
+    colourless
 }
 
 /// Whether two pictures of `LOOKED_AT` in the layout of four brightness
@@ -518,6 +547,15 @@ mod tests {
         assert!(alike(&picture_of(0, 0, 0), &processor).is_err(), "black");
         assert!(alike(&picture_of(79, 137, 190), &processor).is_err(), "too red");
         assert!(alike(&[0; 10], &processor).is_err(), "not a whole picture");
+    }
+
+    #[test]
+    fn without_the_processors_picture_a_green_one_is_still_caught() {
+        let right = picture_of(144, 114, 115);
+        assert!(alike(&right, &colourless_beside(&right)).is_ok());
+        let green = picture_of(129, 1, 1);
+        assert!(alike(&green, &colourless_beside(&green)).is_err());
+        assert!(alike(&[0; 10], &colourless_beside(&[0; 10])).is_err());
     }
 
     #[tokio::test]
