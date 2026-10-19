@@ -1667,7 +1667,7 @@ mod tests {
             "[0:4]scale=1280:720,format=bgra,hwupload[words];\
              [0:v:0]libplacebo=w=-2:h=720:format=bgra:colorspace=bt709\
              :color_primaries=bt709:color_trc=bt709:range=pc:tonemapping=auto[picture];\
-             [picture][words]overlay_vulkan=x=224:y=0,hwmap=derive_device=vaapi,format=vaapi,\
+             [picture][words]overlay_vulkan=x=224:y=0,hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv[painted]"
         );
         assert!(!painted.contains("hwdownload"), "{painted}");
@@ -1684,7 +1684,7 @@ mod tests {
         assert_eq!(
             args[position(&args, "-vf").expect("a chain") + 1],
             "libplacebo=w=-2:h=720:format=bgra:colorspace=bt709:color_primaries=bt709\
-             :color_trc=bt709:range=pc:tonemapping=auto,hwmap=derive_device=vaapi,format=vaapi,\
+             :color_trc=bt709:range=pc:tonemapping=auto,hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
         );
     }
