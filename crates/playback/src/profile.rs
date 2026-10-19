@@ -158,6 +158,17 @@ pub struct ClientProfile {
     pub rebuilt_video: Vec<RebuiltCapability>,
     /// Audio codec names the client can decode.
     pub audio_codecs: Vec<String>,
+    /// Audio codecs the client accepts in a stream the server rebuilds and
+    /// feeds to it in pieces.
+    ///
+    /// The same split as for the picture: a browser plays a sound in a whole
+    /// file that its piece by piece player refuses. Measured with a film whose
+    /// sound was carried over into such a stream, and no picture appeared.
+    ///
+    /// Absent means the client draws no such line, and the sounds it decodes
+    /// are taken in pieces as well.
+    #[serde(default)]
+    pub rebuilt_audio: Option<Vec<String>>,
     /// Most channels the client will accept. Browsers output stereo.
     #[serde(default)]
     pub max_audio_channels: Option<i32>,
@@ -206,6 +217,15 @@ impl ClientProfile {
         self.audio_codecs
             .iter()
             .any(|known| known.eq_ignore_ascii_case(codec))
+    }
+
+    /// Whether a sound carried over as it is into a stream fed in pieces is
+    /// one the client will take.
+    pub fn takes_audio_in_pieces(&self, codec: &str) -> bool {
+        match &self.rebuilt_audio {
+            Some(codecs) => codecs.iter().any(|known| known.eq_ignore_ascii_case(codec)),
+            None => self.supports_audio_codec(codec),
+        }
     }
 
     /// Whether a stream rebuilt into this codec, at this height, is one the
@@ -308,6 +328,7 @@ impl ClientProfile {
                 "vorbis".into(),
                 "flac".into(),
             ],
+            rebuilt_audio: Some(vec!["aac".into(), "opus".into()]),
             max_audio_channels: Some(2),
             subtitle_formats: vec!["webvtt".into()],
             wide_gamut: Vec::new(),
@@ -551,6 +572,26 @@ mod tests {
             profile.efficient("hevc"),
             "a codec the page said nothing about is not punished for it"
         );
+    }
+
+    #[test]
+    fn a_sound_taken_in_pieces_is_what_the_client_said_or_else_what_it_decodes() {
+        let silent = ClientProfile {
+            rebuilt_audio: None,
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(silent.takes_audio_in_pieces("mp3"));
+        assert!(!silent.takes_audio_in_pieces("eac3"));
+
+        let said = ClientProfile {
+            rebuilt_audio: Some(vec!["aac".into(), "eac3".into()]),
+            ..ClientProfile::conservative_browser()
+        };
+        assert!(
+            !said.takes_audio_in_pieces("mp3"),
+            "decoded in a whole file, refused in pieces"
+        );
+        assert!(said.takes_audio_in_pieces("EAC3"));
     }
 
     #[test]
