@@ -2,6 +2,11 @@
 # the installation script before building. Each library here goes with its
 # option in configure-options.
 nasm
+meson
+ninja-build
+libshaderc-dev
+python3-jinja2
+patchelf
 clang
 libva-dev
 libdrm-dev
