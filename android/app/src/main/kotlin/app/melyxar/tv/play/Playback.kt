@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.util.EventLogger
 import app.melyxar.BuildConfig
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import app.melyxar.player.ClientProfile
+import app.melyxar.player.RidesOutARestart
 import app.melyxar.player.boundedLoading
 import app.melyxar.player.lightEffects
 import app.melyxar.player.measuredProfile
@@ -217,7 +218,10 @@ class Playback(
 
     private fun newPlayer(): ExoPlayer {
         val player = ExoPlayer.Builder(context, DecodedSound(context))
-            .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http))))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http)))
+                    .setLoadErrorHandlingPolicy(RidesOutARestart()),
+            )
             .setAudioAttributes(sound, true)
             .setHandleAudioBecomingNoisy(true)
             .setLoadControl(boundedLoading())
@@ -289,8 +293,8 @@ class Playback(
     private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, quality), audio, subtitle, wideGamut)
 
     /** Plays a plan from [at] seconds: the file itself, or a film rebuilt
-     *  from there. */
-    private suspend fun open(plan: Plan, at: Double) {
+     *  from there, paused unless [going]. */
+    private suspend fun open(plan: Plan, at: Double, going: Boolean = true) {
         this.plan = plan
         if (BuildConfig.DEBUG) {
             Log.d(SOUND_LOG, "plan: ${plan.method}, audio ${plan.audio.firstOrNull { it.id == plan.chosenAudioId }?.codec}")
@@ -318,18 +322,18 @@ class Playback(
         drawPicture(carryOn = false)
         player.setMediaItem(item, (at * 1000).toLong())
         player.prepare()
-        player.play()
+        player.playWhenReady = going
         keepTheStream()
         reportEveryNowAndThen()
     }
 
     /** Plays it again from where it is, as the server now has it for these
      *  tracks. */
-    private fun again(subtitleChoice: TrackChoice) {
+    private fun again(subtitleChoice: TrackChoice, going: Boolean = true) {
         val at = seconds
         scope.launch {
             try {
-                open(api.plan(source, asked(subtitleChoice)), at)
+                open(api.plan(source, asked(subtitleChoice)), at, going)
             } catch (_: IOException) {
                 failed = true
             }
@@ -479,9 +483,10 @@ class Playback(
                 }
                 if (!alive) {
                     // Swept away while paused, or the server started again:
-                    // another from where the viewer stands.
+                    // another from where the viewer stands, asked apart from
+                    // this beat, which opening a film stops.
                     stream = null
-                    plan?.let { open(it, seconds) }
+                    again(paintedChoice, going = player.playWhenReady)
                     return@launch
                 }
             }
