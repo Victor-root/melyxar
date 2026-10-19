@@ -360,13 +360,14 @@ pub(super) async fn try_it(
 /// colours and its shapes, nothing more.
 const LOOKED_AT: (usize, usize) = (64, 36);
 
-/// The height a picture is looked at after a card made it: that of a film.
+/// The height a picture passed to the card without a copy is looked at:
+/// that of the largest film rebuilt, which is rebuilt at its own size.
 ///
 /// A card may lay out a large picture in memory unlike a small one, and a
 /// picture handed across in a layout its receiver misreads comes out as
-/// scattered stripes. Seen on an RX 6600 at a film's size, after a trial at
-/// `TRIAL_HEIGHT` had come out right.
-pub(crate) const LOOKED_AT_HEIGHT: i32 = 1080;
+/// scattered stripes. Seen on an RX 6600 with a film rebuilt at 3840 by 1600,
+/// after the same trial at 180 and at 1080 lines had come out right.
+pub(crate) const LOOKED_AT_HEIGHT: i32 = 2160;
 
 /// How far the card's picture may stand from the processor's, on average, in
 /// brightness and in each of the two colour planes, out of 255.

@@ -317,12 +317,12 @@ impl CardSearch {
         None
     }
 
-    /// For a recipe converting through Vulkan: whether what comes out at a
-    /// film's size looks like the processor's own conversion, and, for one
-    /// that keeps the picture on the card, whether a subtitle made of
-    /// pictures laid there looks like the processor's too. Kept only when it
-    /// holds, so a card is never left with a picture that is wrong, nor with
-    /// a film it could take before and no longer can.
+    /// For a recipe converting through Vulkan: whether what comes out looks
+    /// like the processor's own conversion, and, for one that keeps the
+    /// picture on the card, whether a subtitle made of pictures laid there
+    /// looks like the processor's too. Kept only when it holds, so a card is
+    /// never left with a picture that is wrong, nor with a film it could take
+    /// before and no longer can.
     async fn it_looks_right_and_paints(
         &mut self,
         ffmpeg: &Path,
@@ -332,7 +332,14 @@ impl CardSearch {
         recipe: ToneMapping,
     ) -> bool {
         let reads = recipe.read_in_its_trial();
-        let chain = card.chain(Some(LOOKED_AT_HEIGHT), Some(recipe), reads).join(",");
+        // Only a picture passed to the card without a copy depends on how
+        // large it is; one that comes down is looked at as every trial runs,
+        // which a card whose encoder stops short of the largest film passes.
+        let height = match recipe.lays_on_vulkan() {
+            true => LOOKED_AT_HEIGHT,
+            false => TRIAL_HEIGHT,
+        };
+        let chain = card.chain(Some(height), Some(recipe), reads).join(",");
         let (looks, said) = looks_right(
             ffmpeg,
             card.opening(reads, Some(recipe)),
@@ -345,7 +352,7 @@ impl CardSearch {
             what: format!("{}_looks_right", recipe.trial_name()),
             device: card.device.display().to_string(),
             worked: looks,
-            said,
+            said: format!("at {height} lines, {said}"),
         });
         if !looks || !recipe.lays_on_vulkan() {
             return looks;
@@ -381,7 +388,7 @@ impl CardSearch {
             what: format!("{}_paints", recipe.trial_name()),
             device: card.device.display().to_string(),
             worked: paints,
-            said,
+            said: format!("at {LOOKED_AT_HEIGHT} lines, {said}"),
         });
         paints
     }
