@@ -1197,10 +1197,11 @@ media_tools_build() {
   [[ "$rc" -eq 0 ]] || return 1
 
   # Swapped in whole, so the server never finds one tool of the pair without
-  # the other.
+  # the other, nor either without the library beside them.
   rm -rf "$staged"
-  mkdir -p "${staged}/bin" "$INSTALLED_DIR" || return 1
-  if ! install -m 0755 "${work}/bin/ffmpeg" "${work}/bin/ffprobe" "${staged}/bin/"; then
+  mkdir -p "${staged}/bin" "${staged}/lib" "$INSTALLED_DIR" || return 1
+  if ! { install -m 0755 "${work}/bin/ffmpeg" "${work}/bin/ffprobe" "${staged}/bin/" &&
+    cp -P "${work}"/lib/* "${staged}/lib/"; }; then
     rm -rf "$staged"
     return 1
   fi

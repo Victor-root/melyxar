@@ -2,9 +2,7 @@
 # configure. Only what Melyxar uses: the cards, the encoders it writes with,
 # the filters its commands name, and the formats it reads and writes.
 #
-# libplacebo is left out: FFmpeg 9 wants a newer one than Debian 13 has. A
-# card that converts colour only through it is then proved unable to at
-# start-up, and its wide gamut films go to the processor.
+# libplacebo is the one built by build.sh, found beside the tools.
 --enable-gpl
 --disable-debug
 --disable-doc
@@ -12,6 +10,7 @@
 --enable-vaapi
 --enable-libdrm
 --enable-vulkan
+--enable-libplacebo
 --enable-ffnvcodec
 --enable-nvenc
 --enable-nvdec
