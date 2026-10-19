@@ -39,7 +39,7 @@ export function UploadButton({
         title={said}
       >
         <UploadIcon size={16} />
-        {bare ? null : said}
+        {bare ? null : <span className="press-words">{said}</span>}
       </button>
       {open && <UploadDialog library={library} album={album} onClose={() => setOpen(false)} />}
     </>
