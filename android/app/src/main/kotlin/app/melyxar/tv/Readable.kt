@@ -45,6 +45,7 @@ fun pictureName(width: Int?, height: Int?): String? {
     val down = height ?: 0
     return when {
         across <= 0 && down <= 0 -> null
+        across >= 6400 || down >= 4000 -> "8K"
         across >= 3200 || down >= 2000 -> "4K"
         across >= 2400 || down >= 1400 -> "1440p"
         across >= 1800 || down >= 1000 -> "1080p"

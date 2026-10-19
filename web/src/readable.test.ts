@@ -314,6 +314,8 @@ describe("pictureName", () => {
     // Stored with the black bands cut off: the height alone undersold both.
     expect(pictureName(1920, 800)).toBe("1080p");
     expect(pictureName(3840, 1600)).toBe("4K");
+    expect(pictureName(7680, 4320)).toBe("8K");
+    expect(pictureName(7680, 3200)).toBe("8K");
     expect(pictureName(1280, 536)).toBe("720p");
   });
 

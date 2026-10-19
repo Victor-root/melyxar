@@ -390,6 +390,7 @@ pub struct VideoDetails {
 /// height and is named by it just the same.
 pub fn definition(width: i32, height: i32) -> &'static str {
     match (width, height) {
+        (w, h) if w >= 6400 || h >= 4000 => "8K",
         (w, h) if w >= 3200 || h >= 2000 => "4K",
         (w, h) if w >= 2400 || h >= 1400 => "1440p",
         (w, h) if w >= 1800 || h >= 1000 => "1080p",
@@ -690,6 +691,8 @@ mod tests {
         // Stored with the black bands cut off: the height alone undersold both.
         assert_eq!(definition(1920, 800), "1080p");
         assert_eq!(definition(3840, 1600), "4K");
+        assert_eq!(definition(7680, 4320), "8K");
+        assert_eq!(definition(7680, 3200), "8K");
         assert_eq!(definition(1280, 536), "720p");
         assert_eq!(definition(2560, 1070), "1440p");
         // Narrower than a screen, it keeps its full height and is named by it.

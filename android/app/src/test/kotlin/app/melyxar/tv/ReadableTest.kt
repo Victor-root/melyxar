@@ -30,6 +30,7 @@ class ReadableTest {
     @Test
     fun namesAPictureByItsLargerSide() {
         assertEquals("4K", pictureName(3840, 1600))
+        assertEquals("8K", pictureName(7680, 4320))
         assertEquals("1080p", pictureName(1920, 800))
         assertEquals("720p", pictureName(1280, 534))
         assertNull(pictureName(720, 576))

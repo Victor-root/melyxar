@@ -358,6 +358,9 @@ export function pictureName(width: number | null, height: number | null): string
   if (across <= 0 && down <= 0) {
     return null;
   }
+  if (across >= 6400 || down >= 4000) {
+    return "8K";
+  }
   if (across >= 3200 || down >= 2000) {
     return "4K";
   }
