@@ -20,6 +20,7 @@ use melyxar_app::AppState;
 use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
 use melyxar_core::library::LibraryKind;
+use melyxar_core::id::LibraryId;
 use melyxar_core::work::{IdentificationNote, PlaybackState};
 use serde::{Deserialize, Serialize};
 
@@ -574,18 +575,18 @@ struct HomeView {
     up_next: Vec<UpNextView>,
     /// What a home page leads with, newest first.
     recently_added: Vec<CardView>,
-    /// One row per kind of library this server really holds.
+    /// One row per library this viewer sees, in the order of their tiles.
     shelves: Vec<ShelfView>,
     works: i64,
     /// Whether anything is still waiting to be looked up, so the page can say
     /// so rather than showing untitled films with no explanation.
     awaiting_identification: i64,
-    /// The sections to draw below the banner, in order: band, carry_on,
-    /// up_next, recently_added and libraries, those this viewer shows.
-    sections: Vec<&'static str>,
-    /// The kinds of library in the order this viewer chose, for the tiles that
-    /// lead to them.
-    kind_order: Vec<&'static str>,
+    /// The sections to draw below the banner, in order, those this viewer
+    /// shows: band, carry_on, up_next, newest:<library> and recently_added.
+    sections: Vec<String>,
+    /// The libraries in the order this viewer chose, for the tiles that lead
+    /// to them, music's among them.
+    library_order: Vec<String>,
 }
 
 /// One work the page opens on, and why it is there.
@@ -634,16 +635,17 @@ struct UpNextView {
     episode_number: Option<i32>,
 }
 
-/// One row of the home page, for one kind of library.
+/// One row of the home page, for one library.
 #[derive(Debug, Serialize)]
 struct ShelfView {
-    /// movies, series, anime or shows.
+    library: String,
+    /// movies, series, anime, home_media or shows.
     kind: &'static str,
-    /// The newest works of that kind, for the row of them further down the
-    /// home page.
+    /// The newest works of that library, for the row of them further down
+    /// the home page.
     cards: Vec<CardView>,
     /// The newest of them somebody named, for the fan of posters on the tile
-    /// that leads to the kind.
+    /// that leads to the library.
     fan: Vec<CardView>,
 }
 
@@ -737,6 +739,7 @@ async fn home(
             .shelves
             .iter()
             .map(|shelf| ShelfView {
+                library: shelf.library.to_db_string(),
                 kind: shelf.kind.as_str(),
                 cards: shelf.cards.iter().map(card_view).collect(),
                 fan: shelf.fan.iter().map(card_view).collect(),
@@ -744,8 +747,12 @@ async fn home(
             .collect(),
         works: page.works,
         awaiting_identification: page.awaiting_identification,
-        sections: page.sections.iter().map(|section| section.as_str()).collect(),
-        kind_order: page.kind_order.iter().map(|kind| kind.as_str()).collect(),
+        sections: page.sections.iter().map(|section| section.name()).collect(),
+        library_order: page
+            .library_order
+            .iter()
+            .map(LibraryId::to_db_string)
+            .collect(),
     }))
 }
 

@@ -421,57 +421,44 @@ impl SubtitleMode {
 /// edge to edge above everything else, and has its own switch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeSection {
-    /// The tiles leading to each kind of library.
+    /// The tiles leading to each library.
     Band,
     /// What was left halfway.
     CarryOn,
     /// The episode each started series is waiting on.
     UpNext,
-    /// The newest works of one kind of library. One section per kind rather
-    /// than one for them all, so each row can be moved and hidden on its own.
-    Newest(LibraryKind),
-    /// Everything newest, whatever its kind.
+    /// The newest works of one library. One section per library rather than
+    /// one for them all, so each row can be moved and hidden on its own, and
+    /// per library rather than per kind, so a library made apart stays apart.
+    Newest(LibraryId),
+    /// Everything newest, whatever its library.
     RecentlyAdded,
 }
 
 impl HomeSection {
-    /// Every section, in the order a person meets them until they choose
-    /// another: the row of each library, in the order kinds are met, before
-    /// the row of everything newest, which mixes them all.
-    pub const fn every() -> [Self; 10] {
-        [
-            Self::Band,
-            Self::CarryOn,
-            Self::UpNext,
-            Self::Newest(LibraryKind::Movies),
-            Self::Newest(LibraryKind::Series),
-            Self::Newest(LibraryKind::Anime),
-            Self::Newest(LibraryKind::HomeMedia),
-            Self::Newest(LibraryKind::Shows),
-            Self::Newest(LibraryKind::Music),
-            Self::RecentlyAdded,
-        ]
-    }
+    /// The sections every home page has whatever its libraries, in the order
+    /// a person meets them until they choose another. The row of each library
+    /// comes before the last, which mixes them all.
+    pub const FIXED: [Self; 4] = [Self::Band, Self::CarryOn, Self::UpNext, Self::RecentlyAdded];
 
-    pub fn as_str(self) -> &'static str {
+    /// What the section is called where it is stored and sent.
+    pub fn name(self) -> String {
         match self {
-            Self::Band => "band",
-            Self::CarryOn => "carry_on",
-            Self::UpNext => "up_next",
-            Self::Newest(LibraryKind::Movies) => "newest:movies",
-            Self::Newest(LibraryKind::Series) => "newest:series",
-            Self::Newest(LibraryKind::Anime) => "newest:anime",
-            Self::Newest(LibraryKind::HomeMedia) => "newest:home_media",
-            Self::Newest(LibraryKind::Shows) => "newest:shows",
-            Self::Newest(LibraryKind::Music) => "newest:music",
-            Self::RecentlyAdded => "recently_added",
+            Self::Band => "band".to_string(),
+            Self::CarryOn => "carry_on".to_string(),
+            Self::UpNext => "up_next".to_string(),
+            Self::Newest(library) => format!("newest:{library}"),
+            Self::RecentlyAdded => "recently_added".to_string(),
         }
     }
 
     pub fn parse(value: &str) -> Option<Self> {
-        Self::every()
-            .into_iter()
-            .find(|section| section.as_str() == value)
+        match value.strip_prefix("newest:") {
+            Some(library) => library.parse().ok().map(Self::Newest),
+            None => Self::FIXED
+                .into_iter()
+                .find(|section| section.name() == value),
+        }
     }
 }
 
@@ -697,11 +684,13 @@ pub struct Preferences {
     /// by one person for themselves. Hidden, the account still signs in: the
     /// name is typed rather than pressed.
     pub hidden_at_the_door: bool,
-    /// The kinds of library in the order the home page lays them out, its
-    /// band and its rows alike. Always every kind, once each.
-    pub home_order: Vec<LibraryKind>,
-    /// The sections of the home page in the order it lays them out. Always
-    /// every section, once each, shown or not.
+    /// The libraries in the order the tiles of the home page lay them out,
+    /// once each. A library it does not name comes after the ones it does,
+    /// as [`Preferences::libraries_in_order`] places it.
+    pub home_order: Vec<LibraryId>,
+    /// The sections of the home page in the order it lays them out, once
+    /// each, shown or not. Always every fixed section; the row of a library
+    /// it does not name is placed by [`Preferences::home_sections_shown`].
     pub home_sections: Vec<HomeSection>,
     /// The sections left off the home page. Kept apart from the order, so a
     /// section shown again comes back where it was.
@@ -756,8 +745,8 @@ impl Default for Preferences {
             // Shown by default: a household server is the ordinary case, and a
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
-            home_order: LibraryKind::every().to_vec(),
-            home_sections: HomeSection::every().to_vec(),
+            home_order: Vec::new(),
+            home_sections: HomeSection::FIXED.to_vec(),
             hidden_home_sections: Vec::new(),
             step_back_seconds: DEFAULT_STEP_BACK,
             step_on_seconds: DEFAULT_STEP_ON,
@@ -805,19 +794,20 @@ impl Preferences {
         if !is_an_interface_language(&self.interface_language) {
             self.interface_language = AUTOMATIC_LANGUAGE.to_string();
         }
-        // A kind named twice keeps its first place, and one never named goes
-        // after the others, in the order everybody starts with: a kind added
-        // to the server must not be missing from anybody's home page.
-        let mut order: Vec<LibraryKind> = Vec::new();
-        for kind in self.home_order.into_iter().chain(LibraryKind::every()) {
-            if !order.contains(&kind) {
-                order.push(kind);
+        // A library named twice keeps its first place. One never named is
+        // placed when the page is laid out, among the libraries there are.
+        let mut order: Vec<LibraryId> = Vec::new();
+        for library in self.home_order {
+            if !order.contains(&library) {
+                order.push(library);
             }
         }
         self.home_order = order;
-        // The same for the sections, for the same reason.
+        // A section named twice keeps its first place, and a fixed one never
+        // named goes after the others: a section added to the page must not
+        // be missing from anybody's.
         let mut sections: Vec<HomeSection> = Vec::new();
-        for section in self.home_sections.into_iter().chain(HomeSection::every()) {
+        for section in self.home_sections.into_iter().chain(HomeSection::FIXED) {
             if !sections.contains(&section) {
                 sections.push(section);
             }
@@ -859,22 +849,68 @@ impl Preferences {
         }
     }
 
-    /// The sections the home page shows, in the order it shows them.
-    pub fn home_sections_shown(&self) -> Vec<HomeSection> {
-        self.home_sections
+    /// The libraries given, in the order this person's home page lays them
+    /// out: the ones the order names first, in its order, then the others
+    /// by kind in the order everybody starts with, keeping the order they
+    /// were given in within a kind. A library added to the server is never
+    /// missing from anybody's home page.
+    pub fn libraries_in_order(&self, libraries: &[(LibraryId, LibraryKind)]) -> Vec<LibraryId> {
+        let mut placed: Vec<LibraryId> = self
+            .home_order
             .iter()
             .copied()
-            .filter(|section| !self.hidden_home_sections.contains(section))
-            .collect()
+            .filter(|chosen| libraries.iter().any(|(library, _)| library == chosen))
+            .collect();
+        for kind in LibraryKind::every() {
+            for (library, _) in libraries.iter().filter(|(_, of)| *of == kind) {
+                if !placed.contains(library) {
+                    placed.push(*library);
+                }
+            }
+        }
+        placed
     }
 
-    /// Where a kind of library comes on this person's home page, first at
-    /// nought.
-    pub fn place_on_the_home_page(&self, kind: LibraryKind) -> usize {
-        self.home_order
+    /// The sections the home page shows, in the order it shows them, for
+    /// the libraries given in the order of their tiles.
+    pub fn home_sections_shown(&self, libraries: &[LibraryId]) -> Vec<HomeSection> {
+        let mut shown = self.home_sections_laid_out(libraries);
+        shown.retain(|section| !self.hidden_home_sections.contains(section));
+        shown
+    }
+
+    /// Every section of the home page, shown or hidden, in the order it lays
+    /// them out, for the libraries given in the order of their tiles.
+    ///
+    /// The row of a library gone is left out. The row of a library the order
+    /// never named comes after the last row of a library it did, or just
+    /// before everything newest when it named none, in the order of the
+    /// tiles: a library added to the server gets its row where the others
+    /// are, shown until somebody hides it.
+    pub fn home_sections_laid_out(&self, libraries: &[LibraryId]) -> Vec<HomeSection> {
+        let present = |section: &HomeSection| match section {
+            HomeSection::Newest(library) => libraries.contains(library),
+            _ => true,
+        };
+        let mut laid_out: Vec<HomeSection> =
+            self.home_sections.iter().copied().filter(present).collect();
+        let unplaced: Vec<HomeSection> = libraries
             .iter()
-            .position(|chosen| *chosen == kind)
-            .unwrap_or(self.home_order.len())
+            .map(|library| HomeSection::Newest(*library))
+            .filter(|section| !laid_out.contains(section))
+            .collect();
+        let after_the_last_row = laid_out
+            .iter()
+            .rposition(|section| matches!(section, HomeSection::Newest(_)))
+            .map(|at| at + 1);
+        let before_everything_newest = laid_out
+            .iter()
+            .position(|section| *section == HomeSection::RecentlyAdded);
+        let at = after_the_last_row
+            .or(before_everything_newest)
+            .unwrap_or(laid_out.len());
+        laid_out.splice(at..at, unplaced);
+        laid_out
     }
 }
 
@@ -1243,65 +1279,113 @@ mod tests {
     }
 
     #[test]
-    fn the_home_sections_always_hold_every_section_once() {
-        let anime = HomeSection::Newest(LibraryKind::Anime);
+    fn the_home_sections_always_hold_every_fixed_section_once() {
+        let library = LibraryId::new();
+        let row = HomeSection::Newest(library);
         let chosen = Preferences {
-            home_sections: vec![anime, HomeSection::Band, anime],
+            home_sections: vec![row, HomeSection::Band, row],
             hidden_home_sections: vec![HomeSection::UpNext, HomeSection::UpNext],
             ..Preferences::default()
         }
         .normalised();
-        assert_eq!(chosen.home_sections.len(), HomeSection::every().len());
         assert_eq!(
-            chosen.home_sections[..4],
-            [anime, HomeSection::Band, HomeSection::CarryOn, HomeSection::UpNext]
+            chosen.home_sections,
+            vec![
+                row,
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded
+            ]
         );
         assert_eq!(chosen.hidden_home_sections, vec![HomeSection::UpNext]);
-        assert!(
-            !chosen.home_sections_shown().contains(&HomeSection::UpNext),
-            "a hidden section is left out of what is shown"
-        );
         assert_eq!(
-            chosen.home_sections_shown().len(),
-            HomeSection::every().len() - 1,
-            "and keeps its place in the order"
+            chosen.home_sections_shown(&[library]),
+            vec![row, HomeSection::Band, HomeSection::CarryOn, HomeSection::RecentlyAdded],
+            "a hidden section is left out of what is shown, the others keep their places"
         );
-        assert_eq!(
-            Preferences::default().home_sections.last(),
-            Some(&HomeSection::RecentlyAdded),
-            "the row of every library before the row that mixes them all"
-        );
-        for section in HomeSection::every() {
-            assert_eq!(HomeSection::parse(section.as_str()), Some(section));
+        for section in HomeSection::FIXED.into_iter().chain([row]) {
+            assert_eq!(HomeSection::parse(&section.name()), Some(section));
         }
         assert_eq!(HomeSection::parse("libraries"), None);
+        assert_eq!(HomeSection::parse("newest:movies"), None, "a kind is not a library");
     }
 
     #[test]
-    fn the_home_order_always_holds_every_kind_once() {
+    fn the_row_of_every_library_comes_where_the_rows_are_and_one_gone_goes() {
+        let (films, tests, series, gone) =
+            (LibraryId::new(), LibraryId::new(), LibraryId::new(), LibraryId::new());
+        let row = HomeSection::Newest;
+
+        // Nothing chosen: every row in the order of the tiles, before the
+        // row that mixes them all.
+        assert_eq!(
+            Preferences::default().home_sections_shown(&[films, series]),
+            vec![
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                row(films),
+                row(series),
+                HomeSection::RecentlyAdded
+            ]
+        );
+
+        // A library added since comes after the last row placed, even one
+        // hidden; a library removed takes its row with it.
         let chosen = Preferences {
-            home_order: vec![LibraryKind::Anime, LibraryKind::Shows, LibraryKind::Anime],
+            home_sections: vec![
+                row(series),
+                HomeSection::Band,
+                row(films),
+                row(gone),
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded,
+            ],
+            hidden_home_sections: vec![row(films)],
+            ..Preferences::default()
+        };
+        assert_eq!(
+            chosen.home_sections_shown(&[films, tests, series]),
+            vec![
+                row(series),
+                HomeSection::Band,
+                row(tests),
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded
+            ]
+        );
+    }
+
+    #[test]
+    fn the_tiles_follow_the_order_chosen_then_the_kinds() {
+        let (films, tests, anime, music) =
+            (LibraryId::new(), LibraryId::new(), LibraryId::new(), LibraryId::new());
+        let libraries = [
+            (music, LibraryKind::Music),
+            (tests, LibraryKind::Movies),
+            (anime, LibraryKind::Anime),
+            (films, LibraryKind::Movies),
+        ];
+
+        // Nothing chosen: by kind, in the order everybody starts with, and in
+        // the order given within a kind.
+        assert_eq!(
+            Preferences::default().libraries_in_order(&libraries),
+            vec![tests, films, anime, music]
+        );
+
+        // Chosen, with a library named twice and one that is gone: the order
+        // first, then the rest by kind.
+        let chosen = Preferences {
+            home_order: vec![anime, LibraryId::new(), films, anime],
             ..Preferences::default()
         }
         .normalised();
-        assert_eq!(
-            chosen.home_order,
-            vec![
-                LibraryKind::Anime,
-                LibraryKind::Shows,
-                LibraryKind::Movies,
-                LibraryKind::Series,
-                LibraryKind::HomeMedia,
-                LibraryKind::Music,
-            ]
-        );
-        assert_eq!(chosen.place_on_the_home_page(LibraryKind::Anime), 0);
-        assert_eq!(chosen.place_on_the_home_page(LibraryKind::Movies), 2);
-
-        assert_eq!(
-            Preferences::default().normalised().home_order,
-            LibraryKind::every().to_vec()
-        );
+        assert_eq!(chosen.home_order.len(), 3);
+        assert_eq!(chosen.libraries_in_order(&libraries), vec![anime, films, tests, music]);
     }
 
     #[test]

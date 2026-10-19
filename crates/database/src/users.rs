@@ -455,28 +455,27 @@ impl Database {
     }
 }
 
-/// The order of a home page as it is stored: the names of the kinds, joined by
-/// commas.
-fn written_order(order: &[LibraryKind]) -> String {
+/// The order of a home page as it is stored: the libraries, joined by commas.
+fn written_order(order: &[LibraryId]) -> String {
     order
         .iter()
-        .map(|kind| kind.as_str())
+        .map(LibraryId::to_db_string)
         .collect::<Vec<_>>()
         .join(",")
 }
 
-/// The order of a home page read back. A name nobody knows is dropped rather
-/// than locking the account out.
-fn read_order(stored: &str) -> Vec<LibraryKind> {
-    stored.split(',').filter_map(LibraryKind::parse).collect()
+/// The order of a home page read back. Anything that is not a library is
+/// dropped rather than locking the account out.
+fn read_order(stored: &str) -> Vec<LibraryId> {
+    stored.split(',').filter_map(|library| library.parse().ok()).collect()
 }
 
 /// Sections of a home page as they are kept, and read back the same way as
-/// the kinds of library.
+/// the order.
 fn written_sections(sections: &[HomeSection]) -> String {
     sections
         .iter()
-        .map(|section| section.as_str())
+        .map(|section| section.name())
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -1319,6 +1318,7 @@ mod tests {
     #[tokio::test]
     async fn preferences_are_clamped_on_the_way_in_and_on_the_way_out() {
         let database = database().await;
+        let (anime, films) = (LibraryId::new(), LibraryId::new());
         let created = database
             .create_user("victor", None, &Permissions::administrator())
             .await
@@ -1340,12 +1340,12 @@ mod tests {
             buttons_in_the_bar: vec![HeaderButton::Search],
             backdrop: Backdrop::None,
             backdrop_light: 7,
-            home_order: vec![LibraryKind::Anime, LibraryKind::Movies],
+            home_order: vec![anime, films],
             step_back_seconds: 0,
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
             subtitle_mode: SubtitleMode::OnlyForced,
-            home_sections: vec![HomeSection::Newest(LibraryKind::Anime)],
+            home_sections: vec![HomeSection::Newest(anime)],
             hidden_home_sections: vec![HomeSection::Band],
             resume_rewind_seconds: 15,
             resume_rules: ResumeRules {
@@ -1419,11 +1419,7 @@ mod tests {
         assert_eq!(loaded.preferences.subtitle_mode, SubtitleMode::OnlyForced);
         assert_eq!(
             loaded.preferences.home_sections[..3],
-            [
-                HomeSection::Newest(LibraryKind::Anime),
-                HomeSection::Band,
-                HomeSection::CarryOn,
-            ]
+            [HomeSection::Newest(anime), HomeSection::Band, HomeSection::CarryOn]
         );
         assert_eq!(loaded.preferences.hidden_home_sections, vec![HomeSection::Band]);
         assert_eq!(loaded.preferences.resume_rewind_seconds, 15);
@@ -1437,17 +1433,7 @@ mod tests {
                 min_seconds: 30,
             }
         );
-        assert_eq!(
-            loaded.preferences.home_order,
-            vec![
-                LibraryKind::Anime,
-                LibraryKind::Movies,
-                LibraryKind::Series,
-                LibraryKind::HomeMedia,
-                LibraryKind::Shows,
-                LibraryKind::Music,
-            ]
-        );
+        assert_eq!(loaded.preferences.home_order, vec![anime, films]);
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::NightDialogue

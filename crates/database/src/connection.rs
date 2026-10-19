@@ -596,7 +596,10 @@ mod tests {
             .expect("preferences written");
         }
 
-        crate::MIGRATOR.run(&pool).await.expect("migrated");
+        crate::MIGRATOR
+            .run_to(52, &pool)
+            .await
+            .expect("migrated to a section per kind");
 
         let rows: Vec<(String, String, String)> = sqlx::query_as(
             "SELECT user_id, home_sections, hidden_home_sections
@@ -621,6 +624,104 @@ mod tests {
             ]
             .map(|(id, sections, hidden)| {
                 (id.to_string(), sections.to_string(), hidden.to_string())
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn the_order_and_the_rows_of_kinds_become_those_of_their_libraries() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(118, &pool)
+            .await
+            .expect("migrated to just before a home page per library");
+        // Two libraries of films, named so their order is not that of their
+        // identifiers, one of series, none of anime.
+        for (id, name, kind) in [
+            ("b-films", "Films", "movies"),
+            ("a-tests", "Tests", "movies"),
+            ("c-series", "Series", "series"),
+        ] {
+            sqlx::query(
+                "INSERT INTO libraries (id, name, kind, created_at, updated_at)
+                 VALUES (?, ?, ?, '2026-10-19T00:00:00Z', '2026-10-19T00:00:00Z')",
+            )
+            .bind(id)
+            .bind(name)
+            .bind(kind)
+            .execute(&pool)
+            .await
+            .expect("library written");
+        }
+        for (id, order, sections, hidden) in [
+            (
+                "chosen",
+                "series,anime,movies",
+                "newest:anime,band,newest:series,carry_on,up_next,newest:movies,recently_added",
+                "newest:movies,up_next",
+            ),
+            (
+                "unnamed",
+                "anime",
+                "band,carry_on,up_next,newest:anime,newest:music,recently_added",
+                "",
+            ),
+        ] {
+            sqlx::query(
+                "INSERT INTO users (id, name, created_at) VALUES (?, ?, '2026-10-19T00:00:00Z')",
+            )
+            .bind(id)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("account written");
+            sqlx::query(
+                "INSERT INTO user_preferences (user_id, home_order, home_sections, hidden_home_sections)
+                 VALUES (?, ?, ?, ?)",
+            )
+            .bind(id)
+            .bind(order)
+            .bind(sections)
+            .bind(hidden)
+            .execute(&pool)
+            .await
+            .expect("preferences written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+            "SELECT user_id, home_order, home_sections, hidden_home_sections
+             FROM user_preferences ORDER BY user_id",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("read");
+        assert_eq!(
+            rows,
+            [
+                (
+                    "chosen",
+                    "c-series,b-films,a-tests",
+                    "band,newest:c-series,carry_on,up_next,newest:b-films,newest:a-tests,recently_added",
+                    "newest:b-films,newest:a-tests,up_next",
+                ),
+                (
+                    // The kinds it did not name come after, in the order
+                    // everybody starts with; the rows of kinds holding no
+                    // library leave no hole.
+                    "unnamed",
+                    "b-films,a-tests,c-series",
+                    "band,carry_on,up_next,recently_added",
+                    "",
+                ),
+            ]
+            .map(|(id, order, sections, hidden)| {
+                (id.to_string(), order.to_string(), sections.to_string(), hidden.to_string())
             })
         );
     }

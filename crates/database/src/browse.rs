@@ -169,10 +169,9 @@ pub struct BrowseRequest {
     pub watch_later_only: bool,
     /// Only the works of libraries of one kind, whichever libraries those are.
     ///
-    /// A row of films on a home page means every film on the server, and a
-    /// collection spread over four disks is four libraries of the same kind.
-    /// Asking by kind is what lets one row hold them all without the caller
-    /// having to know which libraries exist.
+    /// Searching among the films means every film on the server, whatever
+    /// library holds it. Asking by kind is what lets one grid hold them all
+    /// without the caller having to know which libraries exist.
     pub library_kind: Option<LibraryKind>,
     /// Only the works of libraries a catalogue describes, leaving out what
     /// people filmed and photographed themselves: among films and series, a

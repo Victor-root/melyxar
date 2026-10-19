@@ -6,7 +6,7 @@
 //! like the browser without any rule being written twice.
 
 use melyxar_core::id::{LibraryId, WorkId};
-use melyxar_core::user::{HomeSection, User};
+use melyxar_core::user::{HomeSection, Preferences, User};
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
@@ -78,7 +78,8 @@ pub struct Home {
     pub up_next: Vec<UpNext>,
     /// Everything newest, whatever kind it is.
     pub recently_added: WorkPage,
-    /// One row per kind of library this server really holds, newest first.
+    /// One row per library this viewer sees, newest first, in the order of
+    /// their tiles. Music has its own row, drawn apart.
     pub shelves: Vec<Shelf>,
     pub works: i64,
     pub awaiting_identification: i64,
@@ -86,22 +87,23 @@ pub struct Home {
     /// chose. Every row above is sent whatever this says: the banner is made
     /// of what was left halfway and what has just arrived, shown or not.
     pub sections: Vec<HomeSection>,
-    /// The kinds of library in the order this viewer chose, for the tiles that
-    /// lead to them, music's among them: the shelves above hold no music.
-    pub kind_order: Vec<LibraryKind>,
+    /// The libraries this viewer sees in the order they chose, for the tiles
+    /// that lead to them, music's among them: the shelves above hold no music.
+    pub library_order: Vec<LibraryId>,
 }
 
-/// One row of the home page, for one kind of library.
+/// One row of the home page, for one library.
 ///
-/// Built from the libraries that are really there rather than from a written
-/// list of kinds: a server with no anime has no row of anime, and a server
-/// with two libraries of films has one row holding both.
+/// One per library rather than per kind: a library made apart, films kept for
+/// trials say, is made apart to stay apart, and a collection spread over
+/// several disks is one library holding several folders.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shelf {
+    pub library: LibraryId,
     pub kind: LibraryKind,
     pub cards: Vec<WorkCard>,
-    /// The newest works of that kind a provider or a person named, for the
-    /// fan of posters on the tile that leads to it.
+    /// The newest works of that library a provider or a person named, for
+    /// the fan of posters on the tile that leads to it.
     pub fan: Vec<WorkCard>,
 }
 
@@ -185,7 +187,7 @@ const IN_THE_HERO: i64 = 5;
 /// How many cards one kind's row holds.
 const ON_A_SHELF: i64 = 24;
 
-/// How many posters the tile of one kind fans out at its widest.
+/// How many posters the tile of one library fans out at its widest.
 const IN_A_FAN: i64 = 5;
 
 /// Every library this viewer may see, with what it holds and what the server
@@ -348,6 +350,9 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     // works to print two numbers is a home page nobody waits for.
     let counted = crate::reach::counted_for(state, who, library_id).await?;
 
+    let seen = libraries(state, who).await?;
+    let library_order = in_their_order(&seen, &who.preferences);
+
     Ok(Home {
         // Not drawn and so not worked out: dressing its candidates is the
         // dearest part of the page, and nobody would see the result.
@@ -358,12 +363,12 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         hero_at_random: who.preferences.banner_at_random,
         carry_on,
         up_next,
-        shelves: the_shelves(state, who).await?,
+        shelves: the_shelves(state, who, &seen, &library_order).await?,
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
-        sections: who.preferences.home_sections_shown(),
-        kind_order: who.preferences.home_order.clone(),
+        sections: who.preferences.home_sections_shown(&library_order),
+        library_order,
     })
 }
 
@@ -524,37 +529,62 @@ fn dressed_in_full(dressed: &Dressed) -> bool {
         && !dressed.genres.is_empty()
 }
 
-/// One row per kind of library this server really holds, in the order this
-/// account chose.
-///
-/// Read from the libraries themselves rather than from a written list of
-/// kinds, so a server with no anime has no row of anime and nobody has to
-/// remember to add one the day a kind is invented. A kind holding several
-/// libraries gets one row across all of them, which is what somebody means by
-/// "films" when their films are spread over four disks.
-async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
-    let mut kinds: Vec<LibraryKind> = Vec::new();
-    for library in libraries(state, who).await? {
-        // Music has no card to show yet: the model is there, nothing fills it.
-        if library.kind != LibraryKind::Music && !kinds.contains(&library.kind) {
-            kinds.push(library.kind);
-        }
-    }
-    kinds.sort_by_key(|kind| who.preferences.place_on_the_home_page(*kind));
+/// The libraries given, in the order these preferences lay out their tiles.
+fn in_their_order(seen: &[LibrarySummary], preferences: &Preferences) -> Vec<LibraryId> {
+    preferences.libraries_in_order(
+        &seen
+            .iter()
+            .map(|library| (library.id, library.kind))
+            .collect::<Vec<_>>(),
+    )
+}
 
+/// How these preferences lay out this viewer's home page among the libraries
+/// they see: every library in the order of its tile, and every section shown
+/// or hidden in its order, the row of a library added since among them. What
+/// a settings screen offers to rearrange.
+pub async fn home_layout(
+    state: &AppState,
+    who: &User,
+    preferences: &Preferences,
+) -> Result<(Vec<LibraryId>, Vec<HomeSection>)> {
+    let order = in_their_order(&libraries(state, who).await?, preferences);
+    let sections = preferences.home_sections_laid_out(&order);
+    Ok((order, sections))
+}
+
+/// The newest works of each library this viewer sees, in the order of their
+/// tiles.
+///
+/// Read from the libraries themselves rather than from a written list, so a
+/// server with no anime has no row of anime and a library added has its row
+/// at once.
+async fn the_shelves(
+    state: &AppState,
+    who: &User,
+    seen: &[LibrarySummary],
+    order: &[LibraryId],
+) -> Result<Vec<Shelf>> {
     let mut shelves = Vec::new();
-    for kind in kinds {
+    for id in order {
+        let Some(library) = seen.iter().find(|library| library.id == *id) else {
+            continue;
+        };
+        // Music has no card to show: its row is drawn from its albums.
+        if library.kind == LibraryKind::Music {
+            continue;
+        }
         let newest = BrowseRequest {
-            library_kind: Some(kind),
+            library_id: Some(library.id),
             order: WorkOrder::AddedAt,
             descending: true,
             limit: ON_A_SHELF,
             ..Default::default()
         };
         let page = browse(state, &newest, who).await?;
-        // Asked apart from the row: the newest arrivals of a kind are often
-        // files nobody has named yet, and a fan drawn from those alone is a
-        // fan of holes on a library full of posters.
+        // Asked apart from the row: the newest arrivals of a library are
+        // often files nobody has named yet, and a fan drawn from those alone
+        // is a fan of holes on a library full of posters.
         let fan = browse(
             state,
             &BrowseRequest {
@@ -566,7 +596,8 @@ async fn the_shelves(state: &AppState, who: &User) -> Result<Vec<Shelf>> {
         )
         .await?;
         shelves.push(Shelf {
-            kind,
+            library: library.id,
+            kind: library.kind,
             cards: page.cards,
             fan: fan.cards,
         });
@@ -956,15 +987,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_row_exists_for_each_kind_of_library_and_for_no_other() {
-        let (_directory, state, _, viewer) = state_with_films(&["Quiet Harbour"]).await;
+    async fn a_row_exists_for_each_library_and_for_no_other() {
+        let (_directory, state, library_id, viewer) = state_with_films(&["Quiet Harbour"]).await;
 
         let page = home(&state, None, &viewer).await.expect("read");
         assert_eq!(
-            page.shelves.iter().map(|shelf| shelf.kind).collect::<Vec<_>>(),
-            vec![LibraryKind::Movies],
-            "a server with only films has one row, and no empty row of anime"
+            page.shelves.iter().map(|shelf| shelf.library).collect::<Vec<_>>(),
+            vec![library_id],
+            "a server with one library of films has one row, and no empty row of anime"
         );
+        assert_eq!(page.shelves[0].kind, LibraryKind::Movies);
         assert_eq!(page.shelves[0].cards.len(), 1);
         assert!(
             page.shelves[0].fan.is_empty(),
@@ -974,10 +1006,10 @@ mod tests {
 
     #[tokio::test]
     async fn the_rows_come_in_the_order_the_account_chose() {
-        let (directory, state, _, mut viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let (directory, state, films, mut viewer) = state_with_films(&["Quiet Harbour"]).await;
         // Named to sort before the films, which is what the rows used to
         // follow whatever anybody chose.
-        state
+        let anime = state
             .database()
             .create_library(
                 "Animation",
@@ -986,30 +1018,95 @@ mod tests {
                 &[("disk-one".to_string(), directory.path().join("anime"))],
             )
             .await
-            .expect("library created");
-        let kinds = |page: &Home| {
+            .expect("library created")
+            .id;
+        let libraries = |page: &Home| {
             page.shelves
                 .iter()
-                .map(|shelf| shelf.kind)
+                .map(|shelf| shelf.library)
                 .collect::<Vec<_>>()
         };
 
         let page = home(&state, None, &viewer).await.expect("read");
-        assert_eq!(kinds(&page), vec![LibraryKind::Movies, LibraryKind::Anime]);
+        assert_eq!(libraries(&page), vec![films, anime], "by kind until somebody chooses");
 
         viewer.preferences = melyxar_core::user::Preferences {
-            home_order: vec![LibraryKind::Anime],
+            home_order: vec![anime],
             ..viewer.preferences
         }
         .normalised();
         let page = home(&state, None, &viewer).await.expect("read");
-        assert_eq!(kinds(&page), vec![LibraryKind::Anime, LibraryKind::Movies]);
+        assert_eq!(libraries(&page), vec![anime, films]);
+        assert_eq!(page.library_order, vec![anime, films]);
+    }
+
+    #[tokio::test]
+    async fn a_second_library_of_films_has_its_own_row_and_keeps_to_it() {
+        // The films kept for trials, made into a library of their own, are
+        // not to mix with the films somebody watches.
+        let (directory, state, films, viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let trials = state
+            .database()
+            .create_library(
+                "Tests",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), directory.path().join("tests"))],
+            )
+            .await
+            .expect("library created")
+            .id;
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(page.shelves.len(), 2, "one row each, not one for every film");
+        let row_of = |library| {
+            page.shelves
+                .iter()
+                .find(|shelf| shelf.library == library)
+                .expect("a row")
+        };
+        assert_eq!(row_of(films).cards.len(), 1);
+        assert!(row_of(trials).cards.is_empty(), "nothing of the other library in it");
+        assert!(page.sections.contains(&HomeSection::Newest(trials)));
+        assert!(page.sections.contains(&HomeSection::Newest(films)));
+    }
+
+    #[tokio::test]
+    async fn the_settings_are_offered_every_library_one_added_since_among_them() {
+        let (directory, state, films, viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let anime = state
+            .database()
+            .create_library(
+                "Animation",
+                LibraryKind::Anime,
+                "fr",
+                &[("disk-one".to_string(), directory.path().join("anime"))],
+            )
+            .await
+            .expect("library created")
+            .id;
+        let chosen = melyxar_core::user::Preferences {
+            home_order: vec![anime],
+            home_sections: vec![HomeSection::Newest(anime), HomeSection::Band],
+            hidden_home_sections: vec![HomeSection::Newest(anime)],
+            ..viewer.preferences.clone()
+        }
+        .normalised();
+
+        let (order, sections) = home_layout(&state, &viewer, &chosen).await.expect("read");
+        assert_eq!(order, vec![anime, films], "the library nobody placed comes last");
         assert_eq!(
-            page.kind_order.first(),
-            Some(&LibraryKind::Anime),
-            "the order is handed over whole, for the tile of music too"
+            sections,
+            vec![
+                HomeSection::Newest(anime),
+                HomeSection::Newest(films),
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::RecentlyAdded,
+            ],
+            "a hidden row is offered still, and the new one comes after the last row"
         );
-        assert!(page.kind_order.contains(&LibraryKind::Music));
     }
 
     #[tokio::test]
@@ -1026,14 +1123,20 @@ mod tests {
 
     #[tokio::test]
     async fn a_hidden_section_is_left_out_of_the_page_but_its_rows_still_come() {
-        let (_directory, state, _library_id, mut viewer) =
+        let (_directory, state, library_id, mut viewer) =
             state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
         assert_eq!(
             home(&state, None, &viewer).await.expect("read").sections,
-            HomeSection::every().to_vec()
+            vec![
+                HomeSection::Band,
+                HomeSection::CarryOn,
+                HomeSection::UpNext,
+                HomeSection::Newest(library_id),
+                HomeSection::RecentlyAdded,
+            ]
         );
 
-        let films = HomeSection::Newest(LibraryKind::Movies);
+        let films = HomeSection::Newest(library_id);
         viewer.preferences.home_sections = vec![films, HomeSection::Band];
         viewer.preferences.hidden_home_sections = vec![HomeSection::RecentlyAdded];
         viewer.preferences = viewer.preferences.normalised();
