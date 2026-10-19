@@ -30,12 +30,15 @@
 //! how much memory and time it takes while it works.
 
 use std::collections::VecDeque;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use melyxar_core::time::Millis;
 
 use crate::command::{rebuilt_size, Command, VideoEncode};
-use crate::hardware::{Card, CardPath, A_GENERATED_PICTURE_SIZE, TRIAL_HEIGHT};
+use crate::hardware::{
+    Card, CardPath, A_GENERATED_PICTURE_SIZE, LOOKED_AT_HEIGHT, TRIAL_HEIGHT,
+};
 
 /// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
 /// authors them for.
@@ -401,27 +404,56 @@ pub(crate) fn trial_arguments(card: &Card, encoder: &str, layout: &str) -> Vec<S
         ),
     };
     let before = card.filters_for(Some(TRIAL_HEIGHT), false, false).join(",");
-    trial_with(card.opening_arguments(false, false), &before, &place, encoder)
+    trial_with(card.opening_arguments(false, false), &before, &place, encoder, None)
 }
 
 /// What the tool is handed to prove that a card whose recipe keeps the
 /// converted picture on it lays a subtitle there, through Vulkan, and passes
-/// the painted picture on to its encoder.
-pub(crate) fn trial_on_vulkan_arguments(card: &Card, encoder: &str) -> Vec<String> {
+/// the painted picture on to its encoder, which writes it to `to` to be
+/// looked at. At a film's size, where a card lays a picture out as it will
+/// for a film.
+pub(crate) fn trial_on_vulkan_arguments(card: &Card, encoder: &str, to: &Path) -> Vec<String> {
     let place = on_vulkan(
-        Some(rebuilt_size(A_GENERATED_PICTURE_SIZE, Some(TRIAL_HEIGHT))),
+        Some(rebuilt_size(A_GENERATED_PICTURE_SIZE, Some(LOOKED_AT_HEIGHT))),
         A_SUBTITLE_SIZE,
         card.back_up(true),
     );
     let before = card
-        .filters_until_it_comes_down(Some(TRIAL_HEIGHT), true, false)
+        .filters_until_it_comes_down(Some(LOOKED_AT_HEIGHT), true, false)
         .join(",");
-    trial_with(card.opening_arguments(false, true), &before, &place, encoder)
+    trial_with(card.opening_arguments(false, true), &before, &place, encoder, Some(to))
 }
 
-/// A trial that lays the made subtitle onto the made picture at `place`.
-fn trial_with(opening: Vec<String>, before: &str, place: &Place, encoder: &str) -> Vec<String> {
+/// The same picture and subtitle laid by the processor and written to `to`,
+/// which the card's is set beside.
+pub(crate) fn painted_by_the_processor_arguments(to: &Path) -> Vec<String> {
+    let picture = rebuilt_size(A_GENERATED_PICTURE_SIZE, Some(LOOKED_AT_HEIGHT));
+    let place = Place::Processor {
+        sized: Some(fitted(A_SUBTITLE_SIZE, picture)),
+        back_up: None,
+    };
+    let before = format!("scale={}:{}", picture.0, picture.1);
+    trial_with(Vec::new(), &before, &place, WRITES_WHAT_IS_LOOKED_AT, Some(to))
+}
+
+/// The encoder the processor writes a picture to be looked at with: one
+/// every build of the tool carries.
+const WRITES_WHAT_IS_LOOKED_AT: &str = "mjpeg";
+
+/// A trial that lays the made subtitle onto the made picture at `place`,
+/// written to `to` when it is to be looked at.
+fn trial_with(
+    opening: Vec<String>,
+    before: &str,
+    place: &Place,
+    encoder: &str,
+    to: Option<&Path>,
+) -> Vec<String> {
     let graph = graph("[0:0]", Some(before), 1, place);
+    let written = match to {
+        Some(to) => vec!["-frames:v".to_string(), "1".to_string(), "-y".to_string(), to.display().to_string()],
+        None => vec!["-f".to_string(), "null".to_string(), "-".to_string()],
+    };
 
     ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
@@ -439,12 +471,10 @@ fn trial_with(opening: Vec<String>, before: &str, place: &Place, encoder: &str) 
                 PAINTED,
                 "-c:v",
                 encoder,
-                "-f",
-                "null",
-                "-",
             ]
             .map(str::to_string),
         )
+        .chain(written)
         .collect()
 }
 

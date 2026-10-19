@@ -37,7 +37,7 @@ mod trials;
 mod vaapi;
 
 pub use search::{CardSearch, Trial};
-pub(crate) use trials::{A_GENERATED_PICTURE_SIZE, TRIAL_HEIGHT};
+pub(crate) use trials::{A_GENERATED_PICTURE_SIZE, LOOKED_AT_HEIGHT, TRIAL_HEIGHT};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;

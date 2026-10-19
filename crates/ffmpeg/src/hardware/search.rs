@@ -11,7 +11,7 @@ use serde::Serialize;
 
 use super::trials::{
     looks_right, run_briefly, sample_in, try_it, try_reading, wide_gamut_sample, witness_writer,
-    Sample, TrialInput, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
+    written_alike, Sample, TrialInput, LOOKED_AT_HEIGHT, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
 };
 use super::{encoder_name, Card, CardPath, ToneMapping};
 use crate::painting;
@@ -309,7 +309,7 @@ impl CardSearch {
             });
             if worked
                 && (!recipe.looked_at_in_its_trial()
-                    || self.it_looks_right_and_paints(ffmpeg, card, floor, sample, *recipe, &chain).await)
+                    || self.it_looks_right_and_paints(ffmpeg, card, floor, sample, *recipe).await)
             {
                 return Some(*recipe);
             }
@@ -317,11 +317,12 @@ impl CardSearch {
         None
     }
 
-    /// For a recipe converting through Vulkan: whether what comes out looks
-    /// like the processor's own conversion, and, for one that keeps the
-    /// picture on the card, whether a subtitle made of pictures is laid there
-    /// too. Kept only when it holds, so a card is never left with a picture
-    /// that is wrong, nor with a film it could take before and no longer can.
+    /// For a recipe converting through Vulkan: whether what comes out at a
+    /// film's size looks like the processor's own conversion, and, for one
+    /// that keeps the picture on the card, whether a subtitle made of
+    /// pictures laid there looks like the processor's too. Kept only when it
+    /// holds, so a card is never left with a picture that is wrong, nor with
+    /// a film it could take before and no longer can.
     async fn it_looks_right_and_paints(
         &mut self,
         ffmpeg: &Path,
@@ -329,15 +330,15 @@ impl CardSearch {
         floor: &str,
         sample: &Sample,
         recipe: ToneMapping,
-        chain: &str,
     ) -> bool {
         let reads = recipe.read_in_its_trial();
+        let chain = card.chain(Some(LOOKED_AT_HEIGHT), Some(recipe), reads).join(",");
         let (looks, said) = looks_right(
             ffmpeg,
             card.opening(reads, Some(recipe)),
             floor,
             sample.path(),
-            chain,
+            &chain,
         )
         .await;
         self.trials.push(Trial {
@@ -354,11 +355,28 @@ impl CardSearch {
             tone_mapping: Some(recipe),
             ..card.clone()
         };
-        let (paints, said) =
-            match run_briefly(ffmpeg, painting::trial_on_vulkan_arguments(&trying, floor)).await {
-                Ok(outcome) => outcome,
-                Err(said) => (false, said),
-            };
+        let by_the_card = Sample::named("melyxar-card-painted");
+        let by_the_processor = Sample::named("melyxar-processor-painted");
+        let (paints, said) = match (
+            run_briefly(
+                ffmpeg,
+                painting::trial_on_vulkan_arguments(&trying, floor, by_the_card.path()),
+            )
+            .await,
+            run_briefly(
+                ffmpeg,
+                painting::painted_by_the_processor_arguments(by_the_processor.path()),
+            )
+            .await,
+        ) {
+            (Ok((true, _)), Ok((true, _))) => {
+                written_alike(ffmpeg, by_the_card.path(), by_the_processor.path()).await
+            }
+            (Ok((false, said)) | Err(said), _) => (false, said),
+            (_, Ok((false, said)) | Err(said)) => {
+                (false, format!("the processor could not paint the same: {said}"))
+            }
+        };
         self.trials.push(Trial {
             what: format!("{}_paints", recipe.trial_name()),
             device: card.device.display().to_string(),
