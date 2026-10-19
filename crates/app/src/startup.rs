@@ -269,6 +269,13 @@ pub async fn detect_media_tools(config: &Config) -> (Option<ToolPaths>, Option<C
                 hardware = capabilities.hardware.len(),
                 "media tools ready"
             );
+            if tools.ffmpeg != std::path::Path::new(melyxar_ffmpeg::FFMPEG_MELYXAR) {
+                tracing::warn!(
+                    encoder = %tools.ffmpeg.display(),
+                    "not ffmpeg-melyxar: a wide gamut film started part way through may be \
+                     refused by the card"
+                );
+            }
             report_the_card(&capabilities);
             (Some(tools), Some(capabilities))
         }
