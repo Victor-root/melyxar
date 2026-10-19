@@ -20,7 +20,7 @@ import {
   SoundIcon,
 } from "../../icons";
 import { languagesAmong } from "../../languages";
-import { kindsOnTheHomePage, nameOfKind, useLibraries } from "../../libraries";
+import { KINDS, kindsHeld, nameOfKind, useLibraries } from "../../libraries";
 import { DeviceOptimization } from "../../calibration/DeviceOptimization";
 import { rulesOf, withRulesOf } from "../../resuming";
 import { usePreferences } from "../../screens/settings";
@@ -140,7 +140,7 @@ function Resuming({ preferences }: { preferences: Preferences }) {
   if (!kept) {
     return null;
   }
-  const kinds = kindsOnTheHomePage(kept.home_order, libraries.all);
+  const kinds = kindsHeld(KINDS, libraries.all).filter((kind) => kind !== "music");
 
   return (
     <Panel icon={HistoryIcon} title={t("settings.resuming")} lead={t("settings.resuming_why")}>

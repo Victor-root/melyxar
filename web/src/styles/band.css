@@ -6,9 +6,9 @@
  * The band of ways in, under the banner
  * ----------------------------------------------------------------------- */
 
-/* One tile per kind of library, side by side in the order the categories are
-   offered in, and all of one width. Laid out from the left rather than shared
-   out over the page: two kinds are two tiles next to each other, not one at
+/* One tile per library, side by side in the order the account chose, and all
+   of one width. Laid out from the left rather than shared out over the page:
+   two libraries are two tiles next to each other, not one at
    each end of a line. They wrap rather than scroll, since there are never
    more than a handful and a band that scrolls sideways hides the very thing
    it is there to offer.

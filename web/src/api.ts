@@ -736,27 +736,22 @@ export interface Home {
     episode_number: number | null;
   })[];
   recently_added: Card[];
-  /** One row per kind of library this server really holds: its newest
-      works for the row of that kind, and the newest of them somebody named
-      for the fan of posters on the tile that leads to it. */
-  shelves: { kind: LibraryKind; cards: Card[]; fan: Card[] }[];
+  /** One row per library this viewer sees, music aside, in the order of
+      their tiles: its newest works for its row, and the newest of them
+      somebody named for the fan of posters on the tile that leads to it. */
+  shelves: { library: string; kind: LibraryKind; cards: Card[]; fan: Card[] }[];
   works: number;
   awaiting_identification: number;
   /** The sections this viewer shows below the banner, in their order. */
   sections: HomeSection[];
-  /** The kinds of library in the order this viewer chose, which the tiles
-      leading to them follow, music's among them. */
-  kind_order: LibraryKind[];
+  /** The libraries this viewer sees in the order they chose, which the
+      tiles leading to them follow, music's among them. */
+  library_order: string[];
 }
 
-/** One section of the home page below its banner: the newest of each kind
- *  of library is a section of its own. */
-export type HomeSection =
-  | "band"
-  | "carry_on"
-  | "up_next"
-  | "recently_added"
-  | `newest:${LibraryKind}`;
+/** One section of the home page below its banner: the newest of each
+ *  library is a section of its own, named after the library. */
+export type HomeSection = "band" | "carry_on" | "up_next" | "recently_added" | `newest:${string}`;
 
 /** One of the buttons of the bar at the top, on it or in the account's menu
  *  next to it. */
@@ -1813,10 +1808,12 @@ export interface ViewerPreferences {
   /** Whether this account is left off the list the sign in screen offers.
    *  Hidden, it still signs in: the name is typed rather than pressed. */
   hidden_at_the_door: boolean;
-  /** Every kind of library, in the order the home page lays them out. */
-  home_order: LibraryKind[];
-  /** Every section of the home page below its banner, in its order, and
-   *  those it leaves off. */
+  /** Every library this account sees, in the order the tiles of the home
+   *  page lay them out. */
+  home_order: string[];
+  /** Every section of the home page below its banner, the row of each
+   *  library this account sees among them, in its order, and those it
+   *  leaves off. */
   home_sections: HomeSection[];
   hidden_home_sections: HomeSection[];
   /** How far the player's two step buttons jump, in seconds. */

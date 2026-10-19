@@ -4,14 +4,14 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { kindOfSection, laidOut, sectionsOnOffer } from "./home";
+import { laidOut, libraryOfSection } from "./home";
 
 describe("the sections of the home page", () => {
   it("pairs the two rows of what is under way when they follow each other", () => {
-    expect(laidOut(["band", "carry_on", "up_next", "newest:movies", "recently_added"])).toEqual([
+    expect(laidOut(["band", "carry_on", "up_next", "newest:0199-films", "recently_added"])).toEqual([
       "band",
       ["carry_on", "up_next"],
-      "newest:movies",
+      "newest:0199-films",
       "recently_added",
     ]);
     expect(laidOut(["up_next", "carry_on"])).toEqual([["up_next", "carry_on"]]);
@@ -26,17 +26,9 @@ describe("the sections of the home page", () => {
   });
 });
 
-describe("the rows of each kind of library", () => {
-  it("say which kind they show, and only they do", () => {
-    expect(kindOfSection("newest:home_media")).toBe("home_media");
-    expect(kindOfSection("recently_added")).toBeUndefined();
-  });
-
-  it("are offered only for the kinds this account holds", () => {
-    expect(
-      sectionsOnOffer(["band", "newest:movies", "newest:anime", "newest:music", "recently_added"], [
-        "movies",
-      ]),
-    ).toEqual(["band", "newest:movies", "recently_added"]);
+describe("the rows of each library", () => {
+  it("say which library they show, and only they do", () => {
+    expect(libraryOfSection("newest:0199-tests")).toBe("0199-tests");
+    expect(libraryOfSection("recently_added")).toBeUndefined();
   });
 });

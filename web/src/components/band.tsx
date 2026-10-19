@@ -6,12 +6,13 @@
  * came here knowing what they wanted is looking for, and which used to mean
  * reading the bar at the top word by word.
  *
- * One wide tile per kind of library this server really holds, in the order
- * this account chose for its home page. Each one fans out a few real posters out of that
- * library rather than standing on one borrowed still: a still is one film
- * seen wide, and what a way in has to say is "this is a shelf of these".
+ * One wide tile per library this viewer sees, in the order this account
+ * chose for its home page, two libraries of films two tiles. Each one fans
+ * out a few real posters out of that library rather than standing on one
+ * borrowed still: a still is one film seen wide, and what a way in has to
+ * say is "this is a shelf of these".
  *
- * The posters are the newest works of that kind somebody named, which the
+ * The posters are the newest works of that library somebody named, which the
  * server sends apart from the row further down the page: the newest arrivals
  * are often files nobody has named yet, and a fan drawn from those is a fan of
  * holes on a library full of posters. Newest first, so the same tile shows
@@ -26,9 +27,8 @@
  */
 
 import { Link } from "react-router-dom";
-import type { Card, Home, Library, LibraryKind, Picture } from "../api";
+import type { Card, Home, Library, Picture } from "../api";
 import { useShownPicture } from "./picture";
-import { nameOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { ChevronRightIcon, KindIcon } from "../icons";
 
@@ -79,18 +79,22 @@ export function Band({
 }: {
   shelves: Shelf[];
   libraries: Library[];
-  /** The kinds of library in the order the viewer chose. */
-  order: LibraryKind[];
-  /** The tile of music, drawn by music, which takes its place among the
-      others by the same order. Nothing when there is no music to lead to. */
-  music?: React.ReactNode;
+  /** The libraries in the order the viewer chose, music's among them. */
+  order: string[];
+  /** The tile of one library of music, drawn by music, which takes its
+      place among the others by the same order. */
+  music: (library: Library) => React.ReactNode;
 }) {
   const { t } = useSettings();
 
-  const tiles = [
-    ...shelves.map((shelf) => ({ kind: shelf.kind, tile: <Tile shelf={shelf} libraries={libraries} /> })),
-    ...(music ? [{ kind: "music" as LibraryKind, tile: music }] : []),
-  ].sort((one, other) => order.indexOf(one.kind) - order.indexOf(other.kind));
+  const tiles = order.flatMap((id): { id: string; tile: React.ReactNode }[] => {
+    const shelf = shelves.find((one) => one.library === id);
+    if (shelf) {
+      return [{ id, tile: <Tile shelf={shelf} libraries={libraries} /> }];
+    }
+    const library = libraries.find((one) => one.id === id && one.kind === "music");
+    return library ? [{ id, tile: music(library) }] : [];
+  });
 
   if (tiles.length === 0) {
     return null;
@@ -98,8 +102,8 @@ export function Band({
   return (
     <nav className="band" aria-label={t("home.band")}>
       <Water />
-      {tiles.map(({ kind, tile }) => (
-        <div key={kind} className="band-slot">
+      {tiles.map(({ id, tile }) => (
+        <div key={id} className="band-slot">
           {tile}
         </div>
       ))}
@@ -187,11 +191,12 @@ export function fanOf(cards: Card[]): Card[] {
 function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
   const { t } = useSettings();
   const fan = fanOf(shelf.fan);
+  const name = libraries.find((library) => library.id === shelf.library)?.name ?? t(`kind.${shelf.kind}`);
 
   return (
     <Link
       className="band-tile"
-      to={whereAKindLeads(shelf.kind, libraries)}
+      to={`/library/${shelf.library}`}
       style={{
         /* A breath of the front poster's own colour in the panel behind the
            fan, so two tiles side by side are not the same dark rectangle
@@ -243,7 +248,7 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
       <span className="band-words">
         <span className="band-name">
           <KindIcon kind={shelf.kind} size={17} />
-          {nameOfKind(shelf.kind, libraries, t)}
+          {name}
         </span>
       </span>
       <span className="band-arrow" aria-hidden="true">
