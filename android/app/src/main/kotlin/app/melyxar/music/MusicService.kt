@@ -27,8 +27,6 @@ class MusicService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        SoundTrace.say("service created engine=${MusicEngine.ifMade() != null}")
-        SoundTrace.lookAround(this, "service created")
         val engine = MusicEngine.ifMade() ?: return
         // Melyxar's own mark in the status bar, rather than a player's.
         setMediaNotificationProvider(
@@ -49,12 +47,6 @@ class MusicService : MediaSessionService() {
                 }
             }
             .build()
-    }
-
-    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
-        SoundTrace.say("notification updated foreground=$startInForegroundRequired")
-        super.onUpdateNotification(session, startInForegroundRequired)
-        SoundTrace.lookAround(this, "notification updated")
     }
 
     /**
