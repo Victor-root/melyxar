@@ -479,6 +479,15 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         length: now?.seconds ?? (Number.isFinite(audio.duration) ? Math.floor(audio.duration) : 0),
         loaded: offset.current + bufferedTo(audio),
       });
+      // Read again from the deck on every beat rather than trusted to the
+      // play and pause it said: one of those lost while the application was
+      // in the background left the button saying paused over a song playing.
+      setPlaying((was) => {
+        if (import.meta.env.DEV && was === audio.paused) {
+          console.debug("[music] playing corrected from the deck", { was, paused: audio.paused });
+        }
+        return !audio.paused;
+      });
       if (!now || audio.paused) {
         return;
       }
