@@ -10,8 +10,8 @@ use std::path::Path;
 use serde::Serialize;
 
 use super::trials::{
-    run_briefly, sample_in, try_it, try_reading, wide_gamut_sample, witness_writer, Sample,
-    TrialInput, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
+    looks_right, run_briefly, sample_in, try_it, try_reading, wide_gamut_sample, witness_writer,
+    Sample, TrialInput, TRIAL_HEIGHT, WIDE_GAMUT_CODEC,
 };
 use super::{encoder_name, Card, CardPath, ToneMapping};
 use crate::painting;
@@ -307,11 +307,65 @@ impl CardSearch {
                 worked,
                 said,
             });
-            if worked {
+            if worked
+                && (!recipe.looked_at_in_its_trial()
+                    || self.it_looks_right_and_paints(ffmpeg, card, floor, sample, *recipe, &chain).await)
+            {
                 return Some(*recipe);
             }
         }
         None
+    }
+
+    /// For a recipe converting through Vulkan: whether what comes out looks
+    /// like the processor's own conversion, and, for one that keeps the
+    /// picture on the card, whether a subtitle made of pictures is laid there
+    /// too. Kept only when it holds, so a card is never left with a picture
+    /// that is wrong, nor with a film it could take before and no longer can.
+    async fn it_looks_right_and_paints(
+        &mut self,
+        ffmpeg: &Path,
+        card: &Card,
+        floor: &str,
+        sample: &Sample,
+        recipe: ToneMapping,
+        chain: &str,
+    ) -> bool {
+        let reads = recipe.read_in_its_trial();
+        let (looks, said) = looks_right(
+            ffmpeg,
+            card.opening(reads, Some(recipe)),
+            floor,
+            sample.path(),
+            chain,
+        )
+        .await;
+        self.trials.push(Trial {
+            what: format!("{}_looks_right", recipe.trial_name()),
+            device: card.device.display().to_string(),
+            worked: looks,
+            said,
+        });
+        if !looks || !recipe.lays_on_vulkan() {
+            return looks;
+        }
+
+        let trying = Card {
+            tone_mapping: Some(recipe),
+            ..card.clone()
+        };
+        let (paints, said) =
+            match run_briefly(ffmpeg, painting::trial_on_vulkan_arguments(&trying, floor)).await {
+                Ok(outcome) => outcome,
+                Err(said) => (false, said),
+            };
+        self.trials.push(Trial {
+            what: format!("{}_paints", recipe.trial_name()),
+            device: card.device.display().to_string(),
+            worked: paints,
+            said,
+        });
+        paints
     }
 
     /// Establishes whether the card lays a subtitle made of pictures onto a

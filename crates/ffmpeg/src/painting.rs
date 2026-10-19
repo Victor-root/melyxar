@@ -54,6 +54,16 @@ pub(crate) enum Place<'a> {
         sized: Option<(i32, i32)>,
         back_up: Option<&'static str>,
     },
+    /// On the card, through Vulkan, where the picture is once its colours
+    /// are converted. Vulkan's filter only places what it lays, at a corner
+    /// given in pixels: the subtitle arrives at its size, and its corner is
+    /// worked out here, both when the size of the picture is known. `after`
+    /// is what passes the picture on to the card's encoder.
+    Vulkan {
+        sized: Option<(i32, i32)>,
+        at: Option<(i32, i32)>,
+        after: Option<&'static str>,
+    },
     Card {
         way: CardPath,
         layout: &'a str,
@@ -68,6 +78,16 @@ impl<'a> Place<'a> {
     /// Where a rebuild lays a subtitle: on the card when it was proved to and
     /// the picture stays up there, otherwise on the processor.
     pub(crate) fn of(encode: &'a VideoEncode) -> Self {
+        if let Some((card, _)) = encode
+            .card()
+            .filter(|(card, _)| card.lays_on_vulkan(encode.tone_map))
+        {
+            return on_vulkan(
+                encode.rebuilt_size(),
+                CANVAS,
+                card.back_up(encode.tone_map),
+            );
+        }
         let proved = encode
             .card()
             .filter(|(card, _)| !card.brings_the_picture_down(encode.tone_map))
@@ -93,11 +113,26 @@ impl<'a> Place<'a> {
         }
     }
 
-    /// Whether the subtitle is laid after a card's chain, on the processor:
-    /// the chain then stops where the picture comes down.
+    /// Whether the subtitle is laid part way through a card's chain, on the
+    /// processor or through Vulkan: the chain then stops where it is laid,
+    /// and what follows comes after the subtitle.
     pub(crate) fn after_the_card(&self, encode: &VideoEncode) -> bool {
-        matches!(self, Self::Processor { .. }) && encode.card().is_some()
+        matches!(self, Self::Processor { .. } | Self::Vulkan { .. }) && encode.card().is_some()
     }
+}
+
+/// Where Vulkan lays a subtitle drawn on `canvas` onto a picture rebuilt at
+/// `picture`: brought to its size first, then set centred at the foot.
+fn on_vulkan<'a>(
+    picture: Option<(i32, i32)>,
+    canvas: (i32, i32),
+    after: Option<&'static str>,
+) -> Place<'a> {
+    let sized = picture.map(|picture| fitted(canvas, picture));
+    let at = picture
+        .zip(sized)
+        .map(|((width, height), (laid_across, laid_down))| ((width - laid_across) / 2, height - laid_down));
+    Place::Vulkan { sized, at, after }
 }
 
 /// The size a subtitle drawn on `canvas` is brought to before a card lays it
@@ -165,6 +200,27 @@ pub(crate) fn graph(picture: &str, before: Option<&str>, subtitle: i32, place: &
                 None => format!("{picture}[0:{subtitle}]overlay=shortest=0{back_up}{PAINTED}"),
             }
         }
+        // Handed up to Vulkan in the layout the converted picture is in,
+        // which Vulkan's filter asks the two of to share.
+        Place::Vulkan { sized, at, after } => {
+            let picture = match before {
+                Some(filters) => format!("{picture}{filters}[picture];[picture]"),
+                None => picture.to_string(),
+            };
+            let brought = sized
+                .map(|(width, height)| format!("scale={width}:{height},"))
+                .unwrap_or_default();
+            let placed = at
+                .map(|(across, down)| format!("=x={across}:y={down}"))
+                .unwrap_or_default();
+            let after = after
+                .map(|filters| format!(",{filters}"))
+                .unwrap_or_default();
+            format!(
+                "[0:{subtitle}]{brought}format=bgra,hwupload[words];\
+                 {picture}[words]overlay_vulkan{placed}{after}{PAINTED}"
+            )
+        }
         // How a card lays it is its path's business.
         Place::Card { way, layout, sized } => {
             way.driver()
@@ -181,6 +237,7 @@ pub fn announce(session: &str, index: u32, command: &Command) {
     let place = Place::of(encode);
     let painted_by = match (&place, encode.card()) {
         (Place::Card { .. }, _) => "card",
+        (Place::Vulkan { .. }, _) => "card, through Vulkan, where the picture is once converted",
         (Place::Processor { .. }, Some((card, _))) if card.brings_the_picture_down(encode.tone_map) => {
             "processor, the picture comes down from the card once its colours are converted"
         }
@@ -189,7 +246,7 @@ pub fn announce(session: &str, index: u32, command: &Command) {
     };
     let (layout, subtitle_sized_to) = match place {
         Place::Card { layout, sized, .. } => (Some(layout), sized),
-        Place::Processor { sized, .. } => (None, sized),
+        Place::Processor { sized, .. } | Place::Vulkan { sized, .. } => (None, sized),
     };
     tracing::debug!(
         session,
@@ -344,12 +401,32 @@ pub(crate) fn trial_arguments(card: &Card, encoder: &str, layout: &str) -> Vec<S
         ),
     };
     let before = card.filters_for(Some(TRIAL_HEIGHT), false, false).join(",");
-    let graph = graph("[0:0]", Some(&before), 1, &place);
+    trial_with(card.opening_arguments(false, false), &before, &place, encoder)
+}
+
+/// What the tool is handed to prove that a card whose recipe keeps the
+/// converted picture on it lays a subtitle there, through Vulkan, and passes
+/// the painted picture on to its encoder.
+pub(crate) fn trial_on_vulkan_arguments(card: &Card, encoder: &str) -> Vec<String> {
+    let place = on_vulkan(
+        Some(rebuilt_size(A_GENERATED_PICTURE_SIZE, Some(TRIAL_HEIGHT))),
+        A_SUBTITLE_SIZE,
+        card.back_up(true),
+    );
+    let before = card
+        .filters_until_it_comes_down(Some(TRIAL_HEIGHT), true, false)
+        .join(",");
+    trial_with(card.opening_arguments(false, true), &before, &place, encoder)
+}
+
+/// A trial that lays the made subtitle onto the made picture at `place`.
+fn trial_with(opening: Vec<String>, before: &str, place: &Place, encoder: &str) -> Vec<String> {
+    let graph = graph("[0:0]", Some(before), 1, place);
 
     ["-hide_banner", "-nostdin", "-loglevel", "error"]
         .map(str::to_string)
         .into_iter()
-        .chain(card.opening_arguments(false, false))
+        .chain(opening)
         .chain(
             [
                 "-f",
@@ -385,6 +462,35 @@ const A_PICTURE_AND_A_SUBTITLE: &str = "testsrc2=size=640x360:rate=25:duration=0
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn through_vulkan_the_subtitle_arrives_at_its_size_and_is_set_at_the_foot() {
+        let place = on_vulkan(Some((1920, 800)), CANVAS, Some("hwmap=derive_device=vaapi"));
+        let Place::Vulkan { sized, at, .. } = &place else {
+            panic!("laid through Vulkan");
+        };
+        assert_eq!(*sized, Some((1422, 800)), "fitted to the picture's height");
+        assert_eq!(*at, Some((249, 0)), "centred across, at the foot");
+        assert_eq!(
+            graph("[0:0]", Some("libplacebo=format=bgra"), 3, &place),
+            "[0:3]scale=1422:800,format=bgra,hwupload[words];\
+             [0:0]libplacebo=format=bgra[picture];[picture][words]\
+             overlay_vulkan=x=249:y=0,hwmap=derive_device=vaapi[painted]"
+        );
+
+        let wide = on_vulkan(Some((1280, 720)), CANVAS, None);
+        let Place::Vulkan { sized, at, .. } = &wide else {
+            panic!("laid through Vulkan");
+        };
+        assert_eq!((*sized, *at), (Some((1280, 720)), Some((0, 0))));
+
+        // The size of the picture unknown: laid as it comes, in the corner,
+        // rather than not at all.
+        assert_eq!(
+            graph("[0:0]", None, 3, &on_vulkan(None, CANVAS, None)),
+            "[0:3]format=bgra,hwupload[words];[0:0][words]overlay_vulkan[painted]"
+        );
+    }
 
     #[test]
     fn on_the_processor_the_subtitle_is_laid_on_the_picture_where_it_is() {
