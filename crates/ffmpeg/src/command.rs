@@ -1594,7 +1594,7 @@ mod tests {
         assert!(graph.starts_with("[0:5]scale=1920:1080[words];[0:v:0]libplacebo=w=-2:h=1080:"), "{graph}");
         assert!(
             graph.contains(
-                ",hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv,format=nv12[picture];"
+                ",hwdownload,format=rgba,scale=out_color_matrix=bt709:out_range=tv,format=nv12[picture];"
             ),
             "{graph}"
         );
@@ -1636,9 +1636,9 @@ mod tests {
 
         assert_eq!(
             command.picture_painted_with_subtitles().expect("painted"),
-            "[0:4]scale=1280:720[words];[0:v:0]libplacebo=w=-2:h=720:format=bgra\
+            "[0:4]scale=1280:720[words];[0:v:0]libplacebo=w=-2:h=720:format=rgba\
              :colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=pc\
-             :tonemapping=auto,hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv\
+             :tonemapping=auto,hwdownload,format=rgba,scale=out_color_matrix=bt709:out_range=tv\
              ,format=nv12[picture];\
              [picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'\
              ,format=nv12,hwupload=derive_device=vaapi[painted]"
@@ -1675,8 +1675,8 @@ mod tests {
         let painted = command.picture_painted_with_subtitles().expect("painted");
         assert_eq!(
             painted,
-            "[0:4]scale=1280:720,format=bgra,hwupload[words];\
-             [0:v:0]libplacebo=w=-2:h=720:format=bgra:colorspace=bt709\
+            "[0:4]scale=1280:720,format=rgba,hwupload[words];\
+             [0:v:0]libplacebo=w=-2:h=720:format=rgba:colorspace=bt709\
              :color_primaries=bt709:color_trc=bt709:range=pc:tonemapping=auto[picture];\
              [picture][words]overlay_vulkan=x=224:y=0,hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv[painted]"
@@ -1694,7 +1694,7 @@ mod tests {
         );
         assert_eq!(
             args[position(&args, "-vf").expect("a chain") + 1],
-            "libplacebo=w=-2:h=720:format=bgra:colorspace=bt709:color_primaries=bt709\
+            "libplacebo=w=-2:h=720:format=rgba:colorspace=bt709:color_primaries=bt709\
              :color_trc=bt709:range=pc:tonemapping=auto,hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
         );
