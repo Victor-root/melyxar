@@ -928,13 +928,12 @@ fn how_to_rebuild(
                 .unwrap_or_else(|| rate_for(height.or(source_height), &codec)),
         ),
         // A film that says its picture sits inside a larger frame is read by
-        // the processor, whatever the card can do with its codec. A card hands
-        // its pictures on as whole frames and nothing in the chain that
-        // follows knows how to cut the edges off one, so the film would be
-        // rebuilt frame and all: a wide picture stretched to fill a shape it
-        // never had. The processor cuts them as it reads, which is what every
-        // still image pulled out of these files has always shown.
-        reads_the_film: !says_it_is_cut(tracks)
+        // the card only when the card can size a picture. It hands its
+        // pictures on as whole frames, and its filters are told where the
+        // picture sits and the size it comes out at; a card that cannot size
+        // one would rebuild the film frame and all, a wide picture stretched
+        // to fill a shape it never had. The processor cuts it as it reads.
+        reads_the_film: (!says_it_is_cut(tracks) || card.can_scale)
             && codec_of(tracks).is_some_and(|codec| card.reads_for(&codec, decision.tone_map)),
         codec,
         card: Some(card.clone()),
@@ -944,9 +943,14 @@ fn how_to_rebuild(
 
 /// Whether the film says its picture sits inside a larger frame.
 fn says_it_is_cut(tracks: &[Track]) -> bool {
-    tracks.iter().any(|track| match &track.kind {
-        melyxar_core::media::TrackKind::Video(details) => details.margins.is_some(),
-        _ => false,
+    margins_of(tracks).is_some()
+}
+
+/// What the film says to cut off the frame its picture sits in, when it does.
+fn margins_of(tracks: &[Track]) -> Option<melyxar_core::media::Margins> {
+    tracks.iter().find_map(|track| match &track.kind {
+        melyxar_core::media::TrackKind::Video(details) => details.margins,
+        _ => None,
     })
 }
 
@@ -1125,6 +1129,7 @@ fn encode_for(
     encode.tone_map = plan.decision.tone_map;
     encode.burn_in_subtitle = painted_on;
     encode.picture_size = size_of(&plan.tracks);
+    encode.margins = margins_of(&plan.tracks);
     // Key frames on the segment boundaries, which is what lets any segment be
     // produced on its own rather than only after the one before it.
     encode.keyframe_interval = Some(melyxar_streaming::playlist::SEGMENT_DURATION);
@@ -3033,13 +3038,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_film_that_says_part_of_its_frame_is_not_the_picture_is_read_by_the_processor() {
-        // A card hands its pictures on as whole frames, and nothing in the
-        // chain that follows knows how to cut the edges off one: the film
-        // would be rebuilt frame and all, a wide picture stretched to fill a
-        // shape it never had. The processor cuts them as it reads, which is
-        // what every still image pulled out of these files has always shown.
-        // The card still rebuilds the picture; it just does not read the film.
+    async fn a_film_that_says_part_of_its_frame_is_not_the_picture_is_read_by_a_card_that_sizes() {
+        // A card hands its pictures on as whole frames: its filters are told
+        // where the picture sits and how large it comes out. One that cannot
+        // size a picture would rebuild the film frame and all, a wide picture
+        // stretched to fill a shape it never had, so the processor reads it
+        // and cuts it as it reads; the card still rebuilds the picture.
         let (_directory, state, user_id, source_id) =
             state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
                 let mut picture = video(id, "hevc", 2160);
@@ -3070,23 +3074,30 @@ mod tests {
         .expect("a plan");
 
         let reads_hevc = a_card(&["h264", "hevc"], true);
-        let rebuild = how_to_rebuild(
-            &plan.decision,
-            &plan.tracks,
-            &ClientProfile::conservative_browser(),
-            Some(&reads_hevc),
-            false,
-            &all_codecs(),
-            None,
-        )
-        .expect("this picture is rebuilt");
+        let rebuild_with = |card: &melyxar_ffmpeg::Card| {
+            how_to_rebuild(
+                &plan.decision,
+                &plan.tracks,
+                &ClientProfile::conservative_browser(),
+                Some(card),
+                false,
+                &all_codecs(),
+                None,
+            )
+            .expect("this picture is rebuilt")
+        };
 
+        let sizing = rebuild_with(&reads_hevc);
+        assert!(sizing.on_a_card());
+        assert!(sizing.reads_the_film, "the card sizes the picture it cuts");
+
+        let not_sizing = rebuild_with(&melyxar_ffmpeg::Card {
+            can_scale: false,
+            ..reads_hevc.clone()
+        });
+        assert!(not_sizing.on_a_card(), "the card is still what rebuilds the picture");
         assert!(
-            rebuild.on_a_card(),
-            "the card is still what rebuilds the picture"
-        );
-        assert!(
-            !rebuild.reads_the_film,
+            !not_sizing.reads_the_film,
             "the card was proved to read this codec, and still must not read this film"
         );
     }

@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use melyxar_core::time::Millis;
 use melyxar_core::user::DownmixMethod;
 
-use crate::hardware::Card;
+use crate::hardware::{Card, Cut, Sizing};
 use crate::painting;
 
 /// The input file and where to start reading it.
@@ -139,6 +139,9 @@ pub struct VideoEncode {
     /// subtitle is then brought to its size from this, before it is handed
     /// up.
     pub picture_size: Option<(i32, i32)>,
+    /// What the film says to cut off each edge of the frame its picture is
+    /// carried in, when it says so.
+    pub margins: Option<melyxar_core::media::Margins>,
 }
 
 /// How often the tool is asked to say where it has got to, in seconds.
@@ -176,6 +179,7 @@ impl VideoEncode {
             keyframe_interval: None,
             burn_in_subtitle: None,
             picture_size: None,
+            margins: None,
         }
     }
 
@@ -198,6 +202,7 @@ impl VideoEncode {
             keyframe_interval: None,
             burn_in_subtitle: None,
             picture_size: None,
+            margins: None,
         })
     }
 
@@ -205,6 +210,27 @@ impl VideoEncode {
     pub(crate) fn rebuilt_size(&self) -> Option<(i32, i32)> {
         self.picture_size
             .map(|picture| rebuilt_size(picture, self.scale_to_height))
+    }
+
+    /// How large the picture comes out of the card's filters.
+    ///
+    /// Cut from its frame only when the card reads the film: a film the
+    /// processor reads is cut as it is read, and arrives at its own size.
+    fn sizing(&self) -> Sizing {
+        let cut = match (self.card(), self.margins, self.picture_size) {
+            (Some((_, true)), Some(margins), Some(picture)) => Some(Cut {
+                left: margins.left,
+                top: margins.top,
+                width: picture.0,
+                height: picture.1,
+                out: rebuilt_size(picture, self.scale_to_height),
+            }),
+            _ => None,
+        };
+        Sizing {
+            height: self.scale_to_height,
+            cut,
+        }
     }
 
     /// The card doing the work, and whether it reads the film as well.
@@ -946,11 +972,11 @@ fn picture_filter_chain(encode: &VideoEncode, until_it_comes_down: bool) -> Opti
     if let Some((card, reads_the_film)) = encode.card() {
         let filters = match until_it_comes_down {
             true => card.filters_until_it_comes_down(
-                encode.scale_to_height,
+                encode.sizing(),
                 encode.tone_map,
                 reads_the_film,
             ),
-            false => card.filters_for(encode.scale_to_height, encode.tone_map, reads_the_film),
+            false => card.filters_for(encode.sizing(), encode.tone_map, reads_the_film),
         };
         return (!filters.is_empty()).then(|| filters.join(","));
     }
@@ -1772,6 +1798,71 @@ mod tests {
         let filters = &args[position(&args, "-vf").expect("a filter chain is present") + 1];
         assert_eq!(filters, "scale_vaapi=w=-2:h=1080,tonemap_vaapi=format=nv12");
         assert!(!filters.contains("hwupload"), "{filters}");
+    }
+
+    /// The picture filters of a film framed 1920 by 1080 whose picture is the
+    /// 800 lines in the middle, rebuilt by `card`.
+    fn cut_filters(card: &Card, reads_the_film: bool, tone_map: bool, height: Option<i32>) -> String {
+        let mut encode = VideoEncode::on_a_card(card, "h264", reads_the_film).expect("proved");
+        encode.picture_size = Some((1920, 800));
+        encode.margins = Some(melyxar_core::media::Margins {
+            top: 140,
+            bottom: 140,
+            left: 0,
+            right: 0,
+        });
+        encode.scale_to_height = height;
+        encode.tone_map = tone_map;
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+        args[position(&args, "-vf").expect("a filter chain is present") + 1].clone()
+    }
+
+    #[test]
+    fn a_picture_cut_from_its_frame_on_the_card_is_given_its_own_size() {
+        // The card's filter cuts what the film asks, but sizes what comes out
+        // by the whole frame: told nothing, it stretches the picture to it.
+        assert_eq!(cut_filters(&a_card(), true, false, None), "scale_vaapi=w=1920:h=800:format=nv12");
+        assert_eq!(
+            cut_filters(&a_card(), true, false, Some(720)),
+            "scale_vaapi=w=1728:h=720:format=nv12"
+        );
+        assert_eq!(
+            cut_filters(&a_card(), true, true, None),
+            "scale_vaapi=w=1920:h=800,tonemap_vaapi=format=nv12",
+            "sized before its colours are converted, keeping its bits"
+        );
+        assert_eq!(
+            cut_filters(&an_nvidia_card(), true, false, Some(720)),
+            "scale_cuda=w=1728:h=720:format=nv12"
+        );
+    }
+
+    #[test]
+    fn a_picture_cut_from_its_frame_is_told_to_vulkan_where_it_sits() {
+        // Vulkan reads none of what the film says about its frame.
+        let card = Card {
+            tone_mapping: Some(crate::hardware::ToneMapping::VulkanOnTheCard { vulkan_reads: true }),
+            ..a_card()
+        };
+        let filters = cut_filters(&card, true, true, Some(720));
+        assert!(
+            filters.starts_with("libplacebo=crop_x=0:crop_y=140:crop_w=1920:crop_h=800:w=1728:h=720:"),
+            "{filters}"
+        );
+    }
+
+    #[test]
+    fn a_picture_the_processor_cut_as_it_read_is_not_cut_again() {
+        assert_eq!(
+            cut_filters(&a_card(), false, false, Some(720)),
+            "format=nv12,hwupload,scale_vaapi=w=-2:h=720:format=nv12"
+        );
     }
 
     #[test]
