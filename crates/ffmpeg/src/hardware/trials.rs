@@ -365,8 +365,7 @@ const LOOKED_AT: (usize, usize) = (64, 36);
 ///
 /// A card may lay out a large picture in memory unlike a small one, and a
 /// picture handed across in a layout its receiver misreads comes out as
-/// scattered stripes. Seen on an RX 6600 with a film rebuilt at 3840 by 1600,
-/// after the same trial at 180 and at 1080 lines had come out right.
+/// scattered stripes, so it is looked at as large as a film can be.
 pub(crate) const LOOKED_AT_HEIGHT: i32 = 2160;
 
 /// How far the card's picture may stand from the processor's, on average, in
@@ -413,8 +412,6 @@ pub(super) async fn looks_right(
                 &sample.display().to_string(),
                 "-vf",
                 filters,
-                "-frames:v",
-                "1",
                 "-c:v",
                 encoder,
                 "-y",
@@ -477,8 +474,12 @@ pub(super) async fn written_alike(ffmpeg: &Path, card: &Path, processor: &Path) 
 /// What a trial that writes no more than it must says to the tool first.
 const QUIET: [&str; 4] = ["-hide_banner", "-nostdin", "-loglevel", "error"];
 
-/// One picture of `input`, after `before`, brought to `LOOKED_AT` in the
-/// layout of four brightness samples to one of each colour.
+/// The last picture of `input`, after `before`, brought to `LOOKED_AT` in
+/// the layout of four brightness samples to one of each colour.
+///
+/// The last rather than the first: a card writes every picture of a trial as
+/// it does a film's, one after the other, and a picture passed across while
+/// the one before is still in use comes out wrong only after the first.
 async fn looked_at(ffmpeg: &Path, input: &Path, before: &str) -> std::result::Result<Vec<u8>, String> {
     let (across, down) = LOOKED_AT;
     let arguments = QUIET.map(str::to_string).into_iter().chain(
@@ -486,7 +487,7 @@ async fn looked_at(ffmpeg: &Path, input: &Path, before: &str) -> std::result::Re
             "-i",
             &input.display().to_string(),
             "-vf",
-            &format!("{before}scale={across}:{down},format=yuv420p"),
+            &format!("{before}scale={across}:{down},format=yuv420p,reverse"),
             "-frames:v",
             "1",
             "-f",

@@ -146,13 +146,19 @@ impl Driver for Vaapi {
     // picture came down to the processor and is handed up again; on it, the
     // picture passes from Vulkan to the card where it is, and the card's own
     // filter brings it to the layout the encoder takes, in standard range.
+    //
+    // Mapped in reverse: the card makes the picture and Vulkan draws into it,
+    // so it is laid out the way the card reads it. Made by Vulkan and read by
+    // the card, a film rebuilt at 3840 by 1600 on an RX 6600 came out as a
+    // strip of scattered colour above black, though a trial at that size had
+    // come out right. Jellyfin passes it across the same way on AMD's cards.
     fn back_up(&self, recipe: Option<ToneMapping>) -> Option<&'static str> {
         match recipe {
             Some(ToneMapping::VulkanBesideTheCard { .. }) => {
                 Some("format=nv12,hwupload=derive_device=vaapi")
             }
             Some(ToneMapping::VulkanOnTheCard { .. }) => Some(
-                "hwmap=derive_device=vaapi,format=vaapi,\
+                "hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
                  scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv",
             ),
             _ => None,
@@ -534,7 +540,7 @@ mod tests {
 
     #[test]
     fn on_the_card_the_converted_picture_passes_to_the_encoder_without_coming_down() {
-        let passed_on = "hwmap=derive_device=vaapi,format=vaapi,\
+        let passed_on = "hwmap=derive_device=vaapi:reverse=1,format=vaapi,\
              scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
             .to_string();
         let read_by_vulkan = on_the_card(true).filters_for(Some(1080), true, true);

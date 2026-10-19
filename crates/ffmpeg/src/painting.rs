@@ -451,7 +451,7 @@ fn trial_with(
 ) -> Vec<String> {
     let graph = graph("[0:0]", Some(before), 1, place);
     let written = match to {
-        Some(to) => vec!["-frames:v".to_string(), "1".to_string(), "-y".to_string(), to.display().to_string()],
+        Some(to) => vec!["-y".to_string(), to.display().to_string()],
         None => vec!["-f".to_string(), "null".to_string(), "-".to_string()],
     };
 
