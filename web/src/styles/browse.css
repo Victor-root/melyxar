@@ -280,7 +280,10 @@
     margin: 0 2px 0 12px;
   }
 
-  @container (max-width: 780px) {
+  /* Measured on the longest piece, in French: three choices, putting files
+     in and the files nobody named want 805 points whole, 645 without the
+     names of the choices. */
+  @container (max-width: 840px) {
     .browse-label {
       display: none;
     }
@@ -290,7 +293,7 @@
     }
   }
 
-  @container (max-width: 620px) {
+  @container (max-width: 680px) {
     .browse-press .press-words {
       display: none;
     }
