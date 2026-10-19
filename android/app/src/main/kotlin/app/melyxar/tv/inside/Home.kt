@@ -33,6 +33,7 @@ import app.melyxar.R
 import app.melyxar.server.Album
 import app.melyxar.server.Card
 import app.melyxar.server.Home
+import app.melyxar.server.Shelf
 import app.melyxar.server.Slice
 import app.melyxar.server.albums
 import app.melyxar.tv.WatchNext
@@ -85,11 +86,11 @@ fun HomeScreen(comebacks: Int) {
     // Without the banner, the remote starts on the first library.
     val firstLibrary = remember { FocusRequester() }
     val home = loaded.ready
-    // The covers the tile of music fans out, which the server's shelves do
-    // not hold: the newest albums of every library of music, as on the web.
+    // The covers the tile of each library of music fans out, which the
+    // server's shelves do not hold: its newest albums, as on the web.
     val musicLibraries = chrome.libraries.filter { it.kind == "music" }.map { it.id }
     val newestAlbums = rememberLoaded("music:band:$musicLibraries", comebacks) {
-        inTurn(musicLibraries.map { albums(it, "added", false, Slice(0, COVERS_ASKED)).items }, COVERS_ASKED)
+        musicLibraries.associateWith { albums(it, "added", false, Slice(0, COVERS_ASKED)).items }
     }.value.ready.orEmpty()
     val context = LocalContext.current
     val api = LocalServer.current
@@ -160,11 +161,11 @@ fun HomeScreen(comebacks: Int) {
  *  cards of each of its rows. */
 private fun drawnOn(home: Home): List<Drawn> =
     home.hero.take(2).flatMap(::bannerDrawnOf) +
-        home.sections.flatMap { section -> cardsIn(section, home).take(CARDS_AHEAD).map { it.drawn(liesIn(section)) } }
+        home.sections.flatMap { section -> cardsIn(section, home).take(CARDS_AHEAD).map { it.drawn(liesIn(section, home)) } }
 
 private fun LazyListScope.sections(
     home: Home,
-    newestAlbums: List<Album>,
+    newestAlbums: Map<String, List<Album>>,
     open: (Card) -> Unit,
     memory: FocusMemory,
     band: Modifier,
@@ -194,12 +195,18 @@ private fun cardsIn(section: String, home: Home): List<Card> = when {
     section == "carry_on" -> home.carryOn.map { it.card }
     section == "up_next" -> home.upNext.map { it.card }
     section == "recently_added" -> home.recentlyAdded
-    section.startsWith("newest:") -> home.shelves.firstOrNull { it.kind == section.removePrefix("newest:") }?.cards.orEmpty()
+    section.startsWith("newest:") -> shelfOf(section, home)?.cards.orEmpty()
     else -> emptyList()
 }
 
-/** Whether the cards of the row [section] lie down, their stills shown. */
-private fun liesIn(section: String) = section == "carry_on" || section == "up_next" || section == "newest:home_media"
+/** The shelf of the library whose newest works the row [section] shows. */
+private fun shelfOf(section: String, home: Home): Shelf? =
+    home.shelves.firstOrNull { it.library == section.removePrefix("newest:") }
+
+/** Whether the cards of the row [section] lie down, their stills shown: what
+ *  is under way, and what people filmed themselves. */
+private fun liesIn(section: String, home: Home) =
+    section == "carry_on" || section == "up_next" || shelfOf(section, home)?.kind == "home_media"
 
 /**
  * The two rows of what is under way on one line while both hold on it, as
@@ -243,7 +250,7 @@ private fun Together(firstSection: String, secondSection: String, first: Int, se
 private fun LazyListScope.section(
     section: String,
     home: Home,
-    newestAlbums: List<Album>,
+    newestAlbums: Map<String, List<Album>>,
     open: (Card) -> Unit,
     memory: FocusMemory,
     band: Modifier,
@@ -253,7 +260,7 @@ private fun LazyListScope.section(
         section == "band" -> item("band") {
             val chrome = LocalChrome.current
             Box(band) {
-                Band(home.shelves, newestAlbums, chrome.libraries, home.kindOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory, firstLibrary)
+                Band(home.shelves, newestAlbums, chrome.libraries, home.libraryOrder, onOpen = { chrome.go(Place.Shelf(it)) }, memory, firstLibrary)
             }
         }
         section == "carry_on" || section == "up_next" -> if (cardsIn(section, home).isNotEmpty()) {
@@ -265,13 +272,14 @@ private fun LazyListScope.section(
             }
         }
         section.startsWith("newest:") -> {
-            val kind = section.removePrefix("newest:")
-            val cards = cardsIn(section, home)
+            val shelf = shelfOf(section, home)
+            val cards = shelf?.cards.orEmpty()
             section(section, cards) {
-                CardRow(newestOfKind(kind), Icons.ofKind(kind), cards, key = { it.id }) { card ->
+                val named = LocalChrome.current.libraries.firstOrNull { it.id == shelf?.library }?.name.orEmpty()
+                CardRow(stringResource(R.string.tv_newest_named, named), Icons.ofKind(shelf?.kind.orEmpty()), cards, key = { it.id }) { card ->
                     WorkCard(
                         card,
-                        lying = liesIn(section),
+                        lying = liesIn(section, home),
                         onClick = { open(card) },
                         modifier = Modifier.remembered(memory, "$section/${card.id}"),
                     )

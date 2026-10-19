@@ -35,29 +35,3 @@ fun whichEpisode(season: Int?, episode: Int?, title: String): String? {
     }
     return "${stringResource(R.string.tv_episode_short, season, episode)} · $title"
 }
-
-/** The name of a kind of library. */
-@Composable
-fun kindName(kind: String): String = stringResource(
-    when (kind) {
-        "series" -> R.string.tv_kind_series
-        "anime" -> R.string.tv_kind_anime
-        "shows" -> R.string.tv_kind_shows
-        "home_media" -> R.string.tv_kind_home_media
-        "music" -> R.string.tv_kind_music
-        else -> R.string.tv_kind_movies
-    },
-)
-
-/** The heading of the row of the newest works of a kind. */
-@Composable
-fun newestOfKind(kind: String): String = stringResource(
-    when (kind) {
-        "series" -> R.string.tv_newest_series
-        "anime" -> R.string.tv_newest_anime
-        "shows" -> R.string.tv_newest_shows
-        "home_media" -> R.string.tv_newest_home_media
-        "music" -> R.string.tv_newest_music
-        else -> R.string.tv_newest_movies
-    },
-)
