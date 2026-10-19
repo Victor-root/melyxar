@@ -11,7 +11,7 @@
 import { useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { api } from "../api";
-import type { Card, Home, HomeSection, Job, Library, LibraryKind } from "../api";
+import type { Card, Home, HomeSection, Job, Library } from "../api";
 import { useAsked } from "../asking";
 import { keep, recall } from "../kept";
 import { useMarks } from "../marks";
@@ -33,20 +33,9 @@ export function howFarIn(seconds: number, length: number | null): number | undef
   return Math.min(1, seconds / length);
 }
 
-/** The kind of library a section shows the newest of, when it is one of
- *  those. */
-export function kindOfSection(section: HomeSection): LibraryKind | undefined {
-  return section.startsWith("newest:") ? (section.slice("newest:".length) as LibraryKind) : undefined;
-}
-
-/** The sections a settings screen offers: every one, except the rows of
- *  kinds of library this account does not hold, which would lead nowhere.
- *  They keep their place all the same, for the day such a library comes. */
-export function sectionsOnOffer(sections: readonly HomeSection[], held: readonly LibraryKind[]): HomeSection[] {
-  return sections.filter((section) => {
-    const kind = kindOfSection(section);
-    return kind === undefined || held.includes(kind);
-  });
+/** The library a section shows the newest of, when it is one of those. */
+export function libraryOfSection(section: HomeSection): string | undefined {
+  return section.startsWith("newest:") ? section.slice("newest:".length) : undefined;
 }
 
 /** One section of the home page as it is laid out, or the two rows of what

@@ -1,6 +1,6 @@
 /*
- * The newest albums, for the home page: its row, and the covers fanned out
- * on the tile of music in the band of ways in.
+ * The newest albums of each library of music, for the home page: its row,
+ * and the covers fanned out on its tile in the band of ways in.
  *
  * Asked of music's own requests and drawn with music's own tiles: an album is
  * not a film's card, and the home page only gives it its place among the
@@ -12,7 +12,6 @@ import type { Library } from "../api";
 import { useAsked } from "../asking";
 import { Row, RowHead } from "../components/row";
 import { KindIcon } from "../icons";
-import { newestOfKind, whereAKindLeads } from "../libraries";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { Album } from "./api";
@@ -21,26 +20,12 @@ import { AlbumTile } from "./tiles";
 /** As many as a row of films holds. */
 const ON_A_SHELF = 20;
 
-/** The newest albums of several libraries as one row, taken in turn from
- *  each so that no library pushes the others out of it. */
-export function inTurn<T>(lists: T[][], room: number): T[] {
-  const taken: T[] = [];
-  for (let place = 0; taken.length < room && lists.some((list) => place < list.length); place += 1) {
-    for (const list of lists) {
-      if (place < list.length && taken.length < room) {
-        taken.push(list[place]);
-      }
-    }
-  }
-  return taken;
-}
+const NO_ALBUMS: Record<string, Album[]> = {};
 
-const NO_ALBUMS: Album[] = [];
-
-/** The newest albums of every library of music, read once for the whole
- *  home page and again whenever one of `readAgain` changes. Kept for when
- *  the page is walked back to, like the rest of it. */
-export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Album[] {
+/** The newest albums of each library of music, by library, read once for the
+ *  whole home page and again whenever one of `readAgain` changes. Kept for
+ *  when the page is walked back to, like the rest of it. */
+export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Record<string, Album[]> {
   const ids = libraries
     .filter((library) => library.kind === "music")
     .map((library) => library.id)
@@ -48,12 +33,11 @@ export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Alb
 
   const asked = useAsked(
     async (signal) => {
+      const each = ids ? ids.split(",") : [];
       const pages = await Promise.all(
-        (ids ? ids.split(",") : []).map((library) =>
-          music.albums(library, "added", false, 0, ON_A_SHELF, {}, signal),
-        ),
+        each.map((library) => music.albums(library, "added", false, 0, ON_A_SHELF, {}, signal)),
       );
-      return inTurn(pages.map((page) => page.items), ON_A_SHELF);
+      return Object.fromEntries(each.map((library, at) => [library, pages[at].items]));
     },
     [ids, ...readAgain],
     `home-albums:${ids}`,
@@ -61,7 +45,7 @@ export function useNewestAlbums(libraries: Library[], readAgain: unknown[]): Alb
   return asked.answer ?? NO_ALBUMS;
 }
 
-export function NewestMusic({ libraries, albums }: { libraries: Library[]; albums: Album[] }) {
+export function NewestMusic({ library, albums }: { library: Library; albums: Album[] }) {
   const { t } = useSettings();
   if (albums.length === 0) {
     return null;
@@ -70,8 +54,8 @@ export function NewestMusic({ libraries, albums }: { libraries: Library[]; album
     <section className="section">
       <RowHead
         mark={<KindIcon kind="music" size={24} />}
-        title={newestOfKind("music", libraries, t)}
-        to={whereAKindLeads("music", libraries)}
+        title={t("home.newest.named", { name: library.name })}
+        to={`/library/${library.id}`}
       />
       <Row>
         {albums.map((album) => (

@@ -13,8 +13,6 @@ import type { Library } from "../api";
 import { BandCover } from "../components/band";
 import { useShownPicture } from "../components/picture";
 import { ChevronRightIcon, KindIcon } from "../icons";
-import { nameOfKind, whereAKindLeads } from "../libraries";
-import { useSettings } from "../settings";
 import type { Album } from "./api";
 
 /** As many covers as the other tiles fan out posters. */
@@ -31,19 +29,15 @@ export function coversOf(albums: Album[]): Album[] {
   return [...drawn, ...bare].slice(0, IN_A_FAN);
 }
 
-export function MusicBandTile({ libraries, albums }: { libraries: Library[]; albums: Album[] }) {
-  const { t } = useSettings();
+export function MusicBandTile({ library, albums }: { library: Library; albums: Album[] }) {
   const fan = coversOf(albums);
   // The records are drawn the first time the pointer or the keyboard comes
   // to the tile, since nothing of them is seen before.
   const [woken, setWoken] = useState(false);
-  if (!libraries.some((library) => library.kind === "music")) {
-    return null;
-  }
   return (
     <Link
       className="band-tile band-tile-music"
-      to={whereAKindLeads("music", libraries)}
+      to={`/library/${library.id}`}
       onPointerEnter={() => setWoken(true)}
       onFocus={() => setWoken(true)}
       style={{ ["--tile-color" as string]: fan[0]?.color ?? "var(--surface-raised)" }}
@@ -66,7 +60,7 @@ export function MusicBandTile({ libraries, albums }: { libraries: Library[]; alb
       <span className="band-words">
         <span className="band-name">
           <KindIcon kind="music" size={17} />
-          {nameOfKind("music", libraries, t)}
+          {library.name}
         </span>
       </span>
       <span className="band-arrow" aria-hidden="true">

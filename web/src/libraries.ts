@@ -98,40 +98,9 @@ export function nameOfKind(kind: LibraryKind, libraries: Library[], t: Wording):
   return ofThatKind.length === 1 ? ofThatKind[0].name : t(`kind.${kind}`);
 }
 
-/** The title of the home page's row of what came in last in a category, named
- *  like the category itself. */
-export function newestOfKind(kind: LibraryKind, libraries: Library[], t: Wording): string {
-  const ofThatKind = librariesOfKind(kind, libraries);
-  return ofThatKind.length === 1
-    ? t("home.newest.named", { name: ofThatKind[0].name })
-    : t(`home.newest.${kind}`);
-}
-
-/**
- * Where a whole category leads.
- *
- * Straight into the library when a kind holds one, since a grid of everything
- * of that kind and the grid of that library are then the same page. Into a
- * grid narrowed to the kind when it holds several, because a collection of
- * films spread over four disks is one category and nobody wants to be asked
- * which disk they meant.
- */
-export function whereAKindLeads(kind: LibraryKind, libraries: Library[]): string {
-  const ofThatKind = librariesOfKind(kind, libraries);
-  return ofThatKind.length === 1 ? `/library/${ofThatKind[0].id}` : `/search?in=kind:${kind}`;
-}
-
-/** The kinds this account holds a library of, in the order it chose. */
+/** The kinds this account holds a library of, in the order given. */
 export function kindsHeld(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
   return order.filter((kind) => libraries.some((library) => library.kind === kind));
-}
-
-/**
- * The kinds the home page gives a tile, in the order this account chose.
- * Music has its own row, drawn apart, and no tile yet.
- */
-export function kindsOnTheHomePage(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
-  return kindsHeld(order, libraries).filter((kind) => kind !== "music");
 }
 
 /** How the cards of a kind are laid out: on their side for what somebody

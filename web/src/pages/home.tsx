@@ -4,10 +4,9 @@
  * The banner leads, then the sections below it in the order the viewer
  * chose in their settings, those they hid left out: the tiles leading to each
  * library, what was left halfway, what each started series is waiting on,
- * what arrived last, and the newest of each kind of library this server
- * really holds, a section each. The server says which, in which order. A row with nothing in it is
- * not drawn, so a server of films alone shows no empty row of anime and
- * nobody meets a heading standing over nothing.
+ * what arrived last, and the newest of each library this viewer sees, a
+ * section each. The server says which, in which order. A row with nothing in
+ * it is not drawn, so nobody meets a heading standing over nothing.
  *
  * Every row is the same card, which is what makes a mark pressed in one of
  * them show in all the others at once.
@@ -25,7 +24,7 @@ import { Row, RowHead } from "../components/row";
 import { howFarIn, laidOut, useHomeScreen } from "../screens/home";
 import { refusalKey } from "../i18n";
 import { whatIsLeft, whichEpisode } from "../readable";
-import { cardShapeOf, newestOfKind, whereAKindLeads } from "../libraries";
+import { cardShapeOf } from "../libraries";
 import { useSettings } from "../settings";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
@@ -115,20 +114,15 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
   }
 
   /* Each section as it is drawn, laid out below in the order the viewer
-     chose. The row of a kind of library this server does not hold has
-     nothing to draw, and is not drawn. */
+     chose. A section with nothing to draw is not drawn. */
   const sections: Partial<Record<HomeSection, React.ReactNode>> = {
     /* Where to go for somebody who already knows what they want. */
     band: (
       <Band
         shelves={home.shelves}
         libraries={libraries}
-        order={home.kind_order}
-        music={
-          libraries.some((library) => library.kind === "music") ? (
-            <MusicBandTile libraries={libraries} albums={newestAlbums} />
-          ) : undefined
-        }
+        order={home.library_order}
+        music={(library) => <MusicBandTile library={library} albums={newestAlbums[library.id] ?? []} />}
       />
     ),
 
@@ -208,21 +202,29 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       </section>
     ),
 
-    /* The newest of each kind of library this server really holds, a
-       section each. */
+    /* The newest of each library this viewer sees, a section each. */
     ...Object.fromEntries(
       home.shelves.map((shelf) => [
-        `newest:${shelf.kind}`,
+        `newest:${shelf.library}`,
         <Shelf
-          title={newestOfKind(shelf.kind, libraries, t)}
+          title={t("home.newest.named", {
+            name: libraries.find((library) => library.id === shelf.library)?.name ?? t(`kind.${shelf.kind}`),
+          })}
           mark={<KindIcon kind={shelf.kind} size={24} />}
           cards={shelf.cards}
           shape={cardShapeOf(shelf.kind)}
-          to={whereAKindLeads(shelf.kind, libraries)}
+          to={`/library/${shelf.library}`}
         />,
       ]),
     ),
-    "newest:music": <NewestMusic libraries={libraries} albums={newestAlbums} />,
+    ...Object.fromEntries(
+      libraries
+        .filter((library) => library.kind === "music")
+        .map((library) => [
+          `newest:${library.id}`,
+          <NewestMusic library={library} albums={newestAlbums[library.id] ?? []} />,
+        ]),
+    ),
   };
 
   return (
