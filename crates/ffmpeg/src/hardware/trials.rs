@@ -90,7 +90,7 @@ pub(super) struct Sample(PathBuf);
 impl Sample {
     /// A file of its own in the temporary folder: two trials running at
     /// once, or a server and its tests, never write over each other's.
-    fn named(name: &str) -> Self {
+    pub(super) fn named(name: &str) -> Self {
         static MADE: AtomicUsize = AtomicUsize::new(0);
         let count = MADE.fetch_add(1, Ordering::Relaxed);
         Self(std::env::temp_dir().join(format!("{name}-{}-{count}.mp4", std::process::id())))
@@ -357,8 +357,16 @@ pub(super) async fn try_it(
 }
 
 /// How small a picture is brought before it is looked at: enough to tell its
-/// colours, nothing more.
+/// colours and its shapes, nothing more.
 const LOOKED_AT: (usize, usize) = (64, 36);
+
+/// The height a picture is looked at after a card made it: that of a film.
+///
+/// A card may lay out a large picture in memory unlike a small one, and a
+/// picture handed across in a layout its receiver misreads comes out as
+/// scattered stripes. Seen on an RX 6600 at a film's size, after a trial at
+/// `TRIAL_HEIGHT` had come out right.
+pub(crate) const LOOKED_AT_HEIGHT: i32 = 1080;
 
 /// How far the card's picture may stand from the processor's, on average, in
 /// brightness and in each of the two colour planes, out of 255.
@@ -370,12 +378,22 @@ const LOOKED_AT: (usize, usize) = (64, 36);
 const ALLOWED_BRIGHTNESS: f64 = 90.0;
 const ALLOWED_COLOUR: f64 = 45.0;
 
+/// How closely the shapes of the card's picture must follow the processor's,
+/// as the correlation of their brightness, from 1 for the same shapes to 0
+/// for none in common.
+///
+/// Measured on the sample through Mesa's Vulkan: a right picture 0.78, the
+/// different curve accounting for the rest. The same picture scattered or
+/// read with the wrong stride, as a misread layout does, stays under 0.15.
+const ALIKE_IN_SHAPE: f64 = 0.5;
+
 /// Converts the wide gamut sample on the card the way a film would be, and
 /// sets one picture of it beside the same converted on the processor.
 ///
 /// The one trial that looks at what came out rather than at whether anything
 /// refused: a picture handed from Vulkan to the card came out green once,
-/// through a path where every step said it had worked.
+/// and scattered in stripes another time, through paths where every step
+/// said it had worked.
 pub(super) async fn looks_right(
     ffmpeg: &Path,
     opening: Vec<String>,
@@ -384,9 +402,8 @@ pub(super) async fn looks_right(
     filters: &str,
 ) -> (bool, String) {
     let made = Sample::named("melyxar-card-looked-at");
-    let quiet = ["-hide_banner", "-nostdin", "-loglevel", "error"].map(str::to_string);
-    let converting = quiet
-        .clone()
+    let converting = QUIET
+        .map(str::to_string)
         .into_iter()
         .chain(opening)
         .chain(
@@ -404,56 +421,84 @@ pub(super) async fn looks_right(
             ]
             .map(str::to_string),
         );
-    match run_briefly(ffmpeg, converting).await {
-        Ok((true, _)) => {}
-        Ok((false, said)) | Err(said) => return (false, said),
+    if let Ok((false, said)) | Err(said) = run_briefly(ffmpeg, converting).await {
+        return (false, said);
     }
 
-    let (across, down) = LOOKED_AT;
-    let looking = |input: &Path, before: &str| {
-        quiet.clone().into_iter().chain(
-            [
-                "-i",
-                &input.display().to_string(),
-                "-vf",
-                &format!("{before}scale={across}:{down},format=yuv420p"),
-                "-frames:v",
-                "1",
-                "-f",
-                "rawvideo",
-                "-",
-            ]
-            .map(str::to_string),
-        )
-    };
-    let card = run_keeping(ffmpeg, looking(made.path(), ""), true).await;
-    let processor = run_keeping(
+    let card = looked_at(ffmpeg, made.path(), "").await;
+    let processor = looked_at(
         ffmpeg,
-        looking(
-            sample,
-            &format!("{WHAT_THE_SAMPLE_IS},{},", crate::command::TONE_MAP_FILTER),
-        ),
-        true,
+        sample,
+        &format!("{WHAT_THE_SAMPLE_IS},{},", crate::command::TONE_MAP_FILTER),
     )
     .await;
     let judged = match (card, processor) {
-        (Ok((true, _, card)), Ok((true, _, processor))) => alike(&card, &processor),
+        (Ok(card), Ok(processor)) => alike(&card, &processor),
         // A card is never refused for want of something to compare it with:
-        // the green picture it is looked at for is told by its colour alone.
-        (Ok((true, _, card)), Ok((false, said, _)) | Err(said)) => {
-            alike(&card, &colourless_beside(&card)).map(|alike| {
+        // the sample as it was read keeps the shapes, and a right picture
+        // stays near no colour at all on average.
+        (Ok(card), Err(said)) => match looked_at(ffmpeg, sample, "").await {
+            Ok(read) => alike(&card, &colourless_beside(&read)).map(|alike| {
                 format!(
-                    "{alike}, judged on colour alone, the processor's conversion failed: {said}"
+                    "{alike}, judged on the sample as read, the processor's conversion \
+                     failed: {said}"
                 )
-            })
-        }
-        (Ok((false, said, _)) | Err(said), _) => {
-            Err(format!("the picture could not be looked at: {said}"))
-        }
+            }),
+            Err(also) => Err(format!(
+                "nothing to compare the card's picture with: {said} | {also}"
+            )),
+        },
+        (Err(said), _) => Err(said),
     };
     match judged {
         Ok(said) => (true, said),
         Err(said) => (false, said),
+    }
+}
+
+/// Sets a picture a card wrote beside the same written by the processor and
+/// says whether they look alike, both being of the same picture with no
+/// colours to convert.
+pub(super) async fn written_alike(ffmpeg: &Path, card: &Path, processor: &Path) -> (bool, String) {
+    let judged = match (
+        looked_at(ffmpeg, card, "").await,
+        looked_at(ffmpeg, processor, "").await,
+    ) {
+        (Ok(card), Ok(processor)) => alike(&card, &processor),
+        (Err(said), _) | (_, Err(said)) => Err(said),
+    };
+    match judged {
+        Ok(said) => (true, said),
+        Err(said) => (false, said),
+    }
+}
+
+/// What a trial that writes no more than it must says to the tool first.
+const QUIET: [&str; 4] = ["-hide_banner", "-nostdin", "-loglevel", "error"];
+
+/// One picture of `input`, after `before`, brought to `LOOKED_AT` in the
+/// layout of four brightness samples to one of each colour.
+async fn looked_at(ffmpeg: &Path, input: &Path, before: &str) -> std::result::Result<Vec<u8>, String> {
+    let (across, down) = LOOKED_AT;
+    let arguments = QUIET.map(str::to_string).into_iter().chain(
+        [
+            "-i",
+            &input.display().to_string(),
+            "-vf",
+            &format!("{before}scale={across}:{down},format=yuv420p"),
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-",
+        ]
+        .map(str::to_string),
+    );
+    match run_keeping(ffmpeg, arguments, true).await {
+        Ok((true, _, picture)) => Ok(picture),
+        Ok((false, said, _)) | Err(said) => {
+            Err(format!("the picture could not be looked at: {said}"))
+        }
     }
 }
 
@@ -463,8 +508,8 @@ pub(super) async fn looks_right(
 const WHAT_THE_SAMPLE_IS: &str =
     "setparams=range=tv:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc";
 
-/// A picture as bright as `picture` everywhere it is and with no colour at
-/// all, which is what a picture whose colours are right averages out near.
+/// The shapes of `picture` with no colour at all, which is what a picture
+/// whose colours are right averages out near.
 fn colourless_beside(picture: &[u8]) -> Vec<u8> {
     let (across, down) = LOOKED_AT;
     let brightness = (across * down).min(picture.len());
@@ -474,7 +519,8 @@ fn colourless_beside(picture: &[u8]) -> Vec<u8> {
 }
 
 /// Whether two pictures of `LOOKED_AT` in the layout of four brightness
-/// samples to one of each colour look alike, saying their averages either way.
+/// samples to one of each colour look alike, in colour and in shape, saying
+/// how they compare either way.
 fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
     let (across, down) = LOOKED_AT;
     let brightness = across * down;
@@ -488,7 +534,6 @@ fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
         ));
     }
     let averages = |picture: &[u8]| {
-        let mean = |plane: &[u8]| plane.iter().map(|&value| f64::from(value)).sum::<f64>() / plane.len() as f64;
         (
             mean(&picture[..brightness]),
             mean(&picture[brightness..brightness + colour]),
@@ -497,16 +542,40 @@ fn alike(card: &[u8], processor: &[u8]) -> std::result::Result<String, String> {
     };
     let (card_y, card_u, card_v) = averages(card);
     let (processor_y, processor_u, processor_v) = averages(processor);
+    let shape = correlation(&card[..brightness], &processor[..brightness]);
     let said = format!(
         "card Y/U/V {card_y:.0}/{card_u:.0}/{card_v:.0}, \
-         processor {processor_y:.0}/{processor_u:.0}/{processor_v:.0}"
+         processor {processor_y:.0}/{processor_u:.0}/{processor_v:.0}, shapes {shape:.2}"
     );
     let close = (card_y - processor_y).abs() <= ALLOWED_BRIGHTNESS
         && (card_u - processor_u).abs() <= ALLOWED_COLOUR
-        && (card_v - processor_v).abs() <= ALLOWED_COLOUR;
+        && (card_v - processor_v).abs() <= ALLOWED_COLOUR
+        && shape >= ALIKE_IN_SHAPE;
     match close {
         true => Ok(said),
         false => Err(format!("the card's picture does not look like the processor's: {said}")),
+    }
+}
+
+fn mean(values: &[u8]) -> f64 {
+    values.iter().map(|&value| f64::from(value)).sum::<f64>() / values.len() as f64
+}
+
+/// The correlation of two runs of values of the same length: 1 when one
+/// rises wherever the other does, 0 when they have nothing to do with each
+/// other, and 0 too when either is flat, having no shape to follow.
+fn correlation(one: &[u8], other: &[u8]) -> f64 {
+    let (one_mean, other_mean) = (mean(one), mean(other));
+    let (mut together, mut one_spread, mut other_spread) = (0.0, 0.0, 0.0);
+    for (&a, &b) in one.iter().zip(other) {
+        let (a, b) = (f64::from(a) - one_mean, f64::from(b) - other_mean);
+        together += a * b;
+        one_spread += a * a;
+        other_spread += b * b;
+    }
+    match one_spread * other_spread {
+        spread if spread > 0.0 => together / spread.sqrt(),
+        _ => 0.0,
     }
 }
 
@@ -526,11 +595,20 @@ mod tests {
     use super::*;
     use crate::ToolPaths;
 
-    /// A picture of `LOOKED_AT` all of one brightness and colour.
+    /// A picture of `LOOKED_AT` of one colour, striped across around one
+    /// brightness, so that it has a shape to follow.
     fn picture_of(y: u8, u: u8, v: u8) -> Vec<u8> {
         let (across, down) = LOOKED_AT;
         let brightness = across * down;
-        let mut picture = vec![y; brightness];
+        let mut picture: Vec<u8> = (0..down)
+            .flat_map(|row| {
+                let striped = match row % 2 {
+                    0 => y.saturating_sub(8),
+                    _ => y.saturating_add(8),
+                };
+                std::iter::repeat_n(striped, across)
+            })
+            .collect();
         picture.extend(std::iter::repeat_n(u, brightness / 4));
         picture.extend(std::iter::repeat_n(v, brightness / 4));
         picture
@@ -558,6 +636,30 @@ mod tests {
         assert!(alike(&[0; 10], &colourless_beside(&[0; 10])).is_err());
     }
 
+    #[test]
+    fn a_picture_scattered_in_stripes_does_not_look_like_the_processors() {
+        // A layout misread on the way to the encoder keeps the averages and
+        // loses the shapes: the same values, read with the wrong stride.
+        let (across, down) = LOOKED_AT;
+        let processor: Vec<u8> = (0..across * down)
+            .map(|at| u8::try_from(at % across * 3).expect("under 255"))
+            .chain(std::iter::repeat_n(128, across * down / 2))
+            .collect();
+        assert!(alike(&processor, &processor).is_ok());
+        let scattered: Vec<u8> = (0..across * down)
+            .map(|at| processor[at * 7 % (across * down)])
+            .chain(processor[across * down..].iter().copied())
+            .collect();
+        let said = alike(&scattered, &processor).expect_err("scattered");
+        assert!(said.contains("shapes"), "{said}");
+        let flat = picture_of(100, 128, 128);
+        assert!(alike(&picture_of(100, 128, 128), &flat).is_ok(), "stripes follow stripes");
+        let even: Vec<u8> = std::iter::repeat_n(100, across * down)
+            .chain(std::iter::repeat_n(128, across * down / 2))
+            .collect();
+        assert!(alike(&even, &flat).is_err(), "nothing to follow");
+    }
+
     #[tokio::test]
     async fn the_processors_own_conversion_looks_like_itself() {
         // The comparison run end to end with what every machine has: the
@@ -575,6 +677,24 @@ mod tests {
         .await;
         assert!(worked, "{said}");
         assert!(said.contains("card Y/U/V"), "{said}");
+    }
+
+    #[tokio::test]
+    async fn the_processors_painted_picture_is_written_and_looked_at() {
+        // What a card's painted picture is set beside, written by every
+        // build, and judged alike to itself.
+        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let painted = Sample::named("melyxar-processor-painted-test");
+        let (worked, said) = run_briefly(
+            &tools.ffmpeg,
+            crate::painting::painted_by_the_processor_arguments(painted.path()),
+        )
+        .await
+        .expect("the tool runs");
+        assert!(worked, "{said}");
+        let (alike, said) = written_alike(&tools.ffmpeg, painted.path(), painted.path()).await;
+        assert!(alike, "{said}");
+        assert!(said.contains("shapes 1.00"), "{said}");
     }
 
     #[tokio::test]
