@@ -13,10 +13,7 @@
  */
 
 /** How the interface says a thing, in whichever language it is speaking. */
-export type Wording = (
-  key: string,
-  values?: Record<string, string | number>,
-) => string;
+export type Wording = (key: string, values?: Record<string, string | number>) => string;
 
 /**
  * How a season or an episode is announced.
@@ -60,12 +57,7 @@ export function captionOf(work: Played, t: Wording): string {
   return (
     [
       season && numberOfOne("season", season.number, t),
-      nameOfOne(
-        "episode",
-        work.number,
-        work.has_own_name ? work.title : null,
-        t,
-      ),
+      nameOfOne("episode", work.number, work.has_own_name ? work.title : null, t),
     ]
       .filter(Boolean)
       .join(" · ") || work.title
@@ -76,24 +68,16 @@ export function captionOf(work: Played, t: Wording): string {
 export function nameOfPlayed(work: Played, t: Wording): string {
   const series = work.ancestry.find((up) => up.kind === "series");
   const caption = captionOf(work, t);
-  return work.kind === "episode" && series
-    ? `${series.title} · ${caption}`
-    : caption;
+  return work.kind === "episode" && series ? `${series.title} · ${caption}` : caption;
 }
 
 /** The number alone, for a row that shows the name in a column of its own. */
-export function numberOfOne(
-  kind: string,
-  number: number | null,
-  t: Wording,
-): string {
+export function numberOfOne(kind: string, number: number | null, t: Wording): string {
   if (number === null) {
     return "";
   }
   if (kind === "season") {
-    return number === SEASON_OF_SPECIALS
-      ? t("work.specials")
-      : t("work.season", { number });
+    return number === SEASON_OF_SPECIALS ? t("work.specials") : t("work.season", { number });
   }
   return kind === "episode" ? t("work.episode", { number }) : "";
 }
@@ -142,10 +126,7 @@ export function toolVersionOf(banner: string): string | null {
  * are noise.
  */
 export function howLongSince(instant: string, now: number, t: Wording): string {
-  const minutes = Math.max(
-    0,
-    Math.floor((now - new Date(instant).getTime()) / 60_000),
-  );
+  const minutes = Math.max(0, Math.floor((now - new Date(instant).getTime()) / 60_000));
   const days = Math.floor(minutes / MINUTES_IN_A_DAY);
   const hours = Math.floor((minutes % MINUTES_IN_A_DAY) / 60);
   if (days > 0) {
@@ -178,10 +159,7 @@ export function readableDate(value: string, language: string): string | null {
   const when = new Date(value);
   return Number.isNaN(when.getTime())
     ? null
-    : when.toLocaleString(language, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
+    : when.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** A day written year, month and day, as a provider writes a birthday. */
@@ -198,9 +176,7 @@ export function readableDay(day: string, language: string): string | null {
   if (!parts) {
     return null;
   }
-  const when = new Date(
-    Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])),
-  );
+  const when = new Date(Date.UTC(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])));
   return when.toLocaleDateString(language, {
     day: "numeric",
     month: "long",
@@ -214,20 +190,13 @@ export function readableDay(day: string, language: string): string | null {
  * for a series that has ended in another year, the years it ran.
  */
 export function whenItCameOut(
-  work: {
-    kind: string;
-    year: number | null;
-    release_date: string | null;
-    end_date: string | null;
-  },
+  work: { kind: string; year: number | null; release_date: string | null; end_date: string | null },
   language: string,
   t: Wording,
 ): string | null {
   if (work.kind === "series" && work.end_date && work.year !== null) {
     const ended = Number(work.end_date.slice(0, 4));
-    return ended === work.year
-      ? String(work.year)
-      : t("work.ran", { from: work.year, to: ended });
+    return ended === work.year ? String(work.year) : t("work.ran", { from: work.year, to: ended });
   }
   const day = work.release_date && readableDay(work.release_date, language);
   return day || (work.year !== null ? String(work.year) : null);
@@ -243,8 +212,7 @@ export function yearsBetween(from: string, to: string): number | null {
   }
   const [, fromYear, fromMonth, fromDay] = start.map(Number);
   const [, toYear, toMonth, toDay] = end.map(Number);
-  const beforeTheBirthday =
-    toMonth < fromMonth || (toMonth === fromMonth && toDay < fromDay);
+  const beforeTheBirthday = toMonth < fromMonth || (toMonth === fromMonth && toDay < fromDay);
   return toYear - fromYear - (beforeTheBirthday ? 1 : 0);
 }
 
@@ -331,9 +299,7 @@ export function whatIsLeft(
     return undefined;
   }
   const left = Math.max(Math.round((length - seconds) / 60), 0);
-  return left === 0
-    ? undefined
-    : t("home.hero.left", { time: howLong(left, t) });
+  return left === 0 ? undefined : t("home.hero.left", { time: howLong(left, t) });
 }
 
 /**
@@ -344,11 +310,7 @@ export function whatIsLeft(
  * episode three", is what a menu and a detail page say.
  */
 export function whichEpisode(
-  work: {
-    season_number: number | null;
-    episode_number: number | null;
-    title: string;
-  },
+  work: { season_number: number | null; episode_number: number | null; title: string },
   t: Wording,
 ): string | undefined {
   if (work.season_number === null || work.episode_number === null) {
@@ -378,11 +340,9 @@ export function whatTheFileHolds(facts: {
   /* No badge for a picture smaller than 720p: "SD" beside a title reads as
      a fault rather than as a fact. */
   const picture = pictureName(facts.width, facts.height);
-  return [
-    picture === "SD" ? null : picture,
-    rangeName(facts.hdr),
-    soundName(facts.sound),
-  ].filter((name): name is string => name !== null);
+  return [picture === "SD" ? null : picture, rangeName(facts.hdr), soundName(facts.sound)].filter(
+    (name): name is string => name !== null,
+  );
 }
 
 /**
@@ -392,10 +352,7 @@ export function whatTheFileHolds(facts: {
  * film can be 800 lines tall and a 4K film 1600: read by its height alone,
  * the first was called 720p where every other player says 1080p.
  */
-export function pictureName(
-  width: number | null,
-  height: number | null,
-): string | null {
+export function pictureName(width: number | null, height: number | null): string | null {
   const across = width ?? 0;
   const down = height ?? 0;
   if (across <= 0 && down <= 0) {
@@ -495,9 +452,7 @@ export function readableSize(bytes: number): string {
     value /= 1000;
     unit += 1;
   }
-  return unit === 0
-    ? `${value} ${units[unit]}`
-    : `${value.toFixed(1)} ${units[unit]}`;
+  return unit === 0 ? `${value} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
 }
 
 /** The units of an amount of data, in each language the interface speaks. */
@@ -518,11 +473,7 @@ const DATA_UNITS: Record<string, string[]> = {
  *  makes one every time. */
 const numberFormats = new Map<string, Intl.NumberFormat>();
 
-function written(
-  value: number,
-  language: string,
-  options: Intl.NumberFormatOptions,
-): string {
+function written(value: number, language: string, options: Intl.NumberFormatOptions): string {
   const key = `${language} ${JSON.stringify(options)}`;
   let format = numberFormats.get(key);
   if (!format) {
@@ -537,11 +488,7 @@ function written(
  *  made a hundred of them every time it was drawn. */
 const momentFormats = new Map<string, Intl.DateTimeFormat>();
 
-export function writtenMoment(
-  when: Date,
-  language: string,
-  options: Intl.DateTimeFormatOptions,
-): string {
+export function writtenMoment(when: Date, language: string, options: Intl.DateTimeFormatOptions): string {
   const key = `${language} ${JSON.stringify(options)}`;
   let format = momentFormats.get(key);
   if (!format) {
@@ -592,18 +539,12 @@ export function networkRate(bytesPerSecond: number, language: string): string {
 /** How many voted, shortened the way the language shortens a large number:
  *  1.2M, 1,2 M. */
 export function howManyVoted(votes: number, language: string): string {
-  return written(votes, language, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  });
+  return written(votes, language, { notation: "compact", maximumFractionDigits: 1 });
 }
 
 /** A share from nought to one as a whole percentage, the way the language writes one. */
 export function percentOf(share: number, language: string): string {
-  return written(share, language, {
-    style: "percent",
-    maximumFractionDigits: 0,
-  });
+  return written(share, language, { style: "percent", maximumFractionDigits: 0 });
 }
 
 /**
@@ -625,11 +566,7 @@ export function fullnessOf(used: number, language: string): string {
  * arrows is stopped where the server would have stopped them rather than
  * being silently corrected afterwards.
  */
-export function insideTheRange(
-  asked: number,
-  min: number,
-  max: number,
-): number | null {
+export function insideTheRange(asked: number, min: number, max: number): number | null {
   if (!Number.isFinite(asked)) {
     return null;
   }
