@@ -36,6 +36,7 @@ import {
   howMany,
   outOfAHundred,
   releaseOf,
+  toolVersionOf,
 } from "../../readable";
 import { useRunning } from "../../running";
 import { useAttention } from "../../notifications/attention";
@@ -192,8 +193,13 @@ function ServerPanel({
           label={t("admin.media_tools")}
           value={
             overview &&
-            t(overview.media_tools.found ? "admin.found" : "admin.missing")
+            (overview.media_tools.found
+              ? ((overview.media_tools.version &&
+                  toolVersionOf(overview.media_tools.version)) ??
+                t("admin.found"))
+              : t("admin.missing"))
           }
+          title={overview?.media_tools.version ?? undefined}
           state={
             overview
               ? overview.media_tools.found
