@@ -31,6 +31,7 @@ object Tour {
         "everything" to emptySet(),
         "no band glow" to setOf(Part.BandGlow),
         "no fan shadows" to setOf(Part.FanShadows),
+        "no band floor" to setOf(Part.BandFloor),
         "no shadows" to setOf(Part.Shadows),
         "no banner fade" to setOf(Part.BannerFade),
         "everything again" to emptySet(),

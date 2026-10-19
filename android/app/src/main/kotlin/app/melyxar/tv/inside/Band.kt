@@ -34,9 +34,12 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +91,49 @@ private const val COVER_SIZE = 0.75f
 /** A tile of the band. */
 private val TileWidth = 208.dp
 private val TileHeight = TileWidth * 9 / 16
+
+/** The line the fan stands on, from the top of the tile. */
+private const val GROUND = 0.69f
+
+/** Where the floor's reflection fades out to nothing, from the top of the
+ *  tile before it is turned over: as far below the line as this is above. */
+private const val FLOOR_FADES_AT = 0.37f
+
+/** How opaque the floor is at the feet of the fan. */
+private const val FLOOR_AT_THE_FEET = 0.74f
+
+/** How much darker the floor is than what stands on it. */
+private const val FLOOR_DIMS_BY = 0.18f
+
+/** The lines the surface of the water is made of, as the web's: each a run
+ *  of rows kept whole, then rows let through only so much. Three spacings
+ *  that share no common measure, so the pattern never visibly repeats. */
+private class WaterLine(val whole: Float, val faint: Float, val through: Float)
+
+private val WATER = listOf(
+    WaterLine(2f, 1f, 0.62f),
+    WaterLine(5f, 2f, 0.74f),
+    WaterLine(11f, 2f, 0.84f),
+)
+
+/**
+ * How much of the reflection a row of the tile lets through, [y] points
+ * from its top in a tile [height] points tall, counted before the fan is
+ * turned over: nothing above where the floor fades out, rising to its
+ * strongest at the line the fan stands on, cut dead below it, and drawn in
+ * the water's lines all the way.
+ */
+internal fun waterAt(y: Float, height: Float): Float {
+    val from = height * FLOOR_FADES_AT
+    val to = height * GROUND
+    if (y < from || y >= to) {
+        return 0f
+    }
+    val lines = WATER.fold(1f) { kept, line ->
+        if (y % (line.whole + line.faint) < line.whole) kept else kept * line.through
+    }
+    return FLOOR_AT_THE_FEET * (y - from) / (to - from) * lines
+}
 
 /** A picture of a fan: a poster standing, or a square cover of music. */
 private data class Leafed(val pictures: List<Picture>, val color: String?)
@@ -217,6 +263,9 @@ private fun BandTile(kind: String, name: String, fan: List<Leafed>, square: Bool
             TileHeight * 0.9f,
             Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp),
         )
+        if (Probe.shows(Part.BandFloor)) {
+            Fan(fan, square, records = false, open = { lit }, mirror = true)
+        }
         Fan(fan, square, woken, { lit })
         // The foot of the tile sinks into the ground, under the name.
         Box(
@@ -281,15 +330,17 @@ private val ARROW_SCALE = TileWidth / 340.dp
 /** The fan of posters, or of square covers, standing on a line at 69% of
  *  the tile. Covers stand where the posters would, two thirds of their
  *  height across apart, and the [records] slide out from behind the middle
- *  ones as the fan opens. */
+ *  ones as the fan opens. As the [mirror], the same fan is the floor it
+ *  stands on, and carries neither the shadow nor the sheen of the thing
+ *  itself. */
 @Composable
-private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -> Float) {
+private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -> Float, mirror: Boolean = false) {
     val palette = LocalPalette.current
     val shape = RoundedCornerShape(8.dp)
     val scale = if (square) COVER_SIZE else 1f
     // A shift counted in the widths of a poster, whatever is drawn.
     val reach = if (square) 2f / 3f / COVER_SIZE else 1f
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().then(if (mirror) Modifier.floor() else Modifier)) {
         // The outer leaves first, so the front one is drawn over them.
         FAN.withIndex().reversed().forEach { (at, leaf) ->
             val shown = fan.getOrNull(at) ?: return@forEach
@@ -298,7 +349,7 @@ private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -
             Box(
                 Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = TileHeight * 0.69f - down)
+                    .padding(top = TileHeight * GROUND - down)
                     .size(across, down)
                     .graphicsLayer {
                         val opened = open()
@@ -322,7 +373,7 @@ private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -
                         // afresh at every frame of it, which a television
                         // cannot keep up with.
                         .then(
-                            if (!Probe.shows(Part.FanShadows)) {
+                            if (mirror || !Probe.shows(Part.FanShadows)) {
                                 Modifier
                             } else if (at == 0) {
                                 Modifier.boxShadow(
@@ -338,7 +389,7 @@ private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -
                         .clip(shape),
                 ) {
                     ServerPicture(shown.pictures, across, Modifier.fillMaxSize())
-                    Box(
+                    if (!mirror) Box(
                         Modifier.fillMaxSize().drawWithCache {
                             // The sheen across each poster.
                             val sheen = Brush.linearGradient(
@@ -394,6 +445,40 @@ private fun Record(open: () -> Float) {
                 }
             },
     )
+}
+
+/**
+ * The fan turned over about the line it stands on, as the web's
+ * `.band-mirror`: dimmer than the thing itself and fading out as it falls
+ * away, in the lines of the water's surface.
+ *
+ * The lines and the fade only change down the tile, so they are one
+ * gradient worked out once for the tile's size and laid over the fan in a
+ * single stroke. The floor is its own layer: at rest the screen keeps it as
+ * drawn, and only the tile the remote is on draws it again as its fan opens.
+ * The web's ripple, which pushes each line of the reflection sideways, is
+ * left out: a television has no way to do it cheaply on every frame.
+ */
+private fun Modifier.floor(): Modifier = graphicsLayer {
+    scaleY = -1f
+    transformOrigin = TransformOrigin(0.5f, GROUND)
+    compositingStrategy = CompositingStrategy.Offscreen
+}.drawWithCache {
+    // One stop at each end of every row of pixels the floor covers, each row
+    // read at its middle, in points as the web's lines are measured.
+    val pixels = (size.height * FLOOR_FADES_AT).toInt()..(size.height * GROUND).toInt()
+    val stops = pixels.flatMap { y ->
+        val kept = Color.Black.copy(alpha = waterAt((y + 0.5f) / density, size.height / density))
+        listOf(y / size.height to kept, ((y + 1) / size.height).coerceAtMost(1f) to kept)
+    }
+    val water = Brush.verticalGradient(*stops.toTypedArray(), startY = 0f, endY = size.height)
+    val from = size.height * FLOOR_FADES_AT
+    val to = size.height * GROUND
+    onDrawWithContent {
+        clipRect(top = from, bottom = to) { this@onDrawWithContent.drawContent() }
+        drawRect(Color.Black.copy(alpha = FLOOR_DIMS_BY), blendMode = BlendMode.SrcAtop)
+        drawRect(water, blendMode = BlendMode.DstIn)
+    }
 }
 
 private fun glowAt(center: Offset, radius: Float, colour: Color): Brush =
