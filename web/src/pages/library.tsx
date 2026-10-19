@@ -303,15 +303,15 @@ export function LibraryPage({
     </>
   );
 
-  /* A press of the same kind as the others in the bubble of a phone, a piece
-     of its own beside the bar elsewhere. */
+  /* A press of the same kind as the others in the bubble of a phone, and one
+     of the choices of the piece elsewhere. */
   const unidentifiedPress = offersUnidentified && (
     <button
       type="button"
       className={
         phone
           ? `music-tab music-play-tool${unidentified ? " music-tab-on" : ""}`
-          : `browse-piece browse-alone${unidentified ? " browse-alone-on" : ""}`
+          : `browse-press${unidentified ? " browse-press-on" : ""}`
       }
       onClick={() => choose("unidentified", unidentified ? null : "true")}
       aria-pressed={unidentified}
@@ -320,7 +320,7 @@ export function LibraryPage({
     >
       <IdentifyIcon size={16} />
       {/* Left out when the bar is short of room, the icon standing for it. */}
-      <span className="browse-alone-words">{t("library.filter.unidentified")}</span>
+      <span className="press-words">{t("library.filter.unidentified")}</span>
     </button>
   );
 
@@ -358,9 +358,17 @@ export function LibraryPage({
           </BrowseBubble>
         ) : (
           <div className="browse-bar">
-            <div className="browse-piece">{fields}</div>
-            {library && <UploadButton library={library} className="browse-piece browse-alone" />}
-            {unidentifiedPress}
+            {/* Putting files in and the files nobody named stand in the same
+                piece as the choices, each set apart by the same hairline. */}
+            <div className="browse-piece">
+              {fields}
+              {library && account?.may_upload && (
+                <span className="browse-field">
+                  <UploadButton library={library} className="browse-press" />
+                </span>
+              )}
+              {unidentifiedPress && <span className="browse-field">{unidentifiedPress}</span>}
+            </div>
           </div>
         )}
       </div>

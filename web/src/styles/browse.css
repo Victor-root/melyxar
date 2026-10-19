@@ -171,8 +171,37 @@
   transform: rotate(90deg);
 }
 
-/* The yes-or-no filter: a piece of its own, and filled with the accent once
-   it is on, as anything switched on in this interface is. */
+/* A press among the choices of the piece, putting files in or the yes-or-no
+   filter: plain words tinted under a hand as a choice is, and filled with the
+   accent once the filter is on, as anything switched on in this interface
+   is. */
+.browse-press {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.browse-press:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+}
+
+.browse-press-on,
+.browse-press-on:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* A press in a piece of its own beside the bar, as music puts files in. */
 .browse-alone {
   gap: 8px;
   padding: 0 16px;
@@ -183,13 +212,6 @@
 
 .browse-alone:hover {
   color: var(--text);
-}
-
-.browse-alone-on,
-.browse-alone-on:hover {
-  --header-glow: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
 }
 
 /* On a wide screen the name of the grid and its bar rise into the band of
@@ -236,10 +258,6 @@
     min-width: 0;
   }
 
-  .browse-head .browse-alone {
-    flex: none;
-  }
-
   /* Each choice's name, value and presses laid straight into the piece, so
      that giving ground weighs each of them against its own floor: grouped
      in a box of their own, the box gave way whole and its presses ran out
@@ -273,12 +291,12 @@
   }
 
   @container (max-width: 620px) {
-    .browse-alone-words {
+    .browse-press .press-words {
       display: none;
     }
 
-    .browse-alone {
-      padding: 0 12px;
+    .browse-press {
+      padding: 0 9px;
     }
   }
 
