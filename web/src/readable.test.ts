@@ -81,12 +81,8 @@ describe("howLong", () => {
   });
 
   it("splits the rest off the hours", () => {
-    expect(howLong(155, said)).toBe(
-      'work.hours_minutes({"hours":2,"minutes":35})',
-    );
-    expect(howLong(61, said)).toBe(
-      'work.hours_minutes({"hours":1,"minutes":1})',
-    );
+    expect(howLong(155, said)).toBe('work.hours_minutes({"hours":2,"minutes":35})');
+    expect(howLong(61, said)).toBe('work.hours_minutes({"hours":1,"minutes":1})');
   });
 });
 
@@ -167,8 +163,7 @@ describe("insideTheRange", () => {
 
 describe("howLongSince", () => {
   const start = "2026-09-01T10:00:00Z";
-  const later = (minutes: number) =>
-    new Date(start).getTime() + minutes * 60_000;
+  const later = (minutes: number) => new Date(start).getTime() + minutes * 60_000;
 
   it("says days and hours once a day has gone, and drops the minutes", () => {
     expect(howLongSince(start, later(12 * 1440 + 4 * 60 + 37), said)).toBe(
@@ -183,12 +178,8 @@ describe("howLongSince", () => {
   });
 
   it("says minutes alone within an hour, and never less than none", () => {
-    expect(howLongSince(start, later(8), said)).toBe(
-      'time.minutes({"minutes":8})',
-    );
-    expect(howLongSince(start, later(-3), said)).toBe(
-      'time.minutes({"minutes":0})',
-    );
+    expect(howLongSince(start, later(8), said)).toBe('time.minutes({"minutes":8})');
+    expect(howLongSince(start, later(-3), said)).toBe('time.minutes({"minutes":0})');
   });
 });
 
@@ -297,13 +288,7 @@ describe("what is being played", () => {
   };
 
   it("names a film by its title", () => {
-    const film = {
-      kind: "movie",
-      title: "Ardent Harbour",
-      number: null,
-      has_own_name: true,
-      ancestry: [],
-    };
+    const film = { kind: "movie", title: "Ardent Harbour", number: null, has_own_name: true, ancestry: [] };
     expect(captionOf(film, said)).toBe("Ardent Harbour");
     expect(nameOfPlayed(film, said)).toBe("Ardent Harbour");
   });
@@ -339,44 +324,28 @@ describe("pictureName", () => {
   });
 
   it("puts no badge on a picture smaller than 720p", () => {
-    expect(
-      whatTheFileHolds({ width: 1920, height: 800, hdr: null, sound: null }),
-    ).toEqual(["1080p"]);
-    expect(
-      whatTheFileHolds({ width: 720, height: 576, hdr: null, sound: null }),
-    ).toEqual([]);
+    expect(whatTheFileHolds({ width: 1920, height: 800, hdr: null, sound: null })).toEqual([
+      "1080p",
+    ]);
+    expect(whatTheFileHolds({ width: 720, height: 576, hdr: null, sound: null })).toEqual([]);
   });
 });
 
 describe("whenItCameOut", () => {
   const t = (key: string, values?: Record<string, string | number>) =>
     key === "work.ran" ? `${values?.from} to ${values?.to}` : key;
-  const film = {
-    kind: "movie",
-    year: 2019,
-    release_date: null,
-    end_date: null,
-  };
+  const film = { kind: "movie", year: 2019, release_date: null, end_date: null };
 
   it("says the day when it is known, and the year otherwise", () => {
-    expect(
-      whenItCameOut({ ...film, release_date: "2019-03-12" }, "en", t),
-    ).toBe("March 12, 2019");
+    expect(whenItCameOut({ ...film, release_date: "2019-03-12" }, "en", t)).toBe("March 12, 2019");
     expect(whenItCameOut(film, "en", t)).toBe("2019");
     expect(whenItCameOut({ ...film, year: null }, "en", t)).toBeNull();
   });
 
   it("says the years a series ran once it has ended in another year", () => {
-    const series = {
-      kind: "series",
-      year: 2019,
-      release_date: "2019-03-12",
-      end_date: "2023-06-01",
-    };
+    const series = { kind: "series", year: 2019, release_date: "2019-03-12", end_date: "2023-06-01" };
     expect(whenItCameOut(series, "en", t)).toBe("2019 to 2023");
-    expect(whenItCameOut({ ...series, end_date: "2019-12-01" }, "en", t)).toBe(
-      "2019",
-    );
+    expect(whenItCameOut({ ...series, end_date: "2019-12-01" }, "en", t)).toBe("2019");
   });
 });
 
@@ -394,14 +363,10 @@ describe("fullnessOf", () => {
 
 describe("toolVersionOf", () => {
   it("keeps the version out of the banner", () => {
-    expect(
-      toolVersionOf(
-        "ffmpeg version 9.0.2-melyxar1 Copyright (c) 2000-2026 the FFmpeg developers",
-      ),
-    ).toBe("9.0.2-melyxar1");
-    expect(
-      toolVersionOf("ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026"),
-    ).toBe("7.1.5-0+deb13u1");
+    expect(toolVersionOf("ffmpeg version 9.0.2-melyxar1 Copyright (c) 2000-2026 the FFmpeg developers")).toBe(
+      "9.0.2-melyxar1",
+    );
+    expect(toolVersionOf("ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026")).toBe("7.1.5-0+deb13u1");
   });
 
   it("says nothing of a banner without a version", () => {
