@@ -58,6 +58,7 @@ import app.melyxar.R
 import app.melyxar.connect.ConnectActivity
 import app.melyxar.music.MusicEngine
 import app.melyxar.music.MusicService
+import app.melyxar.music.SoundTrace
 import app.melyxar.player.FilmPlayer
 import app.melyxar.player.measuredMusicForms
 import app.melyxar.player.serverFetching
@@ -134,6 +135,7 @@ class WebActivity : ComponentActivity() {
         page.addJavascriptInterface(musicBridge, "MelyxarMusic")
         // The service that keeps the music going, woken now so it is there
         // the moment a song starts.
+        SoundTrace.say("activity asks for the music service")
         musicService = MediaController.Builder(this, SessionToken(this, ComponentName(this, MusicService::class.java)))
             .buildAsync()
         holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))

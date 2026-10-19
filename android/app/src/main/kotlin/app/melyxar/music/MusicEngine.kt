@@ -103,6 +103,7 @@ class MusicEngine private constructor(
         val events = mutableListOf<String>()
 
         fun load(address: String, andPlay: Boolean) {
+            SoundTrace.say("deck $index load andPlay=$andPlay")
             holds = true
             metadataSaid = false
             error = null
@@ -145,6 +146,7 @@ class MusicEngine private constructor(
 
         private inner class Heard : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
+                SoundTrace.say("deck $index state=$state")
                 when (state) {
                     Player.STATE_READY -> if (!metadataSaid) {
                         metadataSaid = true
@@ -159,11 +161,16 @@ class MusicEngine private constructor(
             }
 
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                SoundTrace.say("deck $index playWhenReady=$playWhenReady reason=$reason")
                 events += if (playWhenReady) "play" else "pause"
                 changed()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                SoundTrace.say("deck $index isPlaying=$isPlaying")
+                if (isPlaying) {
+                    SoundTrace.lookAround(context, "deck $index sounds")
+                }
                 if (isPlaying) {
                     events += "playing"
                 }
@@ -171,6 +178,7 @@ class MusicEngine private constructor(
             }
 
             override fun onPlayerError(failure: PlaybackException) {
+                SoundTrace.say("deck $index error ${failure.errorCodeName}")
                 error = "${failure.errorCodeName}: ${failure.message}"
                 events += "error"
                 changed()
@@ -213,6 +221,7 @@ class MusicEngine private constructor(
     }
 
     fun play(deck: Int) {
+        SoundTrace.say("play deck $deck")
         val playing = decks[deck]
         if (!playing.holds) {
             return
@@ -282,6 +291,7 @@ class MusicEngine private constructor(
 
     /** A deck asked to sound: the one the card speaks of, with the focus. */
     private fun started(deck: Deck) {
+        SoundTrace.lookAround(context, "deck ${deck.index} started")
         live = deck.index
         holdTheFocus()
         face.changed()
@@ -333,6 +343,7 @@ class MusicEngine private constructor(
             return
         }
         focusHeld = AudioManagerCompat.requestAudioFocus(audio, focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        SoundTrace.say("focus asked granted=$focusHeld")
     }
 
     private fun letGoOfTheFocus() {
@@ -344,6 +355,7 @@ class MusicEngine private constructor(
     }
 
     private fun focusChanged(change: Int) {
+        SoundTrace.say("focus changed $change")
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> {
                 focusHeld = false
