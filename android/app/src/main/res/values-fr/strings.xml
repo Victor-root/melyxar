@@ -499,4 +499,5 @@
     <string name="tv_track_burns_in">Incrusté dans la vidéo</string>
     <string name="tv_brightness">Luminosité</string>
     <string name="tv_contrast">Contraste</string>
+    <string name="music_card_channel">En cours de lecture</string>
 </resources>

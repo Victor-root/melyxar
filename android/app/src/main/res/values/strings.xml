@@ -484,4 +484,5 @@
     <string name="tv_track_burns_in">Burned into video</string>
     <string name="tv_brightness">Brightness</string>
     <string name="tv_contrast">Contrast</string>
+    <string name="music_card_channel">Now playing</string>
 </resources>
