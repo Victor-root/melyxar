@@ -39,6 +39,7 @@ enum class Part(val byDefault: Boolean) {
     Bar(true),
     BandGlow(true),
     FanShadows(true),
+    BandFloor(true),
     PicturesAhead(true),
 }
 
