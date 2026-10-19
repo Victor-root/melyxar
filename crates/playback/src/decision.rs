@@ -284,6 +284,25 @@ pub fn decide(source: &MediaSource, request: &PlaybackRequest<'_>) -> PlaybackDe
     let track_choice_forces_rebuild = !request.profile.can_switch_tracks_in_container
         && chose_a_non_default_audio_track(source, audio);
 
+    // A film not handed over whole is fed in pieces, and a sound the client
+    // decodes in a whole file is not always one it takes that way.
+    let fed_in_pieces = video_action == StreamAction::Transcode
+        || !container_supported
+        || track_choice_forces_rebuild;
+    let audio_action = match audio {
+        Some((_, details))
+            if fed_in_pieces
+                && audio_action == StreamAction::Copy
+                && !request.profile.takes_audio_in_pieces(&details.codec) =>
+        {
+            reasons.push(Reason::AudioCodecNotSupported {
+                codec: details.codec.clone(),
+            });
+            StreamAction::Transcode
+        }
+        _ => audio_action,
+    };
+
     let method = if video_action == StreamAction::Transcode {
         PlaybackMethod::FullTranscode
     } else if audio_action == StreamAction::Transcode {
@@ -809,6 +828,41 @@ mod tests {
         assert_eq!(decision.audio, StreamAction::Copy);
         assert_eq!(decision.reasons, vec![Reason::EverythingSupported]);
         assert!(!decision.method.is_expensive());
+    }
+
+    #[test]
+    fn a_sound_decoded_whole_but_refused_in_pieces_is_rebuilt_once_the_film_is_streamed() {
+        let profile = ClientProfile {
+            containers: vec!["mp4".into()],
+            ..ClientProfile::conservative_browser()
+        };
+        let tracks = || {
+            vec![
+                video_track(0, "h264", 720, None),
+                audio_track(1, "mp3", 2, true),
+            ]
+        };
+
+        let whole = decide(
+            &source_named("film.mp4", "mov,mp4,m4a", tracks()),
+            &request(&profile),
+        );
+        assert_eq!(whole.method, PlaybackMethod::DirectPlay);
+        assert_eq!(whole.audio, StreamAction::Copy);
+
+        let streamed = decide(
+            &source_named("film.mov", "mov,mp4,m4a", tracks()),
+            &request(&profile),
+        );
+        assert_eq!(streamed.method, PlaybackMethod::TranscodeAudio);
+        assert_eq!(streamed.video, StreamAction::Copy);
+        assert_eq!(streamed.audio, StreamAction::Transcode);
+        assert_eq!(
+            streamed.reasons,
+            vec![Reason::AudioCodecNotSupported {
+                codec: "mp3".into()
+            }]
+        );
     }
 
     #[test]

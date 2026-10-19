@@ -46,6 +46,22 @@ const AUDIO: Probe[] = [
   { type: 'audio/mp4; codecs="ac-3"', name: "ac3" },
 ];
 
+/**
+ * The sounds a stream fed in pieces may carry over as they are, asked the way
+ * the piece by piece player names them.
+ *
+ * MP3 is not among them, though every browser plays it in a whole file: the
+ * player cannot name it inside such a stream, the browser refuses the stream,
+ * and no picture appears. Rebuilt, it plays.
+ */
+const AUDIO_IN_PIECES: Probe[] = [
+  { type: 'audio/mp4; codecs="mp4a.40.2"', name: "aac" },
+  { type: 'audio/mp4; codecs="opus"', name: "opus" },
+  { type: 'audio/mp4; codecs="flac"', name: "flac" },
+  { type: 'audio/mp4; codecs="ec-3"', name: "eac3" },
+  { type: 'audio/mp4; codecs="ac-3"', name: "ac3" },
+];
+
 /** The codecs a wide gamut film comes in, each asked at ten bits. */
 const WIDE_GAMUT: Probe[] = [
   { type: 'video/mp4; codecs="hvc1.2.4.L153.B0"', name: "hevc" },
@@ -94,6 +110,9 @@ export interface ClientProfile {
   /** Codecs this browser takes in a stream fed to it piece by piece. */
   rebuilt_video: RebuiltCapability[];
   audio_codecs: string[];
+  /** Sounds this browser takes in a stream fed to it piece by piece. Absent
+   *  inside the application, which takes in pieces whatever it decodes. */
+  rebuilt_audio?: string[];
   max_audio_channels: number | null;
   subtitle_formats: string[];
   /** The wide gamut pictures shown as they are, empty on a screen of
@@ -389,6 +408,7 @@ export async function clientProfile(asked?: Quality): Promise<ClientProfile> {
     video: VIDEO.filter((entry) => plays(entry.type)).map((entry) => ({ codec: entry.name })),
     rebuilt_video: rebuilt,
     audio_codecs: AUDIO.filter((entry) => plays(entry.type)).map((entry) => entry.name),
+    rebuilt_audio: AUDIO_IN_PIECES.filter((entry) => takesInPieces(entry.type)).map((entry) => entry.name),
     // A browser mixes down to what the machine has; it never says how many
     // channels that is. Two is what is safe to assume, and asking for more
     // is how a film comes out with no voices on a stereo setup.
