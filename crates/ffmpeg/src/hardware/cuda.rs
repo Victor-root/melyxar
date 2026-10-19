@@ -13,7 +13,7 @@ use std::path::Path;
 
 use super::trials::WIDE_GAMUT_CODEC;
 use super::{
-    converted_by_vulkan, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
+    converted_by_vulkan_and_brought_down, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
     CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
 };
 use crate::painting::{AT_THE_FOOT, PAINTED};
@@ -83,11 +83,9 @@ impl Driver for Cuda {
         reads_the_film: bool,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::ThroughVulkan { .. }) => vec![
-                converted_by_vulkan(scale_to_height),
-                "hwdownload".to_string(),
-                "format=nv12".to_string(),
-            ],
+            Some(ToneMapping::ThroughVulkan { .. }) => {
+                converted_by_vulkan_and_brought_down(scale_to_height)
+            }
             _ => handed_up_and_made_smaller(card, scale_to_height, false, reads_the_film),
         }
     }
@@ -328,23 +326,17 @@ mod tests {
 
     #[test]
     fn through_vulkan_the_picture_comes_down_at_its_final_size() {
-        assert_eq!(
-            through_vulkan(true).filters_for(Some(1080), true, true),
-            vec![
-                converted_by_vulkan(Some(1080)),
-                "hwdownload".to_string(),
-                "format=nv12".to_string(),
-            ]
-        );
+        // In one plane, then to the layout the encoder takes on the way: a
+        // picture of two planes came out of Vulkan green.
+        let down = through_vulkan(true).filters_for(Some(1080), true, true);
+        assert_eq!(down, converted_by_vulkan_and_brought_down(Some(1080)));
+        assert!(down[0].contains("format=bgra"), "{down:?}");
+        assert_eq!(down.last().map(String::as_str), Some("format=nv12"));
         // Read by the processor, the same chain: Vulkan takes the picture
         // from wherever it was read.
         assert_eq!(
             through_vulkan(false).filters_for(None, true, false),
-            vec![
-                converted_by_vulkan(None),
-                "hwdownload".to_string(),
-                "format=nv12".to_string(),
-            ]
+            converted_by_vulkan_and_brought_down(None)
         );
     }
 

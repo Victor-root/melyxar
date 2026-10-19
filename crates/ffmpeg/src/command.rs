@@ -1581,7 +1581,12 @@ mod tests {
 
         let graph = command.picture_painted_with_subtitles().expect("painted");
         assert!(graph.starts_with("[0:5]scale=1920:1080[words];[0:v:0]libplacebo=w=-2:h=1080:"), "{graph}");
-        assert!(graph.contains(",hwdownload,format=nv12[picture];"), "{graph}");
+        assert!(
+            graph.contains(
+                ",hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv,format=nv12[picture];"
+            ),
+            "{graph}"
+        );
         assert!(
             graph.ends_with(
                 "[picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'[painted]"
@@ -1620,11 +1625,67 @@ mod tests {
 
         assert_eq!(
             command.picture_painted_with_subtitles().expect("painted"),
-            "[0:4]scale=1280:720[words];[0:v:0]libplacebo=w=-2:h=720:format=nv12\
-             :colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=tv\
-             :tonemapping=auto,hwdownload[picture];\
+            "[0:4]scale=1280:720[words];[0:v:0]libplacebo=w=-2:h=720:format=bgra\
+             :colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=pc\
+             :tonemapping=auto,hwdownload,format=bgra,scale=out_color_matrix=bt709:out_range=tv\
+             ,format=nv12[picture];\
              [picture][words]overlay=shortest=0:x='(main_w-overlay_w)/2':y='main_h-overlay_h'\
              ,format=nv12,hwupload=derive_device=vaapi[painted]"
+        );
+    }
+
+    #[test]
+    fn a_wide_gamut_film_kept_on_the_card_is_painted_by_vulkan_and_never_comes_down() {
+        // The same film on a card whose recipe was proved to keep the picture
+        // there: converted, painted and passed to the encoder on the card.
+        let card = Card {
+            tone_mapping: Some(crate::hardware::ToneMapping::VulkanOnTheCard {
+                vulkan_reads: true,
+            }),
+            picture_subtitle_layout: None,
+            ..a_card()
+        };
+        let mut encode = VideoEncode::on_a_card(&card, "h264", true).expect("proved");
+        encode.tone_map = true;
+        encode.scale_to_height = Some(720);
+        encode.burn_in_subtitle = Some(4);
+        encode.picture_size = Some((3840, 1600));
+        let command = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_video(VideoOutput::Encode(encode.clone()));
+
+        let args = arguments(&command);
+        assert_eq!(args[position(&args, "-hwaccel").expect("read on the card") + 1], "vulkan");
+        assert_eq!(args[position(&args, "-filter_hw_device").expect("filters") + 1], "vk");
+        assert!(args.contains(&"h264_vaapi".to_string()), "{args:?}");
+
+        let painted = command.picture_painted_with_subtitles().expect("painted");
+        assert_eq!(
+            painted,
+            "[0:4]scale=1280:720,format=bgra,hwupload[words];\
+             [0:v:0]libplacebo=w=-2:h=720:format=bgra:colorspace=bt709\
+             :color_primaries=bt709:color_trc=bt709:range=pc:tonemapping=auto[picture];\
+             [picture][words]overlay_vulkan=x=224:y=0,hwmap=derive_device=vaapi,format=vaapi,\
+             scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv[painted]"
+        );
+        assert!(!painted.contains("hwdownload"), "{painted}");
+
+        // Without a subtitle, the same chain with nothing laid on the way.
+        encode.burn_in_subtitle = None;
+        let args = arguments(
+            &Command::new(
+                Input::new("/media/film.mkv"),
+                Output::File(PathBuf::from("/tmp/out.mp4")),
+            )
+            .with_video(VideoOutput::Encode(encode)),
+        );
+        assert_eq!(
+            args[position(&args, "-vf").expect("a chain") + 1],
+            "libplacebo=w=-2:h=720:format=bgra:colorspace=bt709:color_primaries=bt709\
+             :color_trc=bt709:range=pc:tonemapping=auto,hwmap=derive_device=vaapi,format=vaapi,\
+             scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
         );
     }
 

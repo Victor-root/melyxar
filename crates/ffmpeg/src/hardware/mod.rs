@@ -50,11 +50,22 @@ const DEVICE_NAME: &str = "card";
 /// The name given to the Vulkan device opened on the same card.
 const VULKAN_DEVICE_NAME: &str = "vk";
 
-/// What Vulkan is asked to make of a wide gamut picture: standard range, in
-/// the layout the encoder takes, converted the way the filter judges best for
-/// that film.
-const VULKAN_CONVERSION: &str = "format=nv12:colorspace=bt709:color_primaries=bt709\
-    :color_trc=bt709:range=tv:tonemapping=auto";
+/// What Vulkan is asked to make of a wide gamut picture: standard colours,
+/// converted the way the filter judges best for that film, in a picture of
+/// one plane.
+///
+/// One plane, because a picture of two does not come out of Vulkan whole:
+/// asked for the encoder's own layout, the colour plane came out empty and
+/// the picture green, on an Intel card and on Mesa's Vulkan alike, whether it
+/// came down to the processor or passed to the card. What follows brings it
+/// to the encoder's layout, in standard range.
+const VULKAN_CONVERSION: &str = "format=bgra:colorspace=bt709:color_primaries=bt709\
+    :color_trc=bt709:range=pc:tonemapping=auto";
+
+/// What brings the converted picture, once down on the processor, to the
+/// layout every encoder takes, in standard range. Done at its final size, it
+/// costs little.
+const BROUGHT_TO_THE_ENCODERS_LAYOUT: &str = "scale=out_color_matrix=bt709:out_range=tv";
 
 /// The path a card is driven by, which decides everything the tool is told
 /// about it.
@@ -207,6 +218,11 @@ pub enum ToneMapping {
     /// card for its encoder. Vulkan reads the film itself when it was proved
     /// to read a wide gamut one, and the processor reads it otherwise.
     VulkanBesideTheCard { vulkan_reads: bool },
+    /// Vulkan on the same card converts, a subtitle made of pictures is laid
+    /// there too, and the picture passes to the card's encoder without ever
+    /// coming down. Vulkan reads the film itself when it was proved to read a
+    /// wide gamut one, and the processor reads it otherwise.
+    VulkanOnTheCard { vulkan_reads: bool },
 }
 
 impl ToneMapping {
@@ -222,6 +238,10 @@ impl ToneMapping {
             Self::VulkanBesideTheCard { vulkan_reads: false } => {
                 "convert_wide_gamut_vulkan_beside_the_card"
             }
+            Self::VulkanOnTheCard { vulkan_reads: true } => {
+                "convert_wide_gamut_vulkan_reading_on_the_card"
+            }
+            Self::VulkanOnTheCard { vulkan_reads: false } => "convert_wide_gamut_vulkan_on_the_card",
         }
     }
 
@@ -230,7 +250,9 @@ impl ToneMapping {
         match self {
             Self::OwnFilter => false,
             Self::ThroughVulkan { reads } => reads,
-            Self::VulkanBesideTheCard { vulkan_reads } => vulkan_reads,
+            Self::VulkanBesideTheCard { vulkan_reads } | Self::VulkanOnTheCard { vulkan_reads } => {
+                vulkan_reads
+            }
         }
     }
 
@@ -246,6 +268,19 @@ impl ToneMapping {
             self,
             Self::ThroughVulkan { .. } | Self::VulkanBesideTheCard { .. }
         )
+    }
+
+    /// Whether a subtitle made of pictures is laid by Vulkan, where the
+    /// picture is once converted.
+    pub fn lays_on_vulkan(self) -> bool {
+        matches!(self, Self::VulkanOnTheCard { .. })
+    }
+
+    /// Whether what this recipe makes is to be looked at before it is kept:
+    /// a picture converted by Vulkan came out green, through a path where
+    /// every step said it had worked. The card's own filter never did.
+    fn looked_at_in_its_trial(self) -> bool {
+        !matches!(self, Self::OwnFilter)
     }
 }
 
@@ -347,7 +382,16 @@ impl Card {
     /// the picture comes down to it anyway, at its final size, which costs
     /// next to nothing.
     pub fn takes_a_picture_subtitle(&self, tone_map: bool) -> bool {
-        self.picture_subtitle_layout.is_some() || self.brings_the_picture_down(tone_map)
+        self.picture_subtitle_layout.is_some()
+            || self.brings_the_picture_down(tone_map)
+            || self.lays_on_vulkan(tone_map)
+    }
+
+    /// Whether a subtitle made of pictures is laid by Vulkan on the card,
+    /// given whether the colours are converted: the recipe that converts them
+    /// keeps the picture there, and proved it lays one at its trial.
+    pub fn lays_on_vulkan(&self, tone_map: bool) -> bool {
+        tone_map && self.tone_mapping.is_some_and(ToneMapping::lays_on_vulkan)
     }
 
     /// The encoder that produces one codec here, when this card produces it.
@@ -532,6 +576,18 @@ fn converted_by_vulkan(scale_to_height: Option<i32>) -> String {
         .map(|height| format!("w=-2:h={height}:"))
         .unwrap_or_default();
     format!("libplacebo={size}{VULKAN_CONVERSION}")
+}
+
+/// The same, brought down to the processor at its final size and to the
+/// layout every encoder takes.
+fn converted_by_vulkan_and_brought_down(scale_to_height: Option<i32>) -> Vec<String> {
+    vec![
+        converted_by_vulkan(scale_to_height),
+        "hwdownload".to_string(),
+        "format=bgra".to_string(),
+        BROUGHT_TO_THE_ENCODERS_LAYOUT.to_string(),
+        "format=nv12".to_string(),
+    ]
 }
 
 /// The part of a chain every path shares: the picture handed up when the

@@ -7,14 +7,17 @@
 //! Wide gamut colour is converted by the card's own filter where the driver
 //! has one, which Intel's has and AMD's has not. Otherwise Vulkan opened on the
 //! same card reads the film and converts it, or converts what the processor
-//! read, and the picture goes back to the card for its encoder.
+//! read, and the picture passes to the card's encoder: without leaving the
+//! card where that was proved to work and look right, by way of the processor
+//! otherwise.
 
 use std::path::{Path, PathBuf};
 
 use super::trials::WIDE_GAMUT_CODEC;
 use super::{
-    converted_by_vulkan, handed_up_and_made_smaller, opening_with, vulkan_on_the_card, Card,
-    CardPath, Driver, ToneMapping, WorkTally, DEVICE_NAME, VULKAN_DEVICE_NAME,
+    converted_by_vulkan, converted_by_vulkan_and_brought_down, handed_up_and_made_smaller,
+    opening_with, vulkan_on_the_card, Card, CardPath, Driver, ToneMapping, WorkTally,
+    DEVICE_NAME, VULKAN_DEVICE_NAME,
 };
 use crate::painting::PAINTED;
 
@@ -72,14 +75,17 @@ impl Driver for Vaapi {
     }
 
     // The card's own filter first: nothing leaves the card. Then Vulkan
-    // reading the film itself, and last Vulkan handed what the processor read.
-    // Handing Vulkan what the card's own reader read without a copy is not
-    // offered: tried on an RX 6600, it reset the card, and a trial run at
-    // every start must never do that.
+    // reading the film itself, and last Vulkan handed what the processor read,
+    // each with the picture passed to the encoder on the card before the same
+    // by way of the processor. Handing Vulkan what the card's own reader read
+    // without a copy is not offered: tried on an RX 6600, it reset the card,
+    // and a trial run at every start must never do that.
     fn recipes(&self) -> &'static [ToneMapping] {
         &[
             ToneMapping::OwnFilter,
+            ToneMapping::VulkanOnTheCard { vulkan_reads: true },
             ToneMapping::VulkanBesideTheCard { vulkan_reads: true },
+            ToneMapping::VulkanOnTheCard { vulkan_reads: false },
             ToneMapping::VulkanBesideTheCard { vulkan_reads: false },
         ]
     }
@@ -94,7 +100,7 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
     ) -> Vec<String> {
         match recipe {
-            Some(ToneMapping::VulkanBesideTheCard { .. }) => opening_with(
+            Some(ToneMapping::VulkanBesideTheCard { .. } | ToneMapping::VulkanOnTheCard { .. }) => opening_with(
                 card,
                 &vulkan_on_the_card(),
                 VULKAN_DEVICE_NAME,
@@ -112,8 +118,12 @@ impl Driver for Vaapi {
         recipe: Option<ToneMapping>,
         reads_the_film: bool,
     ) -> Vec<String> {
-        if let Some(ToneMapping::VulkanBesideTheCard { .. }) = recipe {
-            return through_vulkan(scale_to_height);
+        match recipe {
+            Some(ToneMapping::VulkanBesideTheCard { .. }) => return through_vulkan(scale_to_height),
+            Some(ToneMapping::VulkanOnTheCard { .. }) => {
+                return vec![converted_by_vulkan(scale_to_height)];
+            }
+            _ => {}
         }
         let tone_map = recipe == Some(ToneMapping::OwnFilter);
         let mut filters =
@@ -124,11 +134,21 @@ impl Driver for Vaapi {
         filters
     }
 
-    // The encoder only takes a picture on the card, and through Vulkan the
-    // picture came down to the processor.
+    // The encoder only takes a picture on the card. Beside the card, the
+    // picture came down to the processor and is handed up again; on it, the
+    // picture passes from Vulkan to the card where it is, and the card's own
+    // filter brings it to the layout the encoder takes, in standard range.
     fn back_up(&self, recipe: Option<ToneMapping>) -> Option<&'static str> {
-        matches!(recipe, Some(ToneMapping::VulkanBesideTheCard { .. }))
-            .then_some("format=nv12,hwupload=derive_device=vaapi")
+        match recipe {
+            Some(ToneMapping::VulkanBesideTheCard { .. }) => {
+                Some("format=nv12,hwupload=derive_device=vaapi")
+            }
+            Some(ToneMapping::VulkanOnTheCard { .. }) => Some(
+                "hwmap=derive_device=vaapi,format=vaapi,\
+                 scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv",
+            ),
+            _ => None,
+        }
     }
 
     // The card's own filter is fed by the card's own reader. Through Vulkan
@@ -136,9 +156,10 @@ impl Driver for Vaapi {
     // alone.
     fn reads_for(&self, card: &Card, codec: &str, recipe: Option<ToneMapping>) -> bool {
         match recipe {
-            Some(ToneMapping::VulkanBesideTheCard { vulkan_reads }) => {
-                vulkan_reads && codec == WIDE_GAMUT_CODEC
-            }
+            Some(
+                ToneMapping::VulkanBesideTheCard { vulkan_reads }
+                | ToneMapping::VulkanOnTheCard { vulkan_reads },
+            ) => vulkan_reads && codec == WIDE_GAMUT_CODEC,
             _ => card.reads(codec),
         }
     }
@@ -210,14 +231,13 @@ impl Driver for Vaapi {
     }
 }
 
-/// The chain that converts colour through Vulkan.
+/// The chain that converts colour through Vulkan beside the card.
 ///
 /// The conversion takes the picture from wherever it was read, makes it
 /// smaller as it converts, and it comes down at its final size to be handed
-/// back up to the card, since Vulkan cannot hand it back without a copy in the
-/// tool as it is published. Handing it back up is `back_up`'s.
+/// back up to the card. Handing it back up is `back_up`'s.
 fn through_vulkan(scale_to_height: Option<i32>) -> Vec<String> {
-    vec![converted_by_vulkan(scale_to_height), "hwdownload".to_string()]
+    converted_by_vulkan_and_brought_down(scale_to_height)
 }
 
 /// The cards driven by the open interface: every working device under
@@ -469,13 +489,78 @@ mod tests {
 
     #[test]
     fn a_card_without_its_own_conversion_tries_vulkan_reading_first() {
+        // Kept on the card before brought down, for each way of reading: a
+        // card whose picture comes out wrong on the card still converts the
+        // way it did before.
         assert_eq!(
             Vaapi.recipes(),
             &[
                 ToneMapping::OwnFilter,
+                ToneMapping::VulkanOnTheCard { vulkan_reads: true },
                 ToneMapping::VulkanBesideTheCard { vulkan_reads: true },
+                ToneMapping::VulkanOnTheCard { vulkan_reads: false },
                 ToneMapping::VulkanBesideTheCard { vulkan_reads: false },
             ]
+        );
+    }
+
+    fn on_the_card(vulkan_reads: bool) -> Card {
+        Card {
+            tone_mapping: Some(ToneMapping::VulkanOnTheCard { vulkan_reads }),
+            ..card(true, false)
+        }
+    }
+
+    #[test]
+    fn on_the_card_the_film_is_opened_as_beside_it() {
+        for reads in [true, false] {
+            assert_eq!(
+                on_the_card(true).opening_arguments(reads, true),
+                through_vulkan(true).opening_arguments(reads, true)
+            );
+        }
+        assert!(on_the_card(true).reads_for("hevc", true));
+        assert!(!on_the_card(true).reads_for("av1", true));
+        assert!(!on_the_card(false).reads_for("hevc", true));
+    }
+
+    #[test]
+    fn on_the_card_the_converted_picture_passes_to_the_encoder_without_coming_down() {
+        for reads_the_film in [true, false] {
+            let filters = on_the_card(true).filters_for(Some(1080), true, reads_the_film);
+            assert_eq!(
+                filters,
+                vec![
+                    converted_by_vulkan(Some(1080)),
+                    "hwmap=derive_device=vaapi,format=vaapi,\
+                     scale_vaapi=format=nv12:out_color_matrix=bt709:out_range=tv"
+                        .to_string(),
+                ]
+            );
+            assert!(!filters.iter().any(|value| value.contains("hwdownload")), "{filters:?}");
+        }
+        // One plane, full range, which is what passes across whole; the
+        // card's filter brings it to the encoder's layout in standard range.
+        assert!(converted_by_vulkan(None).contains("format=bgra"));
+        assert!(converted_by_vulkan(None).contains("range=pc"));
+        // A film whose colours are left alone is not touched by any of it.
+        assert_eq!(
+            on_the_card(true).filters_for(None, false, true),
+            card(true, false).filters_for(None, false, true)
+        );
+    }
+
+    #[test]
+    fn on_the_card_a_picture_subtitle_is_laid_by_vulkan() {
+        let converting = on_the_card(true);
+        assert!(!converting.brings_the_picture_down(true));
+        assert!(converting.lays_on_vulkan(true));
+        assert!(converting.takes_a_picture_subtitle(true), "AMD lays none of its own");
+        assert!(!converting.lays_on_vulkan(false), "the picture is never on Vulkan");
+        assert!(!converting.takes_a_picture_subtitle(false));
+        assert_eq!(
+            converting.filters_until_it_comes_down(Some(720), true, true),
+            vec![converted_by_vulkan(Some(720))]
         );
     }
 
@@ -519,13 +604,11 @@ mod tests {
         // Read by Vulkan or by the processor, the same chain: the conversion
         // takes the picture from wherever it was read.
         for reads_the_film in [true, false] {
+            let mut expected = converted_by_vulkan_and_brought_down(Some(1080));
+            expected.push("format=nv12,hwupload=derive_device=vaapi".to_string());
             assert_eq!(
                 through_vulkan(true).filters_for(Some(1080), true, reads_the_film),
-                vec![
-                    converted_by_vulkan(Some(1080)),
-                    "hwdownload".to_string(),
-                    "format=nv12,hwupload=derive_device=vaapi".to_string(),
-                ]
+                expected
             );
         }
     }
@@ -539,7 +622,7 @@ mod tests {
         assert!(!converting.takes_a_picture_subtitle(false), "the picture stays up");
         assert_eq!(
             converting.filters_until_it_comes_down(Some(720), true, true),
-            vec![converted_by_vulkan(Some(720)), "hwdownload".to_string()]
+            converted_by_vulkan_and_brought_down(Some(720))
         );
         assert_eq!(
             converting.back_up(true),

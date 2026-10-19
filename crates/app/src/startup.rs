@@ -297,7 +297,17 @@ fn report_the_card(capabilities: &Capabilities) {
     let search = &capabilities.card_search;
 
     for trial in &search.trials {
-        if trial.worked {
+        if trial.worked && !trial.said.is_empty() {
+            // What a trial that looks at the picture saw, kept beside the
+            // verdict: a card's colours a few steps from the line are worth
+            // knowing before they are the wrong side of it.
+            tracing::info!(
+                what = trial.what,
+                device = trial.device,
+                said = trial.said,
+                "the card can do this"
+            );
+        } else if trial.worked {
             tracing::info!(
                 what = trial.what,
                 device = trial.device,
