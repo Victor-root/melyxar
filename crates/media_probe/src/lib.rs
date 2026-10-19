@@ -754,7 +754,7 @@ mod tests {
             .expect("the tool runs");
         assert!(status.success());
 
-        let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("tools are installed");
+        let tools = melyxar_ffmpeg::testing::tools();
         let report = melyxar_ffmpeg::probe::probe(&tools, &media)
             .await
             .expect("the file analyses");

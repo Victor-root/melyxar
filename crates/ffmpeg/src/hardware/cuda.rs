@@ -118,10 +118,6 @@ impl Driver for Cuda {
         &["-forced-idr", "1"]
     }
 
-    fn pads_hevc_without_saying(&self) -> bool {
-        false
-    }
-
     // The driver keeps no tally for the work done through the compute
     // interface, its own library is asked instead.
     fn work_tally(&self, card: &Card) -> WorkTally {

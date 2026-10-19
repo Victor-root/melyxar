@@ -1342,7 +1342,7 @@ mod tests {
             .await
             .expect("access refreshed");
 
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         AppState::new(config, database, tools, capabilities)
     }
 

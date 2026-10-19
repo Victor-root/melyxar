@@ -92,7 +92,6 @@ async fn a_server(directory: &Path, root: PathBuf, tool: PathBuf) -> (AppState, 
         },
         media_tools: MediaToolsConfig {
             whisper_path: Some(tool),
-            ..Default::default()
         },
         libraries: vec![LibraryConfig {
             name: "Home".into(),
@@ -118,7 +117,7 @@ async fn a_server(directory: &Path, root: PathBuf, tool: PathBuf) -> (AppState, 
         .expect("the library asks to have its videos listened to");
     let library = database.library_by_name("Home").await.expect("read").expect("declared");
 
-    let (tools, capabilities) = melyxar_app::startup::detect_media_tools(&config).await;
+    let (tools, capabilities) = melyxar_app::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
     (AppState::new(config, database, tools, capabilities), library)
 }
 
@@ -185,7 +184,7 @@ async fn subtitles_by_file(state: &AppState, library: &Library) -> Vec<(String, 
 async fn a_video_with_a_voice_and_no_subtitle_gets_one_marked_as_generated() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let ffmpeg = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here").ffmpeg;
+    let ffmpeg = melyxar_ffmpeg::testing::tools().ffmpeg;
     some_videos(&ffmpeg, &root).await;
     let tool = a_tool_that_hears(directory.path());
 
@@ -248,7 +247,7 @@ async fn a_video_with_a_voice_and_no_subtitle_gets_one_marked_as_generated() {
 async fn a_tool_that_cannot_listen_leaves_the_video_waiting_and_writes_nothing() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let root = directory.path().join("media");
-    let ffmpeg = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here").ffmpeg;
+    let ffmpeg = melyxar_ffmpeg::testing::tools().ffmpeg;
     some_videos(&ffmpeg, &root).await;
     let tool = a_tool_that_fails(directory.path());
 

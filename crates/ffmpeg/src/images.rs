@@ -559,7 +559,7 @@ mod tests {
 
         let small = folder.path().join("poster-200.webp");
         let large = folder.path().join("poster-800.webp");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         resize(&tools, &source, &[(200, &small), (800, &large)])
             .await
             .expect("the tool accepted the command");
@@ -783,7 +783,7 @@ mod tests {
         }
 
         let written = folder.path().join("logo-340.webp");
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         resize(&tools, &source, &[(340, &written)])
             .await
             .expect("the tool accepted the command");

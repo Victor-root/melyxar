@@ -201,29 +201,10 @@ impl VideoEncode {
         })
     }
 
-    /// Whether what comes out is HEVC, whoever writes it.
-    pub(crate) fn writes_hevc(&self) -> bool {
-        writes_hevc(&self.encoder)
-    }
-
     /// How large the picture comes out, when the size it is read at is known.
     pub(crate) fn rebuilt_size(&self) -> Option<(i32, i32)> {
         self.picture_size
             .map(|picture| rebuilt_size(picture, self.scale_to_height))
-    }
-
-    /// The size written into the stream after the encoder, for a card that
-    /// pads the picture without saying how much of it to show.
-    ///
-    /// Each description of the picture is told the same visible size, whatever
-    /// size it was written for. Only an even size can be cut to, the colour
-    /// being halved in both directions.
-    fn size_to_show(&self) -> Option<String> {
-        let (card, _) = self.card()?;
-        let (width, height) = self.rebuilt_size()?;
-        let even = width % 2 == 0 && height % 2 == 0;
-        (card.pads_hevc_without_saying() && self.writes_hevc() && even)
-            .then(|| format!("hevc_metadata=width={width}:height={height}"))
     }
 
     /// The card doing the work, and whether it reads the film as well.
@@ -748,10 +729,6 @@ impl Command {
                     Rebuilding::OnACard { card, .. } => {
                         for argument in card.encoder_arguments() {
                             push!(&argument);
-                        }
-                        if let Some(shown) = encode.size_to_show() {
-                            push!("-bsf:v");
-                            push!(&shown);
                         }
                         if let Some(bitrate) = encode.max_bitrate {
                             push!("-b:v");
@@ -1502,58 +1479,6 @@ mod tests {
         let forced = position(&args, "-forced-idr").expect("forced key frames start a segment");
         assert_eq!(args[forced + 1], "1");
         assert!(forced > position(&args, "-force_key_frames").expect("key frames are forced"));
-    }
-
-    /// The size written into the stream after the encoder, if any.
-    fn size_shown(encode: VideoEncode) -> Option<String> {
-        let args = arguments(
-            &Command::new(
-                Input::new("/media/film.mkv"),
-                Output::File(PathBuf::from("/tmp/out.mp4")),
-            )
-            .with_video(VideoOutput::Encode(encode)),
-        );
-        position(&args, "-bsf:v").map(|at| args[at + 1].clone())
-    }
-
-    #[test]
-    fn hevc_from_the_open_interface_is_told_the_size_to_show() {
-        // A wide film made 1080 lines tall: the encoder pads it to 2624 by
-        // 1088 in its key frames, and what is shown is cut back to this.
-        let mut encode = VideoEncode::on_a_card(&a_card(), "hevc", true).expect("proved");
-        encode.scale_to_height = Some(1080);
-        encode.picture_size = Some((3840, 1600));
-        assert_eq!(
-            size_shown(encode.clone()),
-            Some("hevc_metadata=width=2592:height=1080".to_string())
-        );
-
-        // Left at its own size, the size it is read at.
-        encode.scale_to_height = None;
-        encode.picture_size = Some((1920, 1080));
-        assert_eq!(
-            size_shown(encode),
-            Some("hevc_metadata=width=1920:height=1080".to_string())
-        );
-    }
-
-    #[test]
-    fn the_size_to_show_is_only_written_where_it_is_known_and_needed() {
-        let mut unknown = VideoEncode::on_a_card(&a_card(), "hevc", true).expect("proved");
-        unknown.scale_to_height = Some(1080);
-        assert_eq!(size_shown(unknown), None, "nothing is guessed");
-
-        let mut odd = VideoEncode::on_a_card(&a_card(), "hevc", true).expect("proved");
-        odd.picture_size = Some((1920, 1081));
-        assert_eq!(size_shown(odd), None, "an odd size cannot be cut to");
-
-        let mut other_codec = VideoEncode::on_a_card(&a_card(), "h264", true).expect("proved");
-        other_codec.picture_size = Some((1920, 1080));
-        assert_eq!(size_shown(other_codec), None);
-
-        let mut nvidia = VideoEncode::on_a_card(&an_nvidia_card(), "hevc", true).expect("proved");
-        nvidia.picture_size = Some((1920, 1080));
-        assert_eq!(size_shown(nvidia), None);
     }
 
     #[test]

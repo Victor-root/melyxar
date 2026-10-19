@@ -145,10 +145,7 @@ mod tests {
     async fn a_song_the_browser_cannot_play_comes_out_as_one_it_can() {
         use tokio::io::AsyncReadExt;
 
-        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, nothing was converted");
-            return;
-        };
+        let tools = crate::testing::tools();
         let directory = tempfile::tempdir().expect("temporary directory");
         let song = directory.path().join("Quiet Harbour.m4a");
         let made = TokioCommand::new(&tools.ffmpeg)

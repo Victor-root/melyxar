@@ -123,7 +123,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_real_song_comes_out_as_long_as_it_was_cut() {
-        let tools = crate::ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let folder = tempfile::tempdir().expect("folder");
         let song = folder.path().join("tone.flac");
         let made = std::process::Command::new(&tools.ffmpeg)

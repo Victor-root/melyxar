@@ -383,10 +383,7 @@ mod tests {
     /// but the tool can say so.
     #[tokio::test]
     async fn a_real_film_gives_up_its_thumbnails_in_one_reading() {
-        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, the reading was not exercised");
-            return;
-        };
+        let tools = crate::testing::tools();
         let directory = tempfile::tempdir().expect("temporary directory");
         let film = directory.path().join("Quiet.Harbour.2019.mkv");
         // Twenty five seconds, so three thumbnails at one every ten.
@@ -462,10 +459,7 @@ mod tests {
     /// tell from a stop that did not work.
     #[tokio::test]
     async fn a_reading_given_up_on_ends_the_tool_rather_than_running_it_to_the_end() {
-        let Ok(tools) = crate::ToolPaths::discover(None, None) else {
-            eprintln!("no media tool here, the reading was not exercised");
-            return;
-        };
+        let tools = crate::testing::tools();
         let directory = tempfile::tempdir().expect("temporary directory");
         let film = directory.path().join("Long.Crossing.2019.mkv");
         // Long enough that reading it through takes far more than the moment

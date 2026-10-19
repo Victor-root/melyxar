@@ -15,5 +15,9 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[features]
+# What the tests of the crates that run the tools find them with.
+testing = []
+
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -97,7 +97,7 @@ fn about(found: Millis, expected: f32) -> bool {
 
 #[tokio::test]
 async fn the_opening_survives_being_encoded_and_read_back() {
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     let directory = tempfile::tempdir().expect("temporary directory");
 
     // Six seconds of opening, held by both episodes, at two distances that
@@ -170,7 +170,7 @@ async fn two_real_episodes_sharing_no_opening_share_nothing() {
     // The answer that has to be right even more than the other one: a season
     // whose episodes open straight into the story must get no skip button at
     // all, rather than one over its first scene.
-    let tools = melyxar_ffmpeg::ToolPaths::discover(None, None).expect("the tools are here");
+    let tools = melyxar_ffmpeg::testing::tools();
     let directory = tempfile::tempdir().expect("temporary directory");
 
     let first = an_episode(&tools.ffmpeg, directory.path(), "first", 20.0, &[], 0.0, 41).await;

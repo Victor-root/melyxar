@@ -2302,7 +2302,7 @@ mod tests {
             .expect("work created");
 
         let (tools, capabilities) = match with_tools {
-            true => crate::startup::detect_media_tools(&config).await,
+            true => crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await,
             false => (None, None),
         };
 

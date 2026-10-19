@@ -2379,7 +2379,7 @@ mod tests {
             ..melyxar_config::Config::default()
         };
         crate::startup::prepare_directories(&config).expect("directories prepared");
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         assert!(tools.is_some(), "the tools are installed here");
 
         let database = Database::open_in_memory().await.expect("database opens");

@@ -690,7 +690,7 @@ mod tests {
             .await
             .expect("account created");
 
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         let state = AppState::new(config, database, tools, capabilities);
         (directory, state, source_id, made)
     }

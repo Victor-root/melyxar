@@ -396,9 +396,7 @@ mod tests {
     /// Writes tags into a copy of a fixture the way a tagging program would,
     /// with the tool the server runs on. Answers false where there is none.
     fn tagged(root: &Path, relative: &str, fixture_name: &str, tags: &[(&str, &str)]) -> bool {
-        let Ok(tools) = melyxar_ffmpeg::ToolPaths::discover(None, None) else {
-            return false;
-        };
+        let tools = melyxar_ffmpeg::testing::tools();
         let path = root.join(relative);
         std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
         let mut command = Command::new(&tools.ffmpeg);
@@ -419,7 +417,7 @@ mod tests {
     async fn music_library(directory: &Path, root: &Path) -> (AppState, Library) {
         let (config, database, library) =
             crate::a_test_server(directory, "music", vec![("disk-one", root.to_path_buf())]).await;
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         (
             AppState::new(config, database, tools, capabilities),
             library,
@@ -819,9 +817,7 @@ mod picture_tests {
     /// none: pictures are made with it, so without it there is nothing to
     /// test.
     fn run(arguments: &[&std::ffi::OsStr]) -> bool {
-        let Ok(tools) = melyxar_ffmpeg::ToolPaths::discover(None, None) else {
-            return false;
-        };
+        let tools = melyxar_ffmpeg::testing::tools();
         let status = Command::new(&tools.ffmpeg)
             .args(["-hide_banner", "-loglevel", "error", "-y"])
             .args(arguments)
@@ -856,7 +852,7 @@ mod picture_tests {
     async fn library(directory: &Path, root: &Path) -> (AppState, Library) {
         let (config, database, library) =
             crate::a_test_server(directory, "music", vec![("disk-one", root.to_path_buf())]).await;
-        let (tools, capabilities) = crate::startup::detect_media_tools(&config).await;
+        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
         (
             AppState::new(config, database, tools, capabilities),
             library,

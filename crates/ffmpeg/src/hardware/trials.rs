@@ -693,7 +693,6 @@ fn shortened(text: &str) -> String {
 mod tests {
     use super::super::test_cards::nvidia as nvidia_card;
     use super::*;
-    use crate::ToolPaths;
 
     /// A picture of `LOOKED_AT` of one colour, striped across around one
     /// brightness, so that it has a shape to follow.
@@ -798,7 +797,7 @@ mod tests {
         // The comparison run end to end with what every machine has: the
         // sample converted on the processor and written by a software
         // encoder, looked at as the card's would be.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let sample = wide_gamut_sample(&tools.ffmpeg).await.expect("a sample is written");
         let (worked, said) = looks_right(
             &tools.ffmpeg,
@@ -816,7 +815,7 @@ mod tests {
     async fn the_processors_painted_picture_is_written_and_looked_at() {
         // What a card's painted picture is set beside, written by every
         // build, and judged alike to itself.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let painted = Sample::named("melyxar-processor-painted-test");
         let (worked, said) = run_briefly(
             &tools.ffmpeg,
@@ -835,7 +834,7 @@ mod tests {
         // Written by a software encoder on every machine: kept when it is
         // the picture, refused when what comes out has lost its shapes, as a
         // stream whose headers misdescribe it does.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let (worked, said) =
             writes_it_right(&tools.ffmpeg, Vec::new(), "libx264", "format=yuv420p").await;
         assert!(worked, "{said}");
@@ -854,7 +853,7 @@ mod tests {
     async fn a_picture_left_unconverted_is_caught() {
         // Wide gamut colour left as it was is what a wrong conversion looks
         // like at its mildest: washed out and off in colour.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let sample = wide_gamut_sample(&tools.ffmpeg).await.expect("a sample is written");
         let (worked, said) = looks_right(
             &tools.ffmpeg,
@@ -908,7 +907,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_witness_written_in_software_is_a_film_in_its_codec() {
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         for (codec, encoder, speed) in SOFTWARE_WITNESSES {
             let writer = WitnessWriter::Software {
                 encoder: (*encoder).to_string(),
@@ -936,7 +935,7 @@ mod tests {
         // ask for a picture labelled wide gamut, it asks for these numbers,
         // and a picture made on the spot has none: the trial was establishing
         // that a card cannot convert colour on every card that can.
-        let tools = ToolPaths::discover(None, None).expect("the tools are installed here");
+        let tools = crate::testing::tools();
         let sample = wide_gamut_sample(&tools.ffmpeg)
             .await
             .expect("a sample is written");
