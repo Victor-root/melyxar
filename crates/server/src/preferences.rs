@@ -7,6 +7,7 @@
 use axum::extract::State;
 use axum::{Json, Router};
 use melyxar_app::AppState;
+use melyxar_core::id::LibraryId;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
     Backdrop, DownmixMethod, HeaderButton, HomeSection, Preferences, SubtitleMode, ThemeMode,
@@ -82,12 +83,14 @@ struct PreferencesView {
     backdrop_light: i64,
     /// Whether this account is left off the list the sign in screen offers.
     hidden_at_the_door: bool,
-    /// Every kind of library, in the order the home page lays them out.
-    home_order: Vec<&'static str>,
-    /// Every section of the home page below its banner, in the order it lays
-    /// them out, and those it leaves off.
-    home_sections: Vec<&'static str>,
-    hidden_home_sections: Vec<&'static str>,
+    /// Every library this account sees, in the order the tiles of the home
+    /// page lay them out, a library added since among them.
+    home_order: Vec<String>,
+    /// Every section of the home page below its banner, the row of each
+    /// library this account sees among them, in the order it lays them out,
+    /// and those it leaves off.
+    home_sections: Vec<String>,
+    hidden_home_sections: Vec<String>,
     /// How far the player's two step buttons jump, in seconds.
     step_back_seconds: i64,
     step_on_seconds: i64,
@@ -311,9 +314,9 @@ async fn write(
     if let Some(order) = body.home_order {
         chosen.home_order = order
             .iter()
-            .map(|kind| LibraryKind::parse(kind))
+            .map(|library| library.parse().ok())
             .collect::<Option<_>>()
-            .ok_or_else(|| ServerError::invalid_input("no kind of library goes by that name"))?;
+            .ok_or_else(|| ServerError::invalid_input("that is not a library"))?;
     }
     if let Some(sections) = body.home_sections {
         chosen.home_sections = sections_named(&sections)?;
@@ -424,6 +427,8 @@ async fn view(
     chosen: Preferences,
 ) -> Result<Json<PreferencesView>> {
     let available = melyxar_app::preferences::languages_available(state, who).await?;
+    let (home_order, home_sections) =
+        melyxar_app::catalogue::home_layout(state, who, &chosen).await?;
     Ok(Json(PreferencesView {
         interface_language: chosen.interface_language,
         theme_mode: chosen.theme_mode.as_str(),
@@ -467,16 +472,12 @@ async fn view(
         backdrop: chosen.backdrop.as_str(),
         backdrop_light: chosen.backdrop_light,
         hidden_at_the_door: chosen.hidden_at_the_door,
-        home_order: chosen.home_order.iter().map(|kind| kind.as_str()).collect(),
-        home_sections: chosen
-            .home_sections
-            .iter()
-            .map(|section| section.as_str())
-            .collect(),
+        home_order: home_order.iter().map(LibraryId::to_db_string).collect(),
+        home_sections: home_sections.iter().map(|section| section.name()).collect(),
         hidden_home_sections: chosen
             .hidden_home_sections
             .iter()
-            .map(|section| section.as_str())
+            .map(|section| section.name())
             .collect(),
         step_back_seconds: chosen.step_back_seconds,
         step_on_seconds: chosen.step_on_seconds,
