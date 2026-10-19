@@ -166,6 +166,8 @@ en|accounts_changed|Password updated. All devices signed in to this account have
 fr|accounts_changed|Mot de passe modifié. Tous les appareils connectés à ce compte ont été déconnectés.
 en|menu_writes|Manage write access to media folders
 fr|menu_writes|Gérer l’accès en écriture aux dossiers multimédias
+en|menu_test_films|Build a library of test films
+fr|menu_test_films|Créer une bibliothèque de films d’essai
 en|section_writes|Media folder write access
 fr|section_writes|Accès en écriture aux dossiers multimédias
 en|writes_notice|Melyxar has read-only access to media by default. Grant write access to enable deletion of media files from disk. Access to other folders is unchanged.
@@ -390,6 +392,20 @@ en|bench_held|All performance targets were met at this library size.
 fr|bench_held|Tous les objectifs de performance ont été atteints pour cette taille de bibliothèque.
 en|bench_missed|At least one performance target was missed. See the table above for details.
 fr|bench_missed|Au moins un objectif de performance n’a pas été atteint. Consultez le tableau ci-dessus.
+en|section_test_films|Test films
+fr|section_test_films|Films d’essai
+en|test_films_notice|Downloads free films (about %s GB) and makes difficult cases from them: HDR, Dolby Vision, picture and styled subtitles, interlaced video, TrueHD and DTS sound, chapters, broken and very long files. About twenty minutes the first time; running it again only adds what is missing.
+fr|test_films_notice|Télécharge des films libres de droits (environ %s Go) et en fabrique des cas difficiles : HDR, Dolby Vision, sous-titres en images et stylés, vidéo entrelacée, son TrueHD et DTS, chapitres, fichiers abîmés et très longs. Une vingtaine de minutes la première fois ; relancé, il n’ajoute que ce qui manque.
+en|prompt_test_films_folder|Folder for the test films
+fr|prompt_test_films_folder|Dossier des films d’essai
+en|err_test_films_space|Not enough room in %s: about %s GB are needed.
+fr|err_test_films_space|Pas assez de place dans %s : il faut environ %s Go.
+en|step_test_films|Downloading and making the test films
+fr|step_test_films|Téléchargement et fabrication des films d’essai
+en|test_films_done|Test films ready in %s. Add this folder as a Films library in Melyxar. What each film tests is described in scripts/test-films/README.md.
+fr|test_films_done|Films d’essai prêts dans %s. Ajoutez ce dossier comme bibliothèque de films dans Melyxar. Ce que teste chaque film est décrit dans scripts/test-films/README.md.
+en|test_films_failed|Some test films could not be made. Run this again to pick up where it stopped, with -v to see why.
+fr|test_films_failed|Certains films d’essai n’ont pas pu être faits. Relancez pour reprendre là où ça s’est arrêté, avec -v pour voir pourquoi.
 en|lines_counted|Lockfiles and images are excluded from the count.
 fr|lines_counted|Les fichiers de verrouillage et les images sont exclus du décompte.
 en|section_build|Building
@@ -1777,6 +1793,42 @@ action_bench() {
   fi
 }
 
+# Where the test films go unless somebody says otherwise: out of the data
+# folder, which backups take whole.
+TEST_FILMS_DIR="/srv/melyxar-test-films"
+
+# What the test films take, downloads and made ones together, with room to
+# spare for the one being made.
+TEST_FILMS_GB="8"
+
+# Built by the folder's own script with the tool the server uses, then made
+# readable by the server, which only reads them.
+action_test_films() {
+  is_installed || die "$(tr_msg err_not_installed)"
+  need_command curl
+  need_command python3
+  need_command iconv
+
+  section "$(tr_msg section_test_films)"
+  info "$(tr_fmt test_films_notice "$TEST_FILMS_GB")"
+
+  local folder ffmpeg free_gb
+  folder="$(prompt_default "$(tr_msg prompt_test_films_folder)" "$TEST_FILMS_DIR")"
+  mkdir -p "$folder"
+  free_gb="$(($(df --output=avail -k "$folder" | tail -1) / 1024 / 1024))"
+  ((free_gb >= TEST_FILMS_GB)) || die "$(tr_fmt err_test_films_space "$folder" "$TEST_FILMS_GB")"
+
+  ffmpeg="${MEDIA_TOOLS_DIR}/bin/ffmpeg"
+  [[ -x "$ffmpeg" ]] || ffmpeg="$(command -v ffmpeg)"
+
+  if step "$(tr_msg step_test_films)" bash "${SOURCE_DIR}/scripts/test-films/build.sh" "$ffmpeg" "$folder"; then
+    chmod -R a+rX "$folder"
+    success "$(tr_fmt test_films_done "$folder")"
+  else
+    warn "$(tr_msg test_films_failed)"
+  fi
+}
+
 action_accounts() {
   is_installed || die "$(tr_msg err_not_installed)"
 
@@ -2143,6 +2195,7 @@ menu() {
   printf "   %b8%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_accounts)"
   printf "   %b9%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
   printf "  %b10%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_writes)"
+  printf "  %b11%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_test_films)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -2160,6 +2213,7 @@ menu() {
     8) action_accounts ;;
     9) action_lines ;;
     10) action_writes ;;
+    11) action_test_films ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
@@ -2198,6 +2252,7 @@ main() {
     bench)     action_bench ;;
     accounts)  action_accounts ;;
     lines)     action_lines ;;
+    test-films) action_test_films ;;
     # Without a terminal there is nobody to answer the menu, and an install is
     # far too heavy a thing to start on a default nobody chose.
     "")        has_terminal || die "$(tr_msg err_no_terminal)"; menu ;;
