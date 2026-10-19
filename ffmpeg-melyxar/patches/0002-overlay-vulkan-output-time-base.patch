@@ -1,0 +1,24 @@
+overlay_vulkan: give the output the main input's time base
+
+The output link kept no time base of its own, and framesync worked in the
+finest time base of its two inputs, which every picture leaving the filter
+then carried. When the main picture and the overlay do not share a time base
+(a film and its subtitle, always), the timestamps came out many times too
+large and a player placed nothing: measured with a film in 1/1000 and a
+subtitle in 1/90000, the second picture came out at 3.6 seconds rather than
+0.04. Both are now the main input's, as overlay_vaapi sets them.
+
+--- a/libavfilter/vf_overlay_vulkan.c
++++ b/libavfilter/vf_overlay_vulkan.c
+@@ -190,6 +190,11 @@
+     if (err < 0)
+         return err;
+ 
++    /* The pictures that come out carry the timestamps framesync gives them,
++     * in its own time base: both are made the main input's, as overlay_vaapi
++     * does. */
++    s->fs.time_base = outlink->time_base = avctx->inputs[0]->time_base;
++
+     return ff_framesync_configure(&s->fs);
+ }
+ 

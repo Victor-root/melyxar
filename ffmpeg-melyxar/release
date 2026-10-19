@@ -7,7 +7,7 @@
 # version string ends with: "9.0.2-melyxar1".
 FFMPEG_VERSION="9.0.2"
 FFMPEG_SHA256="8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
-MELYXAR_REVISION="2"
+MELYXAR_REVISION="3"
 
 # libplacebo, which the colour conversion through Vulkan is made of, built
 # here too because FFmpeg 9 wants a newer one than Debian 13 has. Pinned to
