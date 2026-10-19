@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Melyxar" parent="android:Theme.Material.NoActionBar">
+    <!-- Light by day and dark by night (values-night), after the device: the
+         web view tells the page the device is dark only when the theme is,
+         so a dark theme here kept "follow the system" dark on a light phone.
+         The screens draw their own colours; only the ground is set here. -->
+    <style name="Theme.Melyxar" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/ground</item>
         <item name="android:colorBackground">@color/ground</item>
     </style>
