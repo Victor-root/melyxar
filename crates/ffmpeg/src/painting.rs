@@ -37,7 +37,7 @@ use melyxar_core::time::Millis;
 
 use crate::command::{rebuilt_size, Command, VideoEncode};
 use crate::hardware::{
-    Card, CardPath, A_GENERATED_PICTURE_SIZE, LOOKED_AT_HEIGHT, TRIAL_HEIGHT,
+    Card, CardPath, A_GENERATED_PICTURE_SIZE, LOOKED_AT_HEIGHT, TRIAL_HEIGHT, VULKAN_LAYOUT,
 };
 
 /// The canvas a subtitle made of pictures is drawn on: the one every Blu-ray
@@ -220,7 +220,7 @@ pub(crate) fn graph(picture: &str, before: Option<&str>, subtitle: i32, place: &
                 .map(|filters| format!(",{filters}"))
                 .unwrap_or_default();
             format!(
-                "[0:{subtitle}]{brought}format=bgra,hwupload[words];\
+                "[0:{subtitle}]{brought}format={VULKAN_LAYOUT},hwupload[words];\
                  {picture}[words]overlay_vulkan{placed}{after}{PAINTED}"
             )
         }
@@ -502,9 +502,9 @@ mod tests {
         assert_eq!(*sized, Some((1422, 800)), "fitted to the picture's height");
         assert_eq!(*at, Some((249, 0)), "centred across, at the foot");
         assert_eq!(
-            graph("[0:0]", Some("libplacebo=format=bgra"), 3, &place),
-            "[0:3]scale=1422:800,format=bgra,hwupload[words];\
-             [0:0]libplacebo=format=bgra[picture];[picture][words]\
+            graph("[0:0]", Some("libplacebo=format=rgba"), 3, &place),
+            "[0:3]scale=1422:800,format=rgba,hwupload[words];\
+             [0:0]libplacebo=format=rgba[picture];[picture][words]\
              overlay_vulkan=x=249:y=0,hwmap=derive_device=vaapi[painted]"
         );
 
@@ -518,7 +518,7 @@ mod tests {
         // rather than not at all.
         assert_eq!(
             graph("[0:0]", None, 3, &on_vulkan(None, CANVAS, None)),
-            "[0:3]format=bgra,hwupload[words];[0:0][words]overlay_vulkan[painted]"
+            "[0:3]format=rgba,hwupload[words];[0:0][words]overlay_vulkan[painted]"
         );
     }
 

@@ -416,13 +416,17 @@ pub(crate) const LOOKED_AT_HEIGHT: i32 = 2160;
 const ALLOWED_BRIGHTNESS: f64 = 90.0;
 const ALLOWED_COLOUR: f64 = 45.0;
 
-/// How closely the shapes of the card's picture must follow the processor's,
-/// as the correlation of their brightness, from 1 for the same shapes to 0
-/// for none in common.
+/// How closely the card's picture must follow the processor's, as the
+/// correlation of their brightness and of each of their colour planes, from
+/// 1 for the same shapes to 0 for none in common.
 ///
-/// Measured on the sample through Mesa's Vulkan: a right picture 0.78, the
-/// different curve accounting for the rest. The same picture scattered or
-/// read with the wrong stride, as a misread layout does, stays under 0.15.
+/// Measured on the sample through Mesa's Vulkan: a right picture 0.78 in
+/// brightness, the different curve accounting for the rest, and 0.99 in
+/// colour. The same picture scattered or read with the wrong stride, as a
+/// misread layout does, stays under 0.15 in brightness; with red and blue
+/// exchanged, as a layout that puts blue first came out, its colour planes
+/// fall to 0.11 and below. Averages alone missed that: on the sample the
+/// exchanged colours average out much as the right ones do.
 const ALIKE_IN_SHAPE: f64 = 0.5;
 
 /// Converts the wide gamut sample on the card the way a film would be, and
@@ -620,14 +624,22 @@ fn alike_once(card: &[u8], processor: &[u8]) -> std::result::Result<(f64, String
     let (card_y, card_u, card_v) = averages(card);
     let (processor_y, processor_u, processor_v) = averages(processor);
     let shape = correlation(&card[..brightness], &processor[..brightness]);
+    let colours = |plane: std::ops::Range<usize>| followed(&card[plane.clone()], &processor[plane]);
+    let (shape_u, shape_v) = (
+        colours(brightness..brightness + colour),
+        colours(brightness + colour..brightness + 2 * colour),
+    );
     let said = format!(
         "card Y/U/V {card_y:.0}/{card_u:.0}/{card_v:.0}, \
-         processor {processor_y:.0}/{processor_u:.0}/{processor_v:.0}, shapes {shape:.2}"
+         processor {processor_y:.0}/{processor_u:.0}/{processor_v:.0}, shapes {shape:.2}, \
+         colours {shape_u:.2}/{shape_v:.2}"
     );
     let close = (card_y - processor_y).abs() <= ALLOWED_BRIGHTNESS
         && (card_u - processor_u).abs() <= ALLOWED_COLOUR
         && (card_v - processor_v).abs() <= ALLOWED_COLOUR
-        && shape >= ALIKE_IN_SHAPE;
+        && shape >= ALIKE_IN_SHAPE
+        && shape_u >= ALIKE_IN_SHAPE
+        && shape_v >= ALIKE_IN_SHAPE;
     match close {
         true => Ok((shape, said)),
         false => Err(format!("the card's picture does not look like the processor's: {said}")),
@@ -636,6 +648,17 @@ fn alike_once(card: &[u8], processor: &[u8]) -> std::result::Result<(f64, String
 
 fn mean(values: &[u8]) -> f64 {
     values.iter().map(|&value| f64::from(value)).sum::<f64>() / values.len() as f64
+}
+
+/// How closely one colour plane follows another: their correlation, or 1
+/// when the other is flat, a picture of no colour having none to follow and
+/// its average saying the rest.
+fn followed(card: &[u8], processor: &[u8]) -> f64 {
+    let flat = processor.iter().all(|&value| Some(&value) == processor.first());
+    match flat {
+        true => 1.0,
+        false => correlation(card, processor),
+    }
 }
 
 /// The correlation of two runs of values of the same length: 1 when one
@@ -702,6 +725,26 @@ mod tests {
         assert!(alike(&picture_of(0, 0, 0), &processor).is_err(), "black");
         assert!(alike(&picture_of(79, 137, 190), &processor).is_err(), "too red");
         assert!(alike(&[0; 10], &processor).is_err(), "not a whole picture");
+    }
+
+    #[test]
+    fn red_and_blue_exchanged_are_caught_though_they_average_out() {
+        // Colour that changes across the picture, the way the sample's does:
+        // exchanged, it keeps its averages and turns faces blue.
+        let (across, down) = LOOKED_AT;
+        let brightness = across * down;
+        let rising: Vec<u8> = (0..brightness / 4)
+            .map(|at| u8::try_from(64 + at % (across / 2) * 4).expect("under 255"))
+            .collect();
+        let falling: Vec<u8> = rising.iter().map(|&value| 255 - value).collect();
+        let shapes: Vec<u8> = (0..brightness)
+            .map(|at| u8::try_from(at % across * 3).expect("under 255"))
+            .collect();
+        let right = [shapes.clone(), rising.clone(), falling.clone()].concat();
+        let exchanged = [shapes, falling, rising].concat();
+        assert!(alike(&right, &right).is_ok());
+        let said = alike(&exchanged, &right).expect_err("exchanged");
+        assert!(said.contains("colours -1.00/-1.00"), "{said}");
     }
 
     #[test]

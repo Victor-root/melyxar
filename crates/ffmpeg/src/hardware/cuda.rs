@@ -330,7 +330,7 @@ mod tests {
         // picture of two planes came out of Vulkan green.
         let down = through_vulkan(true).filters_for(Some(1080), true, true);
         assert_eq!(down, converted_by_vulkan_and_brought_down(Some(1080)));
-        assert!(down[0].contains("format=bgra"), "{down:?}");
+        assert!(down[0].contains("format=rgba"), "{down:?}");
         assert_eq!(down.last().map(String::as_str), Some("format=nv12"));
         // Read by the processor, the same chain: Vulkan takes the picture
         // from wherever it was read.

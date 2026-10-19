@@ -50,17 +50,22 @@ const DEVICE_NAME: &str = "card";
 /// The name given to the Vulkan device opened on the same card.
 const VULKAN_DEVICE_NAME: &str = "vk";
 
-/// What Vulkan is asked to make of a wide gamut picture: standard colours,
-/// converted the way the filter judges best for that film, in a picture of
-/// one plane.
+/// The layout of a picture Vulkan makes, and of a subtitle laid on it there.
 ///
 /// One plane, because a picture of two does not come out of Vulkan whole:
 /// asked for the encoder's own layout, the colour plane came out empty and
 /// the picture green, on an Intel card and on Mesa's Vulkan alike, whether it
-/// came down to the processor or passed to the card. What follows brings it
-/// to the encoder's layout, in standard range.
-const VULKAN_CONVERSION: &str = "format=bgra:colorspace=bt709:color_primaries=bt709\
-    :color_trc=bt709:range=pc:tonemapping=auto";
+/// came down to the processor or passed to the card. Red first, because a
+/// picture in the layout that puts blue first came out of Vulkan with the two
+/// exchanged, faces turned blue, on an RX 6600 and on Mesa's Vulkan alike.
+pub(crate) const VULKAN_LAYOUT: &str = "rgba";
+
+/// What Vulkan is asked to make of a wide gamut picture: standard colours,
+/// converted the way the filter judges best for that film, in
+/// `VULKAN_LAYOUT`. What follows brings it to the encoder's layout, in
+/// standard range.
+const VULKAN_COLOURS: &str =
+    "colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=pc:tonemapping=auto";
 
 /// What brings the converted picture, once down on the processor, to the
 /// layout every encoder takes, in standard range. Done at its final size, it
@@ -575,7 +580,7 @@ fn converted_by_vulkan(scale_to_height: Option<i32>) -> String {
     let size = scale_to_height
         .map(|height| format!("w=-2:h={height}:"))
         .unwrap_or_default();
-    format!("libplacebo={size}{VULKAN_CONVERSION}")
+    format!("libplacebo={size}format={VULKAN_LAYOUT}:{VULKAN_COLOURS}")
 }
 
 /// The same, brought down to the processor at its final size and to the
@@ -584,7 +589,7 @@ fn converted_by_vulkan_and_brought_down(scale_to_height: Option<i32>) -> Vec<Str
     vec![
         converted_by_vulkan(scale_to_height),
         "hwdownload".to_string(),
-        "format=bgra".to_string(),
+        format!("format={VULKAN_LAYOUT}"),
         BROUGHT_TO_THE_ENCODERS_LAYOUT.to_string(),
         "format=nv12".to_string(),
     ]

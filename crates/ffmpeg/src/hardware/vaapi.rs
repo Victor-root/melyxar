@@ -562,7 +562,7 @@ mod tests {
         }
         // One plane, full range, which is what passes across whole; the
         // card's filter brings it to the encoder's layout in standard range.
-        assert!(converted_by_vulkan(None).contains("format=bgra"));
+        assert!(converted_by_vulkan(None).contains("format=rgba"));
         assert!(converted_by_vulkan(None).contains("range=pc"));
         // A film whose colours are left alone is not touched by any of it.
         assert_eq!(
