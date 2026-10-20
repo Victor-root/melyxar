@@ -14,6 +14,7 @@ pub mod activity;
 pub mod avatars;
 pub mod bench;
 pub mod calibration;
+pub mod cameras;
 pub mod cards;
 pub mod catalogue;
 pub mod collections;

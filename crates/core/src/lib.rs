@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod camera;
 pub mod error;
 pub mod fingerprint;
 pub mod id;

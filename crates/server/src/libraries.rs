@@ -165,8 +165,8 @@ async fn create(
 
     Ok(Json(DeclaredView {
         id: library.id.to_string(),
+        scanning: library.kind.holds_files(),
         name: library.name,
-        scanning: true,
     }))
 }
 

@@ -14,6 +14,7 @@ mod elsewhere;
 pub mod accounts;
 pub mod activity;
 pub mod calibration;
+pub mod cameras;
 pub mod catalogue;
 pub mod collections;
 pub mod deletion;

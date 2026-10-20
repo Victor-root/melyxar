@@ -127,6 +127,13 @@ impl Directories {
         self.cache.join("calibration")
     }
 
+    /// The key the secrets the server must hand back are sealed with, such
+    /// as the passwords of cameras. In the data directory and apart from the
+    /// database: a copy of the database alone opens none of them.
+    pub fn sealing_key(&self) -> PathBuf {
+        self.data.join("sealing.key")
+    }
+
     pub fn backups(&self) -> PathBuf {
         self.data.join("backups")
     }
