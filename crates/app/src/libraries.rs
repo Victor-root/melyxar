@@ -37,6 +37,8 @@ pub enum Refused {
     UnknownKind,
     /// A library has to look somewhere.
     NoFolder,
+    /// A library of cameras is made of cameras, never of folders.
+    NoFolderForCameras,
     /// A path that is not a whole path, which nothing can resolve.
     NotAWholePath,
     FolderMissing,
@@ -59,6 +61,7 @@ impl Refused {
             Self::SomethingIsRunning => "something_is_running",
             Self::UnknownKind => "unknown_kind",
             Self::NoFolder => "no_folder",
+            Self::NoFolderForCameras => "no_folder_for_cameras",
             Self::NotAWholePath => "not_a_whole_path",
             Self::FolderMissing => "folder_missing",
             Self::NotAFolder => "not_a_folder",
@@ -71,13 +74,14 @@ impl Refused {
 
     /// Every one of them, so that a test can cross from here to the words the
     /// interface shows and catch a refusal nobody worded.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 14] = [
         Self::NameNeeded,
         Self::NameTooLong,
         Self::NameTaken,
         Self::SomethingIsRunning,
         Self::UnknownKind,
         Self::NoFolder,
+        Self::NoFolderForCameras,
         Self::NotAWholePath,
         Self::FolderMissing,
         Self::NotAFolder,
@@ -131,8 +135,10 @@ pub struct Asked {
 pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
     let name = name_of(&asked.name)?;
     let language = language_of(&asked.language)?;
-    if asked.roots.is_empty() {
-        return Err(Trouble::Refused(Refused::NoFolder));
+    match (asked.kind.holds_files(), asked.roots.is_empty()) {
+        (true, true) => return Err(Trouble::Refused(Refused::NoFolder)),
+        (false, false) => return Err(Trouble::Refused(Refused::NoFolderForCameras)),
+        _ => {}
     }
     if state.database().library_by_name(&name).await?.is_some() {
         return Err(Trouble::Refused(Refused::NameTaken));
@@ -170,6 +176,12 @@ pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
         .set_library_options(library.id, asked.options)
         .await?;
     library.options = asked.options;
+    // Cameras are declared one by one afterwards: nothing to watch on a disk
+    // nor to scan.
+    if !asked.kind.holds_files() {
+        tracing::info!(library = library.name, "a library of cameras was declared from a screen");
+        return Ok(library);
+    }
     if asked.options.watch_in_real_time {
         state.folder_watch().follow_the_libraries(state).await;
     }
@@ -203,6 +215,9 @@ pub async fn create(state: &AppState, asked: Asked) -> Result<Library> {
 /// Gives a library another folder to look in, and scans it.
 pub async fn add_root(state: &AppState, library_id: LibraryId, path: &Path) -> Result<LibraryRoot> {
     let library = library_by_id(state, library_id).await?;
+    if !library.kind.holds_files() {
+        return Err(Trouble::Refused(Refused::NoFolderForCameras));
+    }
     let path = folder_to_look_in(state, path).await?;
     if library.roots.iter().any(|root| nested(&path, &root.path)) {
         return Err(Trouble::Refused(Refused::FolderAlreadyLookedIn));

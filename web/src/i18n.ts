@@ -29,6 +29,7 @@ const en: Dictionary = {
   "kind.shows": "Shows",
   "kind.home_media": "Personal photos and videos",
   "kind.music": "Music",
+  "kind.cameras": "Cameras",
   "settings.appearance": "Appearance",
   "settings.appearance_why":
     "These preferences are saved to your account and synced across your devices.",
@@ -657,6 +658,7 @@ const en: Dictionary = {
   "library.kind.shows": "Programmes",
   "library.kind.home_media": "Personal photos and videos",
   "library.kind.music": "Music",
+  "library.kind.cameras": "Cameras",
   "music.tabs": "Music",
   "music.tab.for_you": "For you",
   "music.tab.albums": "Albums",
@@ -1091,6 +1093,7 @@ const en: Dictionary = {
     "A task is running for this library. Wait for it to finish or stop it in Activity, then try again.",
   "refused.library.unknown_kind": "Unsupported library type.",
   "refused.library.no_folder": "Add at least one folder to the library.",
+  "refused.library.no_folder_for_cameras": "A camera library has no folder: add its cameras once it is created.",
   "refused.library.not_a_whole_path": "Enter the full path to the folder.",
   "refused.library.folder_missing": "Folder not found on the server.",
   "refused.library.not_a_folder": "The selected path is a file, not a folder.",
@@ -2135,6 +2138,7 @@ const fr: Dictionary = {
   "kind.shows": "Émissions",
   "kind.home_media": "Photos et vidéos personnelles",
   "kind.music": "Musique",
+  "kind.cameras": "Caméras",
   "settings.appearance": "Apparence",
   "settings.appearance_why":
     "Ces préférences sont enregistrées sur votre compte et synchronisées entre vos appareils.",
@@ -2755,6 +2759,7 @@ const fr: Dictionary = {
   "library.kind.shows": "Émissions",
   "library.kind.home_media": "Photos et vidéos personnelles",
   "library.kind.music": "Musique",
+  "library.kind.cameras": "Caméras",
   "music.tabs": "Musique",
   "music.tab.for_you": "Pour vous",
   "music.tab.albums": "Albums",
@@ -3191,6 +3196,8 @@ const fr: Dictionary = {
   "refused.library.unknown_kind": "Type de médiathèque non pris en charge.",
   "refused.library.no_folder":
     "Ajoutez au moins un dossier à la médiathèque.",
+  "refused.library.no_folder_for_cameras":
+    "Une médiathèque de caméras n’a pas de dossier : ajoutez ses caméras une fois créée.",
   "refused.library.not_a_whole_path": "Saisissez le chemin absolu du dossier.",
   "refused.library.folder_missing": "Dossier introuvable sur le serveur.",
   "refused.library.not_a_folder": "Le chemin indiqué correspond à un fichier, pas à un dossier.",

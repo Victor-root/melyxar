@@ -29,11 +29,14 @@ pub enum LibraryKind {
     /// What people filmed and photographed themselves, videos and photos
     /// together, organised by the folders they were put in.
     HomeMedia,
+    /// Cameras watched live, declared one by one rather than found in
+    /// folders.
+    Cameras,
 }
 
 impl LibraryKind {
     /// Every kind, in the order a person meets them until they choose another.
-    pub const fn every() -> [Self; 6] {
+    pub const fn every() -> [Self; 7] {
         [
             Self::Movies,
             Self::Series,
@@ -41,6 +44,7 @@ impl LibraryKind {
             Self::HomeMedia,
             Self::Shows,
             Self::Music,
+            Self::Cameras,
         ]
     }
 
@@ -52,6 +56,7 @@ impl LibraryKind {
             Self::Shows => "shows",
             Self::Music => "music",
             Self::HomeMedia => "home_media",
+            Self::Cameras => "cameras",
         }
     }
 
@@ -63,6 +68,7 @@ impl LibraryKind {
             "shows" => Some(Self::Shows),
             "music" => Some(Self::Music),
             "home_media" => Some(Self::HomeMedia),
+            "cameras" => Some(Self::Cameras),
             _ => None,
         }
     }
@@ -77,30 +83,38 @@ impl LibraryKind {
     /// and music is in a catalogue of its own, which that one knows nothing
     /// about: asking it for an album is asking for a film of the same name.
     pub fn is_catalogued(self) -> bool {
-        !matches!(self, Self::HomeMedia | Self::Music)
+        !matches!(self, Self::HomeMedia | Self::Music | Self::Cameras)
+    }
+
+    /// Whether it is made of files found in folders. A library of cameras
+    /// is made of cameras declared one by one: nothing to scan, to watch on
+    /// the disk, nor to work on in the background.
+    pub fn holds_files(self) -> bool {
+        !matches!(self, Self::Cameras)
     }
 
     /// Whether what it holds is played as video. Music is not, and none of the
     /// readings that go through a video applies to it: where a jump lands,
     /// the thumbnails of the bar, the subtitles inside the file.
     pub fn holds_videos(self) -> bool {
-        !matches!(self, Self::Music)
+        !matches!(self, Self::Music | Self::Cameras)
     }
 
     /// The kind of work a file in this library stands for when nothing better
-    /// is known about it.
+    /// is known about it, and nothing for a library that holds no files.
     ///
     /// A film is one file to one work. In an episodic library this is only
     /// reached by a file whose name never said which episode it is: it is an
     /// episode all the same, belonging to no season, and it is met on its own
     /// in the grid rather than disappearing behind a series it was never
     /// attached to.
-    pub fn work_kind(self) -> WorkKind {
+    pub fn work_kind(self) -> Option<WorkKind> {
         match self {
-            Self::Movies => WorkKind::Movie,
-            Self::Series | Self::Anime | Self::Shows => WorkKind::Episode,
-            Self::Music => WorkKind::Song,
-            Self::HomeMedia => WorkKind::Video,
+            Self::Movies => Some(WorkKind::Movie),
+            Self::Series | Self::Anime | Self::Shows => Some(WorkKind::Episode),
+            Self::Music => Some(WorkKind::Song),
+            Self::HomeMedia => Some(WorkKind::Video),
+            Self::Cameras => None,
         }
     }
 }
@@ -268,16 +282,19 @@ mod tests {
 
     #[test]
     fn library_kinds_round_trip_through_their_stored_form() {
-        for kind in [
-            LibraryKind::Movies,
-            LibraryKind::Series,
-            LibraryKind::Anime,
-            LibraryKind::Shows,
-            LibraryKind::Music,
-            LibraryKind::HomeMedia,
-        ] {
+        for kind in LibraryKind::every() {
             assert_eq!(LibraryKind::parse(kind.as_str()), Some(kind));
         }
+    }
+
+    #[test]
+    fn a_library_of_cameras_holds_no_file_and_no_work() {
+        let cameras = LibraryKind::Cameras;
+        assert!(!cameras.holds_files());
+        assert!(!cameras.holds_videos(), "nothing in it is read from a file");
+        assert!(!cameras.is_catalogued());
+        assert_eq!(cameras.work_kind(), None);
+        assert!(LibraryKind::every().iter().all(|kind| *kind == cameras || kind.holds_files()));
     }
 
     #[test]

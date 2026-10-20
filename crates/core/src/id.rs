@@ -77,6 +77,10 @@ define_id!(
     LibraryRootId
 );
 define_id!(
+    /// Identifies a camera of a library of cameras.
+    CameraId
+);
+define_id!(
     /// Identifies a work: the thing a viewer picks, never a file on disk.
     WorkId
 );
