@@ -263,10 +263,21 @@ private fun BandTile(kind: String, name: String, fan: List<Leafed>, square: Bool
             TileHeight * 0.9f,
             Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp),
         )
-        if (Probe.shows(Part.BandFloor)) {
-            Fan(fan, square, records = false, open = { lit }, mirror = true)
+        if (fan.isEmpty()) {
+            // Nothing to fan out, a library of cameras above all: its own
+            // mark stands where the posters would, as the web's does.
+            Glyph(
+                Icons.ofKind(kind),
+                palette.accentBright.copy(alpha = 0.55f),
+                TileHeight * 0.4f,
+                Modifier.align(Alignment.TopCenter).padding(top = TileHeight * 0.14f),
+            )
+        } else {
+            if (Probe.shows(Part.BandFloor)) {
+                Fan(fan, square, records = false, open = { lit }, mirror = true)
+            }
+            Fan(fan, square, woken, { lit })
         }
-        Fan(fan, square, woken, { lit })
         // The foot of the tile sinks into the ground, under the name.
         Box(
             Modifier.fillMaxSize().drawWithCache {

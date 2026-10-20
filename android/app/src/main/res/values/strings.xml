@@ -374,6 +374,9 @@
     <string name="tv_trailer">Trailer</string>
     <string name="tv_trailer_of">Trailer: %1$s</string>
     <string name="tv_trailer_cannot_play">This trailer cannot be played here.</string>
+    <string name="tv_cameras_none">No camera in this library yet. Cameras are declared from the administration, in the browser.</string>
+    <string name="tv_camera_live">Live</string>
+    <string name="tv_camera_cannot_play">This camera cannot be reached. Check that it is on and on the same network as this television.</string>
     <string name="tv_trailer_no_app">No application on this television can open this trailer.</string>
     <string name="tv_facts">Playback diagnostics</string>
     <string name="tv_facts_stream">Stream</string>

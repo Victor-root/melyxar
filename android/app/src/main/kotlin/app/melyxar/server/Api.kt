@@ -169,6 +169,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
 
+    /** The cameras of a library of cameras, by name. */
+    suspend fun cameras(library: String): List<Camera> =
+        get("/api/v1/libraries/$library/cameras", ListSerializer(Camera.serializer()))
+
+    /** The address a camera is opened at live, its account written in: held
+     *  for as long as it is watched, never kept. */
+    suspend fun liveAddress(camera: String): String = get("/api/v1/cameras/$camera/live", LiveCamera.serializer()).address
+
     suspend fun person(id: String): Person = get("/api/v1/people/$id", Person.serializer())
 
     suspend fun filters(library: String): Filters = get("/api/v1/libraries/$library/filters", Filters.serializer())

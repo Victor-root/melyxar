@@ -285,6 +285,7 @@ object Icons {
         "shows" -> Shows
         "home_media" -> HomeMedia
         "music" -> Music
+        "cameras" -> Camera
         else -> Film
     }
 }

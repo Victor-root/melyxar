@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import app.melyxar.server.Account
 import app.melyxar.server.Api
 import app.melyxar.server.Branding
+import app.melyxar.server.Camera
 import app.melyxar.server.Library
 import app.melyxar.server.Preferences
 import app.melyxar.server.Sessions
@@ -78,6 +79,8 @@ import app.melyxar.tv.requests.MoreTitlesScreen
 import app.melyxar.tv.requests.RequestedTitleScreen
 import app.melyxar.tv.requests.Requests
 import app.melyxar.tv.requests.RequestsScreen
+import app.melyxar.tv.live.CamerasScreen
+import app.melyxar.tv.live.LiveScreen
 import app.melyxar.tv.trailer.TrailerScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -153,6 +156,11 @@ sealed interface Place {
     }
 
     /** A trailer sitting next to the work called [title], fetched from [url]. */
+    /** A camera watched live. */
+    data class Live(val camera: Camera) : Place {
+        override val key = "live:${camera.id}"
+    }
+
     data class Trailer(val title: String, val url: String) : Place {
         override val key = "trailer"
     }
@@ -336,7 +344,7 @@ fun Inside(
         val screen = remember { FocusRequester() }
         LaunchedEffect(trail.toList()) { pinned.keepOnly(trail) }
         val here = trail.last()
-        val film = here is Place.Playing || here is Place.Trailer
+        val film = here is Place.Playing || here is Place.Trailer || here is Place.Live
         notes.filmOnScreen = film
         val kept = rememberSaveableStateHolder()
 
@@ -362,7 +370,7 @@ fun Inside(
                     }
                     is Place.Opened, is Place.Person, is Place.Playing, is Place.Listed,
                     is Place.Album, is Place.Artist, is Place.Playlist, is Place.Genre,
-                    is Place.RequestedTitle, is Place.MoreTitles, is Place.Trailer,
+                    is Place.RequestedTitle, is Place.MoreTitles, is Place.Trailer, is Place.Live,
                     -> trail.add(place)
                     // One search and one song playing at a time: going to
                     // either again comes back to the one already open, the
@@ -499,10 +507,10 @@ fun Inside(
                         kept.SaveableStateProvider(here.key) {
                             when (here) {
                                 Place.Home -> HomeScreen(comebacks)
-                                is Place.Shelf -> if (here.library.kind == "music") {
-                                    MusicLibraryScreen(here.library, comebacks)
-                                } else {
-                                    LibraryScreen(here.library, comebacks)
+                                is Place.Shelf -> when (here.library.kind) {
+                                    "music" -> MusicLibraryScreen(here.library, comebacks)
+                                    "cameras" -> CamerasScreen(here.library, comebacks)
+                                    else -> LibraryScreen(here.library, comebacks)
                                 }
                                 is Place.Opened -> KeepingSheets { WorkScreen(here.work, comebacks) }
                                 is Place.Person -> PersonScreen(here.id, comebacks)
@@ -516,6 +524,7 @@ fun Inside(
                                 is Place.RequestedTitle -> RequestedTitleScreen(here.catalogue, here.tmdbId)
                                 is Place.MoreTitles -> MoreTitlesScreen(here.catalogue, here.genreId, here.genre)
                                 is Place.Trailer -> TrailerScreen(here.title, here.url)
+                                is Place.Live -> LiveScreen(here.camera)
                                 Place.NowPlaying -> NowPlayingScreen()
                                 Place.Settings -> SettingsScreen(sessions)
                                 Place.Notifications -> NotesScreen()
