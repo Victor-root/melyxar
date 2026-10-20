@@ -128,6 +128,7 @@ class WebActivity : ComponentActivity() {
         page.addJavascriptInterface(film, "MelyxarPlayer")
         page.addJavascriptInterface(pageWindow, "MelyxarWindow")
         page.addJavascriptInterface(LauncherIcons(applicationContext), "MelyxarIcon")
+        page.addJavascriptInterface(LiveActivity.Bridge(this), "MelyxarCamera")
         music = MusicEngine.of(this) { serverFetching(page.settings.userAgentString) }
         val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms, ::askToShowTheMusic)
         music.listener = musicBridge
