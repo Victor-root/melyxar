@@ -17,10 +17,11 @@ use crate::convert::parse_id;
 use crate::images::{image_from_row, StoredImage, WHAT_A_PICTURE_IS};
 use crate::{Database, DatabaseError, Result};
 
-/// A video or a photo whose card has no picture made the way pictures are
-/// made today, with what its picture is made from.
+/// A file whose card is pictured out of the file itself, with what its
+/// picture is made from: a video or a photo of home media, or a film or an
+/// episode nobody could name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OwnFileToPicture {
+pub struct FileToPicture {
     pub work_id: WorkId,
     pub kind: WorkKind,
     /// Where the file is, root included.
@@ -196,7 +197,7 @@ impl Database {
         &self,
         library_id: LibraryId,
         recipe: &str,
-    ) -> Result<Vec<OwnFileToPicture>> {
+    ) -> Result<Vec<FileToPicture>> {
         let rows = sqlx::query(
             "SELECT w.id, w.kind, r.path AS root_path, s.relative_path, s.duration_ms,
                     s.size_bytes, s.modified_at
@@ -218,27 +219,65 @@ impl Database {
         .fetch_all(self.reader())
         .await?;
 
-        rows.iter()
-            .map(|row| {
-                let kind_text: String = row.try_get("kind")?;
-                let relative_path: String = row.try_get("relative_path")?;
-                let size_bytes: i64 = row.try_get("size_bytes")?;
-                let modified_at: String = row.try_get("modified_at")?;
-                Ok(OwnFileToPicture {
-                    work_id: parse_id(&row.try_get::<String, _>("id")?)?,
-                    kind: WorkKind::parse(&kind_text).ok_or_else(|| {
-                        DatabaseError::Corrupt(format!("work kind '{kind_text}'"))
-                    })?,
-                    path: PathBuf::from(row.try_get::<String, _>("root_path")?)
-                        .join(&relative_path),
-                    duration: row
-                        .try_get::<Option<i64>, _>("duration_ms")?
-                        .map(Millis::new),
-                    made_from: format!("{relative_path}|{size_bytes}|{modified_at}"),
-                })
-            })
-            .collect()
+        rows.iter().map(file_to_picture).collect()
     }
+
+    /// The films and episodes of a library nobody could name and which have
+    /// no picture at all, with the largest copy of each on the disk.
+    ///
+    /// Their card shows a picture out of the film rather than a letter. Only
+    /// once the copy has been analysed, since where the picture is taken
+    /// depends on how long it runs, and never where a picture was taken away
+    /// by hand.
+    pub async fn unnamed_files_to_picture(
+        &self,
+        library_id: LibraryId,
+    ) -> Result<Vec<FileToPicture>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.kind, r.path AS root_path, s.relative_path, s.duration_ms,
+                    s.size_bytes, s.modified_at
+               FROM works w
+               JOIN media_sources s ON s.id = (
+                    SELECT c.id FROM media_sources c
+                     WHERE c.work_id = w.id AND c.missing_since IS NULL
+                       AND c.analysed_at IS NOT NULL
+                     ORDER BY c.size_bytes DESC LIMIT 1)
+               JOIN library_roots r ON r.id = s.root_id
+              WHERE w.library_id = ?
+                AND w.kind IN ('movie', 'episode')
+                AND w.identification = 'unidentified'
+                AND NOT EXISTS (
+                    SELECT 1 FROM images i
+                     WHERE i.owner_kind = 'work' AND i.owner_id = w.id
+                       AND i.image_kind = 'poster')
+                AND NOT EXISTS (
+                    SELECT 1 FROM work_locked_fields l
+                     WHERE l.work_id = w.id AND l.field = 'poster')
+              ORDER BY w.added_at",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.reader())
+        .await?;
+
+        rows.iter().map(file_to_picture).collect()
+    }
+}
+
+fn file_to_picture(row: &sqlx::sqlite::SqliteRow) -> Result<FileToPicture> {
+    let kind_text: String = row.try_get("kind")?;
+    let relative_path: String = row.try_get("relative_path")?;
+    let size_bytes: i64 = row.try_get("size_bytes")?;
+    let modified_at: String = row.try_get("modified_at")?;
+    Ok(FileToPicture {
+        work_id: parse_id(&row.try_get::<String, _>("id")?)?,
+        kind: WorkKind::parse(&kind_text)
+            .ok_or_else(|| DatabaseError::Corrupt(format!("work kind '{kind_text}'")))?,
+        path: PathBuf::from(row.try_get::<String, _>("root_path")?).join(&relative_path),
+        duration: row
+            .try_get::<Option<i64>, _>("duration_ms")?
+            .map(Millis::new),
+        made_from: format!("{relative_path}|{size_bytes}|{modified_at}"),
+    })
 }
 
 #[cfg(test)]
@@ -250,6 +289,89 @@ mod tests {
     use melyxar_core::time::now;
 
     use super::*;
+
+    #[tokio::test]
+    async fn a_film_nobody_named_is_pictured_from_its_largest_copy() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let library = database
+            .create_library(
+                "Films",
+                LibraryKind::Movies,
+                "fr",
+                &[("disk-one".to_string(), PathBuf::from("/mnt/one/Films"))],
+            )
+            .await
+            .expect("library created");
+        let root = library.roots[0].id;
+        let analysed = |source| {
+            let database = &database;
+            async move {
+                database
+                    .store_analysis(
+                        source,
+                        &SourceAnalysis {
+                            container: Some("matroska,webm".to_string()),
+                            duration: Some(Millis::new(5_400_000)),
+                            overall_bitrate: None,
+                        },
+                        &[],
+                        &[],
+                    )
+                    .await
+                    .expect("analysed");
+            }
+        };
+        let a_film = |title: &'static str, unnamed: bool| {
+            let database = &database;
+            async move {
+                let work = database
+                    .create_work(library.id, WorkKind::Movie, title, title, None)
+                    .await
+                    .expect("written");
+                if unnamed {
+                    database.mark_work_unidentified(work.id).await.expect("marked");
+                }
+                work.id
+            }
+        };
+        let waiting = || {
+            let database = &database;
+            async move {
+                database
+                    .unnamed_files_to_picture(library.id)
+                    .await
+                    .expect("read")
+            }
+        };
+
+        let lost = a_film("The Quiet Lighthouse", true).await;
+        let small = database
+            .insert_source(lost, root, &PathBuf::from("Lighthouse 720p.mkv"), 10, now())
+            .await
+            .expect("recorded");
+        let large = database
+            .insert_source(lost, root, &PathBuf::from("Lighthouse 2160p.mkv"), 90, now())
+            .await
+            .expect("recorded");
+        let named = a_film("Northern Orchard", false).await;
+        let named_copy = database
+            .insert_source(named, root, &PathBuf::from("Orchard.mkv"), 50, now())
+            .await
+            .expect("recorded");
+        analysed(named_copy).await;
+        assert!(waiting().await.is_empty(), "a copy waits for its length to be known");
+
+        analysed(small).await;
+        analysed(large).await;
+        let offered = waiting().await;
+        assert_eq!(offered.len(), 1, "a film somebody named is never offered");
+        assert_eq!(offered[0].work_id, lost);
+        assert_eq!(offered[0].path, PathBuf::from("/mnt/one/Films/Lighthouse 2160p.mkv"));
+        assert_eq!(offered[0].duration, Some(Millis::new(5_400_000)));
+
+        database.lock_field(lost, "poster").await.expect("locked");
+        assert!(waiting().await.is_empty(), "a picture taken away by hand stays away");
+    }
 
     #[tokio::test]
     async fn what_is_left_to_picture_is_each_file_without_a_picture_of_today() {

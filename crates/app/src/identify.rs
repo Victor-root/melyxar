@@ -51,6 +51,9 @@ pub struct IdentifyReport {
     pub pictures_filled: usize,
     /// Films that had a name but no synopsis, and have one now.
     pub synopses_filled: usize,
+    /// Films and episodes nobody could name that now show a picture out of
+    /// their own file rather than a letter.
+    pub pictured: usize,
     pub cancelled: bool,
 }
 
@@ -139,11 +142,23 @@ where
         report.synopses_filled = filled.synopses;
     }
 
+    // What the provider could not name shows a picture out of the film, so
+    // a grid of unnamed copies can still be told apart. Taken once the
+    // provider has had its say: a film it names gets its own poster instead,
+    // which replaces this one should it be named later.
+    if !report.cancelled {
+        let unnamed = database.unnamed_files_to_picture(library.id).await?;
+        report.pictured =
+            crate::own::picture_files(state, unnamed, JobStep::PicturingUnnamedWorks, handle)
+                .await?;
+    }
+
     if report.identified > 0
         || report.merged > 0
         || report.refiled > 0
         || report.pictures_filled > 0
         || report.synopses_filled > 0
+        || report.pictured > 0
     {
         database.bump_library_version(library.id).await?;
     }
@@ -168,6 +183,7 @@ where
         refiled = report.refiled,
         pictures_filled = report.pictures_filled,
         synopses_filled = report.synopses_filled,
+        pictured = report.pictured,
         cancelled = report.cancelled,
         "identification finished"
     );

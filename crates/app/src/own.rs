@@ -3,6 +3,9 @@
 //! No name is read the way a release is read: a file is named by its file,
 //! and it sits in the folders it sits in on the disk. See the decisions on
 //! libraries of home media for why.
+//!
+//! The picture taken out of a file is also what a film or an episode nobody
+//! could name shows on its card (see `identify`).
 
 use std::path::Path;
 
@@ -12,7 +15,7 @@ use melyxar_core::library::Library;
 use melyxar_core::orientation::Orientation;
 use melyxar_core::time::Millis;
 use melyxar_core::work::WorkKind;
-use melyxar_database::own::OwnFileToPicture;
+use melyxar_database::own::FileToPicture;
 use melyxar_jobs::JobHandle;
 
 use crate::{AppState, Result};
@@ -79,11 +82,22 @@ pub(crate) async fn picture_what_has_none(
         .database()
         .own_files_to_picture(library.id, crate::images::RECIPE)
         .await?;
+    picture_files(state, waiting, JobStep::PicturingOwnFiles, handle).await
+}
+
+/// Takes the picture of each of `waiting` out of its file, at `step` of the
+/// job. Answers how many were made.
+pub(crate) async fn picture_files(
+    state: &AppState,
+    waiting: Vec<FileToPicture>,
+    step: JobStep,
+    handle: &JobHandle,
+) -> Result<usize> {
     if waiting.is_empty() {
         return Ok(0);
     }
 
-    handle.at_step(JobStep::PicturingOwnFiles).await;
+    handle.at_step(step).await;
     handle.set_total(waiting.len() as i64).await;
     let limit = state.config().limits.concurrent_probes;
     let owned_state = state.clone();
@@ -120,7 +134,7 @@ pub(crate) async fn picture_what_has_none(
 /// as often as not black, blurred, or the ground while the phone came up.
 const INTO_A_VIDEO: i64 = 10;
 
-async fn picture_one(state: &AppState, file: &OwnFileToPicture) -> Result<bool> {
+async fn picture_one(state: &AppState, file: &FileToPicture) -> Result<bool> {
     let (at, orientation) = match file.kind {
         WorkKind::Photo => {
             let path = file.path.clone();
