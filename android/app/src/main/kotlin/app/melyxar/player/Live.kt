@@ -37,6 +37,7 @@ fun livePlayer(context: Context, address: String): ExoPlayer =
         )
         .build()
         .apply {
+            addAnalyticsListener(LiveTrace(this, address))
             setMediaSource(RtspMediaSource.Factory().createMediaSource(MediaItem.fromUri(address)))
             prepare()
             playWhenReady = true
