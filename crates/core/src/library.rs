@@ -368,16 +368,17 @@ mod tests {
     }
 
     #[test]
-    fn every_kind_holds_videos_but_music() {
+    fn every_kind_holds_videos_but_music_and_cameras() {
         for kind in LibraryKind::every() {
-            assert_eq!(kind.holds_videos(), kind != LibraryKind::Music, "{kind:?}");
+            let apart = matches!(kind, LibraryKind::Music | LibraryKind::Cameras);
+            assert_eq!(kind.holds_videos(), !apart, "{kind:?}");
         }
     }
 
     #[test]
-    fn films_and_series_are_in_the_catalogue_and_music_and_home_media_are_not() {
+    fn films_and_series_are_in_the_catalogue_and_music_home_media_and_cameras_are_not() {
         for kind in LibraryKind::every() {
-            let apart = matches!(kind, LibraryKind::HomeMedia | LibraryKind::Music);
+            let apart = matches!(kind, LibraryKind::HomeMedia | LibraryKind::Music | LibraryKind::Cameras);
             assert_eq!(kind.is_catalogued(), !apart, "{kind:?}");
         }
     }

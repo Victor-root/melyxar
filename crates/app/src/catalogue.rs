@@ -207,6 +207,7 @@ pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummar
         summaries.push(LibrarySummary {
             works: match library.kind {
                 LibraryKind::Music => crate::music::browse::albums_held(state, library.id).await?,
+                LibraryKind::Cameras => database.count_cameras(library.id).await?,
                 _ => {
                     crate::counted::counted(state, Some(library.id))
                         .await?
@@ -367,7 +368,9 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
-        sections: who.preferences.home_sections_shown(&library_order),
+        sections: who
+            .preferences
+            .home_sections_shown(&with_a_row(&seen, &library_order)),
         library_order,
     })
 }
@@ -548,9 +551,23 @@ pub async fn home_layout(
     who: &User,
     preferences: &Preferences,
 ) -> Result<(Vec<LibraryId>, Vec<HomeSection>)> {
-    let order = in_their_order(&libraries(state, who).await?, preferences);
-    let sections = preferences.home_sections_laid_out(&order);
+    let seen = libraries(state, who).await?;
+    let order = in_their_order(&seen, preferences);
+    let sections = preferences.home_sections_laid_out(&with_a_row(&seen, &order));
     Ok((order, sections))
+}
+
+/// The libraries given that have a row of their newest on the home page:
+/// every one but a library of cameras, which has nothing new to show.
+fn with_a_row(seen: &[LibrarySummary], order: &[LibraryId]) -> Vec<LibraryId> {
+    order
+        .iter()
+        .copied()
+        .filter(|id| {
+            seen.iter()
+                .any(|library| library.id == *id && library.kind.holds_files())
+        })
+        .collect()
 }
 
 /// The newest works of each library this viewer sees, in the order of their
@@ -570,8 +587,9 @@ async fn the_shelves(
         let Some(library) = seen.iter().find(|library| library.id == *id) else {
             continue;
         };
-        // Music has no card to show: its row is drawn from its albums.
-        if library.kind == LibraryKind::Music {
+        // Music has no card to show: its row is drawn from its albums. A
+        // library of cameras has nothing to show at all.
+        if library.kind == LibraryKind::Music || !library.kind.holds_files() {
             continue;
         }
         let newest = BrowseRequest {
@@ -1069,6 +1087,38 @@ mod tests {
         assert!(row_of(trials).cards.is_empty(), "nothing of the other library in it");
         assert!(page.sections.contains(&HomeSection::Newest(trials)));
         assert!(page.sections.contains(&HomeSection::Newest(films)));
+    }
+
+    #[tokio::test]
+    async fn a_library_of_cameras_has_a_tile_and_no_row() {
+        let (_directory, state, films, viewer) = state_with_films(&["Quiet Harbour"]).await;
+        let cameras = state
+            .database()
+            .create_library("Cameras", LibraryKind::Cameras, "fr", &[])
+            .await
+            .expect("library created")
+            .id;
+        state
+            .database()
+            .add_camera(
+                cameras,
+                melyxar_database::cameras::CameraFields {
+                    name: "Front door",
+                    address: "rtsp://192.168.1.20/live",
+                    username: "",
+                },
+                None,
+            )
+            .await
+            .expect("added");
+
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(page.library_order, vec![films, cameras], "its tile");
+        assert!(page.shelves.iter().all(|shelf| shelf.library != cameras));
+        assert!(!page.sections.contains(&HomeSection::Newest(cameras)), "no row");
+        let held = libraries(&state, &viewer).await.expect("read");
+        let of_cameras = held.iter().find(|library| library.id == cameras).expect("listed");
+        assert_eq!(of_cameras.works, 1, "what it holds is counted in cameras");
     }
 
     #[tokio::test]

@@ -64,6 +64,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::security::router())
         .merge(crate::speech::router())
         .merge(crate::calibration::router())
+        .merge(crate::cameras::router())
         .merge(crate::catalogue::router())
         .merge(crate::collections::router())
         .merge(crate::general::router())
