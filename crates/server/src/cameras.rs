@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(change).delete(remove),
         )
         .route("/api/v1/cameras/{id}/live", axum::routing::get(live))
+        .route("/api/v1/cameras/{id}/relay", axum::routing::get(relay))
 }
 
 #[derive(Debug, Serialize)]
@@ -146,6 +147,22 @@ async fn live(
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
+}
+
+/// A camera relayed for a browser, as fragmented MP4 sent as it comes for as
+/// long as the browser holds the answer.
+async fn relay(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    UrlPath(id): UrlPath<String>,
+) -> Result<Response> {
+    let relayed = melyxar_app::cameras::relayed(&state, &who, camera_id(&id)?).await?;
+    let mut response = crate::playback::live(crate::tool_output(relayed.output, relayed.process));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static(melyxar_app::cameras::RELAYED_AS),
+    );
     Ok(response)
 }
 

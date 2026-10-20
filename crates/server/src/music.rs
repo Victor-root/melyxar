@@ -4,7 +4,7 @@
 //!
 //! Apart from the routes of films, as music is everywhere in this server.
 
-use axum::body::{Body, Bytes};
+use axum::body::Body;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderName, Request, StatusCode, header};
 use axum::response::{IntoResponse, Response};
@@ -588,9 +588,6 @@ struct SoundQuery {
     start: Option<f64>,
 }
 
-/// How much of a converted song is handed on at a time.
-const CHUNK: usize = 64 * 1024;
-
 /// The sound of one song: its file, or the file converted on the way.
 async fn sound(
     State(state): State<AppState>,
@@ -614,32 +611,14 @@ async fn sound(
         melyxar_app::music::listen::Sound::AsItIs(path) => {
             crate::serve_the_file(&path, request).await
         }
-        melyxar_app::music::listen::Sound::Converted { song, into } => {
-            use tokio::io::AsyncReadExt;
-            // The tool is held by the stream, and stops when the stream is
-            // dropped: a listener who moves on or goes away takes it with
-            // them.
-            let stream = futures_util::stream::unfold(Some(song), |held| async move {
-                let mut song = held?;
-                let mut chunk = vec![0u8; CHUNK];
-                match song.output.read(&mut chunk).await {
-                    Ok(0) => None,
-                    Ok(read) => {
-                        chunk.truncate(read);
-                        Some((Ok::<Bytes, std::io::Error>(Bytes::from(chunk)), Some(song)))
-                    }
-                    Err(error) => Some((Err(error), None)),
-                }
-            });
-            Ok((
-                [
-                    (header::CONTENT_TYPE, into.content_type()),
-                    (header::CACHE_CONTROL, "no-store"),
-                ],
-                Body::from_stream(stream),
-            )
-                .into_response())
-        }
+        melyxar_app::music::listen::Sound::Converted { song, into } => Ok((
+            [
+                (header::CONTENT_TYPE, into.content_type()),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            crate::tool_output(song.output, song.process),
+        )
+            .into_response()),
     }
 }
 

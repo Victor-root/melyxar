@@ -61,6 +61,35 @@ use tower_http::trace::TraceLayer;
 pub use error::{ApiError, ServerError};
 pub use routes::{router, API_VERSION};
 
+/// How much of what a media tool writes is handed on at a time.
+const TOOL_CHUNK: usize = 64 * 1024;
+
+/// What a media tool writes, handed on to the client as it comes. The tool
+/// is held by the answer and stops when the answer is dropped: a client who
+/// moves on or goes away takes it with them.
+pub(crate) fn tool_output(
+    output: tokio::process::ChildStdout,
+    process: tokio::process::Child,
+) -> axum::body::Body {
+    use tokio::io::AsyncReadExt;
+    let stream = futures_util::stream::unfold(Some((output, process)), |held| async move {
+        let (mut output, process) = held?;
+        let mut chunk = vec![0u8; TOOL_CHUNK];
+        match output.read(&mut chunk).await {
+            Ok(0) => None,
+            Ok(read) => {
+                chunk.truncate(read);
+                Some((
+                    Ok::<axum::body::Bytes, std::io::Error>(axum::body::Bytes::from(chunk)),
+                    Some((output, process)),
+                ))
+            }
+            Err(error) => Some((Err(error), None)),
+        }
+    });
+    axum::body::Body::from_stream(stream)
+}
+
 /// Hands a file on the disk straight to the client.
 ///
 /// Ranges, conditional requests and the sending itself are all the file

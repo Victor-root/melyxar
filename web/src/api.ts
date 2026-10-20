@@ -2125,6 +2125,9 @@ export const api = {
   /** Where the application opens a camera live, its account written in.
    *  Handed straight on, never kept. */
   liveCamera: (camera: string) => get<{ address: string }>(`/api/v1/cameras/${camera}/live`),
+  /** Where a browser reads a camera relayed by the server, which keeps its
+   *  address to itself. */
+  relayedCamera: (camera: string) => `/api/v1/cameras/${camera}/relay`,
   setAsideFiles: (library: string, signal?: AbortSignal) =>
     get<SetAsideFile[]>(`/api/v1/libraries/${library}/set-aside`, signal),
   /* Nothing named takes every one of them back. The library is scanned

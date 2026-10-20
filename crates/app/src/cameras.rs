@@ -7,6 +7,7 @@ use melyxar_core::id::{CameraId, LibraryId};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::user::User;
 use melyxar_database::cameras::{Camera, CameraFields};
+use melyxar_ffmpeg::camera::RelayedCamera;
 
 use crate::{AppError, AppState, Result};
 
@@ -163,14 +164,39 @@ pub async fn remove(state: &AppState, id: CameraId) -> Result<()> {
 /// The address an application opens a camera at, its account written in, for
 /// an account granted the camera's library.
 pub async fn live_address(state: &AppState, who: &User, id: CameraId) -> Result<String> {
+    let (camera, address) = opened(state, who, id).await?;
+    tracing::info!(camera = camera.name, user = who.name, "a camera is opened live");
+    Ok(address)
+}
+
+/// What a relayed camera is sent as.
+pub const RELAYED_AS: &str = melyxar_ffmpeg::camera::CONTENT_TYPE;
+
+/// A camera relayed by the server, for a browser, which cannot open it
+/// itself: its address never leaves the server.
+pub async fn relayed(state: &AppState, who: &User, id: CameraId) -> Result<RelayedCamera> {
+    let (camera, address) = opened(state, who, id).await?;
+    let Some(tools) = state.tools() else {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::DependencyMissing,
+            "no media tool to relay this camera with",
+        )));
+    };
+    let relayed = melyxar_ffmpeg::camera::relay(tools, &address)?;
+    tracing::info!(camera = camera.name, user = who.name, "a camera is relayed live");
+    Ok(relayed)
+}
+
+/// A camera `who` may see, and its address with its account written in.
+async fn opened(state: &AppState, who: &User, id: CameraId) -> Result<(Camera, String)> {
     let camera = camera(state, id).await?;
     crate::reach::may_read(who, camera.library_id)?;
     let password = match &camera.sealed_password {
         Some(sealed) => Some(sealing_key(state).await?.open(sealed, &camera.id.to_string())?),
         None => None,
     };
-    tracing::info!(camera = camera.name, user = who.name, "a camera is opened live");
-    Ok(opened_with(&camera.address, &camera.username, password.as_deref()))
+    let address = opened_with(&camera.address, &camera.username, password.as_deref());
+    Ok((camera, address))
 }
 
 fn checked(declared: &Declared) -> std::result::Result<CameraFields<'_>, Refused> {
@@ -320,6 +346,10 @@ mod tests {
         };
         assert!(of_the_library(&state, &kept_out, library).await.is_err());
         assert!(live_address(&state, &kept_out, door).await.is_err());
+        assert!(
+            relayed(&state, &kept_out, door).await.is_err(),
+            "nor has it relayed by the server"
+        );
     }
 
     #[tokio::test]
