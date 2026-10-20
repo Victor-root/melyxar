@@ -10,6 +10,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.util.Log as MediaLog
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
@@ -168,6 +169,31 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
 
     override fun onLoadError(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData, error: IOException, wasCanceled: Boolean) {
         say("load error track ${mediaLoadData.trackType} canceled=$wasCanceled ${causes(error)}")
+    }
+
+    companion object {
+        /**
+         * Lets through, from the camera's own description of its streams,
+         * only the lines naming each stream and its format: nothing else of
+         * what is said with the camera reaches the log, the account least of
+         * all. Every other message of the player is logged as before.
+         */
+        fun hearDescriptions() {
+            MediaLog.setLogger(object : MediaLog.Logger {
+                override fun d(tag: String, message: String, throwable: Throwable?) {
+                    if (tag != "RtspClient") return MediaLog.Logger.DEFAULT.d(tag, message, throwable)
+                    message.lineSequence()
+                        .filter { it.startsWith("m=") || it.startsWith("a=rtpmap") || it.startsWith("a=fmtp") }
+                        .forEach { Log.i(TAG, "described $it") }
+                }
+
+                override fun i(tag: String, message: String, throwable: Throwable?) = MediaLog.Logger.DEFAULT.i(tag, message, throwable)
+
+                override fun w(tag: String, message: String, throwable: Throwable?) = MediaLog.Logger.DEFAULT.w(tag, message, throwable)
+
+                override fun e(tag: String, message: String, throwable: Throwable?) = MediaLog.Logger.DEFAULT.e(tag, message, throwable)
+            })
+        }
     }
 
     override fun onPlayerReleased(eventTime: AnalyticsListener.EventTime) {
