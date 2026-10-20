@@ -46,7 +46,8 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
                 "pulse position ${player.currentPosition}ms buffered ${player.totalBufferedDuration}ms " +
                     "rendered ${counters?.renderedOutputBufferCount} dropped ${counters?.droppedBufferCount} " +
                     "skipped ${counters?.skippedOutputBufferCount} queued ${counters?.queuedInputBufferCount} " +
-                    "sound queued ${sound?.queuedInputBufferCount} played ${sound?.renderedOutputBufferCount}",
+                    "sound queued ${sound?.queuedInputBufferCount} played ${sound?.renderedOutputBufferCount} " +
+                    "skipped ${sound?.skippedInputBufferCount}/${sound?.skippedOutputBufferCount} dropped ${sound?.droppedBufferCount}",
             )
             clock.postDelayed(this, PULSE_MS)
         }
