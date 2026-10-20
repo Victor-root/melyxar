@@ -30,10 +30,15 @@ private const val LOOKED_EVERY_MS = 250L
  * faster until caught up, so a picture never drifts behind the longer it is
  * watched. A camera can also announce a sound it never sends, or one the
  * player cannot read, which would hold the picture: when the camera keeps
- * sending while the player still waits, the sound is let go.
+ * sending while the player still waits, it is opened again without its sound.
  */
 @OptIn(UnstableApi::class)
-internal class LiveEdge(private val player: ExoPlayer, private val trace: LiveTrace) : AnalyticsListener {
+internal class LiveEdge(
+    private val player: ExoPlayer,
+    private val trace: LiveTrace,
+    /** Opens the camera again from the start. */
+    private val reopen: () -> Unit,
+) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
     private val look = object : Runnable {
         override fun run() {
@@ -60,10 +65,14 @@ internal class LiveEdge(private val player: ExoPlayer, private val trace: LiveTr
         }
         val soundOn = !player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO)
         if (soundOn && player.playbackState == Player.STATE_BUFFERING && player.totalBufferedDuration > SOUND_WAITED_MS) {
-            trace.say("sound held the picture with ${player.totalBufferedDuration}ms received, let go")
+            trace.say("sound held the picture with ${player.totalBufferedDuration}ms received, opened again without it")
+            // Opened again rather than the sound let go while it plays: a
+            // camera's streams are chosen once, as it is opened, and choosing
+            // again under way loses the picture.
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                 .build()
+            reopen()
         }
     }
 

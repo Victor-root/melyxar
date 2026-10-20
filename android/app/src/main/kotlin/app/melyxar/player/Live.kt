@@ -37,15 +37,18 @@ fun livePlayer(context: Context, address: String): ExoPlayer =
         )
         .build()
         .apply {
+            LiveTrace.hearDescriptions()
+            val open = {
+                setMediaSource(
+                    RtspMediaSource.Factory()
+                        .setDebugLoggingEnabled(true)
+                        .createMediaSource(MediaItem.fromUri(address)),
+                )
+                prepare()
+            }
             val trace = LiveTrace(this, address)
             addAnalyticsListener(trace)
-            addAnalyticsListener(LiveEdge(this, trace))
-            LiveTrace.hearDescriptions()
-            setMediaSource(
-                RtspMediaSource.Factory()
-                    .setDebugLoggingEnabled(true)
-                    .createMediaSource(MediaItem.fromUri(address)),
-            )
-            prepare()
+            addAnalyticsListener(LiveEdge(this, trace, reopen = open))
+            open()
             playWhenReady = true
         }
