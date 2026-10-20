@@ -18,7 +18,8 @@ private const val FASTEST = 1.5f
 private const val SPEED_PER_SECOND_BEHIND = 0.5f
 private const val SPEED_STEP = 0.05f
 
-/** How long a shown picture may wait on the sound before the sound is let go. */
+/** How much may come from the camera while the player still waits, in
+ *  milliseconds, before the sound is taken to hold it and let go. */
 private const val SOUND_WAITED_MS = 1_500L
 
 private const val LOOKED_EVERY_MS = 250L
@@ -28,14 +29,12 @@ private const val LOOKED_EVERY_MS = 250L
  * yet is how far behind the picture is: past [BEHIND_AT_MOST_MS] it is played
  * faster until caught up, so a picture never drifts behind the longer it is
  * watched. A camera can also announce a sound it never sends, or one the
- * device cannot decode, which would hold the picture on its first frame: when
- * a shown picture still waits on the sound, the sound is let go.
+ * player cannot read, which would hold the picture: when the camera keeps
+ * sending while the player still waits, the sound is let go.
  */
 @OptIn(UnstableApi::class)
 internal class LiveEdge(private val player: ExoPlayer, private val trace: LiveTrace) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
-    /** When a picture was shown while the player still waited, until it plays. */
-    private var shownWaitingSince = 0L
     private val look = object : Runnable {
         override fun run() {
             keepAtNow()
@@ -59,22 +58,13 @@ internal class LiveEdge(private val player: ExoPlayer, private val trace: LiveTr
             }
             return
         }
-        val waited = if (shownWaitingSince == 0L) 0L else System.currentTimeMillis() - shownWaitingSince
         val soundOn = !player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO)
-        if (soundOn && waited > SOUND_WAITED_MS) {
-            trace.say("sound held the picture ${waited}ms, let go")
+        if (soundOn && player.playbackState == Player.STATE_BUFFERING && player.totalBufferedDuration > SOUND_WAITED_MS) {
+            trace.say("sound held the picture with ${player.totalBufferedDuration}ms received, let go")
             player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                 .build()
         }
-    }
-
-    override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
-        if (player.playbackState != Player.STATE_READY) shownWaitingSince = System.currentTimeMillis()
-    }
-
-    override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
-        if (state == Player.STATE_READY) shownWaitingSince = 0L
     }
 
     override fun onPlayerReleased(eventTime: AnalyticsListener.EventTime) {
