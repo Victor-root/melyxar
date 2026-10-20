@@ -51,6 +51,17 @@
   transition: transform var(--quick) var(--ease);
 }
 
+/* In the row that scrolls, each way in keeps the width it has at its
+   widest rather than shrinking to make room for the next. */
+.band > .row {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.band .row-track > .band-slot {
+  flex: 0 0 clamp(220px, 20vw, 340px);
+}
+
 .band-slot::before,
 .band-slot::after {
   content: "";

@@ -29,6 +29,8 @@
 import { Link } from "react-router-dom";
 import type { Card, Home, Library, LibraryKind, Picture } from "../api";
 import { useShownPicture } from "./picture";
+import { Row } from "./row";
+import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { ChevronRightIcon, KindIcon } from "../icons";
 
@@ -86,6 +88,7 @@ export function Band({
   music: (library: Library) => React.ReactNode;
 }) {
   const { t } = useSettings();
+  const onAPhone = useMediaQuery(PHONE);
 
   const tiles = order.flatMap((id): { id: string; tile: React.ReactNode }[] => {
     const shelf = shelves.find((one) => one.library === id);
@@ -111,14 +114,19 @@ export function Band({
   if (tiles.length === 0) {
     return null;
   }
+  const slots = tiles.map(({ id, tile }) => (
+    <div key={id} className="band-slot" data-card>
+      {tile}
+    </div>
+  ));
+  /* One line that scrolls sideways, as every row of the page does: a band
+     that wrapped onto a second line shrank every tile to fit, and many ways
+     in became many small ones. A phone keeps its two small tiles to a line,
+     which are drawn for that. */
   return (
     <nav className="band" aria-label={t("home.band")}>
       <Water />
-      {tiles.map(({ id, tile }) => (
-        <div key={id} className="band-slot">
-          {tile}
-        </div>
-      ))}
+      {onAPhone ? slots : <Row>{slots}</Row>}
     </nav>
   );
 }
