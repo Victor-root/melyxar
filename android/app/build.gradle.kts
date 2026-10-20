@@ -1,3 +1,5 @@
+import com.android.build.api.artifact.ArtifactTransformationRequest
+import com.android.build.api.artifact.SingleArtifact
 import java.util.Properties
 
 plugins {
@@ -75,6 +77,43 @@ android {
 
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
+    }
+}
+
+// A release comes out named Melyxar-<version>.apk rather than app-release.apk,
+// wherever it is built from.
+abstract class NamedApk : DefaultTask() {
+    @get:InputFiles
+    abstract val built: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val named: DirectoryProperty
+
+    @get:Input
+    abstract val fileName: Property<String>
+
+    @get:Internal
+    abstract val request: Property<ArtifactTransformationRequest<NamedApk>>
+
+    @TaskAction
+    fun rename() {
+        request.get().submit(this) { apk ->
+            val target = named.get().file(fileName.get()).asFile
+            File(apk.outputFile).copyTo(target, overwrite = true)
+            target
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val naming = tasks.register<NamedApk>("name${variant.name.replaceFirstChar(Char::uppercase)}Apk") {
+            fileName.set(variant.outputs.single().versionName.map { "Melyxar-$it.apk" })
+        }
+        val request = variant.artifacts.use(naming)
+            .wiredWithDirectories(NamedApk::built, NamedApk::named)
+            .toTransformMany(SingleArtifact.APK)
+        naming.configure { this.request.set(request) }
     }
 }
 
