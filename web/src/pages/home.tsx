@@ -71,9 +71,14 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
     );
   }
 
-  /* A library of music counts its albums, which the catalogue's own count
-     leaves out. */
-  const held = home.works + libraries.reduce((sum, library) => sum + (library.kind === "music" ? library.works : 0), 0);
+  /* A library of music counts its albums and one of cameras its cameras,
+     which the catalogue's own count leaves out. */
+  const held =
+    home.works +
+    libraries.reduce(
+      (sum, library) => sum + (library.kind === "music" || library.kind === "cameras" ? library.works : 0),
+      0,
+    );
   if (held === 0) {
     return (
       <>
