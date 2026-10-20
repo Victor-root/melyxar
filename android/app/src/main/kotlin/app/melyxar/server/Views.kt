@@ -182,6 +182,14 @@ data class Home(
 @Serializable
 data class Library(val id: String, val name: String, val kind: String, val works: Int = 0, val version: Long = 0)
 
+/** A camera of a library of cameras, as an account granted it sees it. */
+@Serializable
+data class Camera(val id: String, val name: String)
+
+/** Where a camera is opened live, its account written in. */
+@Serializable
+data class LiveCamera(val address: String)
+
 /** A page of a grid, and where the next one starts. */
 @Serializable
 data class CardPage(val cards: List<Card> = emptyList(), val next: String? = null)
