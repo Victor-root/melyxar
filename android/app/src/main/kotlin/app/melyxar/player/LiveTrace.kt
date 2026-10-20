@@ -41,10 +41,12 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
     private val pulse = object : Runnable {
         override fun run() {
             val counters = player.videoDecoderCounters
+            val sound = player.audioDecoderCounters
             say(
                 "pulse position ${player.currentPosition}ms buffered ${player.totalBufferedDuration}ms " +
                     "rendered ${counters?.renderedOutputBufferCount} dropped ${counters?.droppedBufferCount} " +
-                    "skipped ${counters?.skippedOutputBufferCount} queued ${counters?.queuedInputBufferCount}",
+                    "skipped ${counters?.skippedOutputBufferCount} queued ${counters?.queuedInputBufferCount} " +
+                    "sound queued ${sound?.queuedInputBufferCount} played ${sound?.renderedOutputBufferCount}",
             )
             clock.postDelayed(this, PULSE_MS)
         }
