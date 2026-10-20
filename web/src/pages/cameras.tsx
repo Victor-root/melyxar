@@ -15,7 +15,10 @@ import { useSettings } from "../settings";
 
 export function CamerasPage({ library }: { library: Library }) {
   const { t } = useSettings();
-  const cameras = useAsked((signal) => api.cameras(library.id, signal), [library.id, library.version]);
+  const cameras = useAsked(
+    (signal) => api.cameras(library.id, signal),
+    [library.id, library.version],
+  );
   const [refused, setRefused] = useState(false);
 
   /* The address holds a password: handed straight to the application and
@@ -36,11 +39,15 @@ export function CamerasPage({ library }: { library: Library }) {
     <main className="page">
       <div className="section-head">
         <h1>{library.name}</h1>
-        <span className="count">{howMany(library.works, "admin.cameras_count", t)}</span>
+        <span className="count">
+          {howMany(library.works, "admin.cameras_count", t)}
+        </span>
       </div>
       {!appCamera && <p className="notice">{t("cameras.in_the_app")}</p>}
       {refused && <p className="notice">{t("cameras.cannot_open")}</p>}
-      {cameras.answer?.length === 0 && <p className="notice">{t("cameras.none")}</p>}
+      {cameras.answer?.length === 0 && (
+        <p className="notice">{t("cameras.none")}</p>
+      )}
       <div className="camera-grid">
         {cameras.answer?.map((camera) =>
           appCamera ? (

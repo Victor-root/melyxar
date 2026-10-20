@@ -360,12 +360,15 @@ function LibraryPanel({
       )}
 
       {/* Read here as well as on the page of what the works are described
-          in, because it is also what a library was made with. */}
-      <span className="panel-say">
-        {t("admin.described_in", {
-          language: languageName(library.metadata_language, language),
-        })}
-      </span>
+          in, because it is also what a library was made with. Cameras are
+          described in nothing. */}
+      {holdsFiles(library.kind) && (
+        <span className="panel-say">
+          {t("admin.described_in", {
+            language: languageName(library.metadata_language, language),
+          })}
+        </span>
+      )}
     </Panel>
   );
 }
