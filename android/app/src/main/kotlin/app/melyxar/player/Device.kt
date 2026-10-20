@@ -50,7 +50,7 @@ fun measuredProfile(context: Context, sound: AudioAttributes, passedOn: Boolean 
         mime in decoded || (passedOn && PASSED_THROUGH[name]?.let(passing::supportsEncoding) == true)
     }.keys
     val profile = profileOf(decoders, shownCurves(context), playedSound)
-    if (BuildConfig.DEBUG) {
+    if (BuildConfig.TRACES) {
         Log.d(DEVICE_LOG, "screen HDR types ${hdrTypesOf(context).toList()} (1 Dolby Vision, 2 HDR10, 3 HLG, 4 HDR10+)")
         decoders.filter { it.mime.startsWith("video/") }.forEach { decoder ->
             Log.d(

@@ -479,7 +479,7 @@ Ces décisions ont été prises après discussion et ne sont pas à rediscuter s
 - **Langue de tout le reste : français.** Documentation, explications, revues, décisions, échanges avec le mainteneur.
 - Le em dash est banni de tout texte du projet.
 - Textes d'interface toujours passés par l'internationalisation, anglais d'abord, français ensuite.
-- Tout journal de débogage est protégé par un contrôle de type `BuildConfig.DEBUG` ou équivalent Rust (`cfg(debug_assertions)`).
+- Tout journal de débogage est protégé par un contrôle de type `BuildConfig.TRACES` (vrai seulement dans la version debug, qui est optimisée comme une release mais garde ses traces) ou équivalent Rust (`cfg(debug_assertions)`).
 - Pas de code mort, pas de contournement temporaire, pas de commentaire inutile.
 - **Tout se fait depuis l'interface web.** Ni l'administrateur ni le spectateur ne doivent avoir à ouvrir un terminal pour faire marcher le serveur : lancer un scan, corriger une fiche, changer un réglage, voir ce qui tourne. Les commandes en ligne existent pour le diagnostic et pour le mainteneur qui débogue, jamais comme seul chemin vers une fonction.
 - **Une panne se lit sur l'écran qui l'a provoquée.** Un travail qui échoue écrit sa raison, la fiche d'un film dit pourquoi il n'a pas de nom, un bouton refusé affiche le refus, et un seul bouton copie le rapport complet de l'installation. Chercher la cause dans un journal est le dernier recours du mainteneur, jamais le chemin normal.

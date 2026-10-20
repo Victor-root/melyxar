@@ -24,7 +24,7 @@ class StartClock : AnalyticsListener {
     private var playing = false
 
     fun mark(step: String) {
-        if (!BuildConfig.DEBUG || playing) {
+        if (!BuildConfig.TRACES || playing) {
             return
         }
         val now = SystemClock.elapsedRealtime()
