@@ -1634,6 +1634,7 @@ name = "melyxar-auth"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "aws-lc-rs",
  "getrandom 0.4.3",
  "sha2 0.11.0",
  "thiserror 2.0.20",

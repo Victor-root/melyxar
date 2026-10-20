@@ -110,6 +110,9 @@ argon2 = "0.6"
 # single request, segment of video included.
 sha2 = "0.11"
 getrandom = "0.4"
+# The sealing of secrets the server must hand back, by the same library
+# rustls already builds on: nothing more is compiled for it.
+aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }
 # Reads which way up a photo is meant to be seen, which a camera writes into
 # the file rather than into its pixels.
 kamadak-exif = "0.6"
