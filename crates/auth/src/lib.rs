@@ -21,6 +21,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod sealing;
+
 use argon2::password_hash::phc::PasswordHash;
 use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use argon2::Argon2;
@@ -36,6 +38,10 @@ pub enum AuthError {
     CouldNotHash(String),
     #[error("the machine would not give any randomness: {0}")]
     NoRandomness(String),
+    #[error("not a key secrets can be sealed with")]
+    NotASealingKey,
+    #[error("a sealed secret that does not open")]
+    NotSealed,
 }
 
 pub type Result<T> = std::result::Result<T, AuthError>;
