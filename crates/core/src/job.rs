@@ -189,6 +189,9 @@ pub enum JobStep {
     /// themselves out of the file itself, and the cover of each album from
     /// beside its songs.
     PicturingOwnFiles,
+    /// Taking a picture out of each film and episode nobody could name, for
+    /// its card.
+    PicturingUnnamedWorks,
     /// Asking the provider what IMDb calls the works that do not say.
     LookingUpImdbIds,
     /// Reading the ratings of the works out of the file IMDb publishes.
@@ -215,7 +218,7 @@ pub enum JobStep {
 
 impl JobStep {
     /// Every step there is, for the same reason as the kinds above.
-    pub const ALL: [Self; 21] = [
+    pub const ALL: [Self; 22] = [
         Self::WalkingFolders,
         Self::ReadingNamesAgain,
         Self::AnalysingFiles,
@@ -226,6 +229,7 @@ impl JobStep {
         Self::AskingTheProvider,
         Self::FillingInWhatIsMissing,
         Self::PicturingOwnFiles,
+        Self::PicturingUnnamedWorks,
         Self::LookingUpImdbIds,
         Self::ReadingImdbRatings,
         Self::AskingOmdb,
@@ -251,6 +255,7 @@ impl JobStep {
             Self::AskingTheProvider => "asking_the_provider",
             Self::FillingInWhatIsMissing => "filling_in_what_is_missing",
             Self::PicturingOwnFiles => "picturing_own_files",
+            Self::PicturingUnnamedWorks => "picturing_unnamed_works",
             Self::LookingUpImdbIds => "looking_up_imdb_ids",
             Self::ReadingImdbRatings => "reading_imdb_ratings",
             Self::AskingOmdb => "asking_omdb",
@@ -277,6 +282,7 @@ impl JobStep {
             "asking_the_provider" => Some(Self::AskingTheProvider),
             "filling_in_what_is_missing" => Some(Self::FillingInWhatIsMissing),
             "picturing_own_files" => Some(Self::PicturingOwnFiles),
+            "picturing_unnamed_works" => Some(Self::PicturingUnnamedWorks),
             "looking_up_imdb_ids" => Some(Self::LookingUpImdbIds),
             "reading_imdb_ratings" => Some(Self::ReadingImdbRatings),
             "asking_omdb" => Some(Self::AskingOmdb),
