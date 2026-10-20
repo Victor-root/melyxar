@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 
 pub mod calibration;
+pub mod camera;
 pub mod capabilities;
 pub mod command;
 pub mod hardware;

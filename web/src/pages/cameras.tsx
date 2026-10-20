@@ -1,7 +1,8 @@
 /*
  * A library of cameras: a tile for each, its mark and its name, with nothing
- * taken from its picture. Inside the Android application a tile opens the
- * camera live; in a browser the page says where it is watched for now.
+ * taken from its picture. A tile opens the camera live: inside the Android
+ * application in its own screen, the application opening the camera itself;
+ * in a browser over the page, relayed by the server.
  */
 
 import { useState } from "react";
@@ -10,6 +11,7 @@ import type { CameraShown, Library } from "../api";
 import { useAsked } from "../asking";
 import { SecurityCameraIcon } from "../icons";
 import { appCamera } from "../player/app-camera";
+import { CameraLive } from "./camera-live";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 
@@ -20,11 +22,13 @@ export function CamerasPage({ library }: { library: Library }) {
     [library.id, library.version],
   );
   const [refused, setRefused] = useState(false);
+  const [watching, setWatching] = useState<CameraShown | null>(null);
 
   /* The address holds a password: handed straight to the application and
-     kept nowhere on the page. */
+     kept nowhere on the page. A browser is never given it. */
   const watch = (camera: CameraShown) => {
     if (!appCamera) {
+      setWatching(camera);
       return;
     }
     const opener = appCamera;
@@ -43,30 +47,26 @@ export function CamerasPage({ library }: { library: Library }) {
           {howMany(library.works, "admin.cameras_count", t)}
         </span>
       </div>
-      {!appCamera && <p className="notice">{t("cameras.in_the_app")}</p>}
       {refused && <p className="notice">{t("cameras.cannot_open")}</p>}
       {cameras.answer?.length === 0 && (
         <p className="notice">{t("cameras.none")}</p>
       )}
       <div className="camera-grid">
-        {cameras.answer?.map((camera) =>
-          appCamera ? (
-            <button
-              type="button"
-              key={camera.id}
-              className="camera-tile"
-              aria-label={t("cameras.watch", { name: camera.name })}
-              onClick={() => watch(camera)}
-            >
-              <CameraFace name={camera.name} />
-            </button>
-          ) : (
-            <div key={camera.id} className="camera-tile">
-              <CameraFace name={camera.name} />
-            </div>
-          ),
-        )}
+        {cameras.answer?.map((camera) => (
+          <button
+            type="button"
+            key={camera.id}
+            className="camera-tile"
+            aria-label={t("cameras.watch", { name: camera.name })}
+            onClick={() => watch(camera)}
+          >
+            <CameraFace name={camera.name} />
+          </button>
+        ))}
       </div>
+      {watching && (
+        <CameraLive camera={watching} onClose={() => setWatching(null)} />
+      )}
     </main>
   );
 }
