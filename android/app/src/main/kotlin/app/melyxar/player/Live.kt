@@ -37,6 +37,12 @@ fun livePlayer(context: Context, address: String): ExoPlayer =
         )
         .build()
         .apply {
+            // A camera's sound is often in a form the device's decoder takes
+            // without ever giving it back, which holds the picture on its
+            // first frame; the picture is what a camera is watched for.
+            trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
             addAnalyticsListener(LiveTrace(this, address))
             setMediaSource(RtspMediaSource.Factory().createMediaSource(MediaItem.fromUri(address)))
             prepare()
