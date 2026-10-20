@@ -30,6 +30,7 @@ import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
 import { DebugJournal } from "./components/debug-journal";
 import { Tooltips } from "./components/tooltips";
+import { CamerasPage } from "./pages/cameras";
 import { LibraryPage } from "./pages/library";
 import { MusicAlbumPage } from "./music/album";
 import { MusicPlaylistPage } from "./music/playlist";
@@ -289,13 +290,16 @@ function BehindTheDoor() {
 }
 
 /** A library opened by its address: a grid of films and series, or, for a
- *  library of music, the pages of music, which are kept apart from them. */
+ *  library of music, the pages of music, which are kept apart from them, or
+ *  the cameras of a library of cameras. */
 function LibraryOrMusic({ libraries }: { libraries: Library[] }) {
   const { id } = useParams();
   const library = libraries.find((entry) => entry.id === id);
-  return library?.kind === "music" ? (
-    <MusicLibraryPage library={library} />
-  ) : (
-    <LibraryPage libraries={libraries} />
-  );
+  if (library?.kind === "music") {
+    return <MusicLibraryPage library={library} />;
+  }
+  if (library?.kind === "cameras") {
+    return <CamerasPage library={library} />;
+  }
+  return <LibraryPage libraries={libraries} />;
 }

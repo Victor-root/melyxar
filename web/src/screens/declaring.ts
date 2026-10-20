@@ -16,6 +16,7 @@ import { useCallback, useState } from "react";
 import { api } from "../api";
 import type { Library, LibraryChoices, LibraryKind, WouldGo } from "../api";
 import { refusalAbout, useAsked, useTold } from "../asking";
+import { holdsFiles } from "../libraries";
 import { NO_MUSIC_OPTIONS, music } from "../music/api";
 import type { MusicLibraryOptions } from "../music/api";
 
@@ -242,7 +243,8 @@ export function useDeclaring(
         name: name.trim() || nameOf(kind),
         kind,
         metadata_language: metadata,
-        roots,
+        // Folders picked before the kind was changed to one that has none.
+        roots: holdsFiles(kind) ? roots : [],
         options: choices,
       });
       if (kind === "music") {

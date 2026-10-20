@@ -13,6 +13,50 @@ use crate::{AppError, AppState, Result};
 /// The longest name a camera may be given.
 const LONGEST_NAME: usize = 120;
 
+/// Why a camera, as written in the administration, was refused. A word and
+/// never a sentence: the screen words it, naming the box to put right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    NameNeeded,
+    /// Not an RTSP address naming a machine, or one carrying its account,
+    /// which is written in the boxes beside it.
+    NotACameraAddress,
+}
+
+impl Refused {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NameNeeded => "name_needed",
+            Self::NotACameraAddress => "not_a_camera_address",
+        }
+    }
+
+    /// Every one of them, so a test can find a refusal nobody worded.
+    pub const ALL: [Self; 2] = [Self::NameNeeded, Self::NotACameraAddress];
+}
+
+/// What can go wrong declaring or changing a camera: something somebody
+/// typed, or the server itself.
+#[derive(Debug, thiserror::Error)]
+pub enum Trouble {
+    #[error("refused: {}", .0.as_str())]
+    Refused(Refused),
+    #[error(transparent)]
+    Failed(#[from] AppError),
+}
+
+impl From<melyxar_database::DatabaseError> for Trouble {
+    fn from(error: melyxar_database::DatabaseError) -> Self {
+        Self::Failed(AppError::from(error))
+    }
+}
+
+impl From<melyxar_auth::AuthError> for Trouble {
+    fn from(error: melyxar_auth::AuthError) -> Self {
+        Self::Failed(AppError::from(error))
+    }
+}
+
 /// What the administration says of a camera.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Declared {
@@ -66,9 +110,9 @@ pub async fn declare(
     library: LibraryId,
     declared: &Declared,
     password: Option<&str>,
-) -> Result<CameraId> {
+) -> std::result::Result<CameraId, Trouble> {
     let library = library_of_cameras(state, library).await?;
-    let fields = checked(declared)?;
+    let fields = checked(declared).map_err(Trouble::Refused)?;
     let database = state.database();
     let camera = database.add_camera(library.id, fields, None).await?;
     if let Some(password) = password.filter(|password| !password.is_empty()) {
@@ -86,10 +130,12 @@ pub async fn change(
     id: CameraId,
     declared: &Declared,
     password: NewPassword,
-) -> Result<()> {
+) -> std::result::Result<(), Trouble> {
     let camera = camera(state, id).await?;
     let database = state.database();
-    database.update_camera(camera.id, checked(declared)?).await?;
+    database
+        .update_camera(camera.id, checked(declared).map_err(Trouble::Refused)?)
+        .await?;
     match password {
         NewPassword::Kept => {}
         NewPassword::Forgotten => {
@@ -127,18 +173,14 @@ pub async fn live_address(state: &AppState, who: &User, id: CameraId) -> Result<
     Ok(opened_with(&camera.address, &camera.username, password.as_deref()))
 }
 
-fn checked(declared: &Declared) -> Result<CameraFields<'_>> {
+fn checked(declared: &Declared) -> std::result::Result<CameraFields<'_>, Refused> {
     let name = declared.name.trim();
     if name.is_empty() || name.chars().count() > LONGEST_NAME {
-        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "a camera needs a name of at most 120 characters",
-        )));
+        return Err(Refused::NameNeeded);
     }
     let address = declared.address.trim();
     if !is_a_camera_address(address) {
-        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "not an RTSP address naming a camera, without its account",
-        )));
+        return Err(Refused::NotACameraAddress);
     }
     Ok(CameraFields {
         name,

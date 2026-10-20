@@ -71,7 +71,7 @@ fun CamerasScreen(library: Library, comebacks: Int) {
         modifier = Modifier.fillMaxSize(),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
-            TopBar { BarTitle(Icons.Camera, library.name, cameras?.size) }
+            TopBar { BarTitle(Icons.SecurityCamera, library.name, cameras?.size) }
         }
         if (cameras?.isEmpty() == true) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -107,7 +107,7 @@ private fun CameraTile(camera: Camera, onClick: () -> Unit, modifier: Modifier) 
             .rim(CardShape, palette.accentBright, 2.dp) { lit }
             .clickable(interaction, indication = null, onClick = onClick),
     ) {
-        Glyph(Icons.Camera, palette.accentBright, 44.dp, Modifier.align(Alignment.Center))
+        Glyph(Icons.SecurityCamera, palette.accentBright, 44.dp, Modifier.align(Alignment.Center))
         Text(
             camera.name,
             fontSize = 16.sp,

@@ -158,3 +158,25 @@ fn camera_id(id: &str) -> Result<CameraId> {
     id.parse()
         .map_err(|_| ServerError::invalid_input("the camera identifier is malformed"))
 }
+
+#[cfg(test)]
+mod tests {
+    /// A refusal with no words is a form that says nothing to whoever filled
+    /// it in.
+    #[test]
+    fn every_reason_a_camera_is_refused_for_has_words_in_both_languages() {
+        let words = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web/src/i18n.ts"),
+        )
+        .expect("the words of the interface");
+
+        for refused in melyxar_app::cameras::Refused::ALL {
+            let key = format!("refused.camera.{}", refused.as_str());
+            assert_eq!(
+                words.matches(&format!("\"{key}\":")).count(),
+                2,
+                "{key} needs a sentence in English and one in French"
+            );
+        }
+    }
+}
