@@ -62,7 +62,7 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
         return out
     }
 
-    private fun say(line: String) {
+    fun say(line: String) {
         Log.i(TAG, "+${System.currentTimeMillis() - started}ms ${hidden(line)}")
     }
 
@@ -112,6 +112,18 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
 
     override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
         say("audio decoder $decoderName")
+    }
+
+    override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
+        say("audio format ${format.sampleMimeType} ${format.codecs} ${format.sampleRate}Hz ${format.channelCount}ch")
+    }
+
+    override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
+        say("sound playing")
+    }
+
+    override fun onAudioUnderrun(eventTime: AnalyticsListener.EventTime, bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
+        say("sound underrun, last fed ${elapsedSinceLastFeedMs}ms ago")
     }
 
     override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
