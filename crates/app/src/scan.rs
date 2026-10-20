@@ -1143,7 +1143,7 @@ async fn work_for(
     let work = database
         .create_work(
             library.id,
-            work_kind_of(&library)?,
+            work_kind_of(library)?,
             &parsed.title,
             &sort_title,
             parsed.year,
