@@ -23,8 +23,8 @@ private val sound = AudioAttributes.Builder()
 /**
  * A camera watched live: the application opens its RTSP address itself, with
  * the account the server wrote into it, and nothing passes through the
- * server. Held as little ahead as plays smoothly, so the picture stays under
- * a second behind the camera.
+ * server. Held as little ahead as plays smoothly, and kept there by
+ * [LiveEdge], so the picture stays under a second behind the camera.
  */
 @OptIn(UnstableApi::class)
 fun livePlayer(context: Context, address: String): ExoPlayer =
@@ -37,13 +37,9 @@ fun livePlayer(context: Context, address: String): ExoPlayer =
         )
         .build()
         .apply {
-            // A camera's sound is often in a form the device's decoder takes
-            // without ever giving it back, which holds the picture on its
-            // first frame; the picture is what a camera is watched for.
-            trackSelectionParameters = trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                .build()
-            addAnalyticsListener(LiveTrace(this, address))
+            val trace = LiveTrace(this, address)
+            addAnalyticsListener(trace)
+            addAnalyticsListener(LiveEdge(this, trace))
             setMediaSource(RtspMediaSource.Factory().createMediaSource(MediaItem.fromUri(address)))
             prepare()
             playWhenReady = true
