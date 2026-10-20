@@ -378,6 +378,10 @@
     <string name="camera_live">Live</string>
     <string name="camera_live_name">%1$s · Live</string>
     <string name="camera_cannot_play">This camera cannot be reached. Check that it is on and on the same network as this device.</string>
+    <string name="camera_move">Move the picture</string>
+    <string name="camera_recentre">Put the picture back in the middle</string>
+    <string name="camera_reconnect">Reconnect</string>
+    <string name="camera_moving">Move the picture with the arrows. OK keeps it there on this device, Back puts it back as it was.</string>
     <string name="tv_trailer_no_app">No application on this television can open this trailer.</string>
     <string name="tv_facts">Playback diagnostics</string>
     <string name="tv_facts_stream">Stream</string>

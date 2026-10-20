@@ -255,7 +255,7 @@ private fun Named(work: Work, modifier: Modifier) {
 
 /** The time, and under it who is watching, at the top right. */
 @Composable
-private fun Who() {
+internal fun Who() {
     val palette = LocalPalette.current
     val account = LocalChrome.current.account
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -394,7 +394,7 @@ private fun StepButton(arc: ImageVector, seconds: Int, onClick: () -> Unit, modi
 /** A button of the player: its icon alone, lit in the accent when the remote
  *  is on it. */
 @Composable
-private fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, large: Boolean = false) {
+internal fun PlayerButton(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, large: Boolean = false) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)

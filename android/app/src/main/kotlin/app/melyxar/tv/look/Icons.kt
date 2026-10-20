@@ -287,6 +287,14 @@ object Icons {
             "M9 10l0 4",
         ),
     )
+    val Move = outlined(
+        "move",
+        paths = arrayOf("M12 3v18", "M3 12h18", "m9 6 3-3 3 3", "m9 18 3 3 3-3", "m6 9-3 3 3 3", "m18 9 3 3-3 3"),
+    )
+    val Recentre = outlined(
+        "recentre",
+        paths = arrayOf(circle(12f, 12f, 3f), "M12 2.6v4.2M12 17.2v4.2M2.6 12h4.2M17.2 12h4.2"),
+    )
 
     /** The icon of a kind of library. */
     fun ofKind(kind: String): ImageVector = when (kind) {
