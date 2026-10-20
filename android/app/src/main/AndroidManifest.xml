@@ -357,6 +357,12 @@
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true" />
 
+        <!-- A camera watched live from the phone's page, over it. -->
+        <activity
+            android:name=".web.LiveActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:exported="false" />
+
         <!-- Open to the phone's own controllers, the lock screen, a headset,
              a car, which is what a session of music is for: none of them
              holds a permission it could be asked for, and the session itself

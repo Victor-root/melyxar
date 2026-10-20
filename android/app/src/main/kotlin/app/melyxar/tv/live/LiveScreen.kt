@@ -115,7 +115,7 @@ fun LiveScreen(camera: Camera) {
         }
         if (failed) {
             Text(
-                stringResource(R.string.tv_camera_cannot_play),
+                stringResource(R.string.camera_cannot_play),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,
                 color = palette.text,
@@ -142,7 +142,7 @@ fun LiveScreen(camera: Camera) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Text(stringResource(R.string.tv_camera_live), fontSize = 15.sp, color = palette.accentBright)
+                Text(stringResource(R.string.camera_live), fontSize = 15.sp, color = palette.accentBright)
             }
         }
     }

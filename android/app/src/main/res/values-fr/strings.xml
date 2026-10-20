@@ -387,8 +387,9 @@
     <string name="tv_trailer_of">Bande-annonce : %1$s</string>
     <string name="tv_trailer_cannot_play">Cette bande-annonce ne peut pas être lue ici.</string>
     <string name="tv_cameras_none">Aucune caméra dans cette médiathèque pour l’instant. Les caméras se déclarent dans l’administration, depuis le navigateur.</string>
-    <string name="tv_camera_live">En direct</string>
-    <string name="tv_camera_cannot_play">Impossible de joindre cette caméra. Vérifiez qu’elle est allumée et sur le même réseau que cette télévision.</string>
+    <string name="camera_live">En direct</string>
+    <string name="camera_live_name">%1$s · En direct</string>
+    <string name="camera_cannot_play">Impossible de joindre cette caméra. Vérifiez qu’elle est allumée et sur le même réseau que cet appareil.</string>
     <string name="tv_trailer_no_app">Aucune application de cette télévision ne sait ouvrir cette bande-annonce.</string>
     <string name="tv_facts">Diagnostic de lecture</string>
     <string name="tv_facts_stream">Flux</string>
