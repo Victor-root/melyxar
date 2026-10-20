@@ -30,7 +30,7 @@ export interface Libraries {
 /** Every kind a library can be, in the order they are offered and read in:
  *  the choice when one is declared, the categories of the bar at the top, the
  *  kinds a search may be narrowed to. */
-export const KINDS: LibraryKind[] = ["movies", "series", "anime", "home_media", "shows", "music"];
+export const KINDS: LibraryKind[] = ["movies", "series", "anime", "home_media", "shows", "music", "cameras"];
 
 /** The kinds held in seasons and episodes, the only ones whose openings can
  *  be found by comparing the episodes of a season. */
@@ -101,6 +101,13 @@ export function nameOfKind(kind: LibraryKind, libraries: Library[], t: Wording):
 /** The kinds this account holds a library of, in the order given. */
 export function kindsHeld(order: LibraryKind[], libraries: Library[]): LibraryKind[] {
   return order.filter((kind) => libraries.some((library) => library.kind === kind));
+}
+
+/** Whether a kind of library is made of files found in folders. A library of
+ *  cameras is made of cameras declared one by one: no folder, no scan, no
+ *  reading of files. */
+export function holdsFiles(kind: LibraryKind): boolean {
+  return kind !== "cameras";
 }
 
 /** How the cards of a kind are laid out: on their side for what somebody

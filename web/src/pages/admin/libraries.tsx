@@ -42,9 +42,10 @@ import {
 } from "../../icons";
 import type { IconProps } from "../../icons";
 import { languageName, METADATA_LANGUAGES } from "../../languages";
-import { EPISODIC, KINDS, useLibraries } from "../../libraries";
+import { EPISODIC, KINDS, holdsFiles, useLibraries } from "../../libraries";
 import { howMany } from "../../readable";
 import { useStartScan } from "../../running";
+import { CamerasAdmin } from "./cameras";
 import {
   useDeclaring,
   useLibraryEditing,
@@ -166,7 +167,11 @@ function LibraryPanel({
     <Panel
       icon={markOf(library.kind)}
       title={library.name}
-      lead={`${t(`kind.${library.kind}`)} · ${howMany(library.works, "admin.works", t)}`}
+      lead={`${t(`kind.${library.kind}`)} · ${howMany(
+        library.works,
+        holdsFiles(library.kind) ? "admin.works" : "admin.cameras_count",
+        t,
+      )}`}
       className="library-panel"
       folding={{ open, toggle: () => setOpen((was) => !was) }}
       rename={{
@@ -176,14 +181,16 @@ function LibraryPanel({
       }}
       action={
         <>
-          <button
-            className="button button-small"
-            onClick={scan.start}
-            disabled={scan.starting}
-          >
-            <RefreshIcon size={15} />
-            {t("home.scan")}
-          </button>
+          {holdsFiles(library.kind) && (
+            <button
+              className="button button-small"
+              onClick={scan.start}
+              disabled={scan.starting}
+            >
+              <RefreshIcon size={15} />
+              {t("home.scan")}
+            </button>
+          )}
           <button
             className="button button-small button-danger"
             onClick={() => {
@@ -225,105 +232,111 @@ function LibraryPanel({
         />
       )}
 
-      <div className="panel-split">
-        <div className="panel-split-main">
-          <div className="settings-lines">
-            <LibraryChoicesFields
-              kind={library.kind}
-              choices={library}
-              onChange={(changes) => editing.settle(library, changes)}
-              watchWhy={
-                library.watch_state === "starting"
-                  ? "admin.watch_starting"
-                  : undefined
-              }
-              watchRefusal={library.watch_refusal}
-            />
-            {library.kind === "music" && (
-              <MusicLibraryOptionsFields library={library.id} />
+      {!holdsFiles(library.kind) ? (
+        <CamerasAdmin library={library} onChanged={onChanged} />
+      ) : (
+        <div className="panel-split">
+          <div className="panel-split-main">
+            <div className="settings-lines">
+              <LibraryChoicesFields
+                kind={library.kind}
+                choices={library}
+                onChange={(changes) => editing.settle(library, changes)}
+                watchWhy={
+                  library.watch_state === "starting"
+                    ? "admin.watch_starting"
+                    : undefined
+                }
+                watchRefusal={library.watch_refusal}
+              />
+              {library.kind === "music" && (
+                <MusicLibraryOptionsFields library={library.id} />
+              )}
+            </div>
+          </div>
+          <div className="panel-split-beside">
+            {/* The folders it looks in. A log line shows only the label, but this is
+              the one screen roots are managed from, and telling two of them apart
+              by more than a label somebody gave one is the point of being here. */}
+            <div className="library-folders">
+              <div className="library-folders-head">
+                <span>{t("admin.folders")}</span>
+                <button
+                  className="button button-small"
+                  onClick={() => setAddingFolder(true)}
+                >
+                  <FolderIcon size={15} />
+                  {t("settings.add_folder")}
+                </button>
+              </div>
+              <div className="lines">
+                {library.roots.map((root) => (
+                  <div className="line" key={root.id}>
+                    <span className="line-mark" aria-hidden="true">
+                      <FolderIcon size={18} />
+                    </span>
+                    <span className="line-words">
+                      <Editable
+                        value={root.label}
+                        label={t("settings.folder_label")}
+                        className="field-quiet"
+                        onSettled={(label) =>
+                          editing.renameFolder(library, root.id, label)
+                        }
+                      />
+                      <span className="line-note line-path">{root.path}</span>
+                      {ACCESS_STATE[root.access] === "trouble" && (
+                        <span className="line-note line-trouble">
+                          {t(`root.${root.explanation_code}`)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="line-end">
+                      <StatePill state={ACCESS_STATE[root.access]}>
+                        {t(`admin.access_state.${root.access}`)}
+                      </StatePill>
+                      <button
+                        className="button button-small button-quiet"
+                        title={t("settings.remove_folder")}
+                        aria-label={t("settings.remove_folder")}
+                        onClick={() =>
+                          setRemoving(
+                            removing?.root === root.id
+                              ? null
+                              : { root: root.id },
+                          )
+                        }
+                      >
+                        <DeleteIcon size={15} />
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* What was taken out of it and left on the disk is walked past by every
+              scan; this is the way to change one's mind. */}
+            {library.set_aside > 0 && (
+              <div className="line">
+                <span className="line-words">
+                  <span className="line-name">
+                    {howMany(library.set_aside, "library.set_aside", t)}
+                  </span>
+                </span>
+                <span className="line-end">
+                  <button
+                    className="button button-small"
+                    onClick={() => setTakingBack(true)}
+                  >
+                    {t("library.take_back")}
+                  </button>
+                </span>
+              </div>
             )}
           </div>
         </div>
-        <div className="panel-split-beside">
-          {/* The folders it looks in. A log line shows only the label, but this is
-            the one screen roots are managed from, and telling two of them apart
-            by more than a label somebody gave one is the point of being here. */}
-          <div className="library-folders">
-            <div className="library-folders-head">
-              <span>{t("admin.folders")}</span>
-              <button
-                className="button button-small"
-                onClick={() => setAddingFolder(true)}
-              >
-                <FolderIcon size={15} />
-                {t("settings.add_folder")}
-              </button>
-            </div>
-            <div className="lines">
-              {library.roots.map((root) => (
-                <div className="line" key={root.id}>
-                  <span className="line-mark" aria-hidden="true">
-                    <FolderIcon size={18} />
-                  </span>
-                  <span className="line-words">
-                    <Editable
-                      value={root.label}
-                      label={t("settings.folder_label")}
-                      className="field-quiet"
-                      onSettled={(label) =>
-                        editing.renameFolder(library, root.id, label)
-                      }
-                    />
-                    <span className="line-note line-path">{root.path}</span>
-                    {ACCESS_STATE[root.access] === "trouble" && (
-                      <span className="line-note line-trouble">
-                        {t(`root.${root.explanation_code}`)}
-                      </span>
-                    )}
-                  </span>
-                  <span className="line-end">
-                    <StatePill state={ACCESS_STATE[root.access]}>
-                      {t(`admin.access_state.${root.access}`)}
-                    </StatePill>
-                    <button
-                      className="button button-small button-quiet"
-                      title={t("settings.remove_folder")}
-                      aria-label={t("settings.remove_folder")}
-                      onClick={() =>
-                        setRemoving(
-                          removing?.root === root.id ? null : { root: root.id },
-                        )
-                      }
-                    >
-                      <DeleteIcon size={15} />
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* What was taken out of it and left on the disk is walked past by every
-            scan; this is the way to change one's mind. */}
-          {library.set_aside > 0 && (
-            <div className="line">
-              <span className="line-words">
-                <span className="line-name">
-                  {howMany(library.set_aside, "library.set_aside", t)}
-                </span>
-              </span>
-              <span className="line-end">
-                <button
-                  className="button button-small"
-                  onClick={() => setTakingBack(true)}
-                >
-                  {t("library.take_back")}
-                </button>
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {addingFolder && (
         <FolderPicker
@@ -733,68 +746,76 @@ export function NewLibrary({
                 onPick={setKind}
               />
             </Setting>
-            <Setting label={t("settings.metadata_language")}>
-              <Picker
-                label={t("settings.metadata_language")}
-                value={metadata}
-                options={METADATA_LANGUAGES.map(
-                  (code) => [code, languageName(code, language)] as const,
+            {holdsFiles(kind) && (
+              <Setting label={t("settings.metadata_language")}>
+                <Picker
+                  label={t("settings.metadata_language")}
+                  value={metadata}
+                  options={METADATA_LANGUAGES.map(
+                    (code) => [code, languageName(code, language)] as const,
+                  )}
+                  onPick={setMetadata}
+                />
+              </Setting>
+            )}
+          </div>
+
+          {holdsFiles(kind) ? (
+            <div className="library-folders">
+              <div className="library-folders-head">
+                <span>{t("admin.folders")}</span>
+                <button
+                  className="button button-small"
+                  onClick={() => setPicking(true)}
+                >
+                  <FolderIcon size={15} />
+                  {t("settings.add_folder")}
+                </button>
+              </div>
+              <div className="lines">
+                {roots.length === 0 && (
+                  <p className="empty-line">{t("admin.no_folder_yet")}</p>
                 )}
-                onPick={setMetadata}
-              />
-            </Setting>
-          </div>
-
-          <div className="library-folders">
-            <div className="library-folders-head">
-              <span>{t("admin.folders")}</span>
-              <button
-                className="button button-small"
-                onClick={() => setPicking(true)}
-              >
-                <FolderIcon size={15} />
-                {t("settings.add_folder")}
-              </button>
+                {roots.map((path) => (
+                  <div className="line" key={path}>
+                    <span className="line-mark" aria-hidden="true">
+                      <FolderIcon size={18} />
+                    </span>
+                    <span className="line-words">
+                      <span className="line-name line-path">{path}</span>
+                    </span>
+                    <span className="line-end">
+                      <button
+                        className="button button-small button-quiet"
+                        onClick={() => dropRoot(path)}
+                      >
+                        {t("settings.forget_folder")}
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="lines">
-              {roots.length === 0 && (
-                <p className="empty-line">{t("admin.no_folder_yet")}</p>
-              )}
-              {roots.map((path) => (
-                <div className="line" key={path}>
-                  <span className="line-mark" aria-hidden="true">
-                    <FolderIcon size={18} />
-                  </span>
-                  <span className="line-words">
-                    <span className="line-name line-path">{path}</span>
-                  </span>
-                  <span className="line-end">
-                    <button
-                      className="button button-small button-quiet"
-                      onClick={() => dropRoot(path)}
-                    >
-                      {t("settings.forget_folder")}
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="settings-lines">
-          <LibraryChoicesFields
-            kind={kind}
-            choices={choices}
-            onChange={choose}
-          />
-          {kind === "music" && (
-            <MusicOptionsFields
-              options={musicOptions}
-              onChange={setMusicOptions}
-            />
+          ) : (
+            <p className="empty-line">{t("admin.cameras_after_creating")}</p>
           )}
         </div>
+
+        {holdsFiles(kind) && (
+          <div className="settings-lines">
+            <LibraryChoicesFields
+              kind={kind}
+              choices={choices}
+              onChange={choose}
+            />
+            {kind === "music" && (
+              <MusicOptionsFields
+                options={musicOptions}
+                onChange={setMusicOptions}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {picking && (
@@ -813,7 +834,7 @@ export function NewLibrary({
         </button>
         <button
           className="button button-accent"
-          disabled={busy || roots.length === 0}
+          disabled={busy || (holdsFiles(kind) && roots.length === 0)}
           onClick={create}
         >
           {t("settings.create_library")}

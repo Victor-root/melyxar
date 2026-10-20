@@ -156,7 +156,7 @@ export type WorkKind = "movie" | "series" | "season" | "episode" | "folder" | "v
 
 /** What a library holds, which is what the header's categories are built
     from: a kind with no library of it is a category that does not exist. */
-export type LibraryKind = "movies" | "series" | "anime" | "shows" | "home_media" | "music";
+export type LibraryKind = "movies" | "series" | "anime" | "shows" | "home_media" | "music" | "cameras";
 
 export type Seen = "not_started" | "in_progress" | "watched";
 
@@ -331,6 +331,25 @@ export type LibraryChoices = Pick<
   | "keeps_resume_points"
   | "keeps_watched_marks"
 >;
+
+/** A camera of a library of cameras. Where it is and its account only for
+ *  an administrator, and its password for nobody. */
+export interface CameraShown {
+  id: string;
+  name: string;
+  address?: string;
+  username?: string;
+  has_password?: boolean;
+}
+
+/** What the administration says of a camera. A password left out keeps the
+ *  one kept. */
+export interface CameraDeclared {
+  name: string;
+  address: string;
+  username: string;
+  password?: string;
+}
 
 export interface Library {
   id: string;
@@ -2096,6 +2115,16 @@ export const api = {
   whatRemovingTakes: (library: string, signal?: AbortSignal) =>
     get<WouldGo>(`/api/v1/libraries/${library}/removal`, signal),
   removeLibrary: (library: string) => remove<WouldGo>(`/api/v1/libraries/${library}`),
+  cameras: (library: string, signal?: AbortSignal) =>
+    get<CameraShown[]>(`/api/v1/libraries/${library}/cameras`, signal),
+  declareCamera: (library: string, camera: CameraDeclared) =>
+    post<{ id: string }>(`/api/v1/libraries/${library}/cameras`, camera),
+  changeCamera: (camera: string, changes: CameraDeclared & { forget_password?: boolean }) =>
+    put<{ changed: boolean }>(`/api/v1/cameras/${camera}`, changes),
+  removeCamera: (camera: string) => remove<{ removed: boolean }>(`/api/v1/cameras/${camera}`),
+  /** Where the application opens a camera live, its account written in.
+   *  Handed straight on, never kept. */
+  liveCamera: (camera: string) => get<{ address: string }>(`/api/v1/cameras/${camera}/live`),
   setAsideFiles: (library: string, signal?: AbortSignal) =>
     get<SetAsideFile[]>(`/api/v1/libraries/${library}/set-aside`, signal),
   /* Nothing named takes every one of them back. The library is scanned

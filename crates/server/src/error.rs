@@ -155,6 +155,15 @@ impl From<melyxar_app::libraries::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::cameras::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::cameras::Trouble) -> Self {
+        match trouble {
+            melyxar_app::cameras::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::cameras::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::deletion::Trouble> for ServerError {
     fn from(trouble: melyxar_app::deletion::Trouble) -> Self {
         match trouble {

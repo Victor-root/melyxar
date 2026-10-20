@@ -192,6 +192,8 @@ export function KindIcon({ kind, ...props }: IconProps & { kind: LibraryKind }) 
       return <HomeMediaIcon {...props} />;
     case "music":
       return <MusicIcon {...props} />;
+    case "cameras":
+      return <SecurityCameraIcon {...props} />;
     default:
       return <FilmIcon {...props} />;
   }
@@ -330,6 +332,18 @@ export function BinocularsIcon(props: IconProps) {
       <path d="M7.654 9.17l.729 -1.261c.16 -.249 1.056 -.203 1.117 .091l.177 1.38" />
       <path d="M4.239 14.813l2.84 -5.133c.189 -.31 .592 -.68 1.421 -.68c.828 0 1.5 .448 1.5 1v6" />
       <path d="M10 12h4v2h-4l0 -2" />
+    </Icon>
+  );
+}
+
+/** A camera fixed to a wall, for the cameras watched live. */
+export function SecurityCameraIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3 4a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1l0 -2" />
+      <path d="M8 14a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+      <path d="M12 14l.01 0" />
+      <path d="M19 7v7a7 7 0 0 1 -14 0v-7" />
     </Icon>
   );
 }

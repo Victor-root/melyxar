@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { Library, LibraryKind } from "./api";
-import { cardShapeOf, kindsHeld, nameOfKind } from "./libraries";
+import { cardShapeOf, holdsFiles, kindsHeld, KINDS, nameOfKind } from "./libraries";
 
 /** A library with only what the order reads of it. */
 function library(kind: LibraryKind): Library {
@@ -18,6 +18,12 @@ describe("the kinds held", () => {
   it("are the kinds this account holds a library of, in the order given", () => {
     const held = [library("music"), library("movies")];
     expect(kindsHeld(EVERY, held)).toEqual(["movies", "music"]);
+  });
+});
+
+describe("what a library is made of", () => {
+  it("is files found in folders for every kind but cameras", () => {
+    expect(KINDS.filter((kind) => !holdsFiles(kind))).toEqual(["cameras"]);
   });
 });
 

@@ -27,7 +27,7 @@
  */
 
 import { Link } from "react-router-dom";
-import type { Card, Home, Library, Picture } from "../api";
+import type { Card, Home, Library, LibraryKind, Picture } from "../api";
 import { useShownPicture } from "./picture";
 import { useSettings } from "../settings";
 import { ChevronRightIcon, KindIcon } from "../icons";
@@ -90,10 +90,22 @@ export function Band({
   const tiles = order.flatMap((id): { id: string; tile: React.ReactNode }[] => {
     const shelf = shelves.find((one) => one.library === id);
     if (shelf) {
-      return [{ id, tile: <Tile shelf={shelf} libraries={libraries} /> }];
+      return [
+        {
+          id,
+          tile: <Tile library={shelf.library} kind={shelf.kind} cards={shelf.fan} libraries={libraries} />,
+        },
+      ];
     }
-    const library = libraries.find((one) => one.id === id && one.kind === "music");
-    return library ? [{ id, tile: music(library) }] : [];
+    const library = libraries.find((one) => one.id === id);
+    if (library?.kind === "music") {
+      return [{ id, tile: music(library) }];
+    }
+    // Cameras have no poster to fan out: their tile stands on its mark.
+    if (library?.kind === "cameras") {
+      return [{ id, tile: <Tile library={library.id} kind={library.kind} cards={[]} libraries={libraries} /> }];
+    }
+    return [];
   });
 
   if (tiles.length === 0) {
@@ -188,15 +200,26 @@ export function fanOf(cards: Card[]): Card[] {
   return [...drawn, ...bare].slice(0, IN_A_FAN);
 }
 
-function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
+function Tile({
+  library,
+  kind,
+  cards,
+  libraries,
+}: {
+  library: string;
+  kind: LibraryKind;
+  /** The named works the server sent for its fan. */
+  cards: Card[];
+  libraries: Library[];
+}) {
   const { t } = useSettings();
-  const fan = fanOf(shelf.fan);
-  const name = libraries.find((library) => library.id === shelf.library)?.name ?? t(`kind.${shelf.kind}`);
+  const fan = fanOf(cards);
+  const name = libraries.find((one) => one.id === library)?.name ?? t(`kind.${kind}`);
 
   return (
     <Link
       className="band-tile"
-      to={`/library/${shelf.library}`}
+      to={`/library/${library}`}
       style={{
         /* A breath of the front poster's own colour in the panel behind the
            fan, so two tiles side by side are not the same dark rectangle
@@ -220,14 +243,14 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
               with nothing in it gets the centred one below instead, which
               is whole, so the two never appear together. */}
           <span className="band-ghost" aria-hidden="true">
-            <KindIcon kind={shelf.kind} />
+            <KindIcon kind={kind} />
           </span>
           <span className="band-halo" aria-hidden="true" />
           <BandCover pictures={fan[0].wide.length > 0 ? fan[0].wide : fan[0].poster} />
           {/* What somebody filmed or photographed has no poster and never
               will: it is wide, and it is theirs. So it is not a fan of
               posters but a pile of prints, standing on the same water. */}
-          {shelf.kind === "home_media" ? (
+          {kind === "home_media" ? (
             <>
               <Pile prints={fan.slice(0, IN_A_PILE)} mirror />
               <Pile prints={fan.slice(0, IN_A_PILE)} />
@@ -241,13 +264,13 @@ function Tile({ shelf, libraries }: { shelf: Shelf; libraries: Library[] }) {
         </>
       ) : (
         <span className="band-mark" aria-hidden="true">
-          <KindIcon kind={shelf.kind} />
+          <KindIcon kind={kind} />
         </span>
       )}
 
       <span className="band-words">
         <span className="band-name">
-          <KindIcon kind={shelf.kind} size={17} />
+          <KindIcon kind={kind} size={17} />
           {name}
         </span>
       </span>

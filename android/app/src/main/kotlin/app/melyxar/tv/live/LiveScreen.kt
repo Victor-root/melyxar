@@ -132,7 +132,7 @@ fun LiveScreen(camera: Camera) {
                     .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)))
                     .padding(start = Gutter, end = Gutter, top = 28.dp, bottom = 40.dp),
             ) {
-                Glyph(Icons.Camera, palette.accentBright, 24.dp)
+                Glyph(Icons.SecurityCamera, palette.accentBright, 24.dp)
                 Text(
                     camera.name,
                     fontSize = 22.sp,

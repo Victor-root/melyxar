@@ -140,7 +140,7 @@ function Resuming({ preferences }: { preferences: Preferences }) {
   if (!kept) {
     return null;
   }
-  const kinds = kindsHeld(KINDS, libraries.all).filter((kind) => kind !== "music");
+  const kinds = kindsHeld(KINDS, libraries.all).filter((kind) => kind !== "music" && kind !== "cameras");
 
   return (
     <Panel icon={HistoryIcon} title={t("settings.resuming")} lead={t("settings.resuming_why")}>

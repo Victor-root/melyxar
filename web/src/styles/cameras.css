@@ -1,0 +1,52 @@
+/*
+ * A library of cameras: a tile for each, its mark and its name on the
+ * glass of the page, lit under a hand like a card.
+ */
+
+.camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--gap-wide);
+}
+
+.camera-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  transition:
+    transform var(--quick) var(--ease),
+    border-color var(--quick) var(--ease);
+}
+
+button.camera-tile:hover,
+button.camera-tile:focus-visible {
+  transform: scale(1.03);
+  border-color: var(--accent-bright);
+}
+
+.camera-mark {
+  color: var(--accent-bright);
+}
+
+.camera-name {
+  position: absolute;
+  inset: auto 14px 10px;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .camera-tile {
+    transition: none;
+  }
+}
