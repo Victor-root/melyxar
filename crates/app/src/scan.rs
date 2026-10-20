@@ -142,6 +142,13 @@ pub async fn start_scan(
     priority: JobPriority,
     mode: RefreshMode,
 ) -> Result<ScanJob> {
+    // The one way in to a scan, so no button, schedule or restart ever walks
+    // a library made of something other than files.
+    if !library.kind.holds_files() {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "this library holds no files to scan",
+        )));
+    }
     let outcome: Arc<Mutex<Option<ScanReport>>> = Arc::new(Mutex::new(None));
     let recorded = Arc::clone(&outcome);
     let state = state.clone();
@@ -1064,7 +1071,7 @@ pub async fn detach_copy(state: &AppState, source_id: MediaSourceId) -> Result<O
     let detached = database
         .detach_source(
             source_id,
-            library.kind.work_kind(),
+            work_kind_of(&library)?,
             &parsed.title,
             &naming::sort_title(&parsed.title),
             parsed.year,
@@ -1136,7 +1143,7 @@ async fn work_for(
     let work = database
         .create_work(
             library.id,
-            library.kind.work_kind(),
+            work_kind_of(&library)?,
             &parsed.title,
             &sort_title,
             parsed.year,
@@ -1611,6 +1618,17 @@ async fn analyse_one(database: &Database, tools: &melyxar_ffmpeg::ToolPaths, fil
         .await
         .map_err(AppError::from)?;
     Ok(Outcome::Analysed)
+}
+
+
+/// The kind of work a file of this library stands for. Never asked of a
+/// library that holds no files, which is never scanned.
+fn work_kind_of(library: &Library) -> Result<melyxar_core::work::WorkKind> {
+    library.kind.work_kind().ok_or_else(|| {
+        AppError::Domain(melyxar_core::Error::invalid_input(
+            "this library holds no files",
+        ))
+    })
 }
 
 #[cfg(test)]

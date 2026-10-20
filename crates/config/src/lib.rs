@@ -324,10 +324,16 @@ impl Config {
             ));
         }
         for library in &self.libraries {
-            if melyxar_core::library::LibraryKind::parse(&library.kind).is_none() {
+            let Some(kind) = melyxar_core::library::LibraryKind::parse(&library.kind) else {
                 return Err(ConfigError::Invalid(format!(
                     "library '{}' declares the unknown kind '{}'",
                     library.name, library.kind
+                )));
+            };
+            if !kind.holds_files() {
+                return Err(ConfigError::Invalid(format!(
+                    "library '{}' is made of cameras, which are declared in the administration",
+                    library.name
                 )));
             }
             if library.roots.is_empty() {
@@ -443,6 +449,13 @@ mod tests {
             .map(|root| root.label.as_str())
             .collect();
         assert_eq!(labels, vec!["disk-one", "disk-two"]);
+    }
+
+    #[test]
+    fn a_library_of_cameras_is_refused_as_they_are_declared_in_the_administration() {
+        let text = MINIMAL.replace(r#"kind = "movies""#, r#"kind = "cameras""#);
+        let error = Config::parse(&text).expect_err("cameras are declared on a screen");
+        assert!(error.to_string().contains("administration"), "{error}");
     }
 
     #[test]

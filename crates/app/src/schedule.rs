@@ -89,7 +89,7 @@ impl ScheduledTask {
     /// Whether this task has anything to do with this library at all.
     fn concerns(self, state: &AppState, library: &Library) -> bool {
         match self {
-            Self::Scan => true,
+            Self::Scan => library.kind.holds_files(),
             Self::Identify => {
                 state.metadata_provider().is_some() && library.kind.is_catalogued()
             }

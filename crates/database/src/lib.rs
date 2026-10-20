@@ -17,6 +17,7 @@ pub mod activity;
 pub mod analysis;
 pub mod browse;
 pub mod calibration;
+pub mod cameras;
 pub mod catalogue;
 pub mod collections;
 pub mod deletion;
