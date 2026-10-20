@@ -14,11 +14,11 @@ const val FOCUS_LOG = "MelyxarFocus"
 
 /** Says in the log as the remote comes into [name] or leaves it. */
 fun Modifier.focusTraced(name: String): Modifier =
-    if (BuildConfig.DEBUG) onFocusChanged { Log.d(FOCUS_LOG, "$name: ${if (it.hasFocus) "holds" else "without"} the remote") } else this
+    if (BuildConfig.TRACES) onFocusChanged { Log.d(FOCUS_LOG, "$name: ${if (it.hasFocus) "holds" else "without"} the remote") } else this
 
 /** Says [what] in the log, written only in the debug build. */
 inline fun focusSaid(what: () -> String) {
-    if (BuildConfig.DEBUG) {
+    if (BuildConfig.TRACES) {
         Log.d(FOCUS_LOG, what())
     }
 }

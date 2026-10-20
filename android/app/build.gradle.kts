@@ -46,13 +46,12 @@ android {
         }
     }
 
+    // Debug is built as a release is, shrunk and optimised and not
+    // debuggable, so that how smooth it runs is how smooth a release runs:
+    // only its traces set it apart (BuildConfig.TRACES). It can still be
+    // profiled, but no debugger attaches to it.
     buildTypes {
-        debug {
-            if (signsWithOwnKey) {
-                signingConfig = signingConfigs.getByName("own")
-            }
-        }
-        release {
+        configureEach {
             if (signsWithOwnKey) {
                 signingConfig = signingConfigs.getByName("own")
             }
@@ -62,6 +61,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+        debug {
+            isDebuggable = false
+            isProfileable = true
+            buildConfigField("boolean", "TRACES", "true")
+        }
+        release {
+            buildConfigField("boolean", "TRACES", "false")
         }
     }
 

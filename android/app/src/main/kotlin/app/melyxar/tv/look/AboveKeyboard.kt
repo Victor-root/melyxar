@@ -52,7 +52,7 @@ val LocalKeyboardRoom = staticCompositionLocalOf<KeyboardRoom?> { null }
 fun AboveKeyboard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val room = remember { KeyboardRoom() }
     val said = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
-    if (BuildConfig.DEBUG) {
+    if (BuildConfig.TRACES) {
         LaunchedEffect(said, room.typing) { Log.d("Melyxar", "keyboard: says $said, typing ${room.typing}") }
     }
     BoxWithConstraints(modifier.fillMaxSize()) {

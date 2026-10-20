@@ -45,7 +45,7 @@ class DecodedSound(context: Context) : DefaultRenderersFactory(context) {
             override fun shouldUseBypass(format: Format): Boolean {
                 val decoded = decodes(mediaCodecSelector, format)
                 val bypass = !decoded && super.shouldUseBypass(format)
-                if (BuildConfig.DEBUG) {
+                if (BuildConfig.TRACES) {
                     Log.d(SOUND_LOG, "sound ${format.sampleMimeType}: decoder ${if (decoded) "found" else "none"}, handed on as it is: $bypass")
                 }
                 return bypass

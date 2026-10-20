@@ -230,7 +230,7 @@ class Playback(
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.TRACES) {
             // Every format, decoder and output of sound the player takes.
             player.addAnalyticsListener(EventLogger(SOUND_LOG))
             player.addAnalyticsListener(clock)
@@ -296,7 +296,7 @@ class Playback(
      *  from there, paused unless [going]. */
     private suspend fun open(plan: Plan, at: Double, going: Boolean = true) {
         this.plan = plan
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.TRACES) {
             Log.d(SOUND_LOG, "plan: ${plan.method}, audio ${plan.audio.firstOrNull { it.id == plan.chosenAudioId }?.codec}")
         }
         closeTheStream()

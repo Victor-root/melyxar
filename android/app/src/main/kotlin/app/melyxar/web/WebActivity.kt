@@ -183,7 +183,7 @@ class WebActivity : ComponentActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun interfacePage() = WebView(this).apply {
         setBackgroundColor(Melyxar.ground.toArgb())
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.TRACES)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
