@@ -298,7 +298,11 @@ export function usePlayback({
      moving the bar, and once they have finished. Held here rather than passed
      down, because it only exists while a session is being fed in pieces: a
      film played as it is has nothing of the sort. */
-  const whileTheViewerMoves = useRef<{ hold: () => void; letGo: () => void } | null>(null);
+  const whileTheViewerMoves = useRef<{
+    hold: () => void;
+    letGo: () => void;
+    hopOver: (to: number) => void;
+  } | null>(null);
   /* Who is following this film, so that the controls can say what moved it.
      A click and a drag are the same thing to the element and two different
      things to the library, and only the bar knows which one happened. */
@@ -637,7 +641,13 @@ export function usePlayback({
       asked = at;
       ask(at)
         .then(({ at_second }) => {
-          if (at_second !== null && element.currentTime === at) {
+          if (at_second === null || element.currentTime !== at) {
+            return;
+          }
+          const moves = whileTheViewerMoves.current;
+          if (moves) {
+            moves.hopOver(at_second);
+          } else {
             element.currentTime = at_second;
           }
         })
@@ -822,6 +832,18 @@ export function usePlayback({
             feed?.startLoad(element.currentTime);
           }
           stopped = false;
+        },
+        // Past a hole in the sound, everything thrown away first: the browser
+        // counts the film around the hole as held and cannot play it, and a
+        // jump landing there was measured to stand still for good.
+        hopOver: (to) => {
+          feed?.trigger(Library.Events.BUFFER_FLUSHING, {
+            startOffset: 0,
+            endOffset: Number.POSITIVE_INFINITY,
+            type: null,
+          });
+          element.currentTime = to;
+          feed?.startLoad(to);
         },
       };
       sayWhereItBegan(Library, feed, stream.id);
