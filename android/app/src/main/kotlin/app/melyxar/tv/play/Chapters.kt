@@ -55,6 +55,10 @@ private const val A_STEP_OF_S = 300.0
  *  a film sent to a chapter lands a hair before its first frame. */
 private const val LANDED_WITHIN_S = 0.25
 
+/** How much of the strip's top is shading alone, which the words may
+ *  stand on. */
+private val SHADED = 60.dp
+
 /** How wide a card of the strip is. */
 private val CARD_ACROSS = 200.dp
 
@@ -89,8 +93,9 @@ fun ChapterStrip(playback: Playback, onClose: () -> Unit, modifier: Modifier = M
     BackHandler(onBack = onClose)
     Column(
         modifier = modifier
+            .standsAtTheFoot(SHADED)
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))))
-            .padding(top = 60.dp, bottom = 28.dp)
+            .padding(top = SHADED, bottom = 28.dp)
             .focusProperties { onExit = { cancelFocusChange() } }
             .focusGroup(),
     ) {

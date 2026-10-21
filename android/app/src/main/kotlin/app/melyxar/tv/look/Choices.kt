@@ -50,7 +50,7 @@ private val TALLEST = 360.dp
  * key does.
  *
  * A list of settings rather than of choices says what each is on in
- * [values], starts where the remote last left it, [startAt], and stays open
+ * [values], none for a line among them that is a choice, starts where the remote last left it, [startAt], and stays open
  * when one is chosen, [leadsOn], since choosing it opens its own list. A
  * [note] says what the choices are for; a list with none says only that.
  * Colours to choose from show each its own in [swatches], and a menu its
@@ -64,7 +64,7 @@ fun ChoiceList(
     onChoose: (Int) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    values: List<String> = emptyList(),
+    values: List<String?> = emptyList(),
     note: String? = null,
     startAt: Int = chosen ?: 0,
     leadsOn: Boolean = false,
@@ -78,7 +78,7 @@ fun ChoiceList(
     BackHandler(onBack = onClose)
     Column(
         modifier = modifier
-            .width(if (values.isEmpty()) 320.dp else 420.dp)
+            .width(if (values.all { it == null }) 320.dp else 420.dp)
             .focusProperties { onExit = { cancelFocusChange() } }
             .then(if (choices.isEmpty()) Modifier.focusRequester(start).focusable() else Modifier.focusGroup())
             .boxShadow(shape, palette.shadowRaised)

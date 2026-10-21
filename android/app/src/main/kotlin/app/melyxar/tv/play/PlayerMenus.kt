@@ -18,6 +18,7 @@ import app.melyxar.tv.soundName
 import app.melyxar.tv.speakersName
 import app.melyxar.tv.speedName
 import java.text.NumberFormat
+import kotlin.math.abs
 
 /** Which list is open over the film, and the list it leads back to. */
 enum class Menu(val from: Menu? = null) {
@@ -35,6 +36,14 @@ enum class Menu(val from: Menu? = null) {
     Brightness(Settings),
     Contrast(Settings),
     WordsOffset(Settings),
+    /** How the words look, opened from the list of subtitles as the web's. */
+    SubtitleSize(Subtitles),
+    SubtitleColour(Subtitles),
+    SubtitleEdge(Subtitles),
+    SubtitleBackground(Subtitles),
+    SubtitleHeight(Subtitles),
+    SubtitleHeightCustom(SubtitleHeight),
+    SubtitleOffset(Subtitles),
     /** What is happening to the film, drawn by the player itself. */
     Diagnostics(Settings),
 }
@@ -72,15 +81,99 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             onClose = back,
             modifier = placed,
         )
-        Menu.Subtitles -> ChoiceList(
-            title = stringResource(R.string.tv_subtitles),
-            choices = listOf(stringResource(R.string.tv_subtitles_off)) +
-                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) },
-            chosen = if (playback.subtitle == null) 0 else plan.subtitles.indexOfFirst { it.id == playback.subtitle } + 1,
-            onChoose = { playback.chooseSubtitle(if (it == 0) null else plan.subtitles[it - 1]) },
-            onClose = back,
-            modifier = placed,
-        )
+        Menu.Subtitles -> {
+            val tracks = listOf(stringResource(R.string.tv_subtitles_off)) +
+                plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) }
+            // Only while a subtitle is chosen: restyling words that are not
+            // on the screen is a column of settings that do nothing. Left
+            // open on a pick, since choosing one is very often followed by
+            // how it looks.
+            val look = KeptWordsLook.look
+            val dressing = if (playback.subtitle == null) {
+                emptyList()
+            } else {
+                listOf(
+                    Menu.SubtitleSize to stringResource(look.size.named),
+                    Menu.SubtitleColour to stringResource(look.colour.named),
+                    Menu.SubtitleEdge to stringResource(look.edge.named),
+                    Menu.SubtitleBackground to stringResource(look.background.named),
+                    Menu.SubtitleHeight to heightName(look),
+                    Menu.SubtitleOffset to offsetName(playback.wordsOffset),
+                )
+            }
+            val chosen = if (playback.subtitle == null) 0 else plan.subtitles.indexOfFirst { it.id == playback.subtitle } + 1
+            ChoiceList(
+                title = stringResource(R.string.tv_subtitles),
+                choices = tracks + dressing.map { (line, _) -> settingName(line) },
+                chosen = chosen,
+                onChoose = { at ->
+                    if (at < tracks.size) {
+                        playback.chooseSubtitle(if (at == 0) null else plan.subtitles[at - 1])
+                    } else {
+                        onMenu(dressing[at - tracks.size].first)
+                    }
+                },
+                onClose = back,
+                modifier = placed,
+                values = List(tracks.size) { null } + dressing.map { it.second },
+                startAt = dressing.indexOfFirst { it.first == left }.takeIf { it >= 0 }?.plus(tracks.size) ?: chosen,
+                leadsOn = true,
+            )
+        }
+        Menu.SubtitleSize -> lookList(menu, WordsSize.entries, KeptWordsLook.look.size, { it.named }, back, placed) {
+            KeptWordsLook.choose(KeptWordsLook.look.copy(size = it))
+        }
+        Menu.SubtitleColour -> lookList(menu, WordsColour.entries, KeptWordsLook.look.colour, { it.named }, back, placed) {
+            KeptWordsLook.choose(KeptWordsLook.look.copy(colour = it))
+        }
+        Menu.SubtitleEdge -> lookList(menu, WordsEdge.entries, KeptWordsLook.look.edge, { it.named }, back, placed) {
+            KeptWordsLook.choose(KeptWordsLook.look.copy(edge = it))
+        }
+        Menu.SubtitleBackground -> lookList(menu, WordsBackground.entries, KeptWordsLook.look.background, { it.named }, back, placed) {
+            KeptWordsLook.choose(KeptWordsLook.look.copy(background = it))
+        }
+        Menu.SubtitleHeight -> {
+            // The last is not one more place beside the other three: it
+            // opens the heights a viewer sets by hand.
+            val look = KeptWordsLook.look
+            val places = WordsHeight.entries
+            ChoiceList(
+                title = settingName(menu),
+                choices = places.map { stringResource(it.named) },
+                chosen = places.indexOf(look.height).takeIf { look.height != WordsHeight.Custom },
+                onChoose = { at ->
+                    val place = places[at]
+                    if (place == WordsHeight.Custom) {
+                        onMenu(Menu.SubtitleHeightCustom)
+                    } else {
+                        KeptWordsLook.choose(look.copy(height = place))
+                        back()
+                    }
+                },
+                onClose = back,
+                modifier = placed,
+                values = places.map { if (it == WordsHeight.Custom) shareName(look.heightCustom) else null },
+                startAt = places.indexOf(look.height),
+                leadsOn = true,
+            )
+        }
+        Menu.SubtitleHeightCustom -> {
+            // Kept open, so one height after another can be tried against
+            // the film behind, which shows the words where they would stand.
+            val look = KeptWordsLook.look
+            val nearest = CUSTOM_HEIGHTS.minBy { abs(it - look.heightCustom) }
+            ChoiceList(
+                title = stringResource(R.string.tv_subtitle_height_custom),
+                choices = CUSTOM_HEIGHTS.map { shareName(it) },
+                chosen = CUSTOM_HEIGHTS.indexOf(nearest).takeIf { look.height == WordsHeight.Custom },
+                onChoose = { KeptWordsLook.choose(look.copy(height = WordsHeight.Custom, heightCustom = CUSTOM_HEIGHTS[it])) },
+                onClose = back,
+                modifier = placed,
+                startAt = CUSTOM_HEIGHTS.indexOf(nearest),
+                leadsOn = true,
+            )
+        }
+        Menu.SubtitleOffset -> offsetList(menu, playback, back, placed)
         Menu.Chapters -> ChapterStrip(playback, onClose = back, modifier = modifier.fillMaxWidth())
         Menu.Info, Menu.Cast, Menu.Diagnostics -> Unit
         Menu.Settings -> {
@@ -141,15 +234,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             onClose = back,
             modifier = placed,
         )
-        Menu.WordsOffset -> ChoiceList(
-            title = settingName(menu),
-            choices = OFFSETS.map(::offsetName),
-            chosen = OFFSETS.indexOf(playback.wordsOffset),
-            onChoose = { playback.chooseWordsOffset(OFFSETS[it]) },
-            onClose = back,
-            modifier = placed,
-            note = stringResource(R.string.tv_words_offset_why),
-        )
+        Menu.WordsOffset -> offsetList(menu, playback, back, placed)
         Menu.WideGamut -> {
             val handling = plan.wideGamut
             if (handling != null && !handling.followsChoice) {
@@ -181,6 +266,39 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
     }
 }
 
+/** How far the words are moved, opened from the settings and from the list
+ *  of subtitles alike. */
+@Composable
+private fun offsetList(menu: Menu, playback: Playback, back: () -> Unit, placed: Modifier) = ChoiceList(
+    title = settingName(menu),
+    choices = OFFSETS.map(::offsetName),
+    chosen = OFFSETS.indexOf(playback.wordsOffset),
+    onChoose = { playback.chooseWordsOffset(OFFSETS[it]) },
+    onClose = back,
+    modifier = placed,
+    note = stringResource(R.string.tv_words_offset_why),
+)
+
+/** One of the lists of how the words look, the one in force ticked. */
+@Composable
+private fun <T> lookList(menu: Menu, choices: List<T>, now: T, named: (T) -> Int, back: () -> Unit, placed: Modifier, onChoose: (T) -> Unit) =
+    ChoiceList(
+        title = settingName(menu),
+        choices = choices.map { stringResource(named(it)) },
+        chosen = choices.indexOf(now),
+        onChoose = { onChoose(choices[it]) },
+        onClose = back,
+        modifier = placed,
+    )
+
+/** Where the words stand, the custom one with its height. */
+@Composable
+private fun heightName(look: WordsLook): String =
+    if (look.height == WordsHeight.Custom) shareName(look.heightCustom) else stringResource(look.height.named)
+
+@Composable
+private fun shareName(hundredths: Int): String = stringResource(R.string.tv_subtitle_height_share, hundredths)
+
 @Composable
 private fun settingName(menu: Menu): String = stringResource(
     when (menu) {
@@ -190,6 +308,12 @@ private fun settingName(menu: Menu): String = stringResource(
         Menu.Brightness -> R.string.tv_brightness
         Menu.Contrast -> R.string.tv_contrast
         Menu.Diagnostics -> R.string.tv_facts
+        Menu.SubtitleSize -> R.string.tv_subtitle_size
+        Menu.SubtitleColour -> R.string.tv_subtitle_colour
+        Menu.SubtitleEdge -> R.string.tv_subtitle_edge
+        Menu.SubtitleBackground -> R.string.tv_subtitle_background
+        Menu.SubtitleHeight -> R.string.tv_subtitle_height
+        Menu.SubtitleOffset -> R.string.tv_words_offset
         else -> R.string.tv_speed
     },
 )

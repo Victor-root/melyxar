@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +55,15 @@ import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.listLine
 import app.melyxar.tv.music.LocalListening
+import app.melyxar.tv.play.KeptWordsLook
+import app.melyxar.tv.play.WordsBackground
+import app.melyxar.tv.play.WordsColour
+import app.melyxar.tv.play.WordsEdge
+import app.melyxar.tv.play.WordsHeight
+import app.melyxar.tv.play.WordsLook
+import app.melyxar.tv.play.WordsSample
+import app.melyxar.tv.play.WordsSize
+import app.melyxar.tv.play.named
 import app.melyxar.tv.play.passSoundOn
 import app.melyxar.tv.play.soundPassedOn
 import app.melyxar.tv.probe.Part
@@ -281,6 +291,42 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
+                // How the words look, kept on this television alone, as a
+                // browser keeps its own.
+                group("subtitle-look", R.string.tv_settings_subtitle_look, Icons.Subtitles) {
+                    Text(
+                        stringResource(R.string.tv_settings_subtitle_look_why),
+                        fontSize = 14.sp,
+                        color = palette.textSoft,
+                        modifier = Modifier.padding(bottom = 10.dp),
+                    )
+                    WordsSample(KeptWordsLook.look, stringResource(R.string.tv_subtitle_sample), Modifier.fillMaxWidth().height(SAMPLE_HEIGHT))
+                }
+                lookLine("subtitle-size", R.string.tv_subtitle_size, WordsSize.entries, { it.named }, { it.size }, memory, { asked = it }) { look, size ->
+                    look.copy(size = size)
+                }
+                lookLine("subtitle-colour", R.string.tv_subtitle_colour, WordsColour.entries, { it.named }, { it.colour }, memory, { asked = it }) { look, colour ->
+                    look.copy(colour = colour)
+                }
+                lookLine("subtitle-edge", R.string.tv_subtitle_edge, WordsEdge.entries, { it.named }, { it.edge }, memory, { asked = it }) { look, edge ->
+                    look.copy(edge = edge)
+                }
+                lookLine("subtitle-background", R.string.tv_subtitle_background, WordsBackground.entries, { it.named }, { it.background }, memory, { asked = it }) { look, background ->
+                    look.copy(background = background)
+                }
+                // The heights a viewer sets by hand are the player's alone,
+                // where the film behind shows where the words would stand.
+                lookLine(
+                    "subtitle-height",
+                    R.string.tv_subtitle_height,
+                    WordsHeight.entries.filter { it != WordsHeight.Custom },
+                    { it.named },
+                    { it.height },
+                    memory,
+                    { asked = it },
+                ) { look, height ->
+                    look.copy(height = height)
+                }
                 group("crossfade", R.string.tv_settings_music, Icons.Music) {
                     val title = stringResource(R.string.tv_setting_crossfade)
                     val none = stringResource(R.string.tv_crossfade_none)
@@ -412,6 +458,31 @@ private fun subtitleModeName(mode: String): Int = when (mode) {
 
 /** A line of the settings, under the name of its group when it opens one;
  *  [modifier] makes it part of the page's head. */
+/** How tall the sample of the words is. */
+private val SAMPLE_HEIGHT = 150.dp
+
+/** A line choosing one side of how the words look, out of [choices], on
+ *  this television alone. */
+private fun <T> LazyListScope.lookLine(
+    key: String,
+    title: Int,
+    choices: List<T>,
+    named: (T) -> Int,
+    now: (WordsLook) -> T,
+    memory: FocusMemory,
+    open: (Asked) -> Unit,
+    changed: (WordsLook, T) -> WordsLook,
+) = group(key, null, null) {
+    val look = KeptWordsLook.look
+    val name = stringResource(title)
+    val names = choices.map { stringResource(named(it)) }
+    Line(key, name, stringResource(named(now(look))), memory) {
+        open(Asked(name, names, choices.indexOf(now(look)).takeIf { it >= 0 }, emptyList()) { at ->
+            KeptWordsLook.choose(changed(KeptWordsLook.look, choices[at]))
+        })
+    }
+}
+
 private fun LazyListScope.group(key: String, name: Int?, icon: ImageVector?, modifier: Modifier = Modifier, line: @Composable () -> Unit) {
     item(key) {
         ReadingColumn(modifier) {

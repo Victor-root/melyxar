@@ -16,6 +16,7 @@ import app.melyxar.server.KnownServers
 import app.melyxar.server.Sessions
 import app.melyxar.server.network
 import app.melyxar.tv.look.Lighter
+import app.melyxar.tv.play.KeptWordsLook
 import app.melyxar.tv.look.TvScale
 import app.melyxar.tv.probe.Probe
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +37,7 @@ class TvActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Probe.watch(this)
         Lighter.keep(this)
+        KeptWordsLook.keep(this)
         // Built while the window comes up rather than in its first frame:
         // making the client readies everything a secure connection needs.
         lifecycleScope.launch(Dispatchers.IO) { network }
