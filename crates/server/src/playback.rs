@@ -848,6 +848,9 @@ enum Wanted {
     Segment(u32),
     /// How far the preparation has got, which a page shows while waiting.
     Preparation,
+    /// Where the sound comes back after a hole, for a player that stood still
+    /// at this moment of the film.
+    SoundAfter(Millis),
 }
 
 /// Reads the name a player asked for.
@@ -860,6 +863,10 @@ fn wanted_from(name: &str) -> Option<Wanted> {
         "playlist.m3u8" => Some(Wanted::Playlist),
         "init.mp4" => Some(Wanted::Header),
         "preparation" => Some(Wanted::Preparation),
+        other if other.starts_with("sound-after-") => other
+            .strip_prefix("sound-after-")
+            .and_then(|at| at.parse().ok())
+            .map(|at| Wanted::SoundAfter(Millis::new(at))),
         other => other
             .strip_prefix("segment-")
             .and_then(|rest| rest.strip_suffix(".m4s"))
@@ -879,6 +886,7 @@ async fn session_file(
         Some(Wanted::Header) => header_file(&state, &who, &id, request).await,
         Some(Wanted::Segment(index)) => segment(&state, &who, &id, index, request).await,
         Some(Wanted::Preparation) => preparation(&state, &who, &id).await,
+        Some(Wanted::SoundAfter(from)) => sound_after(&state, &who, &id, from).await,
         None => ServerError::not_found("a session hands out nothing by that name").into_response(),
     }
 }
@@ -947,6 +955,36 @@ fn producing_view(working: Producing) -> ProducingView {
     ProducingView {
         pictures_a_second: working.pictures_a_second,
         speed: working.speed,
+    }
+}
+
+/// Where the sound comes back, in seconds of film, or nothing when it does
+/// not stop.
+#[derive(Debug, Serialize)]
+struct SoundAfterView {
+    at_second: Option<f64>,
+}
+
+async fn sound_after(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    id: &str,
+    from: Millis,
+) -> Response {
+    match live_session(state, who, id).await {
+        Ok(session) => match session.where_the_sound_comes_back(from).await {
+            Ok(back) => {
+                tracing::info!(
+                    session = id,
+                    from_second = from.as_seconds_f64(),
+                    back_at_second = back.map(Millis::as_seconds_f64),
+                    "a player stood still where the film has no sound, and was told where it comes back"
+                );
+                Json(SoundAfterView { at_second: back.map(Millis::as_seconds_f64) }).into_response()
+            }
+            Err(error) => ServerError::from(error).into_response(),
+        },
+        Err(error) => error.into_response(),
     }
 }
 
@@ -1993,6 +2031,11 @@ mod tests {
         assert_eq!(wanted_from("playlist.m3u8"), Some(Wanted::Playlist));
         assert_eq!(wanted_from("init.mp4"), Some(Wanted::Header));
         assert_eq!(wanted_from("preparation"), Some(Wanted::Preparation));
+        assert_eq!(
+            wanted_from("sound-after-305975"),
+            Some(Wanted::SoundAfter(Millis::new(305_975)))
+        );
+        assert_eq!(wanted_from("sound-after-later"), None);
         assert_eq!(wanted_from("segment-0.m4s"), Some(Wanted::Segment(0)));
         assert_eq!(wanted_from("segment-1799.m4s"), Some(Wanted::Segment(1799)));
 

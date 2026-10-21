@@ -518,6 +518,74 @@ pub fn where_the_film_can_be_cut(key_frames: &[Millis]) -> Vec<Millis> {
     boundaries
 }
 
+/// How far past a stuck moment the sound is looked for.
+///
+/// Read from there and no further, so the answer costs a few seconds of the
+/// file rather than the whole of it.
+const SOUND_LOOKED_FOR_OVER: &str = "300";
+
+/// The shortest silence in the file itself that counts as a hole.
+///
+/// Well over the length of one piece of sound, which is a few hundredths of a
+/// second whatever the codec, and over the small gaps a film's own rounding
+/// leaves between them.
+pub const A_HOLE_IN_THE_SOUND: Millis = Millis::new(1000);
+
+/// Where the sound of a film comes back after a hole that begins at or after
+/// `from`, read from the file for that stretch alone.
+///
+/// A film whose sound stops for a while has nothing for a player to play
+/// there, and players stand still at it rather than play the picture on its
+/// own. Asked by a player that has stood still: it goes on from here.
+pub async fn where_the_sound_comes_back(
+    tools: &crate::ToolPaths,
+    media: &Path,
+    audio_index: Option<i32>,
+    from: Millis,
+) -> Result<Option<Millis>> {
+    let stream = audio_index.map_or_else(|| "a:0".to_string(), |index| index.to_string());
+    let output = TokioCommand::new(&tools.ffprobe)
+        .args(["-hide_banner", "-loglevel", "error", "-select_streams", &stream])
+        .args([
+            "-read_intervals",
+            &format!("{}%+{SOUND_LOOKED_FOR_OVER}", from.as_seconds_f64()),
+            "-show_entries",
+            "packet=pts_time",
+            "-of",
+            "csv=p=0",
+        ])
+        .args(crate::formats::only_as(tools.allowed_formats()))
+        .arg(media)
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("analyser", &output));
+    }
+    Ok(sound_comes_back(&String::from_utf8_lossy(&output.stdout), from))
+}
+
+/// Reads where the sound comes back in a listing of its pieces, one time a
+/// line: the first piece after `from` that follows a hole, or that `from`
+/// already stands in.
+pub fn sound_comes_back(listing: &str, from: Millis) -> Option<Millis> {
+    let mut times: Vec<i64> = listing
+        .lines()
+        .filter_map(|line| seconds_to_ms(line.split(',').next()?))
+        .collect();
+    // In time order: a container lists its pieces in the order they are
+    // stored, which is not always the order they are heard in.
+    times.sort_unstable();
+    let mut before = from.get();
+    for time in times.into_iter().filter(|&time| time >= from.get()) {
+        if time - before > A_HOLE_IN_THE_SOUND.get() {
+            return Some(Millis::new(time));
+        }
+        before = time;
+    }
+    None
+}
+
 /// Parses a report that was already captured, which is what tests use.
 pub fn parse_report(text: &str) -> Result<ProbeReport> {
     serde_json::from_str(text).map_err(|error| FfmpegError::MalformedReport(error.to_string()))
@@ -979,5 +1047,33 @@ mod tests {
             FfmpegError::Failed { output, .. } => assert!(!output.is_empty()),
             other => panic!("expected a failure carrying its output, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_sound_comes_back_after_its_hole() {
+        let listing = "299.940000\n299.968000\n299.989000\n344.021000\n344.042000\n";
+        assert_eq!(
+            sound_comes_back(listing, Millis::new(299_900)),
+            Some(Millis::new(344_021)),
+            "stuck just before the hole"
+        );
+        assert_eq!(
+            sound_comes_back(listing, Millis::new(305_975)),
+            Some(Millis::new(344_021)),
+            "stuck inside it"
+        );
+    }
+
+    #[test]
+    fn sound_with_no_hole_has_nowhere_to_come_back() {
+        let listing = "10.000000\n10.021000\n10.043000\n10.064000\n";
+        assert_eq!(sound_comes_back(listing, Millis::new(10_000)), None);
+        assert_eq!(sound_comes_back("", Millis::new(10_000)), None);
+    }
+
+    #[test]
+    fn pieces_listed_out_of_order_are_read_in_time_order() {
+        let listing = "20.021000\n20.000000\n50.000000\n20.043000\n";
+        assert_eq!(sound_comes_back(listing, Millis::new(20_000)), Some(Millis::new(50_000)));
     }
 }

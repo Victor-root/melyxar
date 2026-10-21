@@ -2480,6 +2480,12 @@ export const api = {
     post<PlaybackSession>(`/api/v1/playback/${source}/session`, body, signal),
   preparation: (session: string, signal?: AbortSignal) =>
     get<Preparation>(`/api/v1/stream/${session}/preparation`, signal),
+  /** Where the sound comes back after a hole in it, for a film standing
+   *  still at `second`. */
+  soundAfter: (session: string, second: number) =>
+    get<{ at_second: number | null }>(
+      `/api/v1/stream/${session}/sound-after-${Math.round(second * 1000)}`,
+    ),
   preferences: (signal?: AbortSignal) =>
     get<ViewerPreferences>("/api/v1/preferences", signal),
   savePreferences: (changes: Partial<ViewerPreferences>, signal?: AbortSignal) =>

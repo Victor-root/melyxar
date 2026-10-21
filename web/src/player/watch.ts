@@ -73,7 +73,7 @@ const CLOSE_ENOUGH_TO_THE_LANDING_MS = 250;
 const SAY_HOW_IT_STARTED_AFTER_MS = 5_000;
 
 /** The stretch the browser holds around one moment, and how many it holds. */
-function whatIsHeldAround(element: Picture, moment: number) {
+export function whatIsHeldAround(element: Picture, moment: number) {
   const held = element.buffered;
   for (let index = 0; index < held.length; index += 1) {
     if (held.start(index) <= moment && moment <= held.end(index)) {

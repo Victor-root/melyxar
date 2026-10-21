@@ -480,6 +480,10 @@ data class StreamSession(val id: String, val playlistUrl: String)
 /** How far the server has got making a rebuilt film: its step, starting,
  *  reading, producing or ready, and how much of the first piece a player
  *  needs is written, from nought to one. */
+/** Where the sound of a film comes back after a hole in it. */
+@Serializable
+data class SoundAfter(val atSecond: Double? = null)
+
 @Serializable
 data class Preparation(
     val step: String = "starting",
