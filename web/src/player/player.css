@@ -2642,3 +2642,52 @@ melyxar-picture.player-video {
   border-radius: 2px;
   background: var(--text-faint);
 }
+
+/* The next episode announced over the end of this one, where the skip
+   button stands, which it replaces for the credits. */
+.player-up-next {
+  position: absolute;
+  right: var(--gap-wide);
+  bottom: 22%;
+  z-index: 3;
+  width: min(360px, calc(100% - 2 * var(--gap-wide)));
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-raised);
+  color: var(--text);
+}
+
+.player-up-next p {
+  margin: 0;
+}
+
+.player-up-next-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.player-up-next-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.player-up-next-count {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.player-up-next-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
