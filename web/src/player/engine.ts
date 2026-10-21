@@ -36,7 +36,9 @@ import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
 import { markTheOpening } from "./opening";
-import { watchTheReading } from "./watch";
+import { watchTheReading, whatIsHeldAround } from "./watch";
+import { watchStill } from "./sound-hole";
+import type { Watch } from "./sound-hole";
 import { sayHowItDecodes } from "./card";
 import { useLoading } from "./loading";
 import { useWords } from "./words";
@@ -78,6 +80,10 @@ const SEGMENT_PATIENCE = 40_000;
  * through it rather than jump. Each costs the server a few file checks.
  */
 const PREPARATION_EVERY = 250;
+
+/** How often a playing film is looked at for standing still at a hole in
+ *  its sound, in milliseconds. */
+const LOOKED_FOR_A_HOLE_EVERY = 500;
 
 /**
  * How often the server is told somebody still has the film open.
@@ -601,6 +607,46 @@ export function usePlayback({
       window.clearInterval(beating);
       document.removeEventListener("visibilitychange", cameBack);
     };
+  }, [stream]);
+
+  /* A film stood still at a hole in its own sound goes on from where the
+     sound comes back (see `sound-hole.ts`). Asked once for each place it
+     stands at, so a hole the server finds no end to costs one question. */
+  useEffect(() => {
+    const name = stream?.id;
+    if (!name) {
+      return;
+    }
+    let watch: Watch = null;
+    let asked: number | null = null;
+    const look = () => {
+      const element = video.current;
+      if (!element || element.paused || element.seeking || element.ended) {
+        watch = null;
+        return;
+      }
+      const at = element.currentTime;
+      const held = whatIsHeldAround(element, at).held_to_second;
+      const seen = watchStill(watch, at, performance.now(), held === null ? 0 : held - at);
+      watch = seen.watch;
+      if (!seen.stuck || asked === at) {
+        return;
+      }
+      asked = at;
+      api
+        .soundAfter(name, at)
+        .then(({ at_second }) => {
+          if (at_second !== null && element.currentTime === at) {
+            element.currentTime = at_second;
+          }
+        })
+        .catch(() => {
+          // Nothing to go on from: the film stays where it is, as it would
+          // have without asking.
+        });
+    };
+    const timer = window.setInterval(look, LOOKED_FOR_A_HOLE_EVERY);
+    return () => window.clearInterval(timer);
   }, [stream]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:

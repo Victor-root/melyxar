@@ -633,6 +633,22 @@ impl Session {
             .segment_holding(self.recipe.where_the_viewer_starts)
     }
 
+    /// Where the sound of this film comes back after a hole at or after
+    /// `from`, for a player standing still there. Nothing for a film played
+    /// without its sound.
+    pub async fn where_the_sound_comes_back(&self, from: Millis) -> Result<Option<Millis>> {
+        if matches!(self.recipe.audio, melyxar_ffmpeg::command::AudioOutput::None) {
+            return Ok(None);
+        }
+        Ok(melyxar_ffmpeg::probe::where_the_sound_comes_back(
+            &self.tools,
+            &self.recipe.source,
+            self.recipe.streams.audio_index,
+            from,
+        )
+        .await?)
+    }
+
     /// How far the preparation has got.
     ///
     /// Read from the folder rather than remembered, because the folder is what

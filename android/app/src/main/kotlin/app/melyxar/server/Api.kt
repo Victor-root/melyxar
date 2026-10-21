@@ -1,5 +1,6 @@
 package app.melyxar.server
 
+import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -244,6 +245,11 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     /** How far the server has got making a rebuilt film's first piece. */
     suspend fun preparation(id: String): Preparation = get("/api/v1/stream/$id/preparation", Preparation.serializer())
+
+    /** Where the sound comes back after a hole in it, in seconds, for a film
+     *  standing still at [seconds]; nothing when it does not stop. */
+    suspend fun soundAfter(id: String, seconds: Double): Double? =
+        get("/api/v1/stream/$id/sound-after-${(seconds * 1000).roundToLong()}", SoundAfter.serializer()).atSecond
 
     suspend fun closeStream(id: String) {
         send("DELETE", "/api/v1/stream/$id", null)

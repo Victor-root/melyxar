@@ -1,6 +1,7 @@
 package app.melyxar.tv.play
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
@@ -58,6 +59,10 @@ private const val PREPARATION_EVERY_MS = 250L
 
 /** How often a film the server rebuilds is said to be still watched. */
 private const val STILL_HERE_EVERY_MS = 30_000L
+
+/** How often a playing film is looked at for standing still at a hole in
+ *  its sound. */
+private const val LOOKED_FOR_A_HOLE_EVERY_MS = 500L
 
 /** The speeds a film can be played at, as the web's player offers them. */
 val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
@@ -185,6 +190,7 @@ class Playback(
     /** How long the film takes to start, for the debug build's log. */
     private val clock = StartClock()
     private var keeping: Job? = null
+    private var hopping: Job? = null
 
     /**
      * What plays the film. Made anew, where the film is, when the picture has
@@ -324,6 +330,7 @@ class Playback(
         player.prepare()
         player.playWhenReady = going
         keepTheStream()
+        goOnPastHoles()
         reportEveryNowAndThen()
     }
 
@@ -493,6 +500,43 @@ class Playback(
         }
     }
 
+    /** A film standing still at a hole in its own sound goes on from where
+     *  the sound comes back (see SoundHole.kt). Asked once for each place it
+     *  stands at, so a hole the server finds no end to costs one question. */
+    private fun goOnPastHoles() {
+        hopping?.cancel()
+        val kept = stream ?: return
+        hopping = scope.launch {
+            var watch: StillWatch? = null
+            var asked: Long? = null
+            while (isActive) {
+                delay(LOOKED_FOR_A_HOLE_EVERY_MS)
+                if (!player.playWhenReady) {
+                    watch = null
+                    continue
+                }
+                val at = player.currentPosition
+                val seen = watchStill(watch, at, SystemClock.elapsedRealtime(), player.bufferedPosition - at)
+                watch = seen.watch
+                if (!seen.stuck || asked == at) continue
+                asked = at
+                val back = try {
+                    api.soundAfter(kept.id, at / 1000.0)
+                } catch (_: IOException) {
+                    null
+                } catch (_: Refusal) {
+                    null
+                }
+                if (BuildConfig.TRACES) {
+                    Log.d(SOUND_LOG, "stood still at $at ms, the sound comes back at $back s")
+                }
+                if (back != null && player.currentPosition == at) {
+                    player.seekTo((back * 1000).toLong())
+                }
+            }
+        }
+    }
+
     private fun reportEveryNowAndThen() {
         reporting?.cancel()
         reporting = scope.launch {
@@ -563,6 +607,7 @@ class Playback(
 
     private suspend fun closeTheStream() {
         keeping?.cancel()
+        hopping?.cancel()
         counting?.cancel()
         val closing = stream ?: return
         stream = null
@@ -583,6 +628,7 @@ class Playback(
         reporting?.cancel()
         counting?.cancel()
         keeping?.cancel()
+        hopping?.cancel()
         val at = seconds
         val paused = !player.isPlaying
         player.release()
