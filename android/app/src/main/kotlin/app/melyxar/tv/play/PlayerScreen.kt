@@ -333,9 +333,10 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                                     }
                                 }
                                 // The controls up with nothing chosen: an arrow
-                                // comes to them; with nothing up, it brings them.
+                                // comes back to the button last on, or to play;
+                                // with nothing up, it brings them.
                                 else -> {
-                                    if (shown && !barOnly) memory.requester(PLAY).requestFocus()
+                                    if (shown && !barOnly && !memory.restore()) memory.requester(PLAY).requestFocus()
                                     nudge()
                                 }
                             }
