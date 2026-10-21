@@ -159,8 +159,10 @@ fun PhotoViewer(startAt: String) {
                 }
                 when {
                     event.key == Key.MediaPlayPause || event.key == Key.MediaPlay || event.key == Key.MediaPause -> {
-                        running = !running
-                        nudge()
+                        if (event.nativeKeyEvent.repeatCount == 0) {
+                            running = !running
+                            nudge()
+                        }
                         true
                     }
                     shown -> {

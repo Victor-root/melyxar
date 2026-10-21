@@ -609,13 +609,15 @@ class Playback(
     }
 
     fun toggle() {
-        if (player.isPlaying) {
-            player.pause()
-        } else {
-            if (player.playbackState == Player.STATE_ENDED) {
-                player.seekTo(0)
-            }
-            player.play()
-        }
+        if (player.isPlaying) pause() else play()
     }
+
+    fun play() {
+        if (player.playbackState == Player.STATE_ENDED) {
+            player.seekTo(0)
+        }
+        player.play()
+    }
+
+    fun pause() = player.pause()
 }

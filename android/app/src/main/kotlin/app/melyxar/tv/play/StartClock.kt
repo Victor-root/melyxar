@@ -40,7 +40,7 @@ class StartClock : AnalyticsListener {
     ) = mark("load started: ${loadEventInfo.dataSpec.uri.lastPathSegment} from ${loadEventInfo.dataSpec.position}, kind ${mediaLoadData.dataType}")
 
     override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) =
-        mark("load done: ${loadEventInfo.bytesLoaded / 1024} KiB in ${loadEventInfo.loadDurationMs} ms, kind ${mediaLoadData.dataType}")
+        mark("load done: ${loadEventInfo.bytesLoaded / 1024} KiB in ${loadEventInfo.loadDurationMs} ms, kind ${mediaLoadData.dataType}, ${held(eventTime)}")
 
     override fun onVideoDecoderInitialized(
         eventTime: AnalyticsListener.EventTime,
@@ -62,8 +62,15 @@ class StartClock : AnalyticsListener {
             Player.STATE_BUFFERING -> "buffering"
             Player.STATE_READY -> "ready"
             else -> "ended"
-        },
+        } + ", ${held(eventTime)}",
     )
+
+    override fun onIsLoadingChanged(eventTime: AnalyticsListener.EventTime, isLoading: Boolean) =
+        mark("${if (isLoading) "loading" else "loading no more"}, ${held(eventTime)}")
+
+    /** Where the film is, and how much of it the player holds ahead. */
+    private fun held(eventTime: AnalyticsListener.EventTime) =
+        "at ${eventTime.currentPlaybackPositionMs} ms, ${eventTime.totalBufferedDurationMs} ms held ahead"
 
     override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) =
         mark("first picture on screen")

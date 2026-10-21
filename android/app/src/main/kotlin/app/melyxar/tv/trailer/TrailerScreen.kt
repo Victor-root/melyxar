@@ -183,7 +183,9 @@ fun TrailerScreen(title: String, url: String) {
                 }
                 if (event.type == KeyEventType.KeyDown && !failed) {
                     when (key) {
-                        in PAUSING -> if (player.isPlaying) player.pause() else player.play()
+                        in PAUSING -> if (event.nativeKeyEvent.repeatCount == 0) {
+                            if (player.isPlaying) player.pause() else player.play()
+                        }
                         in BACKWARD -> player.seekTo((player.currentPosition - STEP_MS).coerceAtLeast(0))
                         in FORWARD -> player.seekTo(player.currentPosition + STEP_MS)
                     }
