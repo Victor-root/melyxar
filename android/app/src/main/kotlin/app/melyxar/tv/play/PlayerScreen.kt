@@ -87,6 +87,9 @@ private fun sideways(event: KeyEvent): Boolean = event.key == Key.DirectionLeft 
 /** Whether [event] is an arrow to the side held down. */
 private fun held(event: KeyEvent): Boolean = sideways(event) && event.nativeKeyEvent.repeatCount > 0
 
+/** Whether [event] is a key going down again on its own while held. */
+private fun repeated(event: KeyEvent): Boolean = event.nativeKeyEvent.repeatCount > 0
+
 /** What takes the foot of the film in place of the controls. */
 private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast, Menu.Diagnostics)
 
@@ -273,9 +276,17 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         return@onPreviewKeyEvent false
                     }
                     when (event.key) {
+                        // Once however long the key is held: going down again
+                        // on its own, it would pause and play on and on.
                         Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
-                            playback.toggle()
-                            nudge()
+                            if (!repeated(event)) {
+                                when (event.key) {
+                                    Key.MediaPlay -> playback.play()
+                                    Key.MediaPause -> playback.pause()
+                                    else -> playback.toggle()
+                                }
+                                nudge()
+                            }
                             true
                         }
                         Key.MediaFastForward -> {
@@ -316,8 +327,10 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                                 event.key == Key.Back -> return@onPreviewKeyEvent false
                                 event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
                                     if (!quietHeld) return@onPreviewKeyEvent false
-                                    playback.toggle()
-                                    nudge()
+                                    if (!repeated(event)) {
+                                        playback.toggle()
+                                        nudge()
+                                    }
                                 }
                                 // The controls up with nothing chosen: an arrow
                                 // comes to them; with nothing up, it brings them.
