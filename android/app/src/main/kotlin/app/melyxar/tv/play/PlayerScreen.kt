@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -41,6 +42,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -88,6 +90,13 @@ private fun held(event: KeyEvent): Boolean = sideways(event) && event.nativeKeyE
 /** What takes the foot of the film in place of the controls. */
 private val FOOT_TAKERS = setOf(Menu.Chapters, Menu.Info, Menu.Cast, Menu.Diagnostics)
 
+/** The sheets among them that stand at the foot, which the words climb
+ *  above as they do above the controls. */
+private val FOOT_SHEETS = setOf(Menu.Chapters, Menu.Info, Menu.Cast)
+
+/** How far above the controls the words stand, as the web's. */
+private val ABOVE_THE_FOOT = 24.dp
+
 /** The steps back and on of the arrows and the buttons, as the account
  *  chose them. */
 data class Steps(val back: Int, val on: Int)
@@ -133,6 +142,8 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val quiet = remember { FocusRequester() }
     var quietHeld by remember { mutableStateOf(false) }
     val memory = rememberFocusMemory()
+    val foot = remember { Foot() }
+    val aboveTheFoot = with(LocalDensity.current) { ABOVE_THE_FOOT.toPx() }
     val upNextFirst = remember { FocusRequester() }
     val next = work?.carryOnWith?.takeIf { it.sourceId != null }
     var declined by remember { mutableStateOf(false) }
@@ -245,139 +256,146 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
         if (shown) shown = false else onDone()
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp && event.key == stepOnRelease) {
-                    stepOnRelease = null
-                    playback.withStep(if (event.key == Key.DirectionLeft) -steps.back else steps.on)
-                    glimpse()
-                    return@onPreviewKeyEvent true
-                }
-                if (event.type != KeyEventType.KeyDown) {
-                    return@onPreviewKeyEvent false
-                }
-                when (event.key) {
-                    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
-                        playback.toggle()
-                        nudge()
-                        true
+    // What stands at the foot of the film says how far up it reaches.
+    CompositionLocalProvider(LocalFoot provides foot) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyUp && event.key == stepOnRelease) {
+                        stepOnRelease = null
+                        playback.withStep(if (event.key == Key.DirectionLeft) -steps.back else steps.on)
+                        glimpse()
+                        return@onPreviewKeyEvent true
                     }
-                    Key.MediaFastForward -> {
-                        playback.withStep(steps.on)
-                        nudge()
-                        true
+                    if (event.type != KeyEventType.KeyDown) {
+                        return@onPreviewKeyEvent false
                     }
-                    Key.MediaRewind -> {
-                        playback.withStep(-steps.back)
-                        nudge()
-                        true
-                    }
-                    // The television's own: its volume, and anything else
-                    // the film has no use for.
-                    !in FILM_KEYS -> false
-                    // Something chosen on the controls, a list or the next
-                    // episode answers its own keys; the skip waiting for the
-                    // middle button stands for the film to every other key.
-                    else -> if (!(quietHeld || skipHeld && skippable != null) || menu != null || announced != null) {
-                        nudges += 1
-                        false
-                    } else {
-                        when {
-                            // Held to the side, the arrow takes the bar along
-                            // with the film's pictures.
-                            held(event) -> {
-                                stepOnRelease = null
-                                glimpse()
-                                scrubbing = true
-                            }
-                            // Pressed to the side with only the bar or nothing
-                            // up, it steps through the film, the bar alone
-                            // saying where it is.
-                            sideways(event) && (!shown || barOnly) -> {
-                                stepOnRelease = event.key
-                                glimpse()
-                            }
-                            event.key == Key.Back -> return@onPreviewKeyEvent false
-                            event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
-                                if (!quietHeld) return@onPreviewKeyEvent false
-                                playback.toggle()
-                                nudge()
-                            }
-                            // The controls up with nothing chosen: an arrow
-                            // comes to them; with nothing up, it brings them.
-                            else -> {
-                                if (shown && !barOnly) memory.requester(PLAY).requestFocus()
-                                nudge()
-                            }
+                    when (event.key) {
+                        Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                            playback.toggle()
+                            nudge()
+                            true
                         }
-                        true
+                        Key.MediaFastForward -> {
+                            playback.withStep(steps.on)
+                            nudge()
+                            true
+                        }
+                        Key.MediaRewind -> {
+                            playback.withStep(-steps.back)
+                            nudge()
+                            true
+                        }
+                        // The television's own: its volume, and anything else
+                        // the film has no use for.
+                        !in FILM_KEYS -> false
+                        // Something chosen on the controls, a list or the next
+                        // episode answers its own keys; the skip waiting for the
+                        // middle button stands for the film to every other key.
+                        else -> if (!(quietHeld || skipHeld && skippable != null) || menu != null || announced != null) {
+                            nudges += 1
+                            false
+                        } else {
+                            when {
+                                // Held to the side, the arrow takes the bar along
+                                // with the film's pictures.
+                                held(event) -> {
+                                    stepOnRelease = null
+                                    glimpse()
+                                    scrubbing = true
+                                }
+                                // Pressed to the side with only the bar or nothing
+                                // up, it steps through the film, the bar alone
+                                // saying where it is.
+                                sideways(event) && (!shown || barOnly) -> {
+                                    stepOnRelease = event.key
+                                    glimpse()
+                                }
+                                event.key == Key.Back -> return@onPreviewKeyEvent false
+                                event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter -> {
+                                    if (!quietHeld) return@onPreviewKeyEvent false
+                                    playback.toggle()
+                                    nudge()
+                                }
+                                // The controls up with nothing chosen: an arrow
+                                // comes to them; with nothing up, it brings them.
+                                else -> {
+                                    if (shown && !barOnly) memory.requester(PLAY).requestFocus()
+                                    nudge()
+                                }
+                            }
+                            true
+                        }
                     }
-                }
-            },
-    ) {
-        Picture(playback)
-        WordsOverFilm(playback, raised = shown, modifier = Modifier.fillMaxSize())
-        Box(Modifier.fillMaxSize().focusRequester(quiet).onFocusChanged { quietHeld = it.isFocused }.focusable())
-        if (waiting && !playback.failed) {
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Spinner { playback.loading }
-                playback.loading?.let {
-                    Text(
-                        stringResource(R.string.tv_loading_percent, it.roundToInt()),
-                        fontSize = 15.sp,
-                        color = LocalPalette.current.textSoft,
-                        modifier = Modifier.padding(top = 12.dp),
-                    )
+                },
+        ) {
+            Picture(playback)
+            // Clear of what covers the foot of the film, at the height chosen
+            // while the viewer is choosing one by hand.
+            val covered = (shown && menu !in FOOT_TAKERS) || menu in FOOT_SHEETS
+            val lift = (foot.reach + aboveTheFoot).takeIf { covered && menu != Menu.SubtitleHeightCustom }
+            WordsOverFilm(playback, KeptWordsLook.look, lift, Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().focusRequester(quiet).onFocusChanged { quietHeld = it.isFocused }.focusable())
+            if (waiting && !playback.failed) {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spinner { playback.loading }
+                    playback.loading?.let {
+                        Text(
+                            stringResource(R.string.tv_loading_percent, it.roundToInt()),
+                            fontSize = 15.sp,
+                            color = LocalPalette.current.textSoft,
+                            modifier = Modifier.padding(top = 12.dp),
+                        )
+                    }
                 }
             }
-        }
-        // The chapters and the sheets take the foot of the film the controls
-        // stand in.
-        AnimatedVisibility(shown && menu !in FOOT_TAKERS, enter = fadeIn(), exit = fadeOut()) {
-            Controls(
-                playback = playback,
-                work = work,
-                playing = playing,
-                steps = steps,
-                barOnly = barOnly,
-                memory = memory,
-                onMenu = ::openMenu,
-                onNext = next?.let { { playNext(it) } },
-                onAiming = { aiming = it },
-            )
-        }
-        skippable?.let { stretch ->
-            Skip(
-                stretch,
-                onSkip = { playback.player.seekTo((stretch.toSecond * 1000).toLong()) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = Gutter, bottom = 120.dp)
-                    .focusRequester(skip)
-                    .onFocusChanged { skipHeld = it.isFocused },
-            )
-        }
-        announced?.let {
-            UpNext(
-                it,
-                first = upNextFirst,
-                onPlay = { playNext(it) },
-                onCancel = { declined = true },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
-            )
-        }
-        when (val open = menu) {
-            null -> Unit
-            Menu.Info -> work?.let { InfoSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
-            Menu.Cast -> work?.let { CastSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
-            Menu.Diagnostics -> Diagnostics(playback, onClose = { openMenu(Menu.Settings) }, Modifier.align(Alignment.CenterEnd).padding(end = Gutter))
-            else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
-        }
-        if (playback.failed) {
-            CannotPlay(onDone)
+            // The chapters and the sheets take the foot of the film the controls
+            // stand in.
+            AnimatedVisibility(shown && menu !in FOOT_TAKERS, enter = fadeIn(), exit = fadeOut()) {
+                Controls(
+                    playback = playback,
+                    work = work,
+                    playing = playing,
+                    steps = steps,
+                    barOnly = barOnly,
+                    memory = memory,
+                    onMenu = ::openMenu,
+                    onNext = next?.let { { playNext(it) } },
+                    onAiming = { aiming = it },
+                )
+            }
+            skippable?.let { stretch ->
+                Skip(
+                    stretch,
+                    onSkip = { playback.player.seekTo((stretch.toSecond * 1000).toLong()) },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = Gutter, bottom = 120.dp)
+                        .focusRequester(skip)
+                        .onFocusChanged { skipHeld = it.isFocused },
+                )
+            }
+            announced?.let {
+                UpNext(
+                    it,
+                    first = upNextFirst,
+                    onPlay = { playNext(it) },
+                    onCancel = { declined = true },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
+                )
+            }
+            when (val open = menu) {
+                null -> Unit
+                Menu.Info -> work?.let { InfoSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
+                Menu.Cast -> work?.let { CastSheet(it, onClose = { openMenu(null) }, Modifier.align(Alignment.BottomCenter)) }
+                Menu.Diagnostics -> Diagnostics(playback, onClose = { openMenu(Menu.Settings) }, Modifier.align(Alignment.CenterEnd).padding(end = Gutter))
+                else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
+            }
+            if (playback.failed) {
+                CannotPlay(onDone)
+            }
         }
     }
 }

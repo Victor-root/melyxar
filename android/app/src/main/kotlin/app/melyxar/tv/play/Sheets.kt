@@ -46,7 +46,9 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.ServerPicture
 
-/** How far down the film the sheets begin to shade it. */
+/** How far down the film the sheets begin to shade it, and how much of
+ *  their top is that shade alone, which the words may stand on. */
+private val SHADED = 120.dp
 private val SHADE = Brush.verticalGradient(0f to Color.Transparent, 0.35f to Color.Black.copy(alpha = 0.7f), 1f to Color.Black.copy(alpha = 0.9f))
 
 /**
@@ -62,8 +64,9 @@ fun InfoSheet(work: Work, onClose: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .standsAtTheFoot(SHADED)
             .background(SHADE)
-            .padding(start = Gutter, end = Gutter, top = 120.dp, bottom = 36.dp)
+            .padding(start = Gutter, end = Gutter, top = SHADED, bottom = 36.dp)
             .closesOnTheWayDown(onClose)
             .focusRequester(held)
             .focusable(),
@@ -96,8 +99,9 @@ fun CastSheet(work: Work, onClose: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .standsAtTheFoot(SHADED)
             .background(SHADE)
-            .padding(top = 120.dp, bottom = 30.dp)
+            .padding(top = SHADED, bottom = 30.dp)
             .closesOnTheWayDown(onClose)
             .focusProperties { onExit = { cancelFocusChange() } }
             .focusGroup(),

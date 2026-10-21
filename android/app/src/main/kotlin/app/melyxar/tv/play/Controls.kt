@@ -95,6 +95,10 @@ private const val TICK_MS = 250L
 private val PREVIEW_ACROSS = 240.dp
 private val PREVIEW_GAP = 10.dp
 
+/** How far the shading above the controls reaches, which the words may
+ *  stand on. */
+private val FOOT_SHADING = 90.dp
+
 /** Every number of the player keeps its width as it changes. */
 private val Times = TextStyle(
     fontSize = 15.sp,
@@ -146,8 +150,9 @@ fun Controls(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .standsAtTheFoot(FOOT_SHADING)
                 .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f))))
-                .padding(start = Gutter, end = Gutter, top = 90.dp, bottom = 24.dp),
+                .padding(start = Gutter, end = Gutter, top = FOOT_SHADING, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
