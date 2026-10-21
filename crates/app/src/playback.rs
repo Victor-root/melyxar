@@ -208,7 +208,7 @@ pub async fn where_the_sound_comes_back(
             "this server has no media tools, so the sound of a film cannot be read",
         ))
     })?;
-    Ok(melyxar_ffmpeg::probe::where_the_sound_comes_back(&tools, &path, stream_index, from).await?)
+    Ok(melyxar_ffmpeg::probe::where_the_sound_comes_back(tools, &path, stream_index, from).await?)
 }
 
 /// Where the file of a copy is, for the route that hands it over to be kept,
