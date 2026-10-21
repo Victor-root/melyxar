@@ -2486,6 +2486,14 @@ export const api = {
     get<{ at_second: number | null }>(
       `/api/v1/stream/${session}/sound-after-${Math.round(second * 1000)}`,
     ),
+  /** The same for a file played as it lies, in the sound track `audio` or
+   *  its first. */
+  soundAfterInTheFile: (source: string, audio: string | null, second: number) =>
+    get<{ at_second: number | null }>(
+      `/api/v1/playback/${source}/sound-after/${Math.round(second * 1000)}${
+        audio ? `?audio=${encodeURIComponent(audio)}` : ""
+      }`,
+    ),
   preferences: (signal?: AbortSignal) =>
     get<ViewerPreferences>("/api/v1/preferences", signal),
   savePreferences: (changes: Partial<ViewerPreferences>, signal?: AbortSignal) =>

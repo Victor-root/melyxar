@@ -178,6 +178,39 @@ pub async fn file_of(
     Ok(crate::playable_file(state.database(), source_id).await?.path)
 }
 
+/// Where the sound of a copy played as it lies comes back after a hole at or
+/// after `from`, in the sound track `audio` or the file's first one, for a
+/// player standing still there. A film the server rebuilds is asked through
+/// its session instead.
+pub async fn where_the_sound_comes_back(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: MediaSourceId,
+    audio: Option<TrackId>,
+    from: Millis,
+) -> Result<Option<Millis>> {
+    let path = file_of(state, who, source_id).await?;
+    let stream_index = match audio {
+        Some(track_id) => Some(
+            state
+                .database()
+                .tracks_of_source(source_id)
+                .await?
+                .into_iter()
+                .find(|track| track.id == track_id && matches!(track.kind, TrackKind::Audio(_)))
+                .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("audio track")))?
+                .stream_index,
+        ),
+        None => None,
+    };
+    let tools = state.tools().ok_or_else(|| {
+        AppError::Domain(melyxar_core::Error::dependency_missing(
+            "this server has no media tools, so the sound of a film cannot be read",
+        ))
+    })?;
+    Ok(melyxar_ffmpeg::probe::where_the_sound_comes_back(&tools, &path, stream_index, from).await?)
+}
+
 /// Where the file of a copy is, for the route that hands it over to be kept,
 /// for an account allowed to download and to read the library it is in.
 pub async fn file_to_download(

@@ -13,7 +13,7 @@
 
 use crate::identifiers::{parse_device, parse_source, parse_track, parse_work};
 use axum::body::Body;
-use axum::extract::{Path as RoutePath, State};
+use axum::extract::{Path as RoutePath, Query, State};
 use axum::http::{header, HeaderValue, Request, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -72,6 +72,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/playback/{id}/subtitles/{track}",
             axum::routing::get(subtitle),
+        )
+        .route(
+            "/api/v1/playback/{id}/sound-after/{at}",
+            axum::routing::get(sound_after_in_the_file),
         )
         .route(
             "/api/v1/playback/{id}/thumbnails",
@@ -971,19 +975,48 @@ async fn sound_after(
     id: &str,
     from: Millis,
 ) -> Response {
-    match live_session(state, who, id).await {
-        Ok(session) => match session.where_the_sound_comes_back(from).await {
-            Ok(back) => {
-                tracing::info!(
-                    session = id,
-                    from_second = from.as_seconds_f64(),
-                    back_at_second = back.map(Millis::as_seconds_f64),
-                    "a player stood still where the film has no sound, and was told where it comes back"
-                );
-                Json(SoundAfterView { at_second: back.map(Millis::as_seconds_f64) }).into_response()
-            }
-            Err(error) => ServerError::from(error).into_response(),
-        },
+    let back = match live_session(state, who, id).await {
+        Ok(session) => session.where_the_sound_comes_back(from).await.map_err(ServerError::from),
+        Err(error) => Err(error),
+    };
+    sound_after_answer(id, from, back)
+}
+
+/// Which sound a player playing a file as it lies is listening to: the
+/// file's first when it does not say.
+#[derive(Debug, Deserialize)]
+struct SoundAfterAsked {
+    audio: Option<String>,
+}
+
+/// The same for a file played as it lies, which has no session to ask.
+async fn sound_after_in_the_file(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    RoutePath((id, at)): RoutePath<(String, i64)>,
+    Query(asked): Query<SoundAfterAsked>,
+) -> Response {
+    let from = Millis::new(at);
+    let back = async {
+        let source_id = parse_source(&id)?;
+        let audio = asked.audio.as_deref().map(parse_track).transpose()?;
+        Ok(melyxar_app::playback::where_the_sound_comes_back(&state, &who, source_id, audio, from).await?)
+    }
+    .await;
+    sound_after_answer(&id, from, back)
+}
+
+fn sound_after_answer(id: &str, from: Millis, back: Result<Option<Millis>>) -> Response {
+    match back {
+        Ok(back) => {
+            tracing::info!(
+                playing = id,
+                from_second = from.as_seconds_f64(),
+                back_at_second = back.map(Millis::as_seconds_f64),
+                "a player stood still where the film has no sound, and was told where it comes back"
+            );
+            Json(SoundAfterView { at_second: back.map(Millis::as_seconds_f64) }).into_response()
+        }
         Err(error) => error.into_response(),
     }
 }
