@@ -45,6 +45,7 @@ import { useFullscreen } from "./fullscreen";
 import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
+import { UpNext, upNextOffered } from "./up-next";
 import type { Panel, Shape, Turn } from "./panels";
 import { lightFilter, lightsThePicture } from "./picture-light";
 import { rememberSettings, storedSettings } from "./settings";
@@ -173,12 +174,30 @@ function Film({
     toast({ state: "attention", title: t("player.stopped_by_administrator") });
     onClose();
   };
+  /* The next episode is announced over the end of this one rather than
+     started the instant it ends; turned down, the end of the film leaves it,
+     as on the television. */
+  const next = work.kind === "episode" && onNextEpisode ? work.carry_on_with : null;
+  const [declined, setDeclined] = useState(false);
+  const [ended, setEnded] = useState(false);
+  useEffect(() => {
+    setDeclined(false);
+    setEnded(false);
+  }, [sourceId]);
   const playback = usePlayback({
     sourceId,
     workId: work.id,
     fromTheStart,
     startAt,
-    onEnded,
+    onEnded: () => {
+      if (next === null) {
+        onEnded?.();
+      } else if (declined) {
+        onClose();
+      } else {
+        setEnded(true);
+      }
+    },
     onStopped: stoppedByAnAdministrator,
   });
   const {
@@ -402,7 +421,28 @@ function Film({
 
       {/* Beside the controls and not inside them: they fade out when
           nobody touches anything, and this is wanted exactly then. */}
-      <SkipStretch playback={playback} segments={stretches?.segments ?? []} t={t} />
+      {/* The credits of an episode with another after it are its
+          announcement rather than something to skip. */}
+      <SkipStretch
+        playback={playback}
+        segments={(stretches?.segments ?? []).filter(
+          (segment) => segment.kind !== "outro" || next === null || declined,
+        )}
+        t={t}
+      />
+      {next && onNextEpisode && upNextOffered(next, declined, ended, stretches?.segments ?? [], playback.at) && (
+        <UpNext
+          next={next}
+          t={t}
+          onPlay={onNextEpisode}
+          onCancel={() => {
+            setDeclined(true);
+            if (ended) {
+              onClose();
+            }
+          }}
+        />
+      )}
 
       <Overlay
         playback={playback}
