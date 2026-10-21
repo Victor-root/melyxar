@@ -613,10 +613,12 @@ export function usePlayback({
      sound comes back (see `sound-hole.ts`). Asked once for each place it
      stands at, so a hole the server finds no end to costs one question. */
   useEffect(() => {
-    const name = stream?.id;
-    if (!name) {
+    if (pictureKey === null) {
       return;
     }
+    const name = stream?.id;
+    const ask = (at: number) =>
+      name ? api.soundAfter(name, at) : api.soundAfterInTheFile(sourceId, audioId, at);
     let watch: Watch = null;
     let asked: number | null = null;
     const look = () => {
@@ -633,8 +635,7 @@ export function usePlayback({
         return;
       }
       asked = at;
-      api
-        .soundAfter(name, at)
+      ask(at)
         .then(({ at_second }) => {
           if (at_second !== null && element.currentTime === at) {
             element.currentTime = at_second;
@@ -647,7 +648,7 @@ export function usePlayback({
     };
     const timer = window.setInterval(look, LOOKED_FOR_A_HOLE_EVERY);
     return () => window.clearInterval(timer);
-  }, [stream]);
+  }, [pictureKey, stream, sourceId, audioId]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:
      once the film is playing this would be a request a second for something

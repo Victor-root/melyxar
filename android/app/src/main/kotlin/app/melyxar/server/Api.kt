@@ -251,6 +251,14 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
     suspend fun soundAfter(id: String, seconds: Double): Double? =
         get("/api/v1/stream/$id/sound-after-${(seconds * 1000).roundToLong()}", SoundAfter.serializer()).atSecond
 
+    /** The same for a file played as it lies, in the sound track [audio] or
+     *  its first. */
+    suspend fun soundAfterInTheFile(source: String, audio: String?, seconds: Double): Double? =
+        get(
+            "/api/v1/playback/$source/sound-after/${(seconds * 1000).roundToLong()}" + audio?.let { "?audio=$it" }.orEmpty(),
+            SoundAfter.serializer(),
+        ).atSecond
+
     suspend fun closeStream(id: String) {
         send("DELETE", "/api/v1/stream/$id", null)
     }

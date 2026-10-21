@@ -505,7 +505,7 @@ class Playback(
      *  stands at, so a hole the server finds no end to costs one question. */
     private fun goOnPastHoles() {
         hopping?.cancel()
-        val kept = stream ?: return
+        val kept = stream
         hopping = scope.launch {
             var watch: StillWatch? = null
             var asked: Long? = null
@@ -521,7 +521,7 @@ class Playback(
                 if (!seen.stuck || asked == at) continue
                 asked = at
                 val back = try {
-                    api.soundAfter(kept.id, at / 1000.0)
+                    if (kept != null) api.soundAfter(kept.id, at / 1000.0) else api.soundAfterInTheFile(source, audio, at / 1000.0)
                 } catch (_: IOException) {
                     null
                 } catch (_: Refusal) {
