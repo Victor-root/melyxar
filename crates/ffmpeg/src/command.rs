@@ -390,7 +390,8 @@ pub enum WhereToCut {
 /// default.
 const SHORTER_THAN_ANY_PICTURE: Millis = Millis::new(1);
 
-/// Every copied picture made to last exactly until the next one is decoded.
+/// Every copied picture, and every piece of copied sound, made to last exactly
+/// until the next one is decoded.
 ///
 /// A film keeps the length of its pictures rounded, Matroska to the
 /// millisecond: 42 ms for a picture of 41.7. The segment writer checks the
@@ -404,7 +405,16 @@ const SHORTER_THAN_ANY_PICTURE: Millis = Millis::new(1);
 /// segment starts exactly on it. A picture with no decoding time to measure from, just after a jump or at the
 /// very end, keeps the length the film gives it. The commas are escaped
 /// because the tool splits a chain of filters on them.
-const COPIED_PICTURE_LASTS_UNTIL_THE_NEXT: &str = r"setts=pts=PTS:dts=DTS:duration=if(eq(DTS\,NOPTS)+eq(NEXT_DTS\,NOPTS)\,DURATION\,NEXT_DTS-DTS)";
+///
+/// The copied sound is given the same, for a film whose sound stops for a
+/// while: the segment writer starts each segment's sound where the last one
+/// ended rather than at its own time, so everything after the hole came out
+/// as early as the hole was long. Measured on a film whose sound stops for
+/// forty four seconds: a browser and a television both stood still at the
+/// hole, and a browser that hopped over it played the rest out of step.
+/// Lasting until the next, the sound before the hole reaches across it and
+/// what follows keeps its own time.
+const COPIED_LASTS_UNTIL_THE_NEXT: &str = r"setts=pts=PTS:dts=DTS:duration=if(eq(DTS\,NOPTS)+eq(NEXT_DTS\,NOPTS)\,DURATION\,NEXT_DTS-DTS)";
 
 /// A full invocation.
 #[derive(Debug, Clone, PartialEq)]
@@ -724,7 +734,7 @@ impl Command {
                 push!("copy");
                 if matches!(self.output, Output::Segments { .. }) {
                     push!("-bsf:v");
-                    push!(COPIED_PICTURE_LASTS_UNTIL_THE_NEXT);
+                    push!(COPIED_LASTS_UNTIL_THE_NEXT);
                 }
             }
             VideoOutput::Encode(encode) => {
@@ -803,6 +813,10 @@ impl Command {
             AudioOutput::Copy => {
                 push!("-c:a");
                 push!("copy");
+                if matches!(self.output, Output::Segments { .. }) {
+                    push!("-bsf:a");
+                    push!(COPIED_LASTS_UNTIL_THE_NEXT);
+                }
             }
             AudioOutput::Encode(encode) => {
                 if let Some(filter) = self.sound_filters(encode) {
@@ -2294,10 +2308,10 @@ mod tests {
             Command::new(Input::new("/media/film.mkv"), segments()).with_video(VideoOutput::Copy);
         assert_eq!(
             filter(&copied).as_deref(),
-            Some(COPIED_PICTURE_LASTS_UNTIL_THE_NEXT)
+            Some(COPIED_LASTS_UNTIL_THE_NEXT)
         );
         assert!(
-            COPIED_PICTURE_LASTS_UNTIL_THE_NEXT.contains("pts=PTS:dts=DTS"),
+            COPIED_LASTS_UNTIL_THE_NEXT.contains("pts=PTS:dts=DTS"),
             "left unsaid, the filter gives every picture its decoding time to show at"
         );
 
@@ -2311,6 +2325,32 @@ mod tests {
         )
         .with_video(VideoOutput::Copy);
         assert_eq!(filter(&to_a_file), None, "only the segment writer checks the joins");
+    }
+
+    #[test]
+    fn a_copied_sound_in_segments_lasts_until_the_next_piece() {
+        // Measured on a film whose sound stops for forty four seconds: left
+        // to the segment writer, everything after the hole came out that
+        // much early.
+        let segments = || Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            cut: WhereToCut::AtEveryKeyFrame,
+            start_number: 0,
+        };
+        let filter = |command: &Command| {
+            let args = arguments(command);
+            position(&args, "-bsf:a").map(|at| args[at + 1].clone())
+        };
+
+        let copied =
+            Command::new(Input::new("/media/film.mkv"), segments()).with_audio(AudioOutput::Copy);
+        assert_eq!(filter(&copied).as_deref(), Some(COPIED_LASTS_UNTIL_THE_NEXT));
+
+        let rebuilt = Command::new(Input::new("/media/film.mkv"), segments())
+            .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")));
+        assert_eq!(filter(&rebuilt), None, "an encoder gives its sound its true length");
     }
 
     #[test]
