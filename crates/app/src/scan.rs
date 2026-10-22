@@ -472,6 +472,7 @@ pub async fn scan_library(
     }
 
     report.moved = follow_what_moved(state, library).await?;
+    forget_what_was_deleted_beside_a_kept_copy(state, library).await?;
     if library.kind == LibraryKind::Music {
         crate::music::scan::prune(state, library).await?;
         report.pictured =
@@ -648,6 +649,27 @@ async fn file_added(
             .await?;
         report.added += 1;
     }
+    Ok(())
+}
+
+/// Forgets the copies no longer on the disk whose film still has one that is,
+/// which is somebody keeping one version of a film and deleting the others.
+async fn forget_what_was_deleted_beside_a_kept_copy(
+    state: &AppState,
+    library: &Library,
+) -> Result<()> {
+    let forgotten = state
+        .database()
+        .forget_absent_copies_beside_present(library.id)
+        .await?;
+    for (_, path) in &forgotten {
+        tracing::info!(
+            file = %path.display(),
+            "a copy no longer on the disk was forgotten, its film keeping another"
+        );
+    }
+    let sources: Vec<MediaSourceId> = forgotten.into_iter().map(|(id, _)| id).collect();
+    crate::libraries::forget_the_thumbnails_of(state, &sources).await;
     Ok(())
 }
 
