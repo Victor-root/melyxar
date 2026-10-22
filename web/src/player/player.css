@@ -2650,9 +2650,10 @@ melyxar-picture.player-video {
   right: var(--gap-wide);
   bottom: 22%;
   z-index: 3;
-  width: min(360px, calc(100% - 2 * var(--gap-wide)));
+  width: min(620px, calc(100% - 2 * var(--gap-wide)));
   display: grid;
-  gap: 6px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px 18px;
   padding: 18px 20px;
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
@@ -2664,6 +2665,36 @@ melyxar-picture.player-video {
 
 .player-up-next p {
   margin: 0;
+}
+
+.player-up-next-still {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--surface-raised);
+}
+
+.player-up-next-still img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.player-up-next-words {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.player-up-next-overview {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text-soft);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 .player-up-next-label {
@@ -2687,7 +2718,15 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-actions {
+  grid-column: 1 / -1;
   display: flex;
+  justify-content: flex-end;
   gap: 10px;
-  margin-top: 8px;
+}
+
+/* On a phone, the still above the words rather than beside them. */
+@media (max-width: 700px) {
+  .player-up-next {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

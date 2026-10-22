@@ -900,6 +900,9 @@ export interface NextEpisode {
   title: string | null;
   /** The file it plays from, so a button starts it without asking again. */
   source_id: string | null;
+  /** What it is about, and its still, for the card announcing it. */
+  overview: string | null;
+  still: Picture[];
 }
 
 /** One work this one hangs under, as a way back to it. */
