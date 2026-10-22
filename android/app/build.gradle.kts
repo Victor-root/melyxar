@@ -1,5 +1,8 @@
 import com.android.build.api.artifact.ArtifactTransformationRequest
 import com.android.build.api.artifact.SingleArtifact
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.Properties
 
 plugins {
@@ -31,6 +34,8 @@ android {
         applicationId = "app.melyxar.vroot"
         minSdk = 24
         targetSdk = 37
+        // Replaced at every build by the build's own time (see BuildTime below):
+        // the code entirely, the name kept as the base the time is added to.
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -87,6 +92,16 @@ android {
     }
 }
 
+// When this build runs, read afresh by every build. Each build is a newer
+// version without anyone editing a number: test builds go out several times a
+// day through a private F-Droid repository, which, like Omnify, only offers an
+// update for a higher version code. Read through a ValueSource and wired in
+// lazily, because the configuration cache would otherwise freeze the first
+// build's time into every build after it.
+abstract class BuildTime : ValueSource<Long, ValueSourceParameters.None> {
+    override fun obtain(): Long = System.currentTimeMillis()
+}
+
 // A release comes out named Melyxar-<version>.apk rather than app-release.apk,
 // wherever it is built from.
 abstract class NamedApk : DefaultTask() {
@@ -113,6 +128,19 @@ abstract class NamedApk : DefaultTask() {
 }
 
 androidComponents {
+    val builtAt = providers.of(BuildTime::class.java) {}
+    val baseName = android.defaultConfig.versionName
+    // Minutes from the epoch to 2024: the code counts from there, so it stays
+    // far below the largest version code Android takes.
+    val minutesTo2024 = 28_401_120L
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            output.versionCode.set(builtAt.map { (it / 60_000 - minutesTo2024).toInt() })
+            output.versionName.set(
+                builtAt.map { "$baseName-" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date(it)) },
+            )
+        }
+    }
     onVariants(selector().withBuildType("release")) { variant ->
         val naming = tasks.register<NamedApk>("name${variant.name.replaceFirstChar(Char::uppercase)}Apk") {
             fileName.set(variant.outputs.single().versionName.map { "Melyxar-$it.apk" })
