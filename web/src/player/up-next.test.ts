@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { NextEpisode, PlaybackSegment } from "../api";
 import { upNextOffered } from "./up-next";
 
-const NEXT: NextEpisode = { id: "e2", season: 1, episode: 2, title: "A Second Night", source_id: "s2" };
+const NEXT: NextEpisode = {
+  id: "e2",
+  season: 1,
+  episode: 2,
+  title: "A Second Night",
+  source_id: "s2",
+  overview: null,
+  still: [],
+};
 const CREDITS = [{ kind: "outro", from_second: 1260, to_second: 1320 }] as PlaybackSegment[];
 
 describe("the next episode", () => {

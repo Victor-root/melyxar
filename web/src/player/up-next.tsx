@@ -9,9 +9,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { NextEpisode, PlaybackSegment } from "../api";
 import { useBackClosesIt } from "../components/back-closes";
+import { useShownPicture } from "../components/picture";
 
 /** How many seconds the next episode is announced before it starts. */
 export const COUNT_FROM = 10;
+
+/** How wide the still is drawn, as the stylesheet draws it. */
+const STILL_ROOM = "(max-width: 700px) 90vw, 240px";
 
 /** Whether the next episode is offered: one there is, not turned down, and
  *  the film in its credits or over. */
@@ -46,6 +50,7 @@ export function UpNext({
   const play = useRef(onPlay);
   play.current = onPlay;
   const leave = useBackClosesIt(onCancel);
+  const { picture, itDidNotLoad } = useShownPicture(next.still);
 
   useEffect(() => {
     const timer = window.setInterval(() => setLeft((seconds) => seconds - 1), 1000);
@@ -66,9 +71,26 @@ export function UpNext({
 
   return (
     <section className="player-up-next" aria-live="polite">
-      <p className="player-up-next-label">{t("player.next_episode")}</p>
-      {name && <p className="player-up-next-name">{name}</p>}
-      <p className="player-up-next-count">{t("player.up_next.in", { seconds: Math.max(left, 0) })}</p>
+      {/* Its still and what it is about, as its line on the page of the
+          season shows it. */}
+      <div className="player-up-next-still">
+        {picture && (
+          <img
+            src={picture.src}
+            srcSet={picture.srcSet}
+            sizes={STILL_ROOM}
+            alt=""
+            decoding="async"
+            onError={itDidNotLoad}
+          />
+        )}
+      </div>
+      <div className="player-up-next-words">
+        <p className="player-up-next-label">{t("player.next_episode")}</p>
+        {name && <p className="player-up-next-name">{name}</p>}
+        {next.overview && <p className="player-up-next-overview">{next.overview}</p>}
+        <p className="player-up-next-count">{t("player.up_next.in", { seconds: Math.max(left, 0) })}</p>
+      </div>
       <div className="player-up-next-actions">
         <button type="button" className="button button-accent" onClick={() => leave(onPlay)}>
           {t("player.up_next.play_now")}
