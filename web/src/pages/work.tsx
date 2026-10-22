@@ -272,8 +272,8 @@ export function WorkPage() {
       {version && (
         <Versions
           version={version}
-          /* A film held once has nothing to take this copy away from. */
-          separable={work.versions.length > 1}
+          /* A film held once on the disk has nothing to take this copy away from. */
+          separable={!version.missing && work.versions.filter((copy) => !copy.missing).length > 1}
           onChanged={readAgain}
         />
       )}

@@ -6,6 +6,10 @@
 //! under another folder, and the scan has already written it down again as
 //! something new. What is here recognises the two as one file and keeps only
 //! where it is now.
+//!
+//! Nor is a copy absent while its work still has another one on the disk:
+//! the person who kept one version of a film and deleted the others meant
+//! exactly that, and the work loses nothing by forgetting them.
 
 use std::path::PathBuf;
 
@@ -84,6 +88,40 @@ impl Database {
             })
             .map(|(_, _, moved)| moved.clone())
             .collect())
+    }
+
+    /// Forgets the copies of a library marked absent whose work still has a
+    /// copy on the disk, and says which they were.
+    ///
+    /// Only ever beside a present copy, so the work, where everybody was in
+    /// it and what they watched all stay: what goes is the row of a file that
+    /// is not there any more, and what was worked out about that file alone.
+    /// Asked after the moves were followed, so a file moved is followed
+    /// rather than forgotten.
+    pub async fn forget_absent_copies_beside_present(
+        &self,
+        library_id: LibraryId,
+    ) -> Result<Vec<(MediaSourceId, PathBuf)>> {
+        let rows = sqlx::query(
+            "DELETE FROM media_sources
+             WHERE missing_since IS NOT NULL
+               AND root_id IN (SELECT id FROM library_roots WHERE library_id = ?)
+               AND EXISTS (SELECT 1 FROM media_sources present
+                           WHERE present.work_id = media_sources.work_id
+                             AND present.missing_since IS NULL)
+             RETURNING id, relative_path",
+        )
+        .bind(library_id.to_db_string())
+        .fetch_all(self.writer())
+        .await?;
+        rows.iter()
+            .map(|row| {
+                Ok((
+                    parse_id(&row.try_get::<String, _>("id")?)?,
+                    PathBuf::from(row.try_get::<String, _>("relative_path")?),
+                ))
+            })
+            .collect()
     }
 
     /// Forgets the place a file left, and hands what it carried to where it
@@ -308,5 +346,39 @@ mod tests {
             .await
             .expect("read")
             .is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_absent_copy_beside_a_present_one_is_forgotten() {
+        let (database, library_id, root_id) = library().await;
+        let film = a_work(&database, library_id, "Night Harbour").await;
+        let kept = a_file(&database, root_id, film, "Night Harbour 1080p.mkv", now()).await;
+        let deleted = a_file(&database, root_id, film, "Night Harbour 2160p.mkv", now()).await;
+        database.mark_source_missing(deleted).await.expect("marked");
+
+        let forgotten = database
+            .forget_absent_copies_beside_present(library_id)
+            .await
+            .expect("forgotten");
+
+        assert_eq!(forgotten, vec![(deleted, PathBuf::from("Night Harbour 2160p.mkv"))]);
+        let left = database.sources_of_work(film).await.expect("read");
+        assert_eq!(left.iter().map(|source| source.id).collect::<Vec<_>>(), vec![kept]);
+    }
+
+    #[tokio::test]
+    async fn an_absent_copy_that_was_the_only_one_stays() {
+        let (database, library_id, root_id) = library().await;
+        let film = a_work(&database, library_id, "Night Harbour").await;
+        let only = a_file(&database, root_id, film, "Night Harbour.mkv", now()).await;
+        database.mark_source_missing(only).await.expect("marked");
+
+        let forgotten = database
+            .forget_absent_copies_beside_present(library_id)
+            .await
+            .expect("read");
+
+        assert!(forgotten.is_empty(), "a disk left unplugged must not cost the film");
+        assert_eq!(database.sources_of_work(film).await.expect("read").len(), 1);
     }
 }
