@@ -50,6 +50,7 @@
     <string name="tv_progress">%1$s / %2$s</string>
     <string name="tv_episode_short">S%1$dE%2$d</string>
     <string name="tv_cast">Distribution</string>
+    <string name="tv_guest_stars">Vedettes invitées</string>
     <string name="tv_saga">Saga</string>
     <string name="tv_alike">Basé sur le genre %1$s</string>
     <string name="tv_season">Saison %1$d</string>
