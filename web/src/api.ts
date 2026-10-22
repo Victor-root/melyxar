@@ -1774,6 +1774,15 @@ export interface PlaybackSession {
 }
 
 /** What the viewer has decided, and what they can decide between. */
+/** How the grid of a library is laid out. */
+export type LibraryView = "posters" | "compact_posters" | "thumbnails" | "list";
+
+/** What a change of the preferences may say: any of them, or how one library
+ *  is laid out, which leaves the others as they were. */
+export type PreferencesChange = Partial<ViewerPreferences> & {
+  library_view?: { library: string; view: LibraryView };
+};
+
 export interface ViewerPreferences {
   /** The language the interface speaks to this person, as two letters. Theirs
       rather than the browser's, so signing in on another machine carries it. */
@@ -1853,6 +1862,9 @@ export interface ViewerPreferences {
   /** What is done with a film of wide gamut colour. */
   wide_gamut: WideGamutChoice;
   wide_gamut_choices: WideGamutChoice[];
+  /** How each library this account laid out anew is laid out, by library.
+   *  One not named shows its posters. */
+  library_views: Record<string, LibraryView>;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];
@@ -1998,6 +2010,8 @@ export interface BrowseOptions {
   watchLater?: boolean;
   /** Only the libraries of one kind, whichever libraries those are. */
   kind?: LibraryKind;
+  /** Cards laid down, which want a wide picture beside their poster. */
+  wide?: boolean;
 }
 
 /** Turns the choices of a grid into a query the server understands. */
@@ -2016,6 +2030,7 @@ export function browseQuery(options: BrowseOptions): string {
   if (options.favourites) parameters.set("favourites", "true");
   if (options.watchLater) parameters.set("watch_later", "true");
   if (options.kind) parameters.set("kind", options.kind);
+  if (options.wide) parameters.set("wide", "true");
   return parameters.toString();
 }
 
@@ -2496,7 +2511,7 @@ export const api = {
     ),
   preferences: (signal?: AbortSignal) =>
     get<ViewerPreferences>("/api/v1/preferences", signal),
-  savePreferences: (changes: Partial<ViewerPreferences>, signal?: AbortSignal) =>
+  savePreferences: (changes: PreferencesChange, signal?: AbortSignal) =>
     put<ViewerPreferences>("/api/v1/preferences", changes, signal),
   /**
    * Closes a session, including while the page is going away.

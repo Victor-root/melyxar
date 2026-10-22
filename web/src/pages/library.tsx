@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
-import { Card } from "../components/card";
+import { Card, ROOM_IN_A_COMPACT_GRID } from "../components/card";
 import { InOrder } from "../components/in-order";
 import { LetterDrop } from "../components/letter-drop";
 import type { DropHandle } from "../components/letter-drop";
@@ -18,12 +18,14 @@ import { PHONE, useMediaQuery } from "../media-query";
 import { Grid } from "../components/grid";
 import { Picker } from "../components/panel";
 import { Selecting } from "../components/selection";
+import { WorkLine } from "../components/work-line";
 import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { useMarks } from "../marks";
 import { barRoom } from "../bar-room";
 import { landOn, scrollerOf } from "../landing";
 import { letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
+import { LIBRARY_VIEWS, layoutOf } from "../library-views";
 import { ORDERS, useBrowsing } from "../screens/browsing";
 import { useSettings } from "../settings";
 import { useTabPage } from "../tab-page";
@@ -39,11 +41,15 @@ export function LibraryPage({
   /** Whether that found anything, so an empty grid is not called empty. */
   besidesFound?: boolean;
 }) {
-  const { t } = useSettings();
+  const { t, libraryViews, setLibraryView } = useSettings();
   const { account } = useAccount();
   const phone = useMediaQuery(PHONE);
+  /* Only a library opened as such has a layout of its own: the favourites,
+     what is put aside for later and a search are drawn as posters. */
+  const { id: opened } = useParams();
+  const view = (opened && libraryViews[opened]) || "posters";
   const { narrowing, choose, cards: read, more, loadMore, reach, loading, failed, filters } =
-    useBrowsing();
+    useBrowsing(view === "thumbnails");
   const { order, descending, genre, decade, search, unidentified, favourites, watchLater } =
     narrowing;
   /* A view of what this account marked holds what is marked now, not what
@@ -61,7 +67,7 @@ export function LibraryPage({
     return kept.length === read.length ? read : kept;
   }, [read, keeps, goneOf]);
   const library = libraries.find((entry) => entry.id === narrowing.library);
-  const shape = cardShapeOf(library?.kind ?? narrowing.kind);
+  const layout = layoutOf(view, cardShapeOf(library?.kind ?? narrowing.kind));
   useTabPage(
     favourites
       ? t("nav.favourites")
@@ -115,9 +121,7 @@ export function LibraryPage({
      by hand. */
   const held = useRef<{ letter: string; at: number } | null>(null);
   const showsLetters = !!filters && filters.initials.length > 1 && order === "title";
-  /* Only a library opened as such has letters, read by title: the favourites,
-     what is put aside for later and a search have none. */
-  const { id: opened } = useParams();
+  /* Only a library opened as such has letters, read by title. */
   const keepsRoomForLetters = opened !== undefined && order === "title";
 
   const jumpTo = (letter: string) => {
@@ -230,7 +234,7 @@ export function LibraryPage({
           ? [
               <div
                 key={`starts:${card.id}`}
-                className={`letter-starts letter-starts-${shape}`}
+                className={`letter-starts letter-starts-${layout.grid}`}
                 data-starts={card.id}
                 aria-hidden="true"
               >
@@ -239,9 +243,18 @@ export function LibraryPage({
               </div>,
             ]
           : []),
-        <Card key={card.id} card={card} shape={shape} />,
+        layout.grid === "list" ? (
+          <WorkLine key={card.id} card={card} shape={layout.card} />
+        ) : (
+          <Card
+            key={card.id}
+            card={card}
+            shape={layout.card}
+            room={layout.grid === "compact" ? ROOM_IN_A_COMPACT_GRID : undefined}
+          />
+        ),
       ]),
-    [cards, shape, starts],
+    [cards, layout.grid, layout.card, starts],
   );
 
   const fields = (
@@ -267,6 +280,18 @@ export function LibraryPage({
           <ArrowRightIcon size={16} />
         </button>
       </span>
+
+      {opened && (
+        <span className="browse-field">
+          <span className="browse-label">{t("library.view")}</span>
+          <Picker
+            value={view}
+            options={LIBRARY_VIEWS.map((value) => [value, t(`library.view.${value}`)] as const)}
+            onPick={(value) => setLibraryView(opened, value)}
+            label={t("library.view")}
+          />
+        </span>
+      )}
 
       {filters && filters.genres.length > 0 && (
         <Narrower
@@ -395,7 +420,7 @@ export function LibraryPage({
       >
         <Selecting items={cards}>
           <InOrder cards={cards}>
-            <Grid onReachEnd={loadMore} hasMore={more} shape={shape}>
+            <Grid onReachEnd={loadMore} hasMore={more} shape={layout.grid}>
               {drawn}
             </Grid>
           </InOrder>

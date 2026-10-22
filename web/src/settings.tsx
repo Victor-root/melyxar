@@ -18,7 +18,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { api } from "./api";
 import { buttonOrder, EVERY_HEADER_BUTTON, IN_THE_BAR_AT_FIRST, knownButtons } from "./buttons";
-import type { Backdrop, HeaderButton, ViewerPreferences } from "./api";
+import type { Backdrop, HeaderButton, LibraryView, PreferencesChange, ViewerPreferences } from "./api";
 import {
   initialLanguageChoice,
   languageChoiceOf,
@@ -31,6 +31,7 @@ import {
 import type { Language, LanguageChoice } from "./i18n";
 import { colourTheWindow, markTheApp } from "./installing";
 import { LIGHTS } from "./lights";
+import { viewsRead, viewsWritten, withView } from "./library-views";
 import { markTheTab, vividOf } from "./mark";
 import { ON_A_PHONE, useMediaQuery } from "./media-query";
 import { useBranding } from "./player/logo";
@@ -71,6 +72,7 @@ const STORED_BACKDROP = "melyxar.backdrop";
 const STORED_BACKDROP_LIGHT = "melyxar.backdrop.light";
 const STORED_STEP_BACK = "melyxar.step.back";
 const STORED_STEP_ON = "melyxar.step.on";
+const STORED_LIBRARY_VIEWS = "melyxar.library.views";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
@@ -162,6 +164,9 @@ interface Settings {
   /** How far its button on jumps. */
   stepOn: number;
   setStepOn: (seconds: number) => void;
+  /** How each library is laid out, posters where nothing is said. */
+  libraryViews: Record<string, LibraryView>;
+  setLibraryView: (library: string, view: LibraryView) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** Whether the server has said, since the page was opened. */
@@ -273,6 +278,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     initialNumber(STORED_STEP_BACK, THE_USUAL_STEP_BACK),
   );
   const [stepOn, setStepOnState] = useState(() => initialNumber(STORED_STEP_ON, THE_USUAL_STEP_ON));
+  const [libraryViews, setLibraryViewsState] = useState(() =>
+    viewsRead(safeRead(STORED_LIBRARY_VIEWS)),
+  );
 
   // The theme is put on the document rather than passed down, so a stylesheet
   // can answer it without a single component knowing a colour.
@@ -464,6 +472,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ step_on_seconds: seconds });
   }, []);
 
+  /* One library at a time, so two screens laying out two libraries at once
+     each keep their own. */
+  const setLibraryView = useCallback((library: string, view: LibraryView) => {
+    setLibraryViewsState((views) => {
+      const changed = withView(views, library, view);
+      safeWrite(STORED_LIBRARY_VIEWS, viewsWritten(changed));
+      return changed;
+    });
+    tellTheServer({ library_view: { library, view } });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const choice = languageChoiceOf(chosen.interface_language);
     rememberLanguageChoice(choice);
@@ -511,6 +530,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setStepBackState(chosen.step_back_seconds);
     safeWrite(STORED_STEP_ON, String(chosen.step_on_seconds));
     setStepOnState(chosen.step_on_seconds);
+    const views = viewsRead(viewsWritten(chosen.library_views));
+    safeWrite(STORED_LIBRARY_VIEWS, viewsWritten(views));
+    setLibraryViewsState(views);
     setAdopted(true);
   }, []);
 
@@ -555,6 +577,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setStepBack,
       stepOn,
       setStepOn,
+      libraryViews,
+      setLibraryView,
       adopt,
       adopted,
       t: (key, values) => translate(language, key, values),
@@ -599,6 +623,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setStepBack,
       stepOn,
       setStepOn,
+      libraryViews,
+      setLibraryView,
       adopt,
       adopted,
     ],
@@ -622,7 +648,7 @@ export function useSettings(): Settings {
  * the door and not a fault: the browser has already kept it, and it will be
  * sent again the next time one is changed.
  */
-function tellTheServer(changed: Partial<ViewerPreferences>) {
+function tellTheServer(changed: PreferencesChange) {
   void api.savePreferences(changed).catch(() => {});
 }
 

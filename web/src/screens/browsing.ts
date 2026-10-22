@@ -54,6 +54,10 @@ export interface Narrowing {
   /** Only the libraries of one kind, which is what the search's scope
       narrows by when it names a category rather than a folder. */
   kind: LibraryKind | undefined;
+  /** Whether the cards come with a wide picture, for a grid laid out with
+      them lying down. Not in the address: it is how this account lays the
+      library out, kept with its preferences. */
+  wide: boolean;
 }
 
 /**
@@ -125,7 +129,7 @@ export interface Browsing {
   filters: Filters | null;
 }
 
-export function useBrowsing(): Browsing {
+export function useBrowsing(wide: boolean): Browsing {
   const { id } = useParams();
   const { pathname } = useLocation();
   const [parameters, setParameters] = useSearchParams();
@@ -161,8 +165,9 @@ export function useBrowsing(): Browsing {
       favourites,
       watchLater,
       kind: asked.kind,
+      wide,
     };
-  }, [id, order, descending, genre, decade, search, unidentified, favourites, watchLater, scope]);
+  }, [id, order, descending, genre, decade, search, unidentified, favourites, watchLater, scope, wide]);
 
   /* The cards gathered so far, with the choices they answer. Kept under
      those choices as they grow, so a grid walked back to is drawn again
