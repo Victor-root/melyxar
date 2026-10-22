@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
 use melyxar_core::time::Millis;
-use melyxar_ffmpeg::command::{Command, Input, Output, StreamSelection, WhereToCut};
+use melyxar_ffmpeg::command::{Command, Input, Output, StreamSelection, VideoOutput, WhereToCut};
 use melyxar_ffmpeg::process::RunningProcess;
 use melyxar_ffmpeg::ToolPaths;
 use tokio::sync::Mutex;
@@ -1162,8 +1162,13 @@ impl Session {
         if index > 0 {
             input = input.starting_at(self.set_going_at(index));
         }
+        let video = self.video_now();
+        // A copied picture begins on the segment's own key frame, and the
+        // sound is made to begin there with it.
+        let sound_from = (index > 0 && matches!(video, VideoOutput::Copy))
+            .then(|| self.playlist.start_of(index));
 
-        Command::new(
+        let command = Command::new(
             input,
             Output::Segments {
                 pattern: self.folder.join("segment-%d.m4s"),
@@ -1174,11 +1179,15 @@ impl Session {
             },
         )
         .with_streams(self.recipe.streams)
-        .with_video(self.video_now())
+        .with_video(video)
         .with_audio(self.recipe.audio.clone())
         // Asked for so that a segment can be handed over as soon as the tool
         // says it has passed the end of it.
-        .reporting_progress()
+        .reporting_progress();
+        match sound_from {
+            Some(at) => command.with_sound_from(at),
+            None => command,
+        }
     }
 
     /// Where the tool is to cut, which follows from who chose the boundaries.

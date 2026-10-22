@@ -433,6 +433,16 @@ pub struct Command {
     /// Extra arguments, for a filter a hardware path needs that the structure
     /// does not model yet.
     pub extra_arguments: Vec<String>,
+    /// Where the sound of a reading begun part way through may begin, which
+    /// is where its first copied picture does.
+    ///
+    /// The reading rewinds to the key frame before the position asked for,
+    /// and the sound comes with whatever was stored beside that frame. A film
+    /// whose sound is stored a second at a time then hands the first segment
+    /// a second of sound from before its picture. Measured on a television: a
+    /// film taken up again there played the rest with its sound out of step,
+    /// and never did from its start.
+    pub sound_from: Option<Millis>,
     pub output: Output,
 }
 
@@ -446,6 +456,7 @@ impl Command {
             duration: None,
             report_progress: false,
             extra_arguments: Vec::new(),
+            sound_from: None,
             output,
         }
     }
@@ -463,6 +474,18 @@ impl Command {
     pub fn with_audio(mut self, audio: AudioOutput) -> Self {
         self.audio = audio;
         self
+    }
+
+    pub fn with_sound_from(mut self, at: Millis) -> Self {
+        self.sound_from = Some(at);
+        self
+    }
+
+    /// The filter that leaves out the sound from before [`Self::sound_from`],
+    /// in segments only, its comma escaped as in a chain of them.
+    fn sound_before_left_out(&self) -> Option<String> {
+        let from = self.sound_from.filter(|_| matches!(self.output, Output::Segments { .. }))?;
+        Some(format!(r"noise=drop=lt(pts*tb\,{})", format_seconds(from)))
     }
 
     pub fn reporting_progress(mut self) -> Self {
@@ -815,7 +838,10 @@ impl Command {
                 push!("copy");
                 if matches!(self.output, Output::Segments { .. }) {
                     push!("-bsf:a");
-                    push!(COPIED_LASTS_UNTIL_THE_NEXT);
+                    match self.sound_before_left_out() {
+                        Some(left_out) => push!(&format!("{left_out},{COPIED_LASTS_UNTIL_THE_NEXT}")),
+                        None => push!(COPIED_LASTS_UNTIL_THE_NEXT),
+                    }
                 }
             }
             AudioOutput::Encode(encode) => {
@@ -832,6 +858,10 @@ impl Command {
                 if let Some(bitrate) = encode.bitrate {
                     push!("-b:a");
                     push!(&bitrate.to_string());
+                }
+                if let Some(left_out) = self.sound_before_left_out() {
+                    push!("-bsf:a");
+                    push!(&left_out);
                 }
             }
         }
@@ -2325,6 +2355,43 @@ mod tests {
         )
         .with_video(VideoOutput::Copy);
         assert_eq!(filter(&to_a_file), None, "only the segment writer checks the joins");
+    }
+
+    #[test]
+    fn a_reading_begun_part_way_leaves_out_the_sound_from_before_its_picture() {
+        // Measured on a television: the first segment of a film taken up
+        // again carried a second of sound from before its picture, and the
+        // rest played out of step.
+        let segments = || Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            cut: WhereToCut::AtEveryKeyFrame,
+            start_number: 18,
+        };
+        let filter = |command: &Command| {
+            let args = arguments(command);
+            position(&args, "-bsf:a").map(|at| args[at + 1].clone())
+        };
+        let from = Millis::new(180_080);
+
+        let copied = Command::new(Input::new("/media/film.mkv"), segments()).with_sound_from(from);
+        assert_eq!(
+            filter(&copied),
+            Some(format!(r"noise=drop=lt(pts*tb\,180.080),{COPIED_LASTS_UNTIL_THE_NEXT}"))
+        );
+
+        let rebuilt = Command::new(Input::new("/media/film.mkv"), segments())
+            .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")))
+            .with_sound_from(from);
+        assert_eq!(filter(&rebuilt).as_deref(), Some(r"noise=drop=lt(pts*tb\,180.080)"));
+
+        let to_a_file = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_sound_from(from);
+        assert_eq!(filter(&to_a_file), None, "only segments are cut on a picture's key frame");
     }
 
     #[test]
