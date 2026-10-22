@@ -536,6 +536,41 @@ impl HeaderButton {
     }
 }
 
+/// How a library lays out its works.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LibraryView {
+    /// The posters, which every library shows until somebody chooses.
+    #[default]
+    Posters,
+    /// The same posters, smaller and closer, to see many at once.
+    CompactPosters,
+    /// Wide pictures, a scene of each work rather than its poster.
+    Thumbnails,
+    /// One line each, a small poster beside what is known of the work.
+    List,
+}
+
+impl LibraryView {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Posters => "posters",
+            Self::CompactPosters => "compact_posters",
+            Self::Thumbnails => "thumbnails",
+            Self::List => "list",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "posters" => Some(Self::Posters),
+            "compact_posters" => Some(Self::CompactPosters),
+            "thumbnails" => Some(Self::Thumbnails),
+            "list" => Some(Self::List),
+            _ => None,
+        }
+    }
+}
+
 /// Which colour scheme the interface uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -714,6 +749,9 @@ pub struct Preferences {
     pub resume_rules_by_kind: Vec<(LibraryKind, ResumeRules)>,
     /// What is done with a film of wide gamut colour.
     pub wide_gamut: WideGamutChoice,
+    /// The libraries this person changed the layout of, and how. One never
+    /// changed shows its posters.
+    pub library_views: Vec<(LibraryId, LibraryView)>,
 }
 
 impl Default for Preferences {
@@ -757,6 +795,7 @@ impl Default for Preferences {
             resume_rules_per_kind: false,
             resume_rules_by_kind: Vec::new(),
             wide_gamut: WideGamutChoice::default(),
+            library_views: Vec::new(),
         }
     }
 }
@@ -788,6 +827,17 @@ impl Preferences {
         }
         by_kind.reverse();
         self.resume_rules_by_kind = by_kind;
+        // One layout per library, the last one written winning, and none for
+        // a library left with its posters: that is having chosen nothing.
+        let mut views: Vec<(LibraryId, LibraryView)> = Vec::new();
+        for (library, view) in self.library_views.into_iter().rev() {
+            if !views.iter().any(|(held, _)| *held == library) {
+                views.push((library, view));
+            }
+        }
+        views.retain(|(_, view)| *view != LibraryView::Posters);
+        views.reverse();
+        self.library_views = views;
         if !is_an_accent_colour(&self.accent_color) {
             self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
         }
@@ -1454,5 +1504,36 @@ mod tests {
     #[test]
     fn a_quarter_of_the_slider_is_still_audible() {
         assert!(volume_curve(0.25) > 0.08);
+    }
+
+    #[test]
+    fn a_library_keeps_the_last_layout_chosen_and_forgets_its_posters() {
+        let films = LibraryId::new();
+        let series = LibraryId::new();
+        let chosen = Preferences {
+            library_views: vec![
+                (films, LibraryView::List),
+                (series, LibraryView::Thumbnails),
+                (films, LibraryView::CompactPosters),
+                (series, LibraryView::Posters),
+            ],
+            ..Preferences::default()
+        }
+        .normalised();
+
+        assert_eq!(chosen.library_views, vec![(films, LibraryView::CompactPosters)]);
+    }
+
+    #[test]
+    fn a_layout_reads_back_as_it_was_written() {
+        for view in [
+            LibraryView::Posters,
+            LibraryView::CompactPosters,
+            LibraryView::Thumbnails,
+            LibraryView::List,
+        ] {
+            assert_eq!(LibraryView::parse(view.as_str()), Some(view));
+        }
+        assert_eq!(LibraryView::parse("mosaic"), None);
     }
 }

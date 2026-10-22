@@ -177,6 +177,10 @@ pub struct BrowseRequest {
     /// people filmed and photographed themselves: among films and series, a
     /// video of one's own is a stranger, and it has a row of its own.
     pub catalogued_only: bool,
+    /// Whether the cards come back with a picture wider than it is tall, for
+    /// a grid that lays them down. A grid of posters leaves it unasked and
+    /// never pays for it.
+    pub wide: bool,
     /// Who is looking, when somebody is. Named, the page comes back with what
     /// this account has made of each card: where they are in it, whether they
     /// marked it, what is left of a series. Absent, the cards carry the work's
@@ -318,6 +322,7 @@ impl Default for BrowseRequest {
             watch_later_only: false,
             library_kind: None,
             catalogued_only: false,
+            wide: false,
             viewer: None,
         }
     }
@@ -356,8 +361,8 @@ pub struct WorkCard {
     pub initial: String,
     /// Every size of the poster, largest first.
     pub poster: Vec<StoredImage>,
-    /// A picture wider than it is tall, for the rows that lie a card down
-    /// rather than standing it up. Filled only for those rows: a grid of
+    /// A picture wider than it is tall, for the rows and grids that lie a
+    /// card down rather than standing it up. Filled only for those: a grid of
     /// posters never asks for it and never pays for it.
     ///
     /// Empty where there is nothing wide to show, and a card drawn lying then
@@ -593,6 +598,9 @@ impl Database {
         };
 
         self.attach_posters(&mut cards).await?;
+        if request.wide {
+            self.attach_wide_pictures(&mut cards).await?;
+        }
         if let Some(viewer) = request.viewer {
             self.attach_viewer_state(viewer, &mut cards).await?;
         }
@@ -2712,6 +2720,41 @@ mod tests {
             Some(800),
             "largest first, so a client can pick without sorting"
         );
+    }
+
+    #[tokio::test]
+    async fn a_grid_laid_down_asks_for_the_wide_picture_and_no_other_does() {
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let asked = |wide| BrowseRequest {
+            library_id: Some(library_id),
+            wide,
+            ..Default::default()
+        };
+        let work_id = database.browse_works(&asked(false)).await.expect("read").cards[0].id;
+        database
+            .replace_images(
+                "work",
+                &work_id.to_db_string(),
+                "backdrop",
+                &[StoredImage {
+                    owner_kind: "work".to_string(),
+                    owner_id: work_id.to_db_string(),
+                    image_kind: "backdrop".to_string(),
+                    relative_path: format!("works/{work_id}/backdrop-wide-1280.webp"),
+                    width: Some(1280),
+                    height: Some(720),
+                    fingerprint: "wide".to_string(),
+                    dominant_color: None,
+                }],
+            )
+            .await
+            .expect("backdrop stored");
+
+        let standing = database.browse_works(&asked(false)).await.expect("read");
+        assert!(standing.cards[0].wide.is_empty(), "a grid of posters never pays for it");
+        let lying = database.browse_works(&asked(true)).await.expect("read");
+        assert_eq!(lying.cards[0].wide.len(), 1);
+        assert_eq!(lying.cards[0].wide[0].fingerprint, "wide");
     }
 
     #[tokio::test]
