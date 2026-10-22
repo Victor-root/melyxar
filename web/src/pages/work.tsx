@@ -18,6 +18,7 @@ import { useAccount } from "../account";
 import { useTold } from "../asking";
 import { WayBackUp } from "../components/ancestry";
 import { Card } from "../components/card";
+import { SeenButton } from "../components/seen";
 import { InOrder } from "../components/in-order";
 import { useWorkMenu } from "../components/cardmenu";
 import { Panel, Picker } from "../components/panel";
@@ -40,7 +41,6 @@ import {
   StarIcon,
   SubtitlesIcon,
   TagIcon,
-  TickIcon,
   TrailerIcon,
 } from "../icons";
 import { languageName } from "../languages";
@@ -653,29 +653,6 @@ function Marks({
       </button>
       {menu.drawn}
     </span>
-  );
-}
-
-/** Marks a work watched or not, and says which it is. The page's own work
- *  has it among its marks, and every episode of a season's list has one
- *  of its own, smaller, in place of the corner of its still. */
-function SeenButton({ card, small = false }: { card: CardData; small?: boolean }) {
-  const { t } = useSettings();
-  const marks = useMarks();
-  const seen = marks.seenOf(card) === "watched";
-  const said = t(seen ? "card.menu.mark_unwatched" : "card.menu.mark_watched");
-
-  return (
-    <button
-      type="button"
-      className={`work-mark${small ? " work-mark-small" : ""}${seen ? " work-mark-on" : ""}`}
-      aria-pressed={seen}
-      aria-label={said}
-      title={said}
-      onClick={() => marks.setWatched(card, !seen)}
-    >
-      <TickIcon size={small ? 16 : 22} />
-    </button>
   );
 }
 

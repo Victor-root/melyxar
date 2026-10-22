@@ -28,10 +28,14 @@ import { useReachEnd } from "./reach-end";
 /** How many rows of cards a block holds: about a screen of them. */
 const ROWS_A_BLOCK = 3;
 
+/** How a grid is laid out: by the shape of the cards it holds, smaller
+ *  posters than a card has, or one work to a line. */
+export type GridShape = CardShape | "compact" | "list";
+
 interface GridProps {
   children: ReactNode;
-  /** The shape of the cards it holds, which sets how wide a column is. */
-  shape?: CardShape;
+  /** How it is laid out, which sets how wide a column is. */
+  shape?: GridShape;
   /** Called when the viewer nears the end, to fetch what follows. */
   onReachEnd?: () => void;
   /** Whether there is anything left to fetch. */
@@ -139,7 +143,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
  *  never read yet holds no card until its columns are read, still before the
  *  frame is drawn: cut by a guess, every card was made twice, once in the
  *  blocks of the guess and again in the right ones. */
-const counted = new Map<CardShape, number>();
+const counted = new Map<GridShape, number>();
 
 /**
  * How many cards fit on a row, as the stylesheet laid the grid out at the
@@ -147,7 +151,7 @@ const counted = new Map<CardShape, number>();
  * changes width, and put in place before the frame is drawn, so the blocks
  * never show a row cut in two.
  */
-function useColumns(grid: RefObject<HTMLDivElement | null>, shape: CardShape): number | null {
+function useColumns(grid: RefObject<HTMLDivElement | null>, shape: GridShape): number | null {
   const [columns, setColumns] = useState(() => counted.get(shape) ?? null);
   useLayoutEffect(() => {
     const element = grid.current;

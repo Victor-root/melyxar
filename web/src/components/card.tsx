@@ -69,6 +69,11 @@ export const ROOM_FOR_A_PICTURE: Record<CardShape, string> = {
  */
 export const ROOM_IN_A_ROW = "(max-width: 860px) 132px, (min-width: 1400px) 186px, 168px";
 
+/** The same for the smaller posters of a grid laid out compact, and for the
+ *  picture beside the words of a line of a list. */
+export const ROOM_IN_A_COMPACT_GRID = "(max-width: 700px) 30vw, (min-width: 1400px) 134px, 121px";
+export const ROOM_IN_A_LINE: Record<CardShape, string> = { standing: "80px", lying: "142px" };
+
 /** Whether the cards drawn here stand in a row of their own width, said by
  *  the row. A row showing one card at a time on a phone gives it the whole
  *  width, so it says nothing. */
@@ -199,6 +204,9 @@ export const Card = memo(function Card({
   /** Whether this is the work the page is about, in a row of the ones around
       it: lit at rest, and what the row opens on. */
   here = false,
+  /** How much room the picture has, when it is drawn smaller than a card of
+      its shape is in a grid. */
+  room,
 }: {
   card: CardData;
   shape?: CardShape;
@@ -209,6 +217,7 @@ export const Card = memo(function Card({
   named?: boolean;
   cornered?: boolean;
   here?: boolean;
+  room?: string;
 }) {
   const { t } = useSettings();
   const navigate = useGoTo();
@@ -291,7 +300,7 @@ export const Card = memo(function Card({
           <img
             src={poster.src}
             srcSet={poster.srcSet}
-            sizes={inARow && shape === "standing" ? ROOM_IN_A_ROW : ROOM_FOR_A_PICTURE[shape]}
+            sizes={room ?? (inARow && shape === "standing" ? ROOM_IN_A_ROW : ROOM_FOR_A_PICTURE[shape])}
             alt=""
             loading="lazy"
             decoding="async"

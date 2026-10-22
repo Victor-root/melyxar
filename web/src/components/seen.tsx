@@ -24,6 +24,8 @@
  * which is what the player's row of episodes needs.
  */
 
+import type { Card } from "../api";
+import { useMarkActions, useMarksOf } from "../marks";
 import { useSettings } from "../settings";
 import { TickIcon } from "../icons";
 
@@ -103,6 +105,29 @@ export function SeenMark({
       }}
     >
       <span className="seen-mark-said">{inside}</span>
+    </button>
+  );
+}
+
+/** Marks a work watched or not, and says which it is. The page of a work
+ *  has it among its marks, and every line of a list has one of its own,
+ *  smaller, in place of the corner of its picture. */
+export function SeenButton({ card, small = false }: { card: Card; small?: boolean }) {
+  const { t } = useSettings();
+  const marks = useMarkActions();
+  const seen = useMarksOf(card).seen === "watched";
+  const said = t(seen ? "card.menu.mark_unwatched" : "card.menu.mark_watched");
+
+  return (
+    <button
+      type="button"
+      className={`work-mark${small ? " work-mark-small" : ""}${seen ? " work-mark-on" : ""}`}
+      aria-pressed={seen}
+      aria-label={said}
+      title={said}
+      onClick={() => marks.setWatched(card, !seen)}
+    >
+      <TickIcon size={small ? 16 : 22} />
     </button>
   );
 }

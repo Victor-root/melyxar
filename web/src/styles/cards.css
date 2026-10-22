@@ -29,6 +29,22 @@
   }
 }
 
+/* Smaller posters, more of them to a row, for a library laid out compact. */
+.grid-compact {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-width) * 0.72), 1fr));
+}
+
+@media (min-width: 1400px) {
+  .grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(calc(var(--card-width-wide) * 0.72), 1fr));
+  }
+}
+
+/* One work to a line, for a library laid out as a list. */
+.grid-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* A block of a few whole rows of a grid, laid out across all of its columns
    as a grid of its own, and skipped by the browser while it is off the
    screen. What is skipped stands at the height its rows are guessed at until
@@ -50,6 +66,66 @@
 
 .grid-lying.grid-block {
   --card-guess: 190px;
+}
+
+.grid-compact.grid-block {
+  --card-guess: 240px;
+}
+
+.grid-list.grid-block {
+  --card-guess: 120px;
+}
+
+/* A line of a list: the picture small, and beside it the name, a few facts
+   and the button that marks it watched. */
+.work-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-wide);
+  min-width: 0;
+}
+
+.work-line > .card {
+  flex: 0 0 80px;
+  contain-intrinsic-size: auto 120px;
+}
+
+.work-line-lying > .card {
+  flex-basis: 142px;
+  contain-intrinsic-size: auto 80px;
+}
+
+.work-line-words {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.work-line-head {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.work-line-name {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 650;
+  color: var(--text);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-line-name:hover,
+.work-line-name:focus-visible {
+  text-decoration: underline;
+}
+
+.work-line-facts {
+  font-size: 14px;
 }
 
 /* Text that only a screen reader needs: taken out of the page without being
@@ -888,6 +964,18 @@ button.seen-mark:not(.seen-mark-on):hover {
 
 .letter-starts-lying {
   aspect-ratio: 16 / 9;
+}
+
+.letter-starts-compact {
+  font-size: 44px;
+}
+
+/* In a list, a line of its own rather than a tile. */
+.letter-starts-list {
+  aspect-ratio: auto;
+  justify-content: flex-start;
+  padding: 8px 16px;
+  font-size: 32px;
 }
 
 /* A cover is square, and the picture of an artist round. */
