@@ -298,6 +298,9 @@ data class NextEpisode(
     val episode: Int? = null,
     val title: String? = null,
     val sourceId: String? = null,
+    /** What it is about, and its still, for the card announcing it. */
+    val overview: String? = null,
+    val still: List<Picture> = emptyList(),
 )
 
 @Serializable
