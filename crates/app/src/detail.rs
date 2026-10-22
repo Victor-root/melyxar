@@ -36,8 +36,11 @@ pub struct WorkDetail {
     pub end_date: Option<String>,
     pub genres: Vec<String>,
     pub studios: Vec<String>,
-    /// Who is credited, leads first, then the parts behind the camera.
+    /// Who is credited, leads first, then the parts behind the camera. For an
+    /// episode, its series' cast and its own crew.
     pub credits: Vec<Credit>,
+    /// Who plays in this episode alone. Empty for anything else.
+    pub guest_stars: Vec<Credit>,
     /// The saga this film belongs to, when it belongs to one.
     pub collection: Option<String>,
     pub images: Vec<StoredImage>,
@@ -302,6 +305,34 @@ async fn saga_and_its_kin(
     Ok((!cards.is_empty()).then_some(SagaRow { name, cards }))
 }
 
+/// Who one work credits, each with their face.
+///
+/// The faces come back in one read, then each one joins its own name: a page
+/// of eighteen credits must not cost eighteen round trips.
+async fn credits_of(state: &AppState, work_id: WorkId) -> Result<Vec<Credit>> {
+    let database = state.database();
+    let faces = database.credit_photos_of_work(work_id).await?;
+    Ok(database
+        .work_credits(work_id)
+        .await?
+        .into_iter()
+        .map(|credit| {
+            let owner = credit.person_id.to_db_string();
+            Credit {
+                photo: faces
+                    .iter()
+                    .filter(|image| image.owner_id == owner)
+                    .cloned()
+                    .collect(),
+                person_id: credit.person_id,
+                name: credit.name,
+                role: credit.role,
+                character: credit.character,
+            }
+        })
+        .collect())
+}
+
 /// Reads everything one page shows about one work.
 pub async fn work_detail(
     state: &AppState,
@@ -388,29 +419,6 @@ pub async fn work_detail(
             }),
     );
 
-    // The faces come back in one read, then each one joins its own name: a page
-    // of eighteen credits must not cost eighteen round trips.
-    let faces = database.credit_photos_of_work(work_id).await?;
-    let credits = database
-        .work_credits(work_id)
-        .await?
-        .into_iter()
-        .map(|credit| {
-            let owner = credit.person_id.to_db_string();
-            Credit {
-                photo: faces
-                    .iter()
-                    .filter(|image| image.owner_id == owner)
-                    .cloned()
-                    .collect(),
-                person_id: credit.person_id,
-                name: credit.name,
-                role: credit.role,
-                character: credit.character,
-            }
-        })
-        .collect();
-
     let children = database.children_of(viewer, work_id, &language).await?;
     let siblings = match (work.kind, work.parent_id) {
         (melyxar_core::work::WorkKind::Episode, Some(season)) => {
@@ -425,9 +433,11 @@ pub async fn work_detail(
     // here. Its backdrop is kept aside for the page below it.
     let mut ancestry = Vec::new();
     let mut series_backdrop = Vec::new();
+    let mut series = None;
     for up in database.ancestry_of(work_id).await? {
         let mut logo = Vec::new();
         if up.kind == melyxar_core::work::WorkKind::Series {
+            series = Some(up.id);
             for image in database.images_of("work", &up.id.to_db_string()).await? {
                 match image.image_kind.as_str() {
                     "logo" => logo.push(image),
@@ -444,6 +454,24 @@ pub async fn work_detail(
             logo,
         });
     }
+
+    // An episode is played by its series' regulars, then by whoever came in
+    // for it alone: what it holds of its own as actors are its guest stars.
+    let own = credits_of(state, work_id).await?;
+    let (credits, guest_stars) = match (work.kind, series) {
+        (melyxar_core::work::WorkKind::Episode, Some(series)) => {
+            let (guests, crew): (Vec<_>, Vec<_>) =
+                own.into_iter().partition(|credit| credit.role == "actor");
+            let mut credits: Vec<Credit> = credits_of(state, series)
+                .await?
+                .into_iter()
+                .filter(|credit| credit.role == "actor")
+                .collect();
+            credits.extend(crew);
+            (credits, guests)
+        }
+        _ => (own, Vec::new()),
+    };
 
     // A season and an episode are almost never given a backdrop of their own
     // by the provider, and their page stood on a bare ground where the page
@@ -536,6 +564,7 @@ pub async fn work_detail(
         genres: database.work_genres(work_id).await?,
         studios: database.work_studios(work_id).await?,
         credits,
+        guest_stars,
         collection: database.work_collection(work_id).await?,
         images,
         external_ids: database.work_external_ids(work_id).await?,
@@ -756,8 +785,6 @@ mod tests {
         saga: Option<&str>,
         cast: &[(&str, &str, i32)],
     ) -> WorkId {
-        use melyxar_database::metadata::{CollectionRecord, CreditRecord, IdentifiedWork};
-
         let work = database
             .create_work(
                 library,
@@ -768,9 +795,29 @@ mod tests {
             )
             .await
             .expect("work created");
+        let cast = cast
+            .iter()
+            .map(|(actor, character, billed)| (*actor, "actor", Some(*character), *billed))
+            .collect::<Vec<_>>();
+        describe(database, work.id, title, year, saga, &cast).await;
+        work.id
+    }
+
+    /// Writes down what a provider would say of one work: its saga and who
+    /// it credits, as (name, role, character, billing).
+    async fn describe(
+        database: &melyxar_database::Database,
+        work: WorkId,
+        title: &str,
+        year: i32,
+        saga: Option<&str>,
+        people: &[(&str, &str, Option<&str>, i32)],
+    ) {
+        use melyxar_database::metadata::{CollectionRecord, CreditRecord, IdentifiedWork};
+
         database
             .apply_identification(
-                work.id,
+                work,
                 &IdentifiedWork {
                     provider: "tmdb".to_string(),
                     external_id: title.to_lowercase(),
@@ -788,14 +835,14 @@ mod tests {
                     age_rating_label: None,
                     genres: Vec::new(),
                     studios: Vec::new(),
-                    credits: cast
+                    credits: people
                         .iter()
-                        .map(|(actor, character, billed)| CreditRecord {
-                            external_id: actor.to_string(),
-                            name: actor.to_string(),
-                            sort_name: actor.to_lowercase(),
-                            role: "actor".to_string(),
-                            character: Some(character.to_string()),
+                        .map(|(name, role, character, billed)| CreditRecord {
+                            external_id: name.to_string(),
+                            name: name.to_string(),
+                            sort_name: name.to_lowercase(),
+                            role: role.to_string(),
+                            character: character.map(str::to_string),
                             ordinal: *billed,
                             photo_path: None,
                         })
@@ -811,7 +858,6 @@ mod tests {
             )
             .await
             .expect("identification applied");
-        work.id
     }
 
     #[tokio::test]
@@ -1088,5 +1134,74 @@ mod tests {
             vec![series.id.to_db_string().as_str()],
             "an episode with no backdrop of its own stands on its series'"
         );
+    }
+
+    #[tokio::test]
+    async fn an_episode_is_played_by_its_series_regulars_and_its_own_guests() {
+        use melyxar_core::work::WorkKind;
+
+        let database = melyxar_database::Database::open_in_memory()
+            .await
+            .expect("database opens");
+        let library = database
+            .create_library("Shows", melyxar_core::library::LibraryKind::Shows, "en", &[])
+            .await
+            .expect("library created");
+        let series = database
+            .create_work(library.id, WorkKind::Series, "Distant Signal", "signal", Some(2019))
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(library.id, series.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        let episode = database
+            .create_child_work(library.id, season.id, 1, WorkKind::Episode, "Long Night", "night")
+            .await
+            .expect("episode created");
+        describe(
+            &database,
+            series.id,
+            "Distant Signal",
+            2019,
+            None,
+            &[("Ada Moss", "actor", Some("Nell"), 0), ("Cy Reed", "producer", None, 0)],
+        )
+        .await;
+        describe(
+            &database,
+            episode.id,
+            "Long Night",
+            2019,
+            None,
+            &[("Ben Oak", "actor", Some("Visitor"), 0), ("Dee Lark", "director", None, 0)],
+        )
+        .await;
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+
+        let detail = work_detail(&state, &crate::an_ordinary_account(viewer), episode.id)
+            .await
+            .expect("read")
+            .expect("present");
+        let names = |credits: &[Credit]| {
+            credits
+                .iter()
+                .map(|credit| (credit.name.clone(), credit.role.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(&detail.credits),
+            [
+                ("Ada Moss".to_string(), "actor".to_string()),
+                ("Dee Lark".to_string(), "director".to_string())
+            ],
+            "the series' regulars and the episode's own crew, not the series' crew"
+        );
+        assert_eq!(names(&detail.guest_stars), [("Ben Oak".to_string(), "actor".to_string())]);
     }
 }

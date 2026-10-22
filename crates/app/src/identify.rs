@@ -707,19 +707,26 @@ where
                 state,
                 provider,
                 episode.id,
-                &as_details(
-                    found.external_id.clone(),
-                    // The name the provider gives, and failing that whatever
-                    // the file said, which is better than nothing at all.
-                    found.name.clone().unwrap_or_else(|| episode.title.clone()),
-                    found.overview.clone(),
-                    // What an episode is shown by is the picture taken from
-                    // the episode itself, which is where its poster would be.
-                    found.still_path.clone(),
-                    found.release_year,
-                    found.runtime,
-                    found.community_rating,
-                ),
+                &Details {
+                    // Its guest stars and who made it. The regulars stay the
+                    // series' own, read from there by the episode's page.
+                    credits: found.credits.clone(),
+                    ..as_details(
+                        found.external_id.clone(),
+                        // The name the provider gives, and failing that
+                        // whatever the file said, which is better than
+                        // nothing at all.
+                        found.name.clone().unwrap_or_else(|| episode.title.clone()),
+                        found.overview.clone(),
+                        // What an episode is shown by is the picture taken
+                        // from the episode itself, which is where its poster
+                        // would be.
+                        found.still_path.clone(),
+                        found.release_year,
+                        found.runtime,
+                        found.community_rating,
+                    )
+                },
                 language,
             )
             .await?;
@@ -782,7 +789,8 @@ fn as_details(
     }
 }
 
-/// Writes one described season or episode down and prepares its picture.
+/// Writes one described season or episode down and prepares its picture,
+/// and the faces of an episode's guest stars.
 async fn write_down<P>(
     state: &AppState,
     provider: &Arc<P>,
@@ -793,7 +801,7 @@ async fn write_down<P>(
 where
     P: MetadataProvider + 'static,
 {
-    state
+    let people = state
         .database()
         .apply_identification(
             work_id,
@@ -803,6 +811,7 @@ where
         .await
         .map_err(AppError::from)?;
     crate::images::store_provider_poster(state, provider.as_ref(), work_id, details).await;
+    crate::images::store_person_photos(state, provider, &people).await;
     Ok(())
 }
 
@@ -2350,6 +2359,14 @@ mod tests {
                     release_year: Some(2019),
                     runtime: Some(melyxar_core::time::Millis::new(48 * 60_000)),
                     community_rating: Some(8.1),
+                    credits: vec![melyxar_metadata::Credit {
+                        external_id: format!("guest-{number}"),
+                        name: format!("Guest {number}"),
+                        role: "actor".to_string(),
+                        character: Some(format!("Visitor {number}")),
+                        ordinal: 0,
+                        photo_path: None,
+                    }],
                 })
                 .collect(),
         }
@@ -2596,6 +2613,19 @@ mod tests {
         );
         assert_eq!(first.community_rating, Some(8.1));
         assert_eq!(first.release_year, Some(2019));
+        let guests: Vec<(String, Option<String>)> = state
+            .database()
+            .work_credits(first.id)
+            .await
+            .expect("read")
+            .into_iter()
+            .map(|credit| (credit.name, credit.character))
+            .collect();
+        assert_eq!(
+            guests,
+            [("Guest 1".to_string(), Some("Visitor 1".to_string()))],
+            "and who came to play in it alone"
+        );
     }
 
     #[tokio::test]

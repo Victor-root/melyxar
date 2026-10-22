@@ -836,6 +836,8 @@ struct WorkView {
     studios: Vec<String>,
     collection: Option<String>,
     cast: Vec<CreditView>,
+    /// Who plays in this episode alone. Empty for anything else.
+    guest_stars: Vec<CreditView>,
     crew: Vec<CreditView>,
     poster: Vec<ImageView>,
     backdrop: Vec<ImageView>,
@@ -1231,6 +1233,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
             .filter(|credit| credit.role == "actor")
             .map(credit_view)
             .collect(),
+        guest_stars: detail.guest_stars.iter().map(credit_view).collect(),
         crew: detail
             .credits
             .iter()
