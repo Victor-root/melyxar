@@ -97,6 +97,9 @@ fun speakersName(channels: Int?): String? = when (channels) {
     else -> "$channels ch"
 }
 
+/** What a work is rated, on the scale the provider uses: 7.4 / 10. */
+fun outOfTen(rating: Double): String = String.format(Locale.ROOT, "%.1f / 10", rating)
+
 /** A moment of a film as a player's clock shows it: 1:02:33, or 4:05 under
  *  an hour. */
 fun clock(seconds: Double): String {

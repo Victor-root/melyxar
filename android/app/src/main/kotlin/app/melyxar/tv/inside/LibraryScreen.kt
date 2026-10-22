@@ -63,12 +63,15 @@ import app.melyxar.tv.look.rim
 import java.io.IOException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 
 /** The orders a grid can be read in, as the web offers them. */
 private val ORDERS = listOf("title", "added_at", "release_year", "community_rating", "runtime")
 
 /** Which list of choices is open over the grid. */
-private enum class Picking { Order, Genre, Decade }
+private enum class Picking { Order, Layout, Genre, Decade }
 
 /**
  * A library, its works in a grid as the web shows them, with the web's sort
@@ -80,6 +83,8 @@ fun LibraryScreen(library: Library, comebacks: Int) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
     val api = LocalServer.current
+    val preferences = LocalAccountPreferences.current
+    val layout = LibraryLayout.of(preferences.now?.libraryViews?.get(library.id))
     val scope = rememberCoroutineScope()
     val memory = rememberFocusMemory()
     val first = remember { FocusRequester() }
@@ -88,7 +93,14 @@ fun LibraryScreen(library: Library, comebacks: Int) {
     var genre by rememberSaveable(library.id) { mutableStateOf<String?>(null) }
     var decade by rememberSaveable(library.id) { mutableStateOf<Int?>(null) }
     var picking by remember { mutableStateOf<Picking?>(null) }
-    val browse = Browse(library = library.id, order = order, descending = descending, genre = genre, decade = decade)
+    val browse = Browse(
+        library = library.id,
+        order = order,
+        descending = descending,
+        genre = genre,
+        decade = decade,
+        wide = layout == LibraryLayout.Thumbnails,
+    )
     val works = rememberWorks(browse, comebacks)
     val filters = rememberLoaded("filters:${library.id}", comebacks) { filters(library.id) }.value.ready
     // A grid read another way starts again from its top.
@@ -106,6 +118,29 @@ fun LibraryScreen(library: Library, comebacks: Int) {
             withFrameNanos {}
             memory.restore()
         }
+    }
+
+    /** Lays the library out as [chosen], at once and for every screen of the
+     *  account, this library alone: the posters are what it has when nothing
+     *  is said. */
+    fun layOut(chosen: LibraryLayout) {
+        preferences.change(
+            {
+                it.copy(
+                    libraryViews = if (chosen == LibraryLayout.Posters) {
+                        it.libraryViews - library.id
+                    } else {
+                        it.libraryViews + (library.id to chosen.word)
+                    },
+                )
+            },
+            buildJsonObject {
+                putJsonObject("library_view") {
+                    put("library", library.id)
+                    put("view", chosen.word)
+                }
+            },
+        )
     }
 
     /** Brings the first work under [letter] to the remote, reading on to it
@@ -152,6 +187,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 grid = grid,
                 onOpen = { chrome.go(Place.Opened(it.id)) },
                 modifier = Modifier.weight(1f),
+                layout = layout,
                 firstCard = first,
                 onReach = { card -> at = card.initial },
                 startsAt = starts,
@@ -162,6 +198,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                     SortAndFilters(
                         order = order,
                         descending = descending,
+                        layout = layout,
                         genre = genre,
                         decade = decade,
                         filters = filters,
@@ -181,6 +218,14 @@ fun LibraryScreen(library: Library, comebacks: Int) {
                 choices = ORDERS.map { orderName(it) },
                 chosen = ORDERS.indexOf(order),
                 onChoose = { order = ORDERS[it] },
+                onClose = ::closePicking,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            Picking.Layout -> ChoiceList(
+                title = stringResource(R.string.tv_layout),
+                choices = LibraryLayout.entries.map { layoutName(it) },
+                chosen = LibraryLayout.entries.indexOf(layout),
+                onChoose = { layOut(LibraryLayout.entries[it]) },
                 onClose = ::closePicking,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -218,6 +263,7 @@ fun LibraryScreen(library: Library, comebacks: Int) {
 private fun SortAndFilters(
     order: String,
     descending: Boolean,
+    layout: LibraryLayout,
     genre: String?,
     decade: Int?,
     filters: Filters?,
@@ -229,6 +275,13 @@ private fun SortAndFilters(
     Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
         GlassBar {
             OrderButtons(orderName(order), descending, memory, onPick = { onPick(Picking.Order) }, onTurn = onTurn)
+            GlassRule()
+            GlassField(
+                stringResource(R.string.tv_layout),
+                layoutName(layout),
+                onClick = { onPick(Picking.Layout) },
+                modifier = Modifier.remembered(memory, "layout"),
+            )
             if (filters != null && filters.genres.isNotEmpty()) {
                 GlassRule()
                 GlassField(
@@ -261,6 +314,16 @@ private fun orderName(order: String): String = stringResource(
         "community_rating" -> R.string.tv_sort_community_rating
         "runtime" -> R.string.tv_sort_runtime
         else -> R.string.tv_sort_title
+    },
+)
+
+@Composable
+private fun layoutName(layout: LibraryLayout): String = stringResource(
+    when (layout) {
+        LibraryLayout.Posters -> R.string.tv_layout_posters
+        LibraryLayout.SmallPosters -> R.string.tv_layout_small_posters
+        LibraryLayout.Thumbnails -> R.string.tv_layout_thumbnails
+        LibraryLayout.Lines -> R.string.tv_layout_list
     },
 )
 

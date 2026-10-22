@@ -72,7 +72,8 @@ fun frameOf(lies: Boolean): DpSize = if (lies) DpSize(WideWidth, WideWidth * 9 /
 
 /** The picture a card of [this] work draws, its still when it [lies] and
  *  has one, its poster otherwise, and how wide. */
-fun Card.drawn(lies: Boolean): Drawn = Drawn(if (lies && wide.isNotEmpty()) wide else poster, frameOf(lies).width)
+fun Card.drawn(lies: Boolean, across: Dp = frameOf(lies).width): Drawn =
+    Drawn(if (lies && wide.isNotEmpty()) wide else poster, across)
 
 /**
  * A work in a row or a grid, as the web draws it: its poster standing, or
@@ -88,18 +89,24 @@ fun WorkCard(
     title: String = card.title,
     note: String? = card.year?.toString(),
     trailing: String? = null,
+    /** The frame of its picture, when it is drawn smaller than a card. */
+    frame: DpSize = frameOf(lying),
+    /** Whether its title is written under it. A line of a list writes it
+     *  beside it instead. */
+    named: Boolean = true,
 ) {
     val began = System.nanoTime()
     val palette = LocalPalette.current
     val whereabouts = LocalMarks.current.whereabouts(card)
     val progress = whereabouts.resume?.let { howFarIn(it.toDouble(), lengthOfAPlay(card)) }
-    val (pictures, across) = card.drawn(lying)
+    val (pictures, across) = card.drawn(lying, frame.width)
     PictureCard(
         across = across,
-        down = frameOf(lying).height,
+        down = frame.height,
         title = title,
         note = note,
         trailing = trailing,
+        named = named,
         ground = card.color?.let(::parseHex)?.let(::Color) ?: palette.surfaceRaised,
         onClick = onClick,
         modifier = modifier.offersMenuOf(Offered.Work(card)),
@@ -148,6 +155,7 @@ fun PictureCard(
     ground: Color,
     onClick: () -> Unit,
     modifier: Modifier,
+    named: Boolean = true,
     picture: @Composable BoxScope.(glowing: Boolean) -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -176,7 +184,7 @@ fun PictureCard(
         ) {
             picture(glowing)
         }
-        if (Probe.shows(Part.Titles)) {
+        if (named && Probe.shows(Part.Titles)) {
             Text(
                 title,
                 fontSize = 14.sp,

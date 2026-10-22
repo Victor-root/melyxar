@@ -146,6 +146,16 @@
     <string name="tv_genre">Genre</string>
     <string name="tv_decade">Décennie</string>
     <string name="tv_decade_name">Années %1$d</string>
+    <string name="tv_layout">Affichage</string>
+    <string name="tv_layout_posters">Affiches</string>
+    <string name="tv_layout_small_posters">Petites affiches</string>
+    <string name="tv_layout_thumbnails">Vignettes</string>
+    <string name="tv_layout_list">Liste</string>
+    <plurals name="tv_episode_count">
+        <item quantity="one">%d épisode</item>
+        <item quantity="many">%d d’épisodes</item>
+        <item quantity="other">%d épisodes</item>
+    </plurals>
     <string name="tv_filter_any">Tous</string>
     <string name="tv_counted">%1$s (%2$d)</string>
     <string name="tv_letters">Aller à une lettre</string>

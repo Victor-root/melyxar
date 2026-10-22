@@ -196,6 +196,7 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
                 browse.search?.let { addQueryParameter("search", it) }
                 if (browse.favourites) addQueryParameter("favourites", "true")
                 if (browse.watchLater) addQueryParameter("watch_later", "true")
+                if (browse.wide) addQueryParameter("wide", "true")
                 after?.let { addQueryParameter("after", it) }
             }
             .addQueryParameter("limit", limit.toString())

@@ -58,6 +58,7 @@ import app.melyxar.server.Picture
 import app.melyxar.server.Work
 import app.melyxar.tv.fileBadges
 import app.melyxar.tv.lengthOfAPlay
+import app.melyxar.tv.outOfTen
 import app.melyxar.tv.look.litPast
 import app.melyxar.tv.trailer.TrailerButton
 import app.melyxar.tv.trailer.trailerOf
@@ -78,7 +79,6 @@ import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.rememberRowScrolling
 import app.melyxar.tv.look.rim
 import app.melyxar.tv.look.shadowRaised
-import java.util.Locale
 
 /**
  * A work's page, as the web's: its picture behind everything, its poster,
@@ -287,7 +287,7 @@ fun RatingMark(site: String, value: Double, fill: Brush, ink: Color) {
             modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(fill).padding(horizontal = 4.dp),
         )
         Text(
-            String.format(Locale.ROOT, "%.1f / 10", value),
+            outOfTen(value),
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
             color = palette.text,
