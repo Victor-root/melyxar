@@ -533,6 +533,8 @@ fn next_episode_view(carry: &CarryOn) -> NextEpisodeView {
         episode: carry.episode,
         title: carry.has_own_name.then(|| carry.title.clone()),
         source_id: carry.source_id.map(|id| id.to_string()),
+        overview: carry.overview.clone(),
+        still: carry.still.iter().map(image_view).collect(),
     }
 }
 
@@ -908,6 +910,9 @@ struct NextEpisodeView {
     title: Option<String>,
     /// The file it plays from, so a button can start it without asking again.
     source_id: Option<String>,
+    /// What it is about, and its still, for the card announcing it.
+    overview: Option<String>,
+    still: Vec<ImageView>,
 }
 
 /// One work hanging under this one: its card, and what its place under this

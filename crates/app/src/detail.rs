@@ -104,6 +104,11 @@ pub struct CarryOn {
     /// The file it would be played from. Absent would mean nothing to play,
     /// and such an episode is never offered.
     pub source_id: Option<MediaSourceId>,
+    /// What it is about, in the language of its library, for the card that
+    /// announces it at the end of the one before.
+    pub overview: Option<String>,
+    /// Its still, every size, largest first.
+    pub still: Vec<StoredImage>,
 }
 
 /// One work this one hangs under, as a way back to it.
@@ -229,6 +234,16 @@ async fn what_to_carry_on_with(
 /// not on the other would be the same button behaving differently.
 async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Result<CarryOn> {
     let database = state.database();
+    let language = crate::hand_edits::language_of(state, episode.library_id).await?;
+    let overview = texts_of(state, episode.id, &language)
+        .await?
+        .and_then(|(_, _, overview)| overview);
+    let still = database
+        .images_of("work", &episode.id.to_db_string())
+        .await?
+        .into_iter()
+        .filter(|image| image.image_kind == "poster")
+        .collect();
 
     // The season it sits in, for a button that says which episode it means.
     let season = match episode.parent_id {
@@ -258,6 +273,23 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
         season,
         episode: episode.ordinal,
         title: episode.title,
+        overview,
+        still,
+    })
+}
+
+/// Title, tagline and synopsis in the language the library speaks, falling
+/// back to English, which is what a provider answers with when it has
+/// nothing else.
+async fn texts_of(
+    state: &AppState,
+    work_id: WorkId,
+    language: &str,
+) -> Result<Option<(Option<String>, Option<String>, Option<String>)>> {
+    let database = state.database();
+    Ok(match database.work_translation(work_id, language).await? {
+        Some(texts) => Some(texts),
+        None => database.work_translation(work_id, "en").await?,
     })
 }
 
@@ -353,12 +385,7 @@ pub async fn work_detail(
 
     let language = crate::hand_edits::language_of(state, work.library_id).await?;
 
-    // The text of the language the library speaks, falling back to English,
-    // which is what a provider answers with when it has nothing else.
-    let texts = match database.work_translation(work_id, &language).await? {
-        Some(texts) => Some(texts),
-        None => database.work_translation(work_id, "en").await?,
-    };
+    let texts = texts_of(state, work_id, &language).await?;
 
     let (release_date, end_date) = database.work_days(work_id).await?;
 
