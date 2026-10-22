@@ -1163,10 +1163,14 @@ impl Session {
             input = input.starting_at(self.set_going_at(index));
         }
         let video = self.video_now();
-        // A copied picture begins on the segment's own key frame, and the
-        // sound is made to begin there with it.
-        let sound_from = (index > 0 && matches!(video, VideoOutput::Copy))
-            .then(|| self.playlist.start_of(index));
+        // A copied picture in a film cut at its key frames begins on the
+        // segment's own, and the sound is made to begin there with it. Cut on
+        // a grid, the picture begins at whatever key frame comes before, and
+        // the sound stays with it.
+        let sound_from = (index > 0
+            && matches!(video, VideoOutput::Copy)
+            && self.playlist.cut_where_the_film_allows())
+        .then(|| self.playlist.start_of(index));
 
         let command = Command::new(
             input,
@@ -1688,6 +1692,49 @@ mod tests {
         assert!(
             (picture - sound).abs() < 0.2,
             "the sound of a segment has to belong to its picture: \
+             picture at {picture}s, sound at {sound}s"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_reading_begun_part_way_hands_out_no_sound_from_before_its_picture() {
+        // Measured on a television: a film taken up again in the middle was
+        // handed a first segment whose sound began a second before its
+        // picture, and played the rest out of step. A film held in MP4 shows
+        // it on a clip: reading it from a key frame brings the sound piece
+        // that began just before.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("film.mov");
+        clip_with_key_frames_every(&source, 60, 240).await;
+
+        let folder = directory.path().join("session");
+        let session = Session::open(
+            SessionId::new(),
+            *NOBODY_IN_PARTICULAR,
+            Recipe {
+                source,
+                duration: Millis::new(60_000),
+                streams: StreamSelection::default(),
+                video: VideoOutput::Copy,
+                audio: AudioOutput::Copy,
+                where_the_viewer_starts: Millis::ZERO,
+                where_it_can_be_started: (0..6).map(|ten| Millis::new(ten * 10_000)).collect(),
+                if_the_card_refuses: Vec::new(),
+            },
+            folder.clone(),
+            melyxar_ffmpeg::testing::tools(),
+        )
+        .await
+        .expect("the session opens");
+
+        let segment = session.segment(2).await.expect("the segment is produced");
+        let (picture, sound) = when_it_starts(&folder, &segment).await;
+
+        assert!((picture - 20.0).abs() < 0.01, "the picture begins on its key frame: {picture}s");
+        assert!(
+            sound >= picture && sound - picture < 0.1,
+            "the sound begins with the picture, never before it: \
              picture at {picture}s, sound at {sound}s"
         );
         session.close().await;
