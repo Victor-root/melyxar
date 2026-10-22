@@ -207,16 +207,8 @@ export function WorkPage() {
 
       {work.kind === "episode" && <TheRestOfTheSeason work={work} />}
 
-      {work.cast.length > 0 && (
-        <section className="section">
-          <RowHead mark={<PeopleIcon size={24} />} title={t("work.cast")} />
-          <Row>
-            {work.cast.slice(0, FACES_SHOWN).map((credit, index) => (
-              <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />
-            ))}
-          </Row>
-        </section>
-      )}
+      <CastRow title={t("work.cast")} credits={work.cast} />
+      <CastRow title={t("work.guest_stars")} credits={work.guest_stars} />
 
       {!holdsOthers && version && screen.plan && (
         <Chapters
@@ -653,6 +645,24 @@ function Marks({
       </button>
       {menu.drawn}
     </span>
+  );
+}
+
+/** A row of people with their faces, under its title: the cast, or the
+ *  guest stars of an episode. Nothing when there is nobody. */
+function CastRow({ title, credits }: { title: string; credits: Work["cast"] }) {
+  if (credits.length === 0) {
+    return null;
+  }
+  return (
+    <section className="section">
+      <RowHead mark={<PeopleIcon size={24} />} title={title} />
+      <Row>
+        {credits.slice(0, FACES_SHOWN).map((credit, index) => (
+          <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />
+        ))}
+      </Row>
+    </section>
   );
 }
 

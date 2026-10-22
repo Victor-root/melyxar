@@ -941,6 +941,8 @@ export interface Work {
   studios: string[];
   collection: string | null;
   cast: Credit[];
+  /** Who plays in this episode alone. Empty for anything else. */
+  guest_stars: Credit[];
   crew: Credit[];
   poster: Picture[];
   backdrop: Picture[];
