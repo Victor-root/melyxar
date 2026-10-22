@@ -4,6 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -19,6 +22,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -34,12 +38,17 @@ import app.melyxar.tv.inside.whichEpisode
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
+import app.melyxar.tv.look.ServerPicture
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.shadowRaised
 import kotlinx.coroutines.delay
 
 /** How many seconds the next episode is announced before it starts. */
 private const val COUNT_FROM_S = 10
+
+/** How wide the card is, and the still at its left. */
+private val CARD_WIDE = 640.dp
+private val STILL_WIDE = 240.dp
 
 /** How often the film is looked at for its credits. */
 private const val LOOKED_AT_EVERY_MS = 500L
@@ -76,25 +85,42 @@ fun UpNext(next: NextEpisode, first: FocusRequester, onPlay: () -> Unit, onCance
     BackHandler(onBack = onCancel)
     Column(
         modifier = modifier
-            .width(400.dp)
+            .width(CARD_WIDE)
             .boxShadow(shape, palette.shadowRaised)
             .clip(shape)
             .background(palette.surfaceRaised)
             .border(1.dp, palette.border, shape)
             .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(stringResource(R.string.tv_next_episode), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = palette.textFaint)
-        Text(
-            whichEpisode(next.season, next.episode, next.title.orEmpty()) ?: next.title.orEmpty(),
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = palette.text,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(stringResource(R.string.tv_next_in, left), fontSize = 14.sp, color = palette.textSoft)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 10.dp)) {
+        // Its still and what it is about, as its line on the page of the
+        // season shows it.
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+            Box(
+                Modifier
+                    .size(STILL_WIDE, STILL_WIDE * 9 / 16)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(palette.surface),
+            ) {
+                ServerPicture(next.still, STILL_WIDE, Modifier.matchParentSize())
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(stringResource(R.string.tv_next_episode), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = palette.textFaint)
+                Text(
+                    whichEpisode(next.season, next.episode, next.title.orEmpty()) ?: next.title.orEmpty(),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                next.overview?.let {
+                    Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = palette.textSoft, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
+                Text(stringResource(R.string.tv_next_in, left), fontSize = 14.sp, color = palette.textSoft)
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
             AccentButton(stringResource(R.string.tv_play_now), onPlay, Modifier.focusRequester(first))
             PlainButton(stringResource(R.string.tv_cancel), onCancel)
         }
