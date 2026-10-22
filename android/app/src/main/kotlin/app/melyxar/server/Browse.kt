@@ -20,4 +20,7 @@ data class Browse(
     val search: String? = null,
     val favourites: Boolean = false,
     val watchLater: Boolean = false,
+    /** Whether the cards come with a wide picture, for a grid laid out with
+     *  them lying. */
+    val wide: Boolean = false,
 )

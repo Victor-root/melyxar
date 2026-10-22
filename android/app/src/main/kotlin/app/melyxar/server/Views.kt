@@ -79,6 +79,9 @@ data class Preferences(
     /** The languages the libraries hold, which are what is offered. */
     val audioLanguages: List<String> = emptyList(),
     val subtitleLanguages: List<String> = emptyList(),
+    /** How each library the account laid out anew is laid out, by library.
+     *  One not named shows its posters. */
+    val libraryViews: Map<String, String> = emptyMap(),
 )
 
 /** A work as every row and grid shows it. */

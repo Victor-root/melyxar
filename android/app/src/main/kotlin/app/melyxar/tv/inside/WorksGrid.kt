@@ -36,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.server.Api
@@ -48,8 +49,6 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
-import app.melyxar.tv.look.PosterWidth
-import app.melyxar.tv.look.WideWidth
 import java.io.IOException
 
 /** The cards of a grid read so far, and where the next page starts. */
@@ -191,6 +190,8 @@ fun WorksGrid(
     grid: LazyGridState,
     onOpen: (Card) -> Unit,
     modifier: Modifier = Modifier,
+    /** How the grid is laid out, its library's posters unless chosen. */
+    layout: LibraryLayout = LibraryLayout.Posters,
     firstCard: FocusRequester? = null,
     /** Told of the card the remote comes to. */
     onReach: (Card) -> Unit = {},
@@ -220,6 +221,7 @@ fun WorksGrid(
         grid = grid,
         onOpen = onOpen,
         modifier = modifier,
+        layout = layout,
         firstCard = firstCard,
         onReach = { at, card ->
             reach(at)
@@ -245,6 +247,8 @@ fun CardGrid(
     grid: LazyGridState,
     onOpen: (Card) -> Unit,
     modifier: Modifier = Modifier,
+    /** How the grid is laid out, its cards' own shape unless chosen. */
+    layout: LibraryLayout = LibraryLayout.Posters,
     firstCard: FocusRequester? = null,
     /** What is written under a card, its year unless said otherwise. */
     noteOf: (Card) -> String? = { it.year?.toString() },
@@ -257,14 +261,17 @@ fun CardGrid(
     top: @Composable (PageHead) -> Unit,
 ) {
     val palette = LocalPalette.current
+    val lines = layout == LibraryLayout.Lines
+    val lies = layout.lies(lying)
+    val frame = layout.frame(lying)
     Box(modifier.fillMaxSize()) {
         ScrollingPage(toTop = { grid.animateScrollToItem(0) }) { head ->
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(if (lying) WideWidth else PosterWidth),
+                columns = if (lines) GridCells.Fixed(1) else GridCells.Adaptive(frame.width),
                 state = grid,
                 contentPadding = PaddingValues(start = Gutter, end = Gutter, bottom = 40.dp),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                verticalArrangement = Arrangement.spacedBy(22.dp),
+                verticalArrangement = Arrangement.spacedBy(if (lines) 12.dp else 22.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
@@ -283,22 +290,28 @@ fun CardGrid(
                 fun LazyGridScope.cardsFrom(from: Int, until: Int) {
                     itemsIndexed(shown.subList(from, until), key = { _, card -> card.id }) { onRun, card ->
                         val at = from + onRun
-                        WorkCard(
-                            card = card,
-                            lying = lying,
-                            note = noteOf(card),
-                            onClick = { onOpen(card) },
-                            modifier = Modifier
-                                .remembered(memory, card.id)
-                                .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
-                                .onFocusChanged { if (it.isFocused) onReach(at, card) }
-                                .firstLineHoldsTheHead(grid, head, card.id),
-                        )
+                        val reached = Modifier
+                            .remembered(memory, card.id)
+                            .then(if (at == 0 && firstCard != null) Modifier.focusRequester(firstCard) else Modifier)
+                            .onFocusChanged { if (it.isFocused) onReach(at, card) }
+                            .firstLineHoldsTheHead(grid, head, card.id)
+                        if (lines) {
+                            WorkLine(card, lying = lies, frame = frame, onClick = { onOpen(card) }, modifier = reached)
+                        } else {
+                            WorkCard(
+                                card = card,
+                                lying = lies,
+                                note = noteOf(card),
+                                onClick = { onOpen(card) },
+                                modifier = reached,
+                                frame = frame,
+                            )
+                        }
                     }
                 }
                 cardsFrom(0, marked)
                 startsAt?.takeIf { marked < shown.size }?.let { starts ->
-                    item(key = "starts:${starts.work}") { LetterStarts(starts.letter, lying) }
+                    item(key = "starts:${starts.work}") { LetterStarts(starts.letter, frame) }
                 }
                 cardsFrom(marked, shown.size)
             }
@@ -317,9 +330,8 @@ data class LetterStart(val work: String, val letter: String)
  * inside a dashed frame of the accent. Nothing the remote stops on.
  */
 @Composable
-private fun LetterStarts(letter: String, lying: Boolean) {
+private fun LetterStarts(letter: String, frame: DpSize) {
     val palette = LocalPalette.current
-    val frame = frameOf(lying)
     Row(
         modifier = Modifier
             .size(frame)
