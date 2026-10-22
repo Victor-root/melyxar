@@ -155,7 +155,7 @@ internal class LiveTrace(private val player: ExoPlayer, address: String) : Analy
         say("dropped $droppedFrames frames in ${elapsedMs}ms")
     }
 
-    override fun onLoadStarted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
+    override fun onLoadStarted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData, retryCount: Int) {
         say("load started type ${mediaLoadData.dataType} track ${mediaLoadData.trackType}")
     }
 
