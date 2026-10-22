@@ -9,8 +9,8 @@ use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::work::ResumeRules;
 use melyxar_core::user::{
-    Backdrop, DownmixMethod, HeaderButton, HomeSection, Permissions, Preferences, SubtitleMode,
-    ThemeMode, User, WideGamutChoice,
+    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, Permissions, Preferences,
+    SubtitleMode, ThemeMode, User, WideGamutChoice,
 };
 use sqlx::{AssertSqlSafe, Row};
 
@@ -63,7 +63,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
      p.resume_min_percent, p.resume_max_percent, p.resume_min_seconds,
-     p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut";
+     p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut, p.library_views";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -409,7 +409,7 @@ impl Database {
                 hidden_home_sections = ?, step_back_seconds = ?,
                 step_on_seconds = ?, resume_rewind_seconds = ?, resume_min_percent = ?,
                 resume_max_percent = ?, resume_min_seconds = ?, resume_rules_per_kind = ?,
-                resume_rules_by_kind = ?, wide_gamut = ?
+                resume_rules_by_kind = ?, wide_gamut = ?, library_views = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -448,6 +448,7 @@ impl Database {
         .bind(preferences.resume_rules_per_kind)
         .bind(written_rules(&preferences.resume_rules_by_kind))
         .bind(preferences.wide_gamut.as_str())
+        .bind(written_views(&preferences.library_views))
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -532,6 +533,27 @@ fn read_rules(stored: &str) -> Vec<(LibraryKind, ResumeRules)> {
                 min_seconds: number()?,
             };
             Some((kind, rules))
+        })
+        .collect()
+}
+
+/// Writes how each library is laid out as `library:view` pairs.
+fn written_views(views: &[(LibraryId, LibraryView)]) -> String {
+    views
+        .iter()
+        .map(|(library, view)| format!("{}:{}", library.to_db_string(), view.as_str()))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Read back the same way, a part that says nothing sensible dropped: its
+/// library shows its posters again.
+fn read_views(stored: &str) -> Vec<(LibraryId, LibraryView)> {
+    stored
+        .split(',')
+        .filter_map(|part| {
+            let (library, view) = part.split_once(':')?;
+            Some((parse_id::<LibraryId>(library).ok()?, LibraryView::parse(view)?))
         })
         .collect()
 }
@@ -746,6 +768,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             resume_rules_by_kind: read_rules(&row.try_get::<String, _>("resume_rules_by_kind")?),
             wide_gamut: WideGamutChoice::parse(&row.try_get::<String, _>("wide_gamut")?)
                 .unwrap_or_default(),
+            library_views: read_views(&row.try_get::<String, _>("library_views")?),
         }
         .normalised(),
         created_at,
@@ -1268,6 +1291,43 @@ mod tests {
             .expect("exists");
         assert!(loaded.permissions.sees_the_whole_server());
         assert!(loaded.permissions.allowed_libraries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_layout_chosen_for_a_library_is_kept() {
+        let database = database().await;
+        let created = database
+            .create_user("reader", None, &Permissions::viewer())
+            .await
+            .expect("account created");
+        let films = database
+            .create_library("Films", LibraryKind::Movies, "en", &[])
+            .await
+            .expect("library created");
+        let series = database
+            .create_library("Series", LibraryKind::Series, "en", &[])
+            .await
+            .expect("library created");
+        let fresh = database.user(created.id).await.expect("read").expect("there");
+        assert!(
+            fresh.preferences.library_views.is_empty(),
+            "every library shows its posters until somebody chooses"
+        );
+
+        let chosen = Preferences {
+            library_views: vec![
+                (films.id, LibraryView::List),
+                (series.id, LibraryView::Thumbnails),
+            ],
+            ..Preferences::default()
+        };
+        database.save_preferences(created.id, &chosen).await.expect("saved");
+
+        let loaded = database.user(created.id).await.expect("read").expect("there");
+        assert_eq!(
+            loaded.preferences.library_views,
+            vec![(films.id, LibraryView::List), (series.id, LibraryView::Thumbnails)]
+        );
     }
 
     #[tokio::test]

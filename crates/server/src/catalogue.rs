@@ -336,6 +336,9 @@ struct BrowseParams {
     kind: Option<LibraryKind>,
     /// One letter, or the sign standing for everything that starts with none.
     initial: Option<String>,
+    /// Cards laid down, which want a wide picture beside their poster.
+    #[serde(default)]
+    wide: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -363,9 +366,9 @@ pub(crate) struct CardView {
     /// first moment rather than grey holes.
     color: Option<String>,
     poster: Vec<ImageView>,
-    /// A picture wider than it is tall, for the rows that lie a card down.
-    /// Empty everywhere else, and empty where there is nothing wide to show,
-    /// which such a row answers by falling back to the poster.
+    /// A picture wider than it is tall, for the rows and grids that lie a
+    /// card down. Empty everywhere else, and empty where there is nothing
+    /// wide to show, which such a row answers by falling back to the poster.
     wide: Vec<ImageView>,
     /// movie, series, season or episode. What a card offers depends on it: a
     /// film plays, a series is opened.
@@ -427,6 +430,7 @@ async fn works(
         watch_later_only: params.watch_later,
         library_kind: params.kind,
         catalogued_only: false,
+        wide: params.wide,
         // A letter nobody could mean is refused rather than quietly ignored:
         // a grid that answers everything to a narrowing looks broken.
         initial: params

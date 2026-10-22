@@ -10,11 +10,12 @@ use melyxar_app::AppState;
 use melyxar_core::id::LibraryId;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
-    Backdrop, DownmixMethod, HeaderButton, HomeSection, Preferences, SubtitleMode, ThemeMode,
-    WideGamutChoice,
+    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, Preferences, SubtitleMode,
+    ThemeMode, WideGamutChoice,
 };
 use melyxar_core::work::{ResumeRules, LEAST_MAX_PERCENT, MOST_MIN_PERCENT, MOST_MIN_SECONDS};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::error::{Result, ServerError};
 use crate::account::Viewer;
@@ -111,6 +112,9 @@ struct PreferencesView {
     wide_gamut: &'static str,
     /// Every choice offered for it, in the order a screen shows them.
     wide_gamut_choices: Vec<&'static str>,
+    /// How each library this person changed is laid out, by library. One
+    /// not named shows its posters.
+    library_views: BTreeMap<String, &'static str>,
     /// Every fold this server knows how to perform.
     downmix_methods: Vec<&'static str>,
     /// The languages the library actually holds, which is what a picker
@@ -191,6 +195,16 @@ struct PreferencesBody {
     resume_rules_by_kind: Option<Vec<KindRulesView>>,
     #[serde(default)]
     wide_gamut: Option<String>,
+    /// One library laid out anew, the others left as they were: two screens
+    /// changing two libraries at once each keep their own.
+    #[serde(default)]
+    library_view: Option<LibraryViewBody>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LibraryViewBody {
+    library: String,
+    view: String,
 }
 
 async fn read(
@@ -356,6 +370,15 @@ async fn write(
             })
             .collect::<Result<_>>()?;
     }
+    if let Some(given) = body.library_view {
+        let library = given
+            .library
+            .parse()
+            .map_err(|_| ServerError::invalid_input("no library goes by that id"))?;
+        let view = LibraryView::parse(&given.view)
+            .ok_or_else(|| ServerError::invalid_input("no layout goes by that name"))?;
+        chosen.library_views.push((library, view));
+    }
 
     let kept = melyxar_app::preferences::save(&state, who.id, chosen).await?;
     view(&state, &who, kept).await
@@ -502,6 +525,11 @@ async fn view(
         wide_gamut_choices: WideGamutChoice::every()
             .iter()
             .map(|choice| choice.as_str())
+            .collect(),
+        library_views: chosen
+            .library_views
+            .iter()
+            .map(|(library, view)| (library.to_db_string(), view.as_str()))
             .collect(),
         downmix_methods: DownmixMethod::every()
             .iter()
