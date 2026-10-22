@@ -243,6 +243,9 @@ pub struct EpisodeDetails {
     pub release_year: Option<i32>,
     pub runtime: Option<Millis>,
     pub community_rating: Option<f64>,
+    /// Who plays in this episode alone, the guest stars, and who directed
+    /// and wrote it. The regulars are the series' own credits.
+    pub credits: Vec<Credit>,
 }
 
 /// One person's part in a film.

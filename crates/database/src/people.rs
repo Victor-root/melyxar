@@ -95,9 +95,10 @@ impl Database {
     /// Every work of this server that credits a person, newest first, as
     /// cards for the one looking.
     ///
-    /// Credits hang on films and series, never on a season or an episode, so
-    /// what is met on its own is exactly what is asked for. A person credited
-    /// twice on one film, acting and directing, is one card.
+    /// A guest star is credited on an episode, and is shown by the series it
+    /// belongs to: an episode is not met on its own. A person credited twice
+    /// on one film, acting and directing, is one card, and a guest of three
+    /// episodes of one series is one card too.
     pub async fn works_crediting(
         &self,
         viewer: UserId,
@@ -110,11 +111,17 @@ impl Database {
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}
                FROM works w
-              WHERE w.id IN (SELECT work_id FROM credits WHERE person_id = ?)
+              WHERE (w.id IN (SELECT work_id FROM credits WHERE person_id = ?)
+                     OR w.id IN (SELECT season.parent_id
+                                   FROM credits c
+                                   JOIN works episode ON episode.id = c.work_id
+                                   JOIN works season ON season.id = episode.parent_id
+                                  WHERE c.person_id = ? AND episode.kind = 'episode'))
                 AND {}{inside}
               ORDER BY w.release_year IS NULL, w.release_year DESC, w.sort_title",
             met_on_its_own("w.")
         )))
+        .bind(person.to_db_string())
         .bind(person.to_db_string());
         for granted in within.iter().copied().flatten() {
             query = query.bind(granted.to_db_string());
@@ -295,6 +302,50 @@ mod tests {
                 .expect("read")
                 .is_empty(),
             "an account granted nothing reads nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_guest_star_is_shown_by_the_series_once_however_many_episodes() {
+        let (database, viewer, films, ada, written) = a_career().await;
+        let series = database
+            .create_work(films, WorkKind::Series, "Distant Signal", "distant signal", Some(2023))
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(films, series.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        for number in 1..=2 {
+            let episode = database
+                .create_child_work(
+                    films,
+                    season.id,
+                    number,
+                    WorkKind::Episode,
+                    &format!("Episode {number}"),
+                    &format!("episode {number}"),
+                )
+                .await
+                .expect("episode created");
+            database
+                .apply_identification(
+                    episode.id,
+                    &crediting(&format!("Episode {number}"), 2023, &[("Ada Moss", "actor")]),
+                    false,
+                )
+                .await
+                .expect("identified");
+        }
+
+        let career = database
+            .works_crediting(viewer, ada, None)
+            .await
+            .expect("read");
+        assert_eq!(
+            career.iter().map(|card| card.id).collect::<Vec<_>>(),
+            vec![series.id, written[3], written[1], written[0]],
+            "the series she came into, once, and never its episodes on their own"
         );
     }
 }

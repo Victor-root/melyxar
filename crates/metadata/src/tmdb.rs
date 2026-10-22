@@ -742,6 +742,12 @@ struct RawEpisode {
     runtime: Option<i64>,
     #[serde(default)]
     vote_average: Option<f64>,
+    /// Who plays in this episode and not in every other: what the series'
+    /// own cast leaves out.
+    #[serde(default)]
+    guest_stars: Vec<RawCast>,
+    #[serde(default)]
+    crew: Vec<RawCrew>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -860,11 +866,9 @@ fn person_from(raw: RawPerson) -> PersonDetails {
     }
 }
 
-fn details_from(raw: DetailsResponse, language: &str) -> Details {
-    let pictures = raw.images.unwrap_or_default();
-    let credits = raw.credits.unwrap_or_default();
-    let mut people: Vec<Credit> = credits
-        .cast
+/// The cast as they are billed, then the parts of the crew a page shows.
+fn credits_from(cast: Vec<RawCast>, crew: Vec<RawCrew>) -> Vec<Credit> {
+    let mut people: Vec<Credit> = cast
         .into_iter()
         .map(|person| Credit {
             external_id: person.id.to_string(),
@@ -878,29 +882,30 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
 
     // Only the parts a page actually shows are kept: a full crew runs to
     // hundreds of people and none of them are ever displayed.
-    people.extend(
-        credits
-            .crew
-            .into_iter()
-            .filter_map(|person| {
-                let role = match person.job.as_deref()? {
-                    "Director" => "director",
-                    "Screenplay" | "Writer" | "Story" => "writer",
-                    "Producer" => "producer",
-                    "Original Music Composer" => "composer",
-                    _ => return None,
-                };
-                Some(Credit {
-                    external_id: person.id.to_string(),
-                    name: person.name,
-                    role: role.to_string(),
-                    character: None,
-                    ordinal: 0,
-                    photo_path: person.profile_path,
-                })
-            })
-            .collect::<Vec<_>>(),
-    );
+    people.extend(crew.into_iter().filter_map(|person| {
+        let role = match person.job.as_deref()? {
+            "Director" => "director",
+            "Screenplay" | "Writer" | "Story" => "writer",
+            "Producer" => "producer",
+            "Original Music Composer" => "composer",
+            _ => return None,
+        };
+        Some(Credit {
+            external_id: person.id.to_string(),
+            name: person.name,
+            role: role.to_string(),
+            character: None,
+            ordinal: 0,
+            photo_path: person.profile_path,
+        })
+    }));
+    people
+}
+
+fn details_from(raw: DetailsResponse, language: &str) -> Details {
+    let pictures = raw.images.unwrap_or_default();
+    let credits = raw.credits.unwrap_or_default();
+    let people = credits_from(credits.cast, credits.crew);
 
     let trailers = raw
         .videos
@@ -1011,6 +1016,7 @@ fn season_from(raw: RawSeason, season_number: i32) -> SeasonDetails {
                     .filter(|minutes| *minutes > 0)
                     .map(|minutes| Millis::new(minutes * 60_000)),
                 community_rating: episode.vote_average.filter(|value| *value > 0.0),
+                credits: credits_from(episode.guest_stars, episode.crew),
             })
             .collect(),
     }
@@ -1419,6 +1425,27 @@ mod tests {
             ]
         );
         assert!(details("fr").season_lengths.is_empty(), "a film holds none");
+    }
+
+    #[test]
+    fn an_episode_names_its_guest_stars_and_who_made_it() {
+        let raw: RawSeason = serde_json::from_str(
+            r#"{"id": 9, "episodes": [{"id": 91, "episode_number": 1,
+                "guest_stars": [{"id": 5, "name": "Ada Moss", "character": "Nell", "order": 3}],
+                "crew": [
+                    {"id": 6, "name": "Ben Oak", "job": "Director"},
+                    {"id": 7, "name": "Someone Else", "job": "Gaffer"}
+                ]}]}"#,
+        )
+        .expect("the answer parses");
+        let episode = season_from(raw, 1).episodes.remove(0);
+        let parts: Vec<(&str, &str)> = episode
+            .credits
+            .iter()
+            .map(|credit| (credit.name.as_str(), credit.role.as_str()))
+            .collect();
+        assert_eq!(parts, [("Ada Moss", "actor"), ("Ben Oak", "director")]);
+        assert_eq!(episode.credits[0].character.as_deref(), Some("Nell"));
     }
 
     #[test]
