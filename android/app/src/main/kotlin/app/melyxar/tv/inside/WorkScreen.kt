@@ -131,9 +131,14 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             if (work.kind == "season") {
                 section("episodes", work.children) { Episodes(stringResource(R.string.tv_episodes), work.children, memory) }
             }
-            section("cast", work.cast) {
-                CardRow(stringResource(R.string.tv_cast), Icons.People, work.cast, key = { it.personId + it.role }) { credit ->
-                    CastMember(credit, Modifier.remembered(memory, "cast/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
+            for ((key, title, credits) in listOf(
+                Triple("cast", R.string.tv_cast, work.cast),
+                Triple("guests", R.string.tv_guest_stars, work.guestStars),
+            )) {
+                section(key, credits) {
+                    CardRow(stringResource(title), Icons.People, credits, key = { it.personId + it.role }) { credit ->
+                        CastMember(credit, Modifier.remembered(memory, "$key/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
+                    }
                 }
             }
             if (chaptered != null) {

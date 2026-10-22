@@ -332,6 +332,8 @@ data class Work(
     val number: Int? = null,
     val genres: List<String> = emptyList(),
     val cast: List<Credit> = emptyList(),
+    /** Who plays in this episode alone. Empty for anything else. */
+    val guestStars: List<Credit> = emptyList(),
     val poster: List<Picture> = emptyList(),
     val backdrop: List<Picture> = emptyList(),
     val logo: List<Picture> = emptyList(),
