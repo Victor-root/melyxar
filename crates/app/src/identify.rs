@@ -4267,7 +4267,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_film_with_a_long_cast_does_not_fetch_a_face_nobody_scrolls_to() {
+    async fn every_face_of_a_long_cast_is_fetched_as_the_page_shows_them_all() {
         let Some(picture) = a_real_poster() else {
             return;
         };
@@ -4301,13 +4301,8 @@ mod tests {
             .collect();
         assert_eq!(
             faces.len(),
-            18,
-            "a page shows the leads, not the call sheet"
-        );
-        assert!(
-            faces.contains(&"/face-0.jpg".to_string())
-                && !faces.contains(&"/face-39.jpg".to_string()),
-            "the faces fetched are the ones billed first: {faces:?}"
+            40,
+            "the last one billed is on the page as much as the first: {faces:?}"
         );
     }
 
