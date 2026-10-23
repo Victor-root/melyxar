@@ -48,11 +48,12 @@ RUST_MINUTES="20"
 
 # Which line of Node the interface is built with.
 #
-# The long term line, and its newest release rather than a version written
-# down here: a version written down is a version that stops being current the
-# week after, without anything saying so. Raised only when that line is
-# retired in its turn.
-NODE_MAJOR="24"
+# The newest long term line, and its newest release rather than a version
+# written down here: a version written down is a version that stops being
+# current the week after, without anything saying so. Raised each October,
+# when the line released that spring becomes the long term one: the line
+# before it then only receives security fixes.
+NODE_MAJOR="26"
 
 # Where Node is unpacked. Under /opt because it belongs to nothing the
 # distribution manages, and its commands are linked into /usr/local/bin,
