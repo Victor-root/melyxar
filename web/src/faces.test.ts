@@ -1,30 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { FACE_DRAWINGS, FACE_TURNS, faceArtOf } from "./faces";
+import { FACE_PICTURES, facePictureOf } from "./faces";
 
-describe("faceArtOf", () => {
-  it("gives the same name the same painting every time", () => {
-    expect(faceArtOf("Alice")).toEqual(faceArtOf("Alice"));
+/** What these names wear, which the television's FacesTest checks too. */
+const PICKED = ["comet", "eclipse", "orbits", "crystal", "comet", "rings", "comet"];
+
+describe("facePictureOf", () => {
+  it("gives the same name the same picture every time", () => {
+    expect(facePictureOf("Alice")).toBe(facePictureOf("Alice"));
   });
 
-  it("only ever picks a drawing and a turn that exist", () => {
-    for (const name of ["", "a", "Bruno", "Élodie", "名前", "tester 2"]) {
-      const art = faceArtOf(name);
-      expect(FACE_DRAWINGS).toContain(art.drawing);
-      expect(FACE_TURNS).toContain(art.turn);
-    }
-  });
-
-  it("spreads a crowd of names over every drawing and every turn", () => {
+  it("spreads a crowd of names over every picture", () => {
     const names = Array.from({ length: 400 }, (_, at) => `account ${at}`);
-    const drawings = new Set(names.map((name) => faceArtOf(name).drawing));
-    const turns = new Set(names.map((name) => faceArtOf(name).turn));
-    expect(drawings.size).toBe(FACE_DRAWINGS.length);
-    expect(turns.size).toBe(FACE_TURNS.length);
+    expect(new Set(names.map(facePictureOf)).size).toBe(FACE_PICTURES.length);
   });
 
-  it("tells names apart that differ only in case", () => {
-    const names = ["alice", "Alice", "ALICE", "aLICE"];
-    const paintings = new Set(names.map((name) => JSON.stringify(faceArtOf(name))));
-    expect(paintings.size).toBeGreaterThan(1);
+  it("picks what the television picks for the same names", () => {
+    expect(["Victor", "Élodie", "Zoë", "Marie-Hélène", "Bob", "", "🎬 Cinéma"].map(facePictureOf)).toEqual(
+      PICKED,
+    );
   });
 });

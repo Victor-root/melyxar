@@ -1,34 +1,26 @@
 /*
- * Which painting an account without a picture wears.
+ * Which picture an account without one of its own wears.
  *
- * Settled by its name alone, so the same account wears the same painting on
- * every screen and every device, and nothing has to be stored for it. Two
- * things are picked: the drawing, and how far round the colour wheel from the
- * accent it is painted, so a household reads as several different faces while
- * every one of them still follows the accent somebody chose.
+ * Settled by its name alone, so the same account wears the same picture on
+ * every screen and every device, the television included, and nothing has to
+ * be stored for it.
  */
 
-export const FACE_DRAWINGS = [
-  "planet",
-  "eclipse",
-  "rings",
-  "silk",
-  "horizon",
-  "record",
-  "nebula",
-  "orbits",
-] as const;
+import comet from "./face-pictures/comet.webp";
+import crystal from "./face-pictures/crystal.webp";
+import eclipse from "./face-pictures/eclipse.webp";
+import orbits from "./face-pictures/orbits.webp";
+import rings from "./face-pictures/rings.webp";
 
-export type FaceDrawing = (typeof FACE_DRAWINGS)[number];
+/** The pictures, in the order the name's hash picks from, which the
+ *  television's list follows too. */
+export const FACE_PICTURES = ["comet", "rings", "orbits", "crystal", "eclipse"] as const;
 
-/** Degrees round the colour wheel from the accent. The first is the accent
- *  itself; the rest are chosen to sit well beside it rather than evenly. */
-export const FACE_TURNS = [0, 170, 205, 40, 285, 325] as const;
+export type FacePicture = (typeof FACE_PICTURES)[number];
 
-export interface FaceArt {
-  drawing: FaceDrawing;
-  turn: number;
-}
+/** Where each one is served from, a name the build gives it so a browser may
+ *  keep it for good. */
+export const FACE_ADDRESSES: Record<FacePicture, string> = { comet, rings, orbits, crystal, eclipse };
 
 /** FNV-1a over the name's code points: small, fast and well spread. */
 function hashOf(name: string): number {
@@ -40,10 +32,6 @@ function hashOf(name: string): number {
   return hash;
 }
 
-export function faceArtOf(name: string): FaceArt {
-  const hash = hashOf(name);
-  return {
-    drawing: FACE_DRAWINGS[hash % FACE_DRAWINGS.length],
-    turn: FACE_TURNS[Math.floor(hash / FACE_DRAWINGS.length) % FACE_TURNS.length],
-  };
+export function facePictureOf(name: string): FacePicture {
+  return FACE_PICTURES[hashOf(name) % FACE_PICTURES.length];
 }
