@@ -2648,7 +2648,7 @@ melyxar-picture.player-video {
 .player-up-next {
   position: absolute;
   right: var(--gap-wide);
-  bottom: 22%;
+  bottom: var(--gap-wide);
   z-index: 3;
   width: min(620px, calc(100% - 2 * var(--gap-wide)));
   display: grid;
@@ -2661,6 +2661,12 @@ melyxar-picture.player-video {
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-raised);
   color: var(--text);
+}
+
+/* Low on the picture while the controls are away, and just above the bottom
+   strip while it shows, by its measured height as the subtitles are. */
+.player-stage:has(.player-overlay[data-away="no"]) .player-up-next {
+  bottom: calc(var(--controls-height, 0px) + var(--gap-wide));
 }
 
 .player-up-next p {
