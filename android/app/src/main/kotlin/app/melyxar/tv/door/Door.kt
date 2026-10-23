@@ -3,6 +3,7 @@ package app.melyxar.tv.door
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -66,12 +68,12 @@ import app.melyxar.server.Refusal
 import app.melyxar.server.Sessions
 import app.melyxar.server.who
 import app.melyxar.theme.MelyxarDisplay
+import app.melyxar.theme.facePictureOf
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.wantsLight
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.Ease
-import app.melyxar.tv.look.FacePainting
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalPictures
@@ -403,13 +405,18 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
     }
 }
 
-/** An account's own picture, or the painting the web gives it. */
+/** An account's own picture, or the one of Melyxar's the web gives it. */
 @Composable
 fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifier) {
     if (avatar != null) {
         ServerPicture(listOf(Picture(avatar)), across, modifier.size(across))
     } else {
-        FacePainting(name, modifier.size(across))
+        Image(
+            painterResource(facePictureOf(name).drawing),
+            contentDescription = null,
+            modifier = modifier.size(across),
+            contentScale = ContentScale.Crop,
+        )
     }
 }
 
