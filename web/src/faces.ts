@@ -6,7 +6,9 @@
  * be stored for it.
  */
 
+import aurora from "./face-pictures/aurora.webp";
 import comet from "./face-pictures/comet.webp";
+import crescent from "./face-pictures/crescent.webp";
 import crystal from "./face-pictures/crystal.webp";
 import eclipse from "./face-pictures/eclipse.webp";
 import orbits from "./face-pictures/orbits.webp";
@@ -14,13 +16,21 @@ import rings from "./face-pictures/rings.webp";
 
 /** The pictures, in the order the name's hash picks from, which the
  *  television's list follows too. */
-export const FACE_PICTURES = ["comet", "rings", "orbits", "crystal", "eclipse"] as const;
+export const FACE_PICTURES = ["comet", "rings", "orbits", "crystal", "eclipse", "aurora", "crescent"] as const;
 
 export type FacePicture = (typeof FACE_PICTURES)[number];
 
 /** Where each one is served from, a name the build gives it so a browser may
  *  keep it for good. */
-export const FACE_ADDRESSES: Record<FacePicture, string> = { comet, rings, orbits, crystal, eclipse };
+export const FACE_ADDRESSES: Record<FacePicture, string> = {
+  comet,
+  rings,
+  orbits,
+  crystal,
+  eclipse,
+  aurora,
+  crescent,
+};
 
 /** FNV-1a over the name's code points: small, fast and well spread. */
 function hashOf(name: string): number {
