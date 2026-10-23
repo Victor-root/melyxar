@@ -498,7 +498,7 @@
   border-radius: 7px;
 }
 
-/* A picture of somebody, or the painting of an account without one: the
+/* A picture of somebody, or Melyxar's own for an account without one: the
    frame it sits in stays the frame, and the picture fills it. */
 .face-picture {
   overflow: hidden;
@@ -510,23 +510,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-/*
- * The tints the paintings are made of, worked out from the accent turned
- * round the colour wheel by however far this account's painting asks. Each
- * keeps a little colour even when the accent has almost none, so a grey
- * accent still gives faces rather than smudges. The night is the same on a
- * white screen as on a dark one: it is a painting of the sky, not a surface.
- */
-.face-art {
-  --art-turn: 0;
-  --art-night: oklch(from var(--accent) 0.15 0.03 calc(h + var(--art-turn)));
-  --art-deep: oklch(from var(--accent) 0.34 max(calc(c * 0.8), 0.09) calc(h + var(--art-turn) - 8));
-  --art-base: oklch(from var(--accent) 0.6 max(c, 0.14) calc(h + var(--art-turn)));
-  --art-glow: oklch(from var(--accent) 0.72 max(c, 0.16) calc(h + var(--art-turn) + 18));
-  --art-light: oklch(from var(--accent) 0.93 max(calc(c * 0.45), 0.06) calc(h + var(--art-turn) + 10));
-  background: var(--art-night);
 }
 
 .cropper {
