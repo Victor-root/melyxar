@@ -16,6 +16,8 @@ enum class FacePicture(@DrawableRes val drawing: Int) {
     Orbits(R.drawable.face_orbits),
     Crystal(R.drawable.face_crystal),
     Eclipse(R.drawable.face_eclipse),
+    Aurora(R.drawable.face_aurora),
+    Crescent(R.drawable.face_crescent),
 }
 
 /** FNV-1a over the name's code points, as `for...of` walks them on the web. */

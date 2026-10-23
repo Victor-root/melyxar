@@ -10,12 +10,12 @@ class FacesTest {
         assertEquals(
             listOf(
                 FacePicture.Comet,
-                FacePicture.Eclipse,
                 FacePicture.Orbits,
-                FacePicture.Crystal,
+                FacePicture.Comet,
                 FacePicture.Comet,
                 FacePicture.Rings,
-                FacePicture.Comet,
+                FacePicture.Orbits,
+                FacePicture.Crescent,
             ),
             listOf("Victor", "Élodie", "Zoë", "Marie-Hélène", "Bob", "", "🎬 Cinéma").map(::facePictureOf),
         )
