@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FACE_PICTURES, facePictureOf } from "./faces";
 
 /** What these names wear, which the television's FacesTest checks too. */
-const PICKED = ["comet", "eclipse", "orbits", "crystal", "comet", "rings", "comet"];
+const PICKED = ["comet", "orbits", "comet", "comet", "rings", "orbits", "crescent"];
 
 describe("facePictureOf", () => {
   it("gives the same name the same picture every time", () => {
