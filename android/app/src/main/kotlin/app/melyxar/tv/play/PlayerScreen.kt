@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +46,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -397,7 +399,16 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                     first = upNextFirst,
                     onPlay = { playNext(it) },
                     onCancel = { declined = true },
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = Gutter, bottom = 120.dp),
+                    // Low on the picture while the controls are away, and just
+                    // above them while they show, by their measured height as
+                    // the words are.
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = Gutter, bottom = Gutter)
+                        .offset {
+                            val above = if (shown && menu !in FOOT_TAKERS) foot.reach + aboveTheFoot - Gutter.toPx() else 0f
+                            IntOffset(0, -above.coerceAtLeast(0f).roundToInt())
+                        },
                 )
             }
             when (val open = menu) {
