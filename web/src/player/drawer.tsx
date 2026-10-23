@@ -12,7 +12,7 @@
  * already on the page is a second of black while somebody waits.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
 import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
@@ -468,7 +468,11 @@ function Episodes({
 
   const down = Math.round(across * A_PICTURE_IS);
   return (
-    <Strip along={across} picture={down}>
+    <Strip
+      along={across}
+      picture={down}
+      opensOn={Math.max(0, episodes.findIndex(({ card }) => card.id === work.id))}
+    >
       {episodes.map(({ card, number, title }) => {
         /* The episode's still, which its season's list draws too: a poster
            is what an episode almost never has of its own. */
@@ -529,6 +533,7 @@ function Episodes({
 function Strip({
   along: card,
   picture,
+  opensOn,
   children,
 }: {
   /** How wide one card is, which is how far a press of the arrow steps. */
@@ -536,9 +541,23 @@ function Strip({
   /** How tall the picture on a card is, which is where the arrows sit: level
    *  with it rather than with the words underneath. */
   picture: number;
+  /** The card the row opens on, at its left edge: the episode playing, with
+   *  the ones after it beside it. Read once as it opens, and again for
+   *  another card, never while somebody moves it. */
+  opensOn?: number;
   children: React.ReactNode;
 }) {
   const row = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const element = row.current;
+    const first = element?.firstElementChild as HTMLElement | null;
+    const wanted =
+      opensOn === undefined ? null : (element?.children[opensOn] as HTMLElement | undefined);
+    if (element && first && wanted) {
+      element.scrollLeft = wanted.offsetLeft - first.offsetLeft;
+    }
+  }, [opensOn]);
   const [more, setMore] = useState({ back: false, on: false });
 
   const look = useCallback(() => {
