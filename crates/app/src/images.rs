@@ -477,19 +477,12 @@ pub async fn forget_picture(state: &AppState, work_id: WorkId, kind: PictureKind
     Ok(())
 }
 
-/// How many faces are worth fetching for one work.
-///
-/// Exactly what the cast row of a detail page shows. Fewer would leave empty
-/// circles among the faces; more would mean fetching pictures for names a
-/// provider lists and nobody displays, which for a long cast is fifty
-/// pictures per film.
-const FACES_FETCHED: usize = 18;
-
 /// Fetches the faces a page shows next to the cast.
 ///
-/// Only the actors, and only the first of them: nobody scrolls to the
-/// forty-third name, and a face already fetched for another film is never
-/// fetched again, since people are shared.
+/// Every actor, since the page shows the whole cast: a person's page lists
+/// every film that credits them, and a film page that stopped at its leads
+/// left them out of the very film their page led to. A face already fetched
+/// for another film is never fetched again, since people are shared.
 pub async fn store_person_photos<P>(
     state: &AppState,
     provider: &Arc<P>,
@@ -510,7 +503,6 @@ where
 
     let wanted: Vec<(String, String)> = cast
         .into_iter()
-        .take(FACES_FETCHED)
         .map(|person| {
             (
                 person.person_id.to_db_string(),
@@ -522,7 +514,7 @@ where
         return 0;
     }
 
-    // A film brings up to eighteen faces, and a face is mostly a wait on
+    // A film brings dozens of faces, and a face is mostly a wait on
     // somebody else's server. Fetched one after another they decide how long
     // naming a whole library takes, so several are in flight at once, bounded
     // by what the configuration allows for picture work: the bound is what

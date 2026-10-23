@@ -73,10 +73,6 @@ import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
 import { useTabPage } from "../tab-page";
 
-/** As many of the cast as the server prepares faces for: past this the names
- *  would show with an initial where the others have a picture. */
-const FACES_SHOWN = 18;
-
 /**
  * How wide the picture at the head of the page is drawn, in plain lengths the
  * browser can read before the stylesheet, which draws them: 150 points on a
@@ -658,7 +654,7 @@ function CastRow({ title, credits }: { title: string; credits: Work["cast"] }) {
     <section className="section">
       <RowHead mark={<PeopleIcon size={24} />} title={title} />
       <Row>
-        {credits.slice(0, FACES_SHOWN).map((credit, index) => (
+        {credits.map((credit, index) => (
           <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />
         ))}
       </Row>
