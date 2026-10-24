@@ -70,12 +70,22 @@ fun rememberInCredits(playback: Playback): State<Boolean> = produceState(false, 
  * again, and the end of the film leads back to where it came from.
  */
 @Composable
-fun UpNext(next: NextEpisode, first: FocusRequester, onPlay: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+fun UpNext(
+    next: NextEpisode,
+    /** Whether the count goes on: while the film plays, or once it is over.
+     *  A film paused holds it where it is. */
+    running: Boolean,
+    first: FocusRequester,
+    onPlay: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val palette = LocalPalette.current
     val shape = RoundedCornerShape(14.dp)
     var left by remember(next.id) { mutableIntStateOf(COUNT_FROM_S) }
     val play by rememberUpdatedState(onPlay)
-    LaunchedEffect(next.id) {
+    LaunchedEffect(next.id, running) {
+        if (!running) return@LaunchedEffect
         while (left > 0) {
             delay(1_000)
             left -= 1
