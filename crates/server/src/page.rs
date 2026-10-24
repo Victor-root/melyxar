@@ -822,9 +822,11 @@ async fn what_the_page_saw(
     // A viewer of this server, like every other route. Nothing here is worth
     // reading, but a journal anybody passing by can write into is a journal
     // that stops being worth reading too.
-    _: crate::account::Viewer,
+    crate::account::Viewer(viewer): crate::account::Viewer,
     Json(said): Json<FromThePage>,
 ) -> Result<Json<Written>> {
+    // Every account writes here, so each line says whose page saw it.
+    let account = tracing::field::display(&viewer.name);
     // The identifier is a name from outside: read as one, never used as one.
     // Written down as the page sent it only once it parses.
     let (session, source) = match Reading::named(said.session.as_deref(), said.source.as_deref())? {
@@ -838,6 +840,7 @@ async fn what_the_page_saw(
             began_at_second,
             first_segment,
         } => tracing::debug!(
+            account,
             session,
             source,
             playlist_said_second,
@@ -851,6 +854,7 @@ async fn what_the_page_saw(
             was_playing,
             moved_by,
         } => tracing::debug!(
+            account,
             session,
             source,
             from_second,
@@ -865,6 +869,7 @@ async fn what_the_page_saw(
             drawn_across,
             drawn_down,
         } => tracing::debug!(
+            account,
             session,
             source,
             across,
@@ -880,6 +885,7 @@ async fn what_the_page_saw(
             was_held_already,
             stretches,
         } => tracing::debug!(
+            account,
             session,
             source,
             asked_for_second,
@@ -898,6 +904,7 @@ async fn what_the_page_saw(
             ready_state,
             pictures_shown,
         } => tracing::debug!(
+            account,
             session,
             source,
             at_second,
@@ -913,6 +920,7 @@ async fn what_the_page_saw(
             at_second,
             waited_ms,
         } => tracing::debug!(
+            account,
             session,
             source,
             at_second,
@@ -930,6 +938,7 @@ async fn what_the_page_saw(
             ready_state,
             page_was_hidden,
         } => tracing::debug!(
+            account,
             session,
             source,
             at_second,
@@ -951,6 +960,7 @@ async fn what_the_page_saw(
             held_seconds,
             page_memory_mb,
         } => tracing::debug!(
+            account,
             session,
             source,
             at_second,
@@ -968,6 +978,7 @@ async fn what_the_page_saw(
             picture_behind_ms,
             worst_behind_ms,
         } => tracing::debug!(
+            account,
             session,
             source,
             at_second,
@@ -984,6 +995,7 @@ async fn what_the_page_saw(
             audio_starts_second,
             library_shift_second,
         } => tracing::debug!(
+            account,
             session,
             source,
             segment,
@@ -1013,6 +1025,7 @@ async fn what_the_page_saw(
             sound_on,
             page_changes,
         } => tracing::debug!(
+            account,
             session,
             source,
             over_ms,
@@ -1039,6 +1052,7 @@ async fn what_the_page_saw(
             because,
             browser_took_over,
         } => tracing::warn!(
+            account,
             session,
             source,
             because = cut_short(&because),
@@ -1046,6 +1060,7 @@ async fn what_the_page_saw(
             "the library gave up on this film"
         ),
         Seen::LibraryHiccup { because, segment } => tracing::debug!(
+            account,
             session,
             source,
             because = cut_short(&because),
@@ -1065,6 +1080,7 @@ async fn what_the_page_saw(
             stretches,
             error_code,
         } => tracing::debug!(
+            account,
             session,
             source,
             after_ms,
@@ -1089,6 +1105,7 @@ async fn what_the_page_saw(
             on_the_card,
             smoothly,
         } => tracing::debug!(
+            account,
             session,
             source,
             card = card.as_deref().map(cut_short),
@@ -1107,6 +1124,7 @@ async fn what_the_page_saw(
             ended,
             to,
         } => tracing::debug!(
+            account,
             session,
             source,
             moment = moment.as_word(),
@@ -1117,6 +1135,7 @@ async fn what_the_page_saw(
             "the next episode card"
         ),
         Seen::LoadingStage { stage, after_ms } => tracing::debug!(
+            account,
             session,
             source,
             stage = stage.as_word(),
@@ -1131,6 +1150,7 @@ async fn what_the_page_saw(
             empty_or_backwards,
             hidden,
         } => tracing::debug!(
+            account,
             session,
             source,
             cues,
@@ -1148,6 +1168,7 @@ async fn what_the_page_saw(
             shown,
             expected,
         } => tracing::debug!(
+            account,
             session,
             source,
             why = why.as_word(),
