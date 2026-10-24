@@ -73,6 +73,15 @@ export function qualityName(quality: Quality, asItIs: string): string {
   return quality.height === null ? written : `${quality.height}p · ${written}`;
 }
 
+/** A rung in a word or two, for the automatic quality to say where it
+ *  stands without a line too long for its row. */
+export function rungShortName(quality: Quality, original: string): string {
+  if (quality.bitrate === null) {
+    return original;
+  }
+  return quality.height === null ? qualityName(quality, original) : `${quality.height}p`;
+}
+
 /** Where the choice is kept, so a viewer sets it once rather than per film. */
 const REMEMBERED = "melyxar.quality";
 

@@ -18,7 +18,7 @@ import { LIGHTS, lightName, lightsThePicture } from "./picture-light";
 import type { Playback } from "./engine";
 import { Line, Menu, OffsetSlider, offsetSaid } from "./menu";
 import type { Surroundings } from "./overlay";
-import { ADAPTIVE, AS_IT_IS, QUALITIES, qualityName } from "./quality";
+import { ADAPTIVE, AS_IT_IS, QUALITIES, qualityName, rungShortName } from "./quality";
 import type { Wording } from "../readable";
 
 /**
@@ -400,7 +400,7 @@ function sheetFor(
                 playback.quality.key !== ADAPTIVE.key
                   ? qualityName(playback.quality, t("player.quality.as_it_is"))
                   : playback.adaptiveRung
-                    ? `${t("player.quality.adaptive")} · ${qualityName(playback.adaptiveRung, t("player.quality.as_it_is"))}`
+                    ? `${t("player.quality.adaptive_short")} · ${rungShortName(playback.adaptiveRung, t("player.quality.original_short"))}`
                     : t("player.quality.adaptive")
               }
               changed={playback.quality.key !== AS_IT_IS.key}
