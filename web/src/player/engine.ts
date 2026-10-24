@@ -29,12 +29,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { api, ApiError } from "../api";
 import { wasAbandoned } from "../asking";
 import type { HowItMoved, PlaybackPlan, PlaybackSession, Reading, WideGamutChoice } from "../api";
-import { qualityCalled, rememberQuality, storedQuality } from "./quality";
+import { qualityCalled } from "./quality";
 import type { Quality } from "./quality";
 import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec";
 import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
+import { useSettings } from "../settings";
 import { useAdaptiveQuality } from "./adapting";
 import { markTheOpening } from "./opening";
 import { watchTheReading, whatIsHeldAround } from "./watch";
@@ -355,10 +356,11 @@ export function usePlayback({
      asks for, which is the one the viewer just turned off. */
   const subtitlesOff = choiceSerial > 0 && subtitleId === null;
   const [speed, setSpeedState] = useState(1);
-  /* What the viewer asked the picture to be held to. Kept across films rather
-     than per film: somebody watching on a thin connection is on a thin
-     connection for the next one too. */
-  const [quality, setQualityState] = useState(storedQuality);
+  /* What the viewer asked the picture to be held to. Kept with the account
+     rather than per film or per device: the last choice made is the one the
+     next film opens with, wherever it is watched. */
+  const { quality: qualityKey, setQuality: keepQuality } = useSettings();
+  const quality = qualityCalled(qualityKey);
   /* Which codec a transcode is asked to come out in. "auto" leaves the choice
      to the usual negotiation, which is what nearly everyone wants nearly
      always; forcing one is for chasing a stutter. */
@@ -1253,11 +1255,7 @@ export function usePlayback({
   /* Remembered as it is chosen, not on the way in: what a player opens with
      is what the viewer left it on, and writing that back would be a decision
      nobody made. */
-  const setQuality = useCallback((key: string) => {
-    const chosen = qualityCalled(key);
-    setQualityState(chosen);
-    rememberQuality(chosen);
-  }, []);
+  const setQuality = useCallback((key: string) => keepQuality(qualityCalled(key).key), [keepQuality]);
 
   const setCodec = useCallback((key: string) => {
     const chosen = codecCalled(key);

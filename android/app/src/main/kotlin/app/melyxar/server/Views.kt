@@ -82,6 +82,9 @@ data class Preferences(
     /** How each library the account laid out anew is laid out, by library.
      *  One not named shows its posters. */
     val libraryViews: Map<String, String> = emptyMap(),
+    /** What the picture of a film is held to, the player's name for it, on
+     *  every device the account plays on. */
+    val playbackQuality: String = "auto",
 )
 
 /** A work as every row and grid shows it. */

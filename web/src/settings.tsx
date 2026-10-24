@@ -73,6 +73,7 @@ const STORED_BACKDROP_LIGHT = "melyxar.backdrop.light";
 const STORED_STEP_BACK = "melyxar.step.back";
 const STORED_STEP_ON = "melyxar.step.on";
 const STORED_LIBRARY_VIEWS = "melyxar.library.views";
+const STORED_QUALITY = "melyxar.quality";
 
 /** The red of the Melyxar theme, which needs none of the work below. */
 const THE_USUAL_ACCENT = "#c81e1e";
@@ -167,6 +168,10 @@ interface Settings {
   /** How each library is laid out, posters where nothing is said. */
   libraryViews: Record<string, LibraryView>;
   setLibraryView: (library: string, view: LibraryView) => void;
+  /** What the picture of a film is held to, by the player's name for it,
+   *  the same on every device the account plays on. */
+  quality: string;
+  setQuality: (key: string) => void;
   /** What the account chose, once the server has said. */
   adopt: (chosen: ViewerPreferences) => void;
   /** Whether the server has said, since the page was opened. */
@@ -281,6 +286,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [libraryViews, setLibraryViewsState] = useState(() =>
     viewsRead(safeRead(STORED_LIBRARY_VIEWS)),
   );
+  const [quality, setQualityState] = useState(() => safeRead(STORED_QUALITY) ?? "auto");
 
   // The theme is put on the document rather than passed down, so a stylesheet
   // can answer it without a single component knowing a colour.
@@ -483,6 +489,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     tellTheServer({ library_view: { library, view } });
   }, []);
 
+  const setQuality = useCallback((key: string) => {
+    safeWrite(STORED_QUALITY, key);
+    setQualityState(key);
+    tellTheServer({ playback_quality: key });
+  }, []);
+
   const adopt = useCallback((chosen: ViewerPreferences) => {
     const choice = languageChoiceOf(chosen.interface_language);
     rememberLanguageChoice(choice);
@@ -533,6 +545,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const views = viewsRead(viewsWritten(chosen.library_views));
     safeWrite(STORED_LIBRARY_VIEWS, viewsWritten(views));
     setLibraryViewsState(views);
+    safeWrite(STORED_QUALITY, chosen.playback_quality);
+    setQualityState(chosen.playback_quality);
     setAdopted(true);
   }, []);
 
@@ -579,6 +593,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setStepOn,
       libraryViews,
       setLibraryView,
+      quality,
+      setQuality,
       adopt,
       adopted,
       t: (key, values) => translate(language, key, values),
@@ -625,6 +641,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setStepOn,
       libraryViews,
       setLibraryView,
+      quality,
+      setQuality,
       adopt,
       adopted,
     ],

@@ -81,24 +81,3 @@ export function rungShortName(quality: Quality, original: string): string {
   }
   return quality.height === null ? qualityName(quality, original) : `${quality.height}p`;
 }
-
-/** Where the choice is kept, so a viewer sets it once rather than per film. */
-const REMEMBERED = "melyxar.quality";
-
-export function storedQuality(): Quality {
-  try {
-    return qualityCalled(window.localStorage.getItem(REMEMBERED));
-  } catch {
-    // A browser refusing storage is a browser that watches films perfectly
-    // well, so it gets the film as it is and nothing is said about it.
-    return AS_IT_IS;
-  }
-}
-
-export function rememberQuality(quality: Quality) {
-  try {
-    window.localStorage.setItem(REMEMBERED, quality.key);
-  } catch {
-    // The choice still holds for this sitting, which is what is being watched.
-  }
-}

@@ -1,7 +1,5 @@
 package app.melyxar.tv.play
 
-import android.content.Context
-import androidx.core.content.edit
 import java.util.Locale
 
 /**
@@ -57,18 +55,4 @@ fun Quality.shortName(original: String): String = when {
     bitrate == null -> original
     height == null -> name(original)
     else -> "${height}p"
-}
-
-/** The rung this television was left on, kept on it as the browser keeps
- *  its own: set once rather than for every film. */
-class KeptQuality(context: Context) {
-    private val kept = context.getSharedPreferences("player", Context.MODE_PRIVATE)
-
-    fun read(): Quality = qualityCalled(kept.getString(QUALITY, null))
-
-    fun keep(quality: Quality) = kept.edit { putString(QUALITY, quality.key) }
-
-    private companion object {
-        const val QUALITY = "quality"
-    }
 }

@@ -59,6 +59,8 @@ import app.melyxar.server.NextEpisode
 import app.melyxar.server.Preferences
 import app.melyxar.server.Segment
 import app.melyxar.tv.inside.LocalAccountPreferences
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import app.melyxar.tv.inside.LocalMarks
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
@@ -118,12 +120,26 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val api = LocalServer.current
     val scope = rememberCoroutineScope()
     val marks = LocalMarks.current
-    val chosen = LocalAccountPreferences.current.now ?: Preferences()
+    val preferences = LocalAccountPreferences.current
+    val chosen = preferences.now ?: Preferences()
     val steps = Steps(chosen.stepBackSeconds, chosen.stepOnSeconds)
     val source = play.source
     val work = rememberLoaded("work:${play.work}") { work(play.work) }.value.ready
     val playback = remember(play) {
-        source?.let { Playback(context, api, play.work, it, play.from, scope, onStopped = onDone, onLeft = marks::rowsHaveMoved) }
+        source?.let {
+            Playback(
+                context, api, play.work, it, play.from, scope,
+                startingQuality = qualityCalled(chosen.playbackQuality),
+                keepQuality = { quality ->
+                    preferences.change(
+                        { held -> held.copy(playbackQuality = quality.key) },
+                        buildJsonObject { put("playback_quality", quality.key) },
+                    )
+                },
+                onStopped = onDone,
+                onLeft = marks::rowsHaveMoved,
+            )
+        }
     }
     DisposableEffect(playback) { onDispose { playback?.leave() } }
     if (playback == null) {

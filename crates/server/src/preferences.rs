@@ -10,8 +10,8 @@ use melyxar_app::AppState;
 use melyxar_core::id::LibraryId;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::user::{
-    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, Preferences, SubtitleMode,
-    ThemeMode, WideGamutChoice,
+    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, PlaybackQuality, Preferences,
+    SubtitleMode, ThemeMode, WideGamutChoice,
 };
 use melyxar_core::work::{ResumeRules, LEAST_MAX_PERCENT, MOST_MIN_PERCENT, MOST_MIN_SECONDS};
 use serde::{Deserialize, Serialize};
@@ -112,6 +112,9 @@ struct PreferencesView {
     wide_gamut: &'static str,
     /// Every choice offered for it, in the order a screen shows them.
     wide_gamut_choices: Vec<&'static str>,
+    /// What the picture of a film is held to, the player's name for it, on
+    /// every device this person plays on.
+    playback_quality: &'static str,
     /// How each library this person changed is laid out, by library. One
     /// not named shows its posters.
     library_views: BTreeMap<String, &'static str>,
@@ -195,6 +198,8 @@ struct PreferencesBody {
     resume_rules_by_kind: Option<Vec<KindRulesView>>,
     #[serde(default)]
     wide_gamut: Option<String>,
+    #[serde(default)]
+    playback_quality: Option<String>,
     /// One library laid out anew, the others left as they were: two screens
     /// changing two libraries at once each keep their own.
     #[serde(default)]
@@ -343,6 +348,10 @@ async fn write(
         chosen.wide_gamut = WideGamutChoice::parse(&choice).ok_or_else(|| {
             ServerError::invalid_input("no choice about wide gamut colour goes by that name")
         })?;
+    }
+    if let Some(choice) = body.playback_quality {
+        chosen.playback_quality = PlaybackQuality::parse(&choice)
+            .ok_or_else(|| ServerError::invalid_input("no quality goes by that name"))?;
     }
     // Brought into range when kept, like the banner.
     if let Some(seconds) = body.step_back_seconds {
@@ -526,6 +535,7 @@ async fn view(
             .iter()
             .map(|choice| choice.as_str())
             .collect(),
+        playback_quality: chosen.playback_quality.as_str(),
         library_views: chosen
             .library_views
             .iter()
