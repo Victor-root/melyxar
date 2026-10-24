@@ -396,6 +396,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             announced?.let {
                 UpNext(
                     it,
+                    running = playing || ended,
                     first = upNextFirst,
                     onPlay = { playNext(it) },
                     onCancel = { declined = true },
