@@ -2650,9 +2650,14 @@ melyxar-picture.player-video {
   right: var(--gap-wide);
   bottom: var(--gap-wide);
   z-index: 3;
-  width: min(620px, calc(100% - 2 * var(--gap-wide)));
+  width: min(660px, calc(100% - 2 * var(--gap-wide)));
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "still words"
+    "actions words";
+  align-items: start;
   gap: 12px 18px;
   padding: 18px 20px;
   border-radius: 14px;
@@ -2674,7 +2679,7 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-still {
-  align-self: center;
+  grid-area: still;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-card);
   overflow: hidden;
@@ -2688,6 +2693,7 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-words {
+  grid-area: words;
   min-width: 0;
   display: grid;
   align-content: start;
@@ -2698,10 +2704,14 @@ melyxar-picture.player-video {
   font-size: 0.9rem;
   line-height: 1.45;
   color: var(--text-soft);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+}
+
+.player-up-next-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: -4px;
 }
 
 .player-up-next-label {
@@ -2720,20 +2730,59 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-count {
-  font-size: 0.9rem;
-  color: var(--text-soft);
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.player-up-next-count svg {
+  position: absolute;
+  inset: 0;
+  rotate: -90deg;
+}
+
+.player-up-next-count circle {
+  fill: none;
+  stroke-width: 3.2;
+}
+
+.player-up-next-track {
+  stroke: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+/* Going out a second at a time, smoothly, and holding where it is while
+   the film is paused. */
+.player-up-next-left {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
 }
 
 .player-up-next-actions {
-  grid-column: 1 / -1;
+  grid-area: actions;
   display: flex;
-  justify-content: flex-end;
   gap: 10px;
 }
 
-/* On a phone, the still above the words rather than beside them. */
+.player-up-next-actions .button {
+  flex: 1 1 auto;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+/* On a phone, one column: the still, what it is about, then the buttons. */
 @media (max-width: 700px) {
   .player-up-next {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      "still"
+      "words"
+      "actions";
   }
 }

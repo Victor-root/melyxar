@@ -15,7 +15,17 @@ import { useShownPicture } from "../components/picture";
 export const COUNT_FROM = 10;
 
 /** How wide the still is drawn, as the stylesheet draws it. */
-const STILL_ROOM = "(max-width: 700px) 90vw, 240px";
+const STILL_ROOM = "(max-width: 700px) 90vw, 272px";
+
+/** The ring the count is drawn in: its radius, and how long it is round. */
+const RING = 17;
+const ROUND = 2 * Math.PI * RING;
+
+/** How much of the ring is still lit with this many seconds left: all of it
+ *  at the start of the count, none once it is over. */
+export function shareLeft(left: number): number {
+  return Math.min(Math.max(left / COUNT_FROM, 0), 1);
+}
 
 /** Whether the next episode is offered: one there is, not turned down, and
  *  the film in its credits or over. */
@@ -78,8 +88,8 @@ export function UpNext({
 
   return (
     <section className="player-up-next" aria-live="polite">
-      {/* Its still and what it is about, as its line on the page of the
-          season shows it. */}
+      {/* Its still with the buttons under it, and beside them what it is
+          about, whole, the card growing with it rather than cutting it. */}
       <div className="player-up-next-still">
         {picture && (
           <img
@@ -93,10 +103,30 @@ export function UpNext({
         )}
       </div>
       <div className="player-up-next-words">
-        <p className="player-up-next-label">{t("player.next_episode")}</p>
+        <div className="player-up-next-head">
+          <p className="player-up-next-label">{t("player.next_episode")}</p>
+          {/* The seconds left, and a ring of the accent going out with them. */}
+          <span
+            className="player-up-next-count"
+            role="timer"
+            aria-label={t("player.up_next.in", { seconds: Math.max(left, 0) })}
+          >
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <circle className="player-up-next-track" cx="20" cy="20" r={RING} />
+              <circle
+                className="player-up-next-left"
+                cx="20"
+                cy="20"
+                r={RING}
+                strokeDasharray={ROUND}
+                strokeDashoffset={ROUND * (1 - shareLeft(left))}
+              />
+            </svg>
+            <span aria-hidden="true">{Math.max(left, 0)}</span>
+          </span>
+        </div>
         {name && <p className="player-up-next-name">{name}</p>}
         {next.overview && <p className="player-up-next-overview">{next.overview}</p>}
-        <p className="player-up-next-count">{t("player.up_next.in", { seconds: Math.max(left, 0) })}</p>
       </div>
       <div className="player-up-next-actions">
         <button type="button" className="button button-accent" onClick={() => leave(onPlay)}>
