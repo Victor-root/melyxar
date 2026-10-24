@@ -37,7 +37,7 @@ export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
             <h1>{t("requests.title")}</h1>
           </div>
           <div className="browse-bar">
-            <nav className="browse-piece music-tabs" aria-label={t("requests.title")}>
+            <nav className="browse-piece request-tabs" aria-label={t("requests.title")}>
               {(
                 [
                   ["/requests", "requests.tab_ask", true],
