@@ -5,7 +5,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +31,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -48,8 +48,6 @@ import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
-import app.melyxar.tv.look.boxShadow
-import app.melyxar.tv.look.shadowRaised
 import kotlinx.coroutines.delay
 
 /** How many seconds the next episode is announced before it starts. */
@@ -58,6 +56,9 @@ private const val COUNT_FROM_S = 10
 /** How wide the card is, and the still at its left. */
 private val CARD_WIDE = 740.dp
 private val STILL_WIDE = 320.dp
+
+/** What the card stands on: the shade of the player's sheets. */
+private val SHADE = Color.Black.copy(alpha = 0.72f)
 
 /** How wide the ring of the count is, and how thick its line. */
 private val RING_WIDE = 44.dp
@@ -111,10 +112,12 @@ fun UpNext(
     Row(
         modifier = modifier
             .width(CARD_WIDE)
-            .boxShadow(shape, palette.shadowRaised)
+            // The shade the sheets of the player stand on, the film showing
+            // through it, and no rim or shadow of its own. Nothing blurred:
+            // the film is drawn on a surface of its own that nothing over it
+            // can blur, and a flat shade costs nothing to draw.
             .clip(shape)
-            .background(palette.surfaceRaised)
-            .border(1.dp, palette.border, shape)
+            .background(SHADE)
             .padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {

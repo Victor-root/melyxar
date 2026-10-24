@@ -2657,10 +2657,12 @@ melyxar-picture.player-video {
   gap: 12px 18px;
   padding: 18px 20px;
   border-radius: 14px;
-  background: color-mix(in srgb, var(--surface-deep) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-raised);
+  /* The glass the sheets of the player are made of, the film showing
+     through it, and no rim or shadow of its own: the same blur over a small
+     card costs a fraction of what the sheets' does over the width of the
+     screen. */
+  background: var(--player-panel);
+  backdrop-filter: blur(18px);
   color: var(--text);
 }
 
