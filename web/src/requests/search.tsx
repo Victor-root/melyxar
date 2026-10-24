@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { refusalAbout, useAsked } from "../asking";
 import { SearchIcon } from "../icons";
+import { COARSE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { requestsApi } from "./api";
 import type { Found } from "./api";
@@ -22,6 +23,7 @@ const ASKED_AFTER_MS = 450;
 
 export function AskSearch() {
   const { t, language } = useSettings();
+  const touch = useMediaQuery(COARSE);
   const [parameters, setParameters] = useSearchParams();
   const words = parameters.get("query") ?? "";
   const [typed, setTyped] = useState(words);
@@ -55,7 +57,10 @@ export function AskSearch() {
         <SearchIcon size={20} />
         <input
           type="search"
-          autoFocus
+          /* Ready to type into where there is a keyboard. On a touch screen
+             the keyboard would rise over the page the moment it opens,
+             before anybody asked to type. */
+          autoFocus={!touch}
           value={typed}
           onChange={(event) => setTyped(event.target.value)}
           placeholder={t("requests.search_placeholder")}
