@@ -37,11 +37,15 @@ type Say = (key: string, values?: Record<string, string | number>) => string;
 
 export function UpNext({
   next,
+  running,
   t,
   onPlay,
   onCancel,
 }: {
   next: NextEpisode;
+  /** Whether the count goes on: while the film plays, or once it is over. A
+      film paused holds it where it is. */
+  running: boolean;
   t: Say;
   onPlay: () => void;
   onCancel: () => void;
@@ -53,9 +57,12 @@ export function UpNext({
   const { picture, itDidNotLoad } = useShownPicture(next.still);
 
   useEffect(() => {
+    if (!running) {
+      return;
+    }
     const timer = window.setInterval(() => setLeft((seconds) => seconds - 1), 1000);
     return () => window.clearInterval(timer);
-  }, [next.id]);
+  }, [next.id, running]);
 
   useEffect(() => {
     if (left <= 0) {
