@@ -1,15 +1,17 @@
 package app.melyxar.tv.play
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -25,9 +27,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,8 +56,12 @@ import kotlinx.coroutines.delay
 private const val COUNT_FROM_S = 10
 
 /** How wide the card is, and the still at its left. */
-private val CARD_WIDE = 640.dp
-private val STILL_WIDE = 240.dp
+private val CARD_WIDE = 740.dp
+private val STILL_WIDE = 320.dp
+
+/** How wide the ring of the count is, and how thick its line. */
+private val RING_WIDE = 44.dp
+private val RING_LINE = 3.5.dp
 
 /** How often the film is looked at for its credits. */
 private const val LOOKED_AT_EVERY_MS = 500L
@@ -93,7 +106,9 @@ fun UpNext(
         play()
     }
     BackHandler(onBack = onCancel)
-    Column(
+    // Its still with the buttons under it, and beside them what it is about,
+    // whole, the card growing with it rather than cutting it.
+    Row(
         modifier = modifier
             .width(CARD_WIDE)
             .boxShadow(shape, palette.shadowRaised)
@@ -101,11 +116,9 @@ fun UpNext(
             .background(palette.surfaceRaised)
             .border(1.dp, palette.border, shape)
             .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        // Its still and what it is about, as its line on the page of the
-        // season shows it.
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(STILL_WIDE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(
                 Modifier
                     .size(STILL_WIDE, STILL_WIDE * 9 / 16)
@@ -114,25 +127,60 @@ fun UpNext(
             ) {
                 ServerPicture(next.still, STILL_WIDE, Modifier.matchParentSize())
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(stringResource(R.string.tv_next_episode), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = palette.textFaint)
-                Text(
-                    whichEpisode(next.season, next.episode, next.title.orEmpty()) ?: next.title.orEmpty(),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                next.overview?.let {
-                    Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = palette.textSoft, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                }
-                Text(stringResource(R.string.tv_next_in, left), fontSize = 14.sp, color = palette.textSoft)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AccentButton(stringResource(R.string.tv_play_now), onPlay, Modifier.focusRequester(first), icon = null)
+                PlainButton(stringResource(R.string.tv_cancel), onCancel)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
-            AccentButton(stringResource(R.string.tv_play_now), onPlay, Modifier.focusRequester(first))
-            PlainButton(stringResource(R.string.tv_cancel), onCancel)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.tv_next_episode),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.textFaint,
+                    modifier = Modifier.weight(1f),
+                )
+                Countdown(left, stringResource(R.string.tv_next_in, left))
+            }
+            Text(
+                whichEpisode(next.season, next.episode, next.title.orEmpty()) ?: next.title.orEmpty(),
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            next.overview?.let {
+                Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = palette.textSoft)
+            }
         }
+    }
+}
+
+/** The seconds left, in a ring of the accent going out with them a second at
+ *  a time, smoothly. */
+@Composable
+private fun Countdown(left: Int, said: String) {
+    val palette = LocalPalette.current
+    val share by animateFloatAsState(
+        (left.toFloat() / COUNT_FROM_S).coerceIn(0f, 1f),
+        animationSpec = tween(1_000, easing = LinearEasing),
+        label = "count",
+    )
+    Box(
+        Modifier
+            .size(RING_WIDE)
+            .semantics { contentDescription = said }
+            .drawBehind {
+                val line = RING_LINE.toPx()
+                val inset = Offset(line / 2, line / 2)
+                val round = Size(size.width - line, size.height - line)
+                drawArc(palette.text.copy(alpha = 0.12f), 0f, 360f, false, inset, round, style = Stroke(line))
+                drawArc(palette.accent, -90f, 360f * share, false, inset, round, style = Stroke(line, cap = StrokeCap.Round))
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(left.coerceAtLeast(0).toString(), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = palette.text)
     }
 }
