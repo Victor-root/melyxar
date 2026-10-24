@@ -72,6 +72,9 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
     val back = { onMenu(menu.from) }
     val placed = modifier.padding(end = Gutter, bottom = 124.dp)
     val asItIs = stringResource(R.string.tv_quality_as_it_is)
+    val adaptive = stringResource(R.string.tv_quality_adaptive)
+    val adaptiveShort = stringResource(R.string.tv_quality_adaptive_short)
+    val originalShort = stringResource(R.string.tv_quality_original_short)
     when (menu) {
         Menu.Audio -> ChoiceList(
             title = stringResource(R.string.tv_audio),
@@ -180,7 +183,10 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             val wideGamut = plan.wideGamut
             val lines = listOfNotNull(
                 Menu.Speed to speedName(playback.speed),
-                Menu.Quality to playback.quality.name(asItIs),
+                Menu.Quality to when {
+                    playback.quality != ADAPTIVE -> playback.quality.name(asItIs)
+                    else -> playback.adaptiveRung?.let { "$adaptiveShort · ${it.shortName(originalShort)}" } ?: adaptive
+                },
                 wideGamut?.let {
                     Menu.WideGamut to stringResource(if (it.converted) R.string.tv_wide_gamut_converted else R.string.tv_wide_gamut_kept)
                 },
@@ -212,7 +218,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
         )
         Menu.Quality -> ChoiceList(
             title = settingName(menu),
-            choices = QUALITIES.map { it.name(asItIs) },
+            choices = QUALITIES.map { if (it == ADAPTIVE) adaptive else it.name(asItIs) },
             chosen = QUALITIES.indexOf(playback.quality),
             onChoose = { playback.chooseQuality(QUALITIES[it]) },
             onClose = back,

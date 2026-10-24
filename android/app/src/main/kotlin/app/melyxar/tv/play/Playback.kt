@@ -47,8 +47,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import java.io.IOException
+import kotlin.math.roundToLong
 
 /** How often the server is told where the film is, as the web tells it. */
 private const val REPORT_EVERY_MS = 10_000L
@@ -63,6 +66,14 @@ private const val STILL_HERE_EVERY_MS = 30_000L
 /** How often a playing film is looked at for standing still at a hole in
  *  its sound. */
 private const val LOOKED_FOR_A_HOLE_EVERY_MS = 500L
+
+/** A segment smaller than this arrives too fast to be timed fairly. */
+private const val TIMED_FROM_BYTES = 64 * 1024
+
+/** A wait this soon after the film opened or jumped is the film arriving,
+ *  not the connection failing it. */
+private const val OPENING_MS = 5_000L
+private const val AFTER_A_JUMP_MS = 4_000L
 
 /** The speeds a film can be played at, as the web's player offers them. */
 val SPEEDS = listOf(0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
@@ -130,6 +141,28 @@ class Playback(
     /** What the picture is held to, as this television was left. */
     var quality by mutableStateOf(keptQuality.read())
         private set
+
+    /** The rung the automatic quality stands on, while it is the one chosen. */
+    var adaptiveRung by mutableStateOf<Quality?>(null)
+        private set
+    private var course: Course? = null
+    private var measuredSpeed: Speed? = null
+
+    /** When the film opened last started playing, and when it was last
+     *  moved, to tell a stall from the film arriving. */
+    private var playingSince: Long? = null
+    private var jumpedAt = 0L
+
+    /** What the film is fetched with, each segment timed for the automatic
+     *  quality. */
+    private val timedHttp = api.http.newBuilder()
+        .eventListenerFactory { TimedSegments { bytes, flowingMs -> scope.launch { heardSegment(bytes, flowingMs) } } }
+        .build()
+
+    /** What the server is asked to hold the picture to: the viewer's rung, or
+     *  the one the automatic quality stands on. */
+    private val held: Quality
+        get() = if (quality == ADAPTIVE) adaptiveRung ?: ADAPTIVE_RUNGS[UNMEASURED_RUNG] else quality
 
     private val keptLight = KeptLight(context)
 
@@ -208,6 +241,7 @@ class Playback(
     init {
         scope.launch {
             try {
+                if (quality == ADAPTIVE) measureTheConnection()
                 clock.mark("screen open, measuring the device")
                 val asking = asked(TrackChoice.Unsaid)
                 clock.mark("device measured, asking the plan")
@@ -225,7 +259,7 @@ class Playback(
     private fun newPlayer(): ExoPlayer {
         val player = ExoPlayer.Builder(context, DecodedSound(context))
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(api.http)))
+                DefaultMediaSourceFactory(DefaultDataSource.Factory(context, OkHttpDataSource.Factory(timedHttp)))
                     .setLoadErrorHandlingPolicy(RidesOutARestart()),
             )
             .setAudioAttributes(sound, true)
@@ -267,7 +301,13 @@ class Playback(
                 if (!timeline.isEmpty) reached(LoadingStage.ManifestParsed)
             }
 
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) jumpedAt = SystemClock.elapsedRealtime()
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY && playingSince == null) playingSince = SystemClock.elapsedRealtime()
+                if (state == Player.STATE_BUFFERING) stalled()
                 if (state == Player.STATE_READY || state == Player.STATE_ENDED) reached(LoadingStage.Done)
                 // Waiting again in the middle of a film the server rebuilds,
                 // after a jump or a stall: counted again from what it says.
@@ -296,7 +336,7 @@ class Playback(
     /** The subtitle the server paints into the film, if any. */
     private val paintedChoice: TrackChoice get() = painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid
 
-    private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, quality), audio, subtitle, wideGamut)
+    private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, held), audio, subtitle, wideGamut)
 
     /** Plays a plan from [at] seconds: the file itself, or a film rebuilt
      *  from there, paused unless [going]. */
@@ -306,6 +346,7 @@ class Playback(
             Log.d(SOUND_LOG, "plan: ${plan.method}, audio ${plan.audio.firstOrNull { it.id == plan.chosenAudioId }?.codec}")
         }
         closeTheStream()
+        playingSince = null
         val address = if (plan.method == "direct_play") {
             api.address(plan.url)
         } else {
@@ -363,7 +404,85 @@ class Playback(
         }
         quality = chosen
         keptQuality.keep(chosen)
-        again(paintedChoice)
+        if (chosen == ADAPTIVE) {
+            scope.launch {
+                measureTheConnection()
+                again(paintedChoice)
+            }
+        } else {
+            course = null
+            adaptiveRung = null
+            again(paintedChoice)
+        }
+    }
+
+    /** Measures the connection before the film is asked for at the rung it
+     *  carries: asking first and correcting after would open it twice. */
+    private suspend fun measureTheConnection() {
+        val speed = connectionSpeed(api)
+        // Another rung chosen while it was measured.
+        if (quality != ADAPTIVE) return
+        measuredSpeed = speed?.let { Speed(it, it) }
+        val first = speed?.let(::rungFor) ?: UNMEASURED_RUNG
+        course = Course(first, SystemClock.elapsedRealtime())
+        adaptiveRung = ADAPTIVE_RUNGS[first]
+        tellOfTheRung("measured", null, first)
+    }
+
+    private fun heardSegment(bytes: Long, flowingMs: Double) {
+        val current = course ?: return
+        if (bytes < TIMED_FROM_BYTES || flowingMs <= 0) return
+        val seconds = flowingMs / 1000
+        val speed = measuredSpeed.withMeasure(bytes * 8 / seconds, seconds)
+        measuredSpeed = speed
+        rememberSpeed(speed.believed)
+        course = current.copy(measured = current.measured + 1)
+        consider()
+    }
+
+    /** The film stopped to wait for what has not arrived, other than while it
+     *  opens or right after a jump. */
+    private fun stalled() {
+        val current = course ?: return
+        val since = playingSince ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (!player.playWhenReady || now - since < OPENING_MS || now - jumpedAt < AFTER_A_JUMP_MS) return
+        course = current.copy(stalls = current.stalls + now)
+        consider()
+    }
+
+    /** Moves the rung when it has to, opening the film again where it is. */
+    private fun consider() {
+        val current = course ?: return
+        val now = SystemClock.elapsedRealtime()
+        val film = plan?.film?.let { Film(it.picture?.bitrate ?: it.overallBitrate, it.picture?.height) }
+        val heldAhead = (player.bufferedPosition - player.currentPosition) / 1000.0
+        val move = nextMove(current, measuredSpeed?.believed, heldAhead, now, film) ?: return
+        course = current.afterMoving(move, now)
+        adaptiveRung = ADAPTIVE_RUNGS[move.rung]
+        tellOfTheRung(move.because.word, current.rung, move.rung)
+        again(paintedChoice, going = player.playWhenReady)
+    }
+
+    /** Writes into the journal the rung taken, and why, as the web player does. */
+    private fun tellOfTheRung(why: String, from: Int?, to: Int) {
+        val taken = ADAPTIVE_RUNGS[to]
+        val fact = buildJsonObject {
+            put("source", source)
+            put("saw", "quality_adapted")
+            put("why", why)
+            measuredSpeed?.let { put("measured_kbps", (it.believed / 1000).roundToLong()) }
+            from?.let { ADAPTIVE_RUNGS[it].bitrate }?.let { put("from_kbps", it / 1000) }
+            taken.bitrate?.let { put("to_kbps", it / 1000) }
+            taken.height?.let { put("to_height", it) }
+        }
+        scope.launch {
+            try {
+                api.tellTheJournal(fact)
+            } catch (_: IOException) {
+                // Only the journal goes without it.
+            }
+        }
     }
 
     fun chooseWideGamut(choice: String?) {

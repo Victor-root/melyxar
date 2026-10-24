@@ -13,6 +13,14 @@ class QualityTest {
     }
 
     @Test
+    fun saysARungOfTheAutomaticQualityInAWordOrTwo() {
+        assertEquals("40 Mb/s", ADAPTIVE_RUNGS.first { it.bitrate == 40_000_000L }.name("Original"))
+        assertEquals("720p", ADAPTIVE_RUNGS.first { it.bitrate == 2_000_000L }.shortName("Origine"))
+        assertEquals("40 Mb/s", ADAPTIVE_RUNGS.first { it.bitrate == 40_000_000L }.shortName("Origine"))
+        assertEquals("Origine", ADAPTIVE_RUNGS.last().shortName("Origine"))
+    }
+
+    @Test
     fun fallsBackToTheFilmAsItIs() {
         assertEquals(AS_IT_IS, qualityCalled(null))
         assertEquals(AS_IT_IS, qualityCalled("4k-100"))

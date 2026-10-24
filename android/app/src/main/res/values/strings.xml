@@ -77,6 +77,9 @@
     <string name="tv_speed">Speed</string>
     <string name="tv_quality">Quality</string>
     <string name="tv_quality_as_it_is">Original quality</string>
+    <string name="tv_quality_adaptive">Automatic</string>
+    <string name="tv_quality_adaptive_short">Auto</string>
+    <string name="tv_quality_original_short">Original</string>
     <string name="tv_wide_gamut">HDR</string>
     <string name="tv_wide_gamut_kept">Kept</string>
     <string name="tv_wide_gamut_converted">Converted to SDR</string>

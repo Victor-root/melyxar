@@ -21,6 +21,9 @@ data class Quality(
 /** The rungs, best first, the same as the web's. */
 val QUALITIES = listOf(
     Quality("auto", null, null),
+    // Not a rung either: the rung chosen for the connection, and changed
+    // with it while the film plays (see Adaptive.kt).
+    Quality("adaptive", null, null),
     Quality("1080p-20", 1080, 20_000_000),
     Quality("1080p-10", 1080, 10_000_000),
     Quality("1080p-6", 1080, 6_000_000),
@@ -33,6 +36,9 @@ val QUALITIES = listOf(
 /** The film as it was written, which a player starts on. */
 val AS_IT_IS = QUALITIES.first()
 
+/** The rung chosen for the connection rather than by the viewer. */
+val ADAPTIVE = QUALITIES[1]
+
 /** The rung by that name, or the film as it is when the name means nothing. */
 fun qualityCalled(key: String?): Quality = QUALITIES.firstOrNull { it.key == key } ?: AS_IT_IS
 
@@ -40,8 +46,17 @@ fun qualityCalled(key: String?): Quality = QUALITIES.firstOrNull { it.key == key
  *  "1080p" and a rate are the same words in every language. */
 fun Quality.name(asItIs: String): String {
     val rate = (bitrate ?: return asItIs) / 1_000_000.0
-    val written = if (rate % 1.0 == 0.0) "${rate.toLong()}" else String.format(Locale.ROOT, "%.1f", rate)
-    return "${height}p · $written Mb/s"
+    val written = (if (rate % 1.0 == 0.0) "${rate.toLong()}" else String.format(Locale.ROOT, "%.1f", rate)) + " Mb/s"
+    // A rate with no size is the film at its own size, held to that rate.
+    return height?.let { "${it}p · $written" } ?: written
+}
+
+/** A rung in a word or two, for the automatic quality to say where it
+ *  stands in the width of its row. */
+fun Quality.shortName(original: String): String = when {
+    bitrate == null -> original
+    height == null -> name(original)
+    else -> "${height}p"
 }
 
 /** The rung this television was left on, kept on it as the browser keeps
