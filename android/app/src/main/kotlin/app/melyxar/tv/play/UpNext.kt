@@ -1,6 +1,8 @@
 package app.melyxar.tv.play
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -34,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +59,10 @@ private const val COUNT_FROM_S = 10
 /** How wide the card is, and the still at its left. */
 private val CARD_WIDE = 740.dp
 private val STILL_WIDE = 320.dp
+
+/** How long the card takes to arrive, and how far below its place it starts. */
+private const val ARRIVING_MS = 420
+private val ARRIVING_FROM = 24.dp
 
 /** What the card stands on: the shade of the player's sheets. */
 private val SHADE = Color.Black.copy(alpha = 0.72f)
@@ -107,10 +114,18 @@ fun UpNext(
         play()
     }
     BackHandler(onBack = onCancel)
+    // Rising into place as it fades in, rather than appearing all at once:
+    // read while the layer is drawn, so it moves without being composed again.
+    val arriving = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { arriving.animateTo(1f, tween(ARRIVING_MS, easing = FastOutSlowInEasing)) }
     // Its still with the buttons under it, and beside them what it is about,
     // whole, the card growing with it rather than cutting it.
     Row(
         modifier = modifier
+            .graphicsLayer {
+                alpha = arriving.value
+                translationY = (1 - arriving.value) * ARRIVING_FROM.toPx()
+            }
             .width(CARD_WIDE)
             // The shade the sheets of the player stand on, the film showing
             // through it, and no rim or shadow of its own. Nothing blurred:

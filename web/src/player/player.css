@@ -2664,6 +2664,29 @@ melyxar-picture.player-video {
   background: var(--player-panel);
   backdrop-filter: blur(18px);
   color: var(--text);
+  /* Rising into place as it fades in, rather than appearing all at once.
+     Its opacity and its place only, which the graphics card moves by itself
+     without the page being laid out or painted again. */
+  animation: player-up-next-in 420ms var(--ease) both;
+}
+
+@keyframes player-up-next-in {
+  from {
+    opacity: 0;
+    translate: 0 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-up-next {
+    animation-name: player-up-next-fade;
+  }
+
+  @keyframes player-up-next-fade {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 /* Low on the picture while the controls are away, and just above the bottom
