@@ -9,8 +9,8 @@ use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
 use melyxar_core::work::ResumeRules;
 use melyxar_core::user::{
-    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, Permissions, Preferences,
-    SubtitleMode, ThemeMode, User, WideGamutChoice,
+    Backdrop, DownmixMethod, HeaderButton, HomeSection, LibraryView, Permissions,
+    PlaybackQuality, Preferences, SubtitleMode, ThemeMode, User, WideGamutChoice,
 };
 use sqlx::{AssertSqlSafe, Row};
 
@@ -63,7 +63,8 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
      p.resume_min_percent, p.resume_max_percent, p.resume_min_seconds,
-     p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut, p.library_views";
+     p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut, p.library_views,
+     p.playback_quality";
 
 /// The read of an account, with whatever else the caller needs alongside and
 /// however it picks the rows.
@@ -409,7 +410,7 @@ impl Database {
                 hidden_home_sections = ?, step_back_seconds = ?,
                 step_on_seconds = ?, resume_rewind_seconds = ?, resume_min_percent = ?,
                 resume_max_percent = ?, resume_min_seconds = ?, resume_rules_per_kind = ?,
-                resume_rules_by_kind = ?, wide_gamut = ?, library_views = ?
+                resume_rules_by_kind = ?, wide_gamut = ?, library_views = ?, playback_quality = ?
              WHERE user_id = ?",
         )
         .bind(&preferences.interface_language)
@@ -449,6 +450,7 @@ impl Database {
         .bind(written_rules(&preferences.resume_rules_by_kind))
         .bind(preferences.wide_gamut.as_str())
         .bind(written_views(&preferences.library_views))
+        .bind(preferences.playback_quality.as_str())
         .bind(id.to_db_string())
         .execute(self.writer())
         .await?;
@@ -607,9 +609,9 @@ async fn write_an_account(
                                        resume_max_percent, resume_min_seconds,
                                        resume_rules_per_kind, resume_rules_by_kind,
                                        header_buttons, buttons_in_the_bar, backdrop,
-                                       backdrop_light)
+                                       backdrop_light, playback_quality)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(&preferences.interface_language)
@@ -643,6 +645,7 @@ async fn write_an_account(
     .bind(written_buttons(&preferences.buttons_in_the_bar))
     .bind(preferences.backdrop.as_str())
     .bind(preferences.backdrop_light)
+    .bind(preferences.playback_quality.as_str())
     .execute(&mut **transaction)
     .await?;
 
@@ -769,6 +772,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             wide_gamut: WideGamutChoice::parse(&row.try_get::<String, _>("wide_gamut")?)
                 .unwrap_or_default(),
             library_views: read_views(&row.try_get::<String, _>("library_views")?),
+            playback_quality: PlaybackQuality::parse(&row.try_get::<String, _>("playback_quality")?)
+                .unwrap_or_default(),
         }
         .normalised(),
         created_at,
@@ -1404,6 +1409,7 @@ mod tests {
             step_back_seconds: 0,
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
+            playback_quality: PlaybackQuality::Adaptive,
             subtitle_mode: SubtitleMode::OnlyForced,
             home_sections: vec![HomeSection::Newest(anime)],
             hidden_home_sections: vec![HomeSection::Band],
@@ -1476,6 +1482,7 @@ mod tests {
         );
         assert_eq!(loaded.preferences.step_on_seconds, 30);
         assert_eq!(loaded.preferences.wide_gamut, WideGamutChoice::NeverConvert);
+        assert_eq!(loaded.preferences.playback_quality, PlaybackQuality::Adaptive);
         assert_eq!(loaded.preferences.subtitle_mode, SubtitleMode::OnlyForced);
         assert_eq!(
             loaded.preferences.home_sections[..3],

@@ -320,6 +320,62 @@ impl WideGamutChoice {
     }
 }
 
+/// What the picture of a film is held to, as the player offers it: the film
+/// as it is, the rung chosen for the connection, or one rung of the ladder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PlaybackQuality {
+    /// The film as it was written.
+    #[default]
+    AsItIs,
+    /// The rung the player chooses for the connection, and moves with it.
+    Adaptive,
+    Hd20,
+    Hd10,
+    Hd6,
+    Mid4,
+    Mid2,
+    Low1_5,
+    Low0_7,
+}
+
+impl PlaybackQuality {
+    /// Every choice, in the order the player offers them.
+    pub const fn every() -> [Self; 9] {
+        [
+            Self::AsItIs,
+            Self::Adaptive,
+            Self::Hd20,
+            Self::Hd10,
+            Self::Hd6,
+            Self::Mid4,
+            Self::Mid2,
+            Self::Low1_5,
+            Self::Low0_7,
+        ]
+    }
+
+    /// The player's own name for it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::AsItIs => "auto",
+            Self::Adaptive => "adaptive",
+            Self::Hd20 => "1080p-20",
+            Self::Hd10 => "1080p-10",
+            Self::Hd6 => "1080p-6",
+            Self::Mid4 => "720p-4",
+            Self::Mid2 => "720p-2",
+            Self::Low1_5 => "480p-1.5",
+            Self::Low0_7 => "360p-0.7",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::every()
+            .into_iter()
+            .find(|choice| choice.as_str() == value)
+    }
+}
+
 /// What is drawn behind the pages of the interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -749,6 +805,8 @@ pub struct Preferences {
     pub resume_rules_by_kind: Vec<(LibraryKind, ResumeRules)>,
     /// What is done with a film of wide gamut colour.
     pub wide_gamut: WideGamutChoice,
+    /// What the picture of a film is held to, kept for every device.
+    pub playback_quality: PlaybackQuality,
     /// The libraries this person changed the layout of, and how. One never
     /// changed shows its posters.
     pub library_views: Vec<(LibraryId, LibraryView)>,
@@ -795,6 +853,7 @@ impl Default for Preferences {
             resume_rules_per_kind: false,
             resume_rules_by_kind: Vec::new(),
             wide_gamut: WideGamutChoice::default(),
+            playback_quality: PlaybackQuality::default(),
             library_views: Vec::new(),
         }
     }
@@ -1182,6 +1241,15 @@ mod tests {
         }
         assert_eq!(WideGamutChoice::parse("sometimes"), None);
         assert_eq!(WideGamutChoice::default(), WideGamutChoice::Automatic);
+    }
+
+    #[test]
+    fn playback_qualities_round_trip_through_the_players_names() {
+        for choice in PlaybackQuality::every() {
+            assert_eq!(PlaybackQuality::parse(choice.as_str()), Some(choice));
+        }
+        assert_eq!(PlaybackQuality::parse("4k-100"), None);
+        assert_eq!(PlaybackQuality::default().as_str(), "auto");
     }
 
     #[test]

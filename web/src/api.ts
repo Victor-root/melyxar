@@ -1900,6 +1900,9 @@ export interface ViewerPreferences {
   /** How each library this account laid out anew is laid out, by library.
    *  One not named shows its posters. */
   library_views: Record<string, LibraryView>;
+  /** What the picture of a film is held to, the player's name for it, on
+   *  every device this account plays on. */
+  playback_quality: string;
   /** The languages the library really holds, which is what a picker offers. */
   audio_languages: string[];
   subtitle_languages: string[];

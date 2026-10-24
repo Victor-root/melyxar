@@ -117,6 +117,10 @@ class Playback(
     /** Where to start, or nothing for where the server has it stopped. */
     private val from: Double?,
     private val scope: CoroutineScope,
+    /** What the account holds the picture to, as it last chose. */
+    startingQuality: Quality,
+    /** Keeps a quality chosen with the account, for every device. */
+    private val keepQuality: (Quality) -> Unit,
     /** An administrator asked the film to stop. */
     private val onStopped: () -> Unit,
     /** The server holds where the film was left, once it is left. */
@@ -136,10 +140,8 @@ class Playback(
     var failed by mutableStateOf(false)
         private set
 
-    private val keptQuality = KeptQuality(context)
-
-    /** What the picture is held to, as this television was left. */
-    var quality by mutableStateOf(keptQuality.read())
+    /** What the picture is held to, as the account last chose. */
+    var quality by mutableStateOf(startingQuality)
         private set
 
     /** The rung the automatic quality stands on, while it is the one chosen. */
@@ -403,7 +405,7 @@ class Playback(
             return
         }
         quality = chosen
-        keptQuality.keep(chosen)
+        keepQuality(chosen)
         if (chosen == ADAPTIVE) {
             scope.launch {
                 measureTheConnection()
