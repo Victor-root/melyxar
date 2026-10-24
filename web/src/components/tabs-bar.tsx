@@ -1,18 +1,17 @@
 /*
- * The tabs of a library of music, in one piece of the glass of the browse
- * bar. When they do not all fit, they are a carousel: an arrow at the edge
- * that has more beyond it moves along, the tab open is always brought into
- * view, and a hand can pull them too.
+ * The tabs of a page, in one piece of the glass of the browse bar: a library
+ * of music, the requests. When they do not all fit, they are a carousel: an
+ * arrow at the edge that has more beyond it moves along, the tab open is
+ * always brought into view, and a hand can pull them too.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BubbleParts, UNROLL_MS, useBubble } from "../components/bubble";
+import { BubbleParts, UNROLL_MS, useBubble } from "./bubble";
 import { useDragToScroll } from "../dragging";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { PHONE, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
-import type { MusicTab } from "./tabs";
 
 /** The room the arrow at the start takes once it is there, its width and the
  *  gap beside it as the stylesheet draws them: it appears as the tabs move,
@@ -23,14 +22,18 @@ const ARROW_ROOM = 32;
  *  draws it. */
 const TRACK_PADDING = 5;
 
-export function TabsBar({
+export function TabsBar<Tab extends string>({
   tabs,
   open,
   onOpen,
+  label,
 }: {
-  tabs: MusicTab[];
-  open: MusicTab;
-  onOpen: (tab: MusicTab) => void;
+  /** Each tab, and what it is called. */
+  tabs: readonly (readonly [Tab, string])[];
+  open: Tab;
+  onOpen: (tab: Tab) => void;
+  /** What the tabs are of, said to a screen reader. */
+  label: string;
 }) {
   const { t } = useSettings();
   const track = useRef<HTMLDivElement>(null);
@@ -124,13 +127,13 @@ export function TabsBar({
     <nav
       ref={bubble}
       className="browse-piece music-tabs"
-      aria-label={t("music.tabs")}
+      aria-label={label}
       data-unrolled={unrolled ? "yes" : "no"}
       onPointerDown={unrolled ? stay : undefined}
     >
-      {phone && <BubbleParts unrolled={unrolled} onUnroll={unroll} label={t("music.tabs_open")} />}
+      {phone && <BubbleParts unrolled={unrolled} onUnroll={unroll} label={t("tabs.open")} />}
       {canGoBack && (
-        <button type="button" className="music-tabs-arrow" onClick={() => move(-1)} aria-label={t("music.tabs_back")}>
+        <button type="button" className="music-tabs-arrow" onClick={() => move(-1)} aria-label={t("tabs.back")}>
           <ChevronLeftIcon size={18} />
         </button>
       )}
@@ -147,7 +150,7 @@ export function TabsBar({
         }}
         {...drag}
       >
-        {tabs.map((tab) => (
+        {tabs.map(([tab, name]) => (
           <button
             key={tab}
             type="button"
@@ -158,12 +161,12 @@ export function TabsBar({
               onOpen(tab);
             }}
           >
-            {t(`music.tab.${tab}`)}
+            {name}
           </button>
         ))}
       </div>
       {canGoOn && (
-        <button type="button" className="music-tabs-arrow" onClick={() => move(1)} aria-label={t("music.tabs_on")}>
+        <button type="button" className="music-tabs-arrow" onClick={() => move(1)} aria-label={t("tabs.on")}>
           <ChevronRightIcon size={18} />
         </button>
       )}

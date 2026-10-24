@@ -33,7 +33,7 @@ import type { Paged } from "./paging";
 import { SongList } from "./songs";
 import { UploadButton } from "../components/upload-button";
 import { LibraryTools } from "./library-tools";
-import { TabsBar } from "./tabs-bar";
+import { TabsBar } from "../components/tabs-bar";
 import { openTab, shownTabs } from "./tabs";
 import type { MusicTab } from "./tabs";
 import { AlbumTile, ArtistTile, GenreTile, LetterStarts } from "./tiles";
@@ -57,7 +57,9 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   const { preferences } = useMusicControls();
   /* The same list from one drawing to the next: the bar of tabs measures
      itself again whenever it is handed another. */
+  const { t } = useSettings();
   const shown = useMemo(() => shownTabs(preferences.hidden_tabs), [preferences.hidden_tabs]);
+  const named = useMemo(() => shown.map((one) => [one, t(`music.tab.${one}`)] as const), [shown, t]);
   const tab = openTab(params.get("tab"), shown);
   const open = (next: MusicTab) => setParams(next === shown[0] ? {} : { tab: next }, { replace: true });
   const tools = <LibraryTools library={library} />;
@@ -73,7 +75,12 @@ export function MusicLibraryPage({ library }: { library: Library }) {
           <h1>{library.name}</h1>
         </div>
         <div className="browse-bar">
-          <TabsBar tabs={shown} open={tab} onOpen={open} />
+          <TabsBar
+            tabs={named}
+            open={tab}
+            onOpen={open}
+            label={t("music.tabs")}
+          />
           {!barred && tab !== "for_you" && <UploadButton library={library} bare className="browse-piece browse-alone" />}
         </div>
       </div>

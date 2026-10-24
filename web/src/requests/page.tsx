@@ -5,8 +5,10 @@
  * this account may ask.
  */
 
-import { NavLink } from "react-router-dom";
+import { useMemo } from "react";
 import { PageBackdrop } from "../components/backdrop";
+import { TabsBar } from "../components/tabs-bar";
+import { useGoTo } from "../navigating";
 import { useSettings } from "../settings";
 import { MyRequests } from "./mine";
 import { MoreTitles } from "./more";
@@ -17,6 +19,17 @@ import { useTabPage } from "../tab-page";
 export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
   const { t } = useSettings();
   const { access } = useRequests();
+  const goTo = useGoTo();
+  /* The same list from one drawing to the next: the bar of tabs measures
+     itself again whenever it is handed another. */
+  const tabs = useMemo(
+    () =>
+      [
+        ["ask", t("requests.tab_ask")],
+        ["mine", t("requests.tab_mine")],
+      ] as const,
+    [t],
+  );
   useTabPage(t("requests.title"));
   if (access === null) {
     return null;
@@ -36,24 +49,15 @@ export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
           <div className="section-head">
             <h1>{t("requests.title")}</h1>
           </div>
+          {/* The same tabs as a library of music's, in the band at the top
+              on a phone. Asking for more of a kind is part of asking. */}
           <div className="browse-bar">
-            <nav className="browse-piece request-tabs" aria-label={t("requests.title")}>
-              {(
-                [
-                  ["/requests", "requests.tab_ask", true],
-                  ["/requests/mine", "requests.tab_mine", false],
-                ] as const
-              ).map(([to, name, end]) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  className={({ isActive }) => `music-tab${isActive ? " music-tab-on" : ""}`}
-                >
-                  {t(name)}
-                </NavLink>
-              ))}
-            </nav>
+            <TabsBar
+              tabs={tabs}
+              open={view === "mine" ? "mine" : "ask"}
+              onOpen={(tab) => goTo(tab === "mine" ? "/requests/mine" : "/requests")}
+              label={t("requests.title")}
+            />
           </div>
         </div>
         {view === "ask" && <AskSearch />}
