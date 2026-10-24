@@ -89,8 +89,9 @@ export function UpNext({
   return (
     <section className="player-up-next" aria-live="polite">
       {/* Its still with the buttons under it, and beside them what it is
-          about, whole, the card growing with it rather than cutting it. Each
-          side stands in the middle of the height the other one gives. */}
+          about, whole, the card growing with it rather than cutting it. The
+          words keep to the top, the still and the buttons stand in the middle
+          of the height the words give them. */}
       <div className="player-up-next-side">
         <div className="player-up-next-still">
           {picture && (
