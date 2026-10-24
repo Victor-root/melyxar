@@ -435,7 +435,6 @@ class Playback(
         val seconds = flowingMs / 1000
         val speed = measuredSpeed.withMeasure(bytes * 8 / seconds, seconds)
         measuredSpeed = speed
-        rememberSpeed(speed.believed)
         course = current.copy(measured = current.measured + 1)
         consider()
     }
