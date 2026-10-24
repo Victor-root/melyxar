@@ -1,6 +1,5 @@
 /*
- * What the connection to the server carries, measured before a film when
- * nothing recent is known.
+ * What the connection to the server carries, measured before every film.
  *
  * A block is downloaded and timed from its first byte to its last, which
  * leaves out the time the question took to reach the server and come back:
@@ -9,8 +8,9 @@
  * fast one is then given a bigger block, since a small block on a fast
  * connection is over before it can be timed.
  *
- * What the films themselves measure afterwards is kept here too, so the next
- * film of the evening starts from it without being measured again.
+ * Never taken from an earlier film: a connection changes between two films,
+ * and a speed kept from one played at home started the next one as it is
+ * over a slow connection that could not carry it.
  */
 
 import { api } from "../api";
@@ -29,15 +29,6 @@ const PATIENCE_MS = 4_000;
 /** Below this, the time between the first byte and the last is too short to
  *  mean anything, and the whole wait is timed instead. */
 const TIMED_AT_LEAST_S = 0.05;
-/** How long a known speed is trusted for the next film. */
-const KNOWN_FOR_MS = 10 * 60_000;
-
-let known: { bitsPerSecond: number; at: number } | null = null;
-
-/** Keeps what a film measured, for the next one. */
-export function rememberSpeed(bitsPerSecond: number) {
-  known = { bitsPerSecond, at: Date.now() };
-}
 
 /** How long one block took and what it says of the connection. */
 interface Timed {
@@ -78,9 +69,6 @@ async function timeBlock(bytes: number, signal: AbortSignal): Promise<Timed> {
 /** What the connection carries in bits a second, or null when it could not
  *  be measured. */
 export async function connectionSpeed(): Promise<number | null> {
-  if (known && Date.now() - known.at < KNOWN_FOR_MS) {
-    return known.bitsPerSecond;
-  }
   const controller = new AbortController();
   const patience = window.setTimeout(() => controller.abort(), PATIENCE_MS);
   try {
@@ -93,7 +81,6 @@ export async function connectionSpeed(): Promise<number | null> {
       );
       speed = (await timeBlock(bytes, controller.signal)).bitsPerSecond;
     }
-    rememberSpeed(speed);
     return speed;
   } catch {
     return null;

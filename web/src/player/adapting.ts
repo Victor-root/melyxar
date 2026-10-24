@@ -12,7 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { ADAPTIVE_RUNGS, UNMEASURED_RUNG, afterMoving, believed, nextMove, rungFor, startingOn, withMeasure } from "./adaptive";
 import type { Course, Film, Speed } from "./adaptive";
-import { connectionSpeed, rememberSpeed } from "./connection";
+import { connectionSpeed } from "./connection";
 import type { Picture } from "./picture";
 import { ADAPTIVE } from "./quality";
 import type { Quality } from "./quality";
@@ -128,7 +128,6 @@ export function useAdaptiveQuality({
       }
       const seconds = flowingMs / 1000;
       speed.current = withMeasure(speed.current, (bytes * 8) / seconds, seconds);
-      rememberSpeed(believed(speed.current));
       course.current = { ...current, measured: current.measured + 1 };
       consider();
     },
