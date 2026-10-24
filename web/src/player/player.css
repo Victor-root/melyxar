@@ -2693,6 +2693,7 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-words {
+  align-self: start;
   min-width: 0;
   display: grid;
   align-content: start;

@@ -117,10 +117,13 @@ fun UpNext(
             .border(1.dp, palette.border, shape)
             .padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
-        // Each side in the middle of the height the other one gives.
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(STILL_WIDE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // In the middle of the height the words give it; the words keep to
+        // the top.
+        Column(
+            Modifier.width(STILL_WIDE).align(Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
             Box(
                 Modifier
                     .size(STILL_WIDE, STILL_WIDE * 9 / 16)
