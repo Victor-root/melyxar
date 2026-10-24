@@ -12,14 +12,6 @@
   margin-bottom: var(--gap-tight);
 }
 
-/* Its two tabs on one line, in the page on every screen: the music's tabs
-   that they look like are pinned into the bar at the top on a phone, where
-   these two were hidden behind its pieces. */
-.browse-piece.request-tabs {
-  flex-wrap: nowrap;
-  gap: 2px;
-}
-
 .request-search {
   max-width: 620px;
   margin: 0 auto var(--gap-wide);
