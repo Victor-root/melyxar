@@ -69,6 +69,14 @@ private const val DEVICE_NAME = "Melyxar"
 /** Below this many seconds in, a film is only said to be on, not where. */
 private const val WORTH_KEEPING_S = 5.0
 
+/** How much of a timed block is read at a time. */
+private const val BLOCK_PIECE = 64 * 1024
+
+/** A block downloaded to time the connection: its bytes, those that came
+ *  after its first piece, how long it took in all and how long from its first
+ *  piece to its last, in seconds. */
+data class BlockTimed(val bytes: Long, val afterTheFirst: Long, val seconds: Double, val flowing: Double)
+
 /** What the player asks of the subtitles. */
 sealed interface TrackChoice {
     /** Whatever the account's way with subtitles gives. */
@@ -242,6 +250,40 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
     } catch (refused: Refusal) {
         if (refused.status !in 400..499) throw refused
         false
+    }
+
+    /**
+     * Downloads a block of nothing in particular, [bytes] long, for the
+     * automatic quality to learn what the connection carries: how long it
+     * took in all, and how much arrived after its first piece and how fast,
+     * which leaves out the time the question took to come back.
+     */
+    suspend fun timeBlock(bytes: Int, patienceMs: Long): BlockTimed = withContext(Dispatchers.IO) {
+        val call = http.newCall(Request.Builder().url(address("/api/v1/system/bandwidth?bytes=$bytes")).get().build())
+        call.timeout().timeout(patienceMs, TimeUnit.MILLISECONDS)
+        val asked = System.nanoTime()
+        call.execute().use { answer ->
+            if (!answer.isSuccessful) throw Refusal(answer.code, null)
+            val stream = answer.body.byteStream()
+            val piece = ByteArray(BLOCK_PIECE)
+            var firstAt: Long? = null
+            var afterTheFirst = 0L
+            var total = 0L
+            while (true) {
+                val read = stream.read(piece)
+                if (read < 0) break
+                total += read
+                if (firstAt == null) firstAt = System.nanoTime() else afterTheFirst += read
+            }
+            val ended = System.nanoTime()
+            BlockTimed(total, afterTheFirst, (ended - asked) / 1e9, firstAt?.let { (ended - it) / 1e9 } ?: 0.0)
+        }
+    }
+
+    /** One fact the player saw, for the journal, among those the server
+     *  names: anything else it refuses. */
+    suspend fun tellTheJournal(fact: JsonObject) {
+        send("POST", "/api/v1/system/journal/page", fact)
     }
 
     /** How far the server has got making a rebuilt film's first piece. */
