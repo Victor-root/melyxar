@@ -7,7 +7,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import type { NextEpisode, PlaybackSegment } from "../api";
+import { api } from "../api";
+import type { NextEpisode, PlaybackSegment, UpNextMoment } from "../api";
 import { useBackClosesIt } from "../components/back-closes";
 import { useShownPicture } from "../components/picture";
 
@@ -45,12 +46,25 @@ export function upNextOffered(
 
 type Say = (key: string, values?: Record<string, string | number>) => string;
 
+/** A step of the card in Melyxar's own journal, written at the server's
+ *  debug level: the way to follow a next episode that did not start. */
+export function tellOfUpNext(
+  source: string,
+  moment: UpNextMoment,
+  facts: { at_second?: number; playing?: boolean; ended?: boolean; to?: string } = {},
+): void {
+  api.tellTheJournal({ source, saw: "up_next", moment, ...facts }).catch(() => {
+    // A line that did not arrive is not worth troubling a viewer over.
+  });
+}
+
 export function UpNext({
   next,
   running,
   t,
   onPlay,
   onCancel,
+  onMoment,
 }: {
   next: NextEpisode;
   /** Whether the count goes on: while the film plays, or once it is over. A
@@ -59,11 +73,22 @@ export function UpNext({
   t: Say;
   onPlay: () => void;
   onCancel: () => void;
+  /** Told of each step, for the journal. */
+  onMoment: (moment: UpNextMoment) => void;
 }) {
   const [left, setLeft] = useState(COUNT_FROM);
   const play = useRef(onPlay);
   play.current = onPlay;
-  const leave = useBackClosesIt(onCancel);
+  const said = useRef(onMoment);
+  said.current = onMoment;
+  const leave = useBackClosesIt(() => {
+    said.current("cancelled");
+    onCancel();
+  });
+
+  useEffect(() => {
+    said.current("offered");
+  }, [next.id]);
   const { picture, itDidNotLoad } = useShownPicture(next.still);
 
   useEffect(() => {
@@ -76,6 +101,7 @@ export function UpNext({
 
   useEffect(() => {
     if (left <= 0) {
+      said.current("counted_out");
       leave(() => play.current());
     }
   }, [left, leave]);
@@ -106,10 +132,24 @@ export function UpNext({
           )}
         </div>
         <div className="player-up-next-actions">
-          <button type="button" className="button button-accent" onClick={() => leave(onPlay)}>
+          <button
+            type="button"
+            className="button button-accent"
+            onClick={() => {
+              onMoment("play_pressed");
+              leave(onPlay);
+            }}
+          >
             {t("player.up_next.play_now")}
           </button>
-          <button type="button" className="button" onClick={() => leave(onCancel)}>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              onMoment("cancelled");
+              leave(onCancel);
+            }}
+          >
             {t("player.up_next.cancel")}
           </button>
         </div>

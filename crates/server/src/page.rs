@@ -380,6 +380,22 @@ enum Seen {
         /// How long the stage before this one lasted, in milliseconds.
         after_ms: u32,
     },
+    /// What became of the card announcing the next episode, step by step:
+    /// the one way to follow a next episode that did not start, from the
+    /// card appearing to where the page went on to.
+    UpNext {
+        moment: UpNextMoment,
+        /// Where the film stood, and whether it played or had ended.
+        #[serde(default)]
+        at_second: Option<f64>,
+        #[serde(default)]
+        playing: Option<bool>,
+        #[serde(default)]
+        ended: Option<bool>,
+        /// The work the page went on to, for the last steps.
+        #[serde(default)]
+        to: Option<String>,
+    },
     /// What the subtitles of the film hold, once the browser has read them.
     ///
     /// Said once for each set of subtitles the film is given. Nought cues
@@ -476,6 +492,47 @@ fn cues_in_a_line(cues: &[ShownCue]) -> String {
 /// One of the real moments a page passes through on the way to a film
 /// playing, in the order it passes through them.
 ///
+/// A step of the card announcing the next episode, closed like the stages.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum UpNextMoment {
+    /// The card came over the film.
+    Offered,
+    /// Its count reached nothing.
+    CountedOut,
+    /// Its play button was pressed.
+    PlayPressed,
+    /// It was turned down, by its button or by the back key.
+    Cancelled,
+    /// The film reached its end, with or without the card.
+    FilmEnded,
+    /// The player asked the page for the next episode.
+    HandedOver,
+    /// The page stepped to the next episode of the series.
+    SteppedToTheNextEpisode,
+    /// The page went on to the next work of a row being played through.
+    WentOnInTheRow,
+    /// The page had nowhere to go on to.
+    NowhereToGo,
+}
+
+impl UpNextMoment {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::Offered => "offered",
+            Self::CountedOut => "counted_out",
+            Self::PlayPressed => "play_pressed",
+            Self::Cancelled => "cancelled",
+            Self::FilmEnded => "film_ended",
+            Self::HandedOver => "handed_over",
+            Self::SteppedToTheNextEpisode => "stepped_to_the_next_episode",
+            Self::WentOnInTheRow => "went_on_in_the_row",
+            Self::NowhereToGo => "nowhere_to_go",
+        }
+    }
+}
+
 /// A closed list like every other fact here: the page cannot invent a stage,
 /// and the order below is what a reading of the journal is checked against.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -1043,6 +1100,22 @@ async fn what_the_page_saw(
             smoothly,
             "the browser says how it decodes this film"
         ),
+        Seen::UpNext {
+            moment,
+            at_second,
+            playing,
+            ended,
+            to,
+        } => tracing::debug!(
+            session,
+            source,
+            moment = moment.as_word(),
+            at_second,
+            playing,
+            ended,
+            to = to.as_deref().map(cut_short),
+            "the next episode card"
+        ),
         Seen::LoadingStage { stage, after_ms } => tracing::debug!(
             session,
             source,
@@ -1147,6 +1220,32 @@ mod tests {
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_steps_of_the_next_episode_card_are_read_and_nothing_else() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"source":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"up_next",
+                "moment":"counted_out","at_second":1310.5,"playing":true,"ended":false}"#,
+        )
+        .expect("a step this module names is read");
+        match said.seen {
+            Seen::UpNext {
+                moment,
+                at_second,
+                to,
+                ..
+            } => {
+                assert_eq!(moment.as_word(), "counted_out");
+                assert_eq!(at_second, Some(1310.5));
+                assert_eq!(to, None);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+        assert!(serde_json::from_str::<FromThePage>(
+            r#"{"source":"x","saw":"up_next","moment":"somewhere_the_page_invented"}"#
+        )
+        .is_err());
     }
 
     #[test]
