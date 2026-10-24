@@ -27,7 +27,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccount } from "../account";
-import type { PlaybackPlan, PlaybackTrack, Stretches, Work } from "../api";
+import type { PlaybackPlan, PlaybackTrack, Stretches, UpNextMoment, Work } from "../api";
 import { useToast } from "../notifications/toasts";
 import { nameOfPlayed } from "../readable";
 import { showPlaying } from "../tab";
@@ -45,7 +45,7 @@ import { useFullscreen } from "./fullscreen";
 import type { Fullscreen } from "./fullscreen";
 import { markFor, useBranding } from "./logo";
 import { Overlay, SkipStretch } from "./overlay";
-import { UpNext, upNextOffered } from "./up-next";
+import { UpNext, tellOfUpNext, upNextOffered } from "./up-next";
 import type { Panel, Shape, Turn } from "./panels";
 import { lightFilter, lightsThePicture } from "./picture-light";
 import { rememberSettings, storedSettings } from "./settings";
@@ -190,6 +190,9 @@ function Film({
     fromTheStart,
     startAt,
     onEnded: () => {
+      if (next !== null) {
+        tellUpNext("film_ended");
+      }
       if (next === null) {
         onEnded?.();
       } else if (declined) {
@@ -200,6 +203,9 @@ function Film({
     },
     onStopped: stoppedByAnAdministrator,
   });
+  /* Each step of the card in the journal, with where the film stood. */
+  const tellUpNext = (moment: UpNextMoment) =>
+    tellOfUpNext(sourceId, moment, { at_second: playback.at, playing: playback.playing, ended });
   const {
     video,
     holdThePicture,
@@ -435,7 +441,11 @@ function Film({
           next={next}
           running={playback.playing || ended}
           t={t}
-          onPlay={onNextEpisode}
+          onMoment={tellUpNext}
+          onPlay={() => {
+            tellUpNext("handed_over");
+            onNextEpisode();
+          }}
           onCancel={() => {
             setDeclined(true);
             if (ended) {

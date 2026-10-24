@@ -1322,6 +1322,15 @@ export type PageFact =
       after_ms: number;
     }
   | {
+      saw: "up_next";
+      moment: UpNextMoment;
+      at_second?: number;
+      playing?: boolean;
+      ended?: boolean;
+      /** The work the page went on to. */
+      to?: string;
+    }
+  | {
       saw: "subtitles_read";
       cues: number;
       first_start_second: number | null;
@@ -1355,6 +1364,18 @@ export interface SubtitleCue {
 export type Reading = { session: string } | { source: string };
 
 export type PageSaw = Reading & PageFact;
+
+/** A step of the card announcing the next episode, as the journal names it. */
+export type UpNextMoment =
+  | "offered"
+  | "counted_out"
+  | "play_pressed"
+  | "cancelled"
+  | "film_ended"
+  | "handed_over"
+  | "stepped_to_the_next_episode"
+  | "went_on_in_the_row"
+  | "nowhere_to_go";
 
 /** What the summary of the administration says about the server. */
 export interface Overview {

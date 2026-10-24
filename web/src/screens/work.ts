@@ -14,13 +14,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { PlaybackPlan, Version, Work } from "../api";
+import type { PlaybackPlan, UpNextMoment, Version, Work } from "../api";
 import { useAsked } from "../asking";
 import { useMarks } from "../marks";
 import type { Trailer } from "../components/trailer";
 import { embedOf } from "../trailers";
 import { forgetTheQueue, movedTo, theQueue, whatComesNext } from "../queue";
 import { afterTheOverlays, useBackClosesIt } from "../components/back-closes";
+import { tellOfUpNext } from "../player/up-next";
 
 /**
  * What the address says when a page is meant to start playing by itself.
@@ -451,20 +452,29 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const queue = theQueue();
   const following = work ? whatComesNext(queue, work.id, nextUp?.id ?? null) : null;
   const goOn = useCallback(() => {
+    // Which way it went, in the journal, against the film just left.
+    const said = (moment: UpNextMoment, to?: string) => {
+      if (playing) {
+        tellOfUpNext(playing.source, moment, { to });
+      }
+    };
     if (!following) {
+      said("nowhere_to_go");
       return;
     }
     if (nextUp && following === nextUp.id) {
+      said("stepped_to_the_next_episode", nextUp.id);
       stepTo(nextUp);
       return;
     }
+    said("went_on_in_the_row", following);
     afterTheOverlays(() => {
       if (queue) {
         movedTo(queue, following);
       }
       navigate(`/work/${following}?${START_AT_ONCE}`, { replace: true });
     });
-  }, [following, nextUp, queue, stepTo, navigate]);
+  }, [following, nextUp, queue, stepTo, navigate, playing]);
 
   return {
     work,
