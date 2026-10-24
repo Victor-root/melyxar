@@ -12,6 +12,7 @@ mod address;
 mod door;
 mod elsewhere;
 pub mod accounts;
+pub mod bandwidth;
 pub mod activity;
 pub mod calibration;
 pub mod cameras;

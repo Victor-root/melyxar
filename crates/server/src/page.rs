@@ -396,6 +396,24 @@ enum Seen {
         #[serde(default)]
         to: Option<String>,
     },
+    /// The automatic quality settling on a rung, and why: the one way to
+    /// follow a film that changed its picture on its own.
+    QualityAdapted {
+        why: AdaptedBecause,
+        /// How fast the connection was measured, in kilobits a second, when
+        /// it was.
+        #[serde(default)]
+        measured_kbps: Option<u32>,
+        /// The rate left and the rate taken, in kilobits a second. Nothing
+        /// is the film as it is.
+        #[serde(default)]
+        from_kbps: Option<u32>,
+        #[serde(default)]
+        to_kbps: Option<u32>,
+        /// The tallest picture of the rung taken, when it has one.
+        #[serde(default)]
+        to_height: Option<u32>,
+    },
     /// What the subtitles of the film hold, once the browser has read them.
     ///
     /// Said once for each set of subtitles the film is given. Nought cues
@@ -529,6 +547,32 @@ impl UpNextMoment {
             Self::SteppedToTheNextEpisode => "stepped_to_the_next_episode",
             Self::WentOnInTheRow => "went_on_in_the_row",
             Self::NowhereToGo => "nowhere_to_go",
+        }
+    }
+}
+
+/// Why the automatic quality took the rung it took.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum AdaptedBecause {
+    /// The connection was measured before the film.
+    Measured,
+    /// The film stopped to wait, again and again.
+    Stalls,
+    /// The connection carries less than the rung needs.
+    SlowerLink,
+    /// The connection has room for a better rung.
+    FasterLink,
+}
+
+impl AdaptedBecause {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::Measured => "measured",
+            Self::Stalls => "stalls",
+            Self::SlowerLink => "slower_link",
+            Self::FasterLink => "faster_link",
         }
     }
 }
@@ -1134,6 +1178,23 @@ async fn what_the_page_saw(
             to = to.as_deref().map(cut_short),
             "the next episode card"
         ),
+        Seen::QualityAdapted {
+            why,
+            measured_kbps,
+            from_kbps,
+            to_kbps,
+            to_height,
+        } => tracing::debug!(
+            account,
+            session,
+            source,
+            why = why.as_word(),
+            measured_kbps,
+            from_kbps,
+            to_kbps,
+            to_height,
+            "the automatic quality changed rung"
+        ),
         Seen::LoadingStage { stage, after_ms } => tracing::debug!(
             account,
             session,
@@ -1265,6 +1326,35 @@ mod tests {
         }
         assert!(serde_json::from_str::<FromThePage>(
             r#"{"source":"x","saw":"up_next","moment":"somewhere_the_page_invented"}"#
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn a_rung_the_automatic_quality_took_is_read_with_its_reason_and_nothing_else() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"source":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"quality_adapted",
+                "why":"slower_link","measured_kbps":3100,"from_kbps":6000,"to_kbps":2000,"to_height":720}"#,
+        )
+        .expect("a reason this module names is read");
+        match said.seen {
+            Seen::QualityAdapted {
+                why,
+                measured_kbps,
+                from_kbps,
+                to_kbps,
+                to_height,
+            } => {
+                assert_eq!(why.as_word(), "slower_link");
+                assert_eq!(measured_kbps, Some(3100));
+                assert_eq!(from_kbps, Some(6000));
+                assert_eq!(to_kbps, Some(2000));
+                assert_eq!(to_height, Some(720));
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
+        assert!(serde_json::from_str::<FromThePage>(
+            r#"{"source":"x","saw":"quality_adapted","why":"because_the_page_said_so"}"#
         )
         .is_err());
     }
