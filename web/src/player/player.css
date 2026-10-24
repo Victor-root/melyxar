@@ -815,12 +815,11 @@ melyxar-picture.player-video {
   background: hsla(0, 0%, 100%, 0.2);
 }
 
-/* Stops exactly where the middle of the handle is rather than at a plain
-   share of the width, so the two never drift apart towards either end. */
+/* A plain share of the width, which always ends under the handle (the
+   handle's middle travels a little less than the whole width) and reaches
+   both ends of the rail at nothing and at everything. */
 .player-loudness::after {
-  width: calc(
-    var(--player-handle-across) / 2 + var(--share, 0) * (100% - var(--player-handle-across))
-  );
+  width: calc(var(--share, 0) * 100%);
   background: var(--accent);
 }
 
