@@ -18,7 +18,7 @@ import { LIGHTS, lightName, lightsThePicture } from "./picture-light";
 import type { Playback } from "./engine";
 import { Line, Menu, OffsetSlider, offsetSaid } from "./menu";
 import type { Surroundings } from "./overlay";
-import { AS_IT_IS, QUALITIES, qualityName } from "./quality";
+import { ADAPTIVE, AS_IT_IS, QUALITIES, qualityName } from "./quality";
 import type { Wording } from "../readable";
 
 /**
@@ -396,7 +396,13 @@ function sheetFor(
             />
             <Line
               label={t("player.quality")}
-              value={qualityName(playback.quality, t("player.quality.as_it_is"))}
+              value={
+                playback.quality.key !== ADAPTIVE.key
+                  ? qualityName(playback.quality, t("player.quality.as_it_is"))
+                  : playback.adaptiveRung
+                    ? `${t("player.quality.adaptive")} · ${qualityName(playback.adaptiveRung, t("player.quality.as_it_is"))}`
+                    : t("player.quality.adaptive")
+              }
               changed={playback.quality.key !== AS_IT_IS.key}
               into
               onPick={() => onPanel("settings.quality")}
@@ -546,7 +552,11 @@ function sheetFor(
         lines: QUALITIES.map((one) => (
           <Line
             key={one.key}
-            label={qualityName(one, t("player.quality.as_it_is"))}
+            label={
+              one.key === ADAPTIVE.key
+                ? t("player.quality.adaptive")
+                : qualityName(one, t("player.quality.as_it_is"))
+            }
             chosen={playback.quality.key === one.key}
             onPick={() => playback.setQuality(one.key)}
           />

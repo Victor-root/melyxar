@@ -195,6 +195,7 @@ Fait :
 - Conversion HDR vers SDR sur la carte (`tonemap_vaapi`), avec repli complet sur le logiciel si la carte ne sait pas la faire : une carte qui ne convertit pas rendrait un film gris, ce qui est pire qu'un film plus petit.
 - Repli sur le processeur quand la carte refuse un film en cours de session, une seule fois, avec la phrase de l'outil au journal. **Option de la page Transcodage, désactivée par défaut** : sans elle, la carte peut seulement être invitée à en faire moins, puis la lecture s'arrête.
 - Choix de qualité par le spectateur (taille et débit), qui devient un plafond dans le profil client.
+- **Fait.** Qualité automatique selon la connexion : mesurée avant le film, suivie segment par segment, palier baissé ou remonté seul et chaque changement écrit au journal (voir le README des décisions).
 - Décodage sur la carte dans les codecs qu'elle a prouvé savoir lire, établis un par un, avec repli sur le processeur pour les autres.
 - Un segment rendu dès que l'outil annonce l'avoir dépassé, au lieu d'attendre que le suivant soit produit par-dessus.
 - Relevé des images clés, playlist découpée dessus quand l'image est recopiée : un saut atterrit où il vise au lieu de plusieurs secondes trop tôt. Travail de fond de l'entretien, repris là où il s'était arrêté, compté dans le rapport.

@@ -1331,6 +1331,15 @@ export type PageFact =
       to?: string;
     }
   | {
+      saw: "quality_adapted";
+      why: "measured" | "stalls" | "slower_link" | "faster_link";
+      /** In kilobits a second; a rate left out is the film as it is. */
+      measured_kbps?: number;
+      from_kbps?: number;
+      to_kbps?: number;
+      to_height?: number;
+    }
+  | {
       saw: "subtitles_read";
       cues: number;
       first_start_second: number | null;
@@ -2339,6 +2348,10 @@ export const api = {
   journalText: (query: JournalQuery, signal?: AbortSignal) =>
     getText(`/api/v1/system/journal/text?${journalQuery(query)}`, signal),
   forgetJournal: () => remove<{ forgotten: number }>("/api/v1/system/journal"),
+  /* A block of nothing in particular, timed by the automatic quality to
+     learn what the connection carries. */
+  blockToTime: (bytes: number, signal?: AbortSignal) =>
+    getRaw(`/api/v1/system/bandwidth?bytes=${bytes}`, "application/octet-stream", signal),
   /* One fact the page saw, for the journal. The server names the facts and
      refuses anything else, so this cannot become a way of writing whatever
      into it: see the `page` module on the server for the whole list. */

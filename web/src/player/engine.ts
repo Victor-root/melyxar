@@ -35,6 +35,7 @@ import { codecCalled, rememberCodec, requestedCodec, storedCodec } from "./codec
 import type { Codec } from "./codec";
 import { rememberLoudness, storedLoudness } from "./loudness";
 import { clientProfile } from "./profile";
+import { useAdaptiveQuality } from "./adapting";
 import { markTheOpening } from "./opening";
 import { watchTheReading, whatIsHeldAround } from "./watch";
 import { watchStill } from "./sound-hole";
@@ -188,6 +189,8 @@ export interface Playback {
   audioId: string | null;
   subtitleId: string | null;
   quality: Quality;
+  /** The rung the automatic quality stands on, when it is the one chosen. */
+  adaptiveRung: Quality | null;
   /** Which codec a transcode is asked to come out in. "auto" leaves the
    *  choice to the usual negotiation. */
   codec: Codec;
@@ -409,16 +412,31 @@ export function usePlayback({
   /* Which picture the listeners below were last hung on, to tell a fresh
      element from the same one listened to again. */
   const listenedTo = useRef<string | null>(null);
+  /* The rung actually asked for, which the automatic quality chooses and
+     moves on its own. Nothing is asked until it has measured the connection. */
+  const heldPicture = plan?.film.picture ?? null;
+  const { asked, rung: adaptiveRung, heardSegment } = useAdaptiveQuality({
+    quality,
+    film: plan
+      ? { bitrate: heldPicture?.bitrate ?? plan.film.overall_bitrate, height: heldPicture?.height ?? null }
+      : null,
+    video,
+    readyPicture,
+    sourceId,
+  });
 
   /* Asked again whenever a track changes: which tracks are wanted is part of
      the question, and the answer can change with it. A film played as it is
      becomes one that has to be rebuilt the moment someone picks a subtitle
      that can only be drawn into the picture. */
   useEffect(() => {
+    if (asked === null) {
+      return;
+    }
     const controller = new AbortController();
     /* The profile is measured rather than read off a list, which takes a
        moment the first time and nothing at all afterwards. */
-    clientProfile(quality)
+    clientProfile(asked)
       .then((profile) =>
         api.plan(
           sourceId,
@@ -445,7 +463,7 @@ export function usePlayback({
         // Together, always: what is produced is decided on the three of them.
         setPlan(answer);
         setWatchedOnTheServer(workId);
-        setPlanFor(quality.key);
+        setPlanFor(asked.key);
         setCodecFor(codec.key);
         setFailed(null);
       })
@@ -458,7 +476,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, workId, audioId, subtitleId, fromTheStart, startAt, quality, codec, wideGamut, choiceSerial]);
+  }, [sourceId, workId, audioId, subtitleId, fromTheStart, startAt, asked, codec, wideGamut, choiceSerial]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* A subtitle made of pictures has to be painted into the picture, so the one
@@ -520,7 +538,7 @@ export function usePlayback({
        closed instead, which costs one round trip nobody is watching. */
     let gone = false;
 
-    clientProfile(quality)
+    clientProfile(asked ?? undefined)
       .then((profile) =>
         api.openSession(sourceId, {
           // A subtitle is named only when it has to be painted into the
@@ -885,6 +903,8 @@ export function usePlayback({
         }
       });
       feed.on(Library.Events.FRAG_LOADED, (_event, loaded) => {
+        const stats = loaded.frag.stats;
+        heardSegment(stats.loaded, stats.loading.end - stats.loading.first);
         if (firstPieceArrived || typeof loaded.frag.sn !== "number") {
           return;
         }
@@ -1477,6 +1497,7 @@ export function usePlayback({
     audioId,
     subtitleId,
     quality,
+    adaptiveRung,
     codec,
     wideGamut,
     speed,

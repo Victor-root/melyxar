@@ -33,6 +33,9 @@ export interface Quality {
  */
 export const QUALITIES: Quality[] = [
   { key: "auto", height: null, bitrate: null },
+  // Not a rung either: the rung chosen for the connection, and changed with
+  // it while the film plays (see adaptive.ts).
+  { key: "adaptive", height: null, bitrate: null },
   { key: "1080p-20", height: 1080, bitrate: 20_000_000 },
   { key: "1080p-10", height: 1080, bitrate: 10_000_000 },
   { key: "1080p-6", height: 1080, bitrate: 6_000_000 },
@@ -44,6 +47,9 @@ export const QUALITIES: Quality[] = [
 
 /** The rung a player starts on: the film as it was written. */
 export const AS_IT_IS = QUALITIES[0];
+
+/** The rung chosen for the connection rather than by the viewer. */
+export const ADAPTIVE = QUALITIES[1];
 
 /** The rung by that name, or the film as it is when the name means nothing. */
 export function qualityCalled(key: string | null): Quality {
@@ -58,12 +64,13 @@ export function qualityCalled(key: string | null): Quality {
  * strings is a list of eight strings to get wrong.
  */
 export function qualityName(quality: Quality, asItIs: string): string {
-  if (quality.height === null || quality.bitrate === null) {
+  if (quality.bitrate === null) {
     return asItIs;
   }
   const rate = quality.bitrate / 1_000_000;
-  const written = Number.isInteger(rate) ? `${rate}` : rate.toFixed(1);
-  return `${quality.height}p · ${written} Mb/s`;
+  const written = `${Number.isInteger(rate) ? rate : rate.toFixed(1)} Mb/s`;
+  // A rate with no size is the film at its own size, held to that rate.
+  return quality.height === null ? written : `${quality.height}p · ${written}`;
 }
 
 /** Where the choice is kept, so a viewer sets it once rather than per film. */
