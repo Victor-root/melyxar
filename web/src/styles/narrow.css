@@ -56,6 +56,14 @@
   .search-scope > .header-link {
     min-height: 0;
   }
+  /* The buttons of a request side by side under its words, smaller than a
+     page's own: at full size each took a line of its own in a column as
+     narrow as a phone leaves beside the poster. */
+  .request-actions .button {
+    padding: 7px 12px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
 }
 
 /* Narrower still, and the name of the server goes the way the name of the
