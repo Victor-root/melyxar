@@ -117,6 +117,8 @@ fun UpNext(
             .border(1.dp, palette.border, shape)
             .padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
+        // Each side in the middle of the height the other one gives.
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(STILL_WIDE), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(

@@ -89,18 +89,29 @@ export function UpNext({
   return (
     <section className="player-up-next" aria-live="polite">
       {/* Its still with the buttons under it, and beside them what it is
-          about, whole, the card growing with it rather than cutting it. */}
-      <div className="player-up-next-still">
-        {picture && (
-          <img
-            src={picture.src}
-            srcSet={picture.srcSet}
-            sizes={STILL_ROOM}
-            alt=""
-            decoding="async"
-            onError={itDidNotLoad}
-          />
-        )}
+          about, whole, the card growing with it rather than cutting it. Each
+          side stands in the middle of the height the other one gives. */}
+      <div className="player-up-next-side">
+        <div className="player-up-next-still">
+          {picture && (
+            <img
+              src={picture.src}
+              srcSet={picture.srcSet}
+              sizes={STILL_ROOM}
+              alt=""
+              decoding="async"
+              onError={itDidNotLoad}
+            />
+          )}
+        </div>
+        <div className="player-up-next-actions">
+          <button type="button" className="button button-accent" onClick={() => leave(onPlay)}>
+            {t("player.up_next.play_now")}
+          </button>
+          <button type="button" className="button" onClick={() => leave(onCancel)}>
+            {t("player.up_next.cancel")}
+          </button>
+        </div>
       </div>
       <div className="player-up-next-words">
         <div className="player-up-next-head">
@@ -127,14 +138,6 @@ export function UpNext({
         </div>
         {name && <p className="player-up-next-name">{name}</p>}
         {next.overview && <p className="player-up-next-overview">{next.overview}</p>}
-      </div>
-      <div className="player-up-next-actions">
-        <button type="button" className="button button-accent" onClick={() => leave(onPlay)}>
-          {t("player.up_next.play_now")}
-        </button>
-        <button type="button" className="button" onClick={() => leave(onCancel)}>
-          {t("player.up_next.cancel")}
-        </button>
       </div>
     </section>
   );
