@@ -433,6 +433,7 @@ function Film({
       {next && onNextEpisode && upNextOffered(next, declined, ended, stretches?.segments ?? [], playback.at) && (
         <UpNext
           next={next}
+          running={playback.playing || ended}
           t={t}
           onPlay={onNextEpisode}
           onCancel={() => {
