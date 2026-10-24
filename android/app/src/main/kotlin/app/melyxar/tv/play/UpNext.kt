@@ -105,7 +105,7 @@ fun UpNext(
     ) {
         // Its still and what it is about, as its line on the page of the
         // season shows it.
-        Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .size(STILL_WIDE, STILL_WIDE * 9 / 16)

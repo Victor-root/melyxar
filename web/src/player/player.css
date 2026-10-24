@@ -2674,6 +2674,7 @@ melyxar-picture.player-video {
 }
 
 .player-up-next-still {
+  align-self: center;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-card);
   overflow: hidden;
