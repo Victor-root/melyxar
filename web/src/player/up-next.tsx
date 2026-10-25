@@ -13,7 +13,7 @@ import { useBackClosesIt } from "../components/back-closes";
 import { useShownPicture } from "../components/picture";
 
 /** How many seconds the next episode is announced before it starts. */
-export const COUNT_FROM = 10;
+export const COUNT_FROM = 20;
 
 /** How wide the still is drawn, as the stylesheet draws it. */
 const STILL_ROOM = "(max-width: 700px) 90vw, 272px";
