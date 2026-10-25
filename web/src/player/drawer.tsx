@@ -403,9 +403,10 @@ function everyFewMinutes(length: number): PlaybackChapter[] {
   return marks;
 }
 
-/** Who is in it and who made it, faces first. */
+/** Who is in it and who made it, faces first, the guest stars of an
+ *  episode right after its cast. */
 function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
-  const everyone: Credit[] = [...work.cast, ...work.crew];
+  const everyone: Credit[] = [...work.cast, ...work.guest_stars, ...work.crew];
   if (everyone.length === 0) {
     return <p className="player-drawer-nothing">{t("player.nobody_named")}</p>;
   }

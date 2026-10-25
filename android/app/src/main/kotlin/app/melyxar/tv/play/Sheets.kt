@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -89,7 +89,8 @@ fun InfoSheet(work: Work, onClose: () -> Unit, modifier: Modifier = Modifier) {
 
 /**
  * Who is in the film, faces in a row the remote runs along, as the web
- * player's sheet of the cast. The arrow down or the back key closes it.
+ * player's sheet of the cast, the guest stars of an episode right after it.
+ * The arrow down or the back key closes it.
  */
 @Composable
 fun CastSheet(work: Work, onClose: () -> Unit, modifier: Modifier = Modifier) {
@@ -114,9 +115,10 @@ fun CastSheet(work: Work, onClose: () -> Unit, modifier: Modifier = Modifier) {
             color = palette.text,
             modifier = Modifier.padding(start = Gutter),
         )
+        val everyone = remember(work) { work.cast + work.guestStars }
         LazyRow(contentPadding = PaddingValues(horizontal = Gutter), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(work.cast, key = { it.personId + it.role }) { credit ->
-                val isFirst = credit == work.cast.first()
+            itemsIndexed(everyone, key = { at, credit -> "$at/${credit.personId}${credit.role}" }) { at, credit ->
+                val isFirst = at == 0
                 Box(if (isFirst) Modifier.focusRequester(first) else Modifier) {
                     CastMember(credit, Modifier, onOpen = {})
                 }
