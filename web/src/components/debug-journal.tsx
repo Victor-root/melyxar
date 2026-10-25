@@ -12,24 +12,14 @@
  * the page outside it.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useAccount } from "../account";
 import { JournalIcon } from "../icons";
 import { TechnicalJournal } from "../pages/admin/journal";
 import { useSettings } from "../settings";
+import { useFillingTheScreen } from "./filling-the-screen";
 import { Modal } from "./modal";
-
-/** What fills the screen right now, or nothing. */
-function useFillingTheScreen(): Element | null {
-  const [filling, setFilling] = useState<Element | null>(() => document.fullscreenElement);
-  useEffect(() => {
-    const tell = () => setFilling(document.fullscreenElement);
-    document.addEventListener("fullscreenchange", tell);
-    return () => document.removeEventListener("fullscreenchange", tell);
-  }, []);
-  return filling;
-}
 
 export function DebugJournal() {
   const { t } = useSettings();

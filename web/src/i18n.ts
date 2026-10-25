@@ -852,6 +852,10 @@ const en: Dictionary = {
   "app_icon.dark": "Dark",
   "app_icon.clear": "Transparent",
   "settings.app_icon_accent": "Logo in the accent colour",
+  "settings.frame_rate": "Show frames per second",
+  "settings.frame_rate_why":
+    "A counter in a corner of the screen, on this device alone: how many frames it draws each second, and how long the slowest took.",
+  "frame_rate.meter": "{fps} fps · slowest {ms} ms",
   "settings.app_icon_accent_why": "The logo of the icon takes the accent colour above, or the offered colour nearest to it.",
   "settings.app_icon_apply": "Change the icon",
   "settings.app_icon_apply_why": "The icon only changes once applied.",
@@ -2995,6 +2999,10 @@ const fr: Dictionary = {
   "app_icon.dark": "Sombre",
   "app_icon.clear": "Transparente",
   "settings.app_icon_accent": "Logo aux couleurs de l'accentuation",
+  "settings.frame_rate": "Afficher les images par seconde",
+  "settings.frame_rate_why":
+    "Un compteur dans un coin de l’écran, sur cet appareil seulement : combien d’images il dessine chaque seconde, et le temps pris par la plus lente.",
+  "frame_rate.meter": "{fps} ips · plus lente {ms} ms",
   "settings.app_icon_accent_why": "Le logo de l'icône prend la couleur d'accentuation ci-dessus, ou la couleur proposée la plus proche.",
   "settings.app_icon_apply": "Changer l'icône",
   "settings.app_icon_apply_why": "L'icône ne change qu'une fois appliquée.",

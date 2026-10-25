@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { Picture } from "../api";
 import { Named } from "./named";
+import { useFillingTheScreen } from "../components/filling-the-screen";
 import { useShownPicture } from "../components/picture";
 import { CloseIcon, InfoIcon, TickIcon, WarningIcon } from "../icons";
 import { useSettings } from "../settings";
@@ -60,23 +61,11 @@ export function useToast(): (toast: Toast) => void {
   return useContext(ToastContext);
 }
 
-/** What is shown full screen, if anything: the browser draws nothing else,
- *  so the words are put inside it. */
-function useFullscreenHolder(): Element | null {
-  const [holder, setHolder] = useState<Element | null>(() => document.fullscreenElement);
-  useEffect(() => {
-    const follow = () => setHolder(document.fullscreenElement);
-    document.addEventListener("fullscreenchange", follow);
-    return () => document.removeEventListener("fullscreenchange", follow);
-  }, []);
-  return holder;
-}
-
 export function Toasts({ children }: { children: ReactNode }) {
   const { t } = useSettings();
   const [shown, setShown] = useState<Shown[]>([]);
   const next = useRef(0);
-  const fullscreen = useFullscreenHolder();
+  const fullscreen = useFillingTheScreen();
 
   const dismiss = useCallback((id: number) => {
     setShown((all) => all.filter((toast) => toast.id !== id));

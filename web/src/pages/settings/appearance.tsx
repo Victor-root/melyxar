@@ -13,6 +13,7 @@ import type { AppIcon, LauncherGround } from "../../app-icon";
 import { LanguagePicker } from "../../components/language-picker";
 import { Modal } from "../../components/modal";
 import { ColourPicker } from "../../components/colour-picker";
+import { useFrameRateShown } from "../../components/frame-rate";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
@@ -91,12 +92,24 @@ export function MyAppearance() {
           </div>
         </Setting>
         <BackdropChoice />
+        <FrameRateChoice />
       </Panel>
 
       <OnAPhone />
 
       <TopBar />
     </>
+  );
+}
+
+/** The frame counter in a corner, on this device alone. */
+function FrameRateChoice() {
+  const { t } = useSettings();
+  const [shown, setShown] = useFrameRateShown();
+  return (
+    <Setting label={t("settings.frame_rate")} why={t("settings.frame_rate_why")}>
+      <Toggle label={t("settings.frame_rate")} checked={shown} onChange={setShown} />
+    </Setting>
   );
 }
 
