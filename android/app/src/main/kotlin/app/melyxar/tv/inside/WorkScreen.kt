@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,6 +66,7 @@ import app.melyxar.tv.trailer.trailerOf
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Badge
 import app.melyxar.tv.look.CardShape
+import app.melyxar.tv.look.CardGap
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
@@ -131,15 +133,8 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             if (work.kind == "season") {
                 section("episodes", work.children) { Episodes(stringResource(R.string.tv_episodes), work.children, memory) }
             }
-            for ((key, title, credits) in listOf(
-                Triple("cast", R.string.tv_cast, work.cast),
-                Triple("guests", R.string.tv_guest_stars, work.guestStars),
-            )) {
-                section(key, credits) {
-                    CardRow(stringResource(title), Icons.People, credits, key = { it.personId + it.role }) { credit ->
-                        CastMember(credit, Modifier.remembered(memory, "$key/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
-                    }
-                }
+            if (work.cast.isNotEmpty() || work.guestStars.isNotEmpty()) {
+                item("cast") { CastAndGuests(work, memory) }
             }
             if (chaptered != null) {
                 item("chapters") { WorkChapters(chaptered, memory) { at -> chrome.play(Play(work.id, chaptered, at)) } }
@@ -529,6 +524,42 @@ private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
     }
 }
 
+/**
+ * The cast and the guest stars on one line, as the web lays them, with the
+ * home page's hairline between them: the guests as wide as they need, up to
+ * half the screen, and the cast in what is left, each scrolling in its share.
+ */
+@Composable
+private fun CastAndGuests(work: Work, memory: FocusMemory) {
+    val chrome = LocalChrome.current
+    val palette = LocalPalette.current
+    @Composable
+    fun People(key: String, title: Int, credits: List<Credit>, modifier: Modifier) =
+        CardRow(stringResource(title), Icons.People, credits, key = { it.personId + it.role }, modifier = modifier) { credit ->
+            CastMember(credit, Modifier.remembered(memory, "$key/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
+        }
+    if (work.cast.isEmpty() || work.guestStars.isEmpty()) {
+        val (key, title, credits) = if (work.cast.isEmpty()) {
+            Triple("guests", R.string.tv_guest_stars, work.guestStars)
+        } else {
+            Triple("cast", R.string.tv_cast, work.cast)
+        }
+        People(key, title, credits, Modifier)
+        return
+    }
+    BoxWithConstraints {
+        val guests = rowWidth(work.guestStars.size, FaceWidth, CardGap, Gutter).coerceAtMost(maxWidth / 2)
+        val cast = rowWidth(work.cast.size, FaceWidth, CardGap, Gutter).coerceAtMost(maxWidth - guests)
+        Row {
+            People("cast", R.string.tv_cast, work.cast, Modifier.width(cast))
+            People("guests", R.string.tv_guest_stars, work.guestStars, Modifier.width(guests).hairlineBefore(palette.accent))
+        }
+    }
+}
+
+/** How wide a face of the cast stands. */
+private val FaceWidth = PosterWidth * 0.8f
+
 /** Somebody of the cast: their photo, their name and their part; pressed,
  *  [onOpen]. */
 @Composable
@@ -543,7 +574,7 @@ fun Face(name: String, character: String?, photo: List<Picture>, modifier: Modif
     val lit by litBy(interaction)
     Column(
         modifier
-            .width(PosterWidth * 0.8f)
+            .width(FaceWidth)
             .clickable(interaction, indication = null, onClick = onOpen),
     ) {
         Box(

@@ -18,6 +18,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -102,4 +106,16 @@ fun <T> LazyListScope.section(key: String, items: List<T>, content: @Composable 
     if (items.isNotEmpty()) {
         item(key = key) { content() }
     }
+}
+
+/** A hairline of [accent] down the left edge, faded at both ends: the air
+ *  between two rows sharing a line, as the web draws it. */
+fun Modifier.hairlineBefore(accent: Color): Modifier = drawWithCache {
+    val line = Brush.verticalGradient(
+        0f to Color.Transparent,
+        0.18f to accent.copy(alpha = 0.45f),
+        0.82f to accent.copy(alpha = 0.45f),
+        1f to Color.Transparent,
+    )
+    onDrawBehind { drawRect(line, size = Size(1.dp.toPx(), size.height)) }
 }
