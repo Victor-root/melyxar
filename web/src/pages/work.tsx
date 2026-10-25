@@ -72,6 +72,7 @@ import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
 import { useTabPage } from "../tab-page";
+import { Together } from "../components/together";
 
 /**
  * How wide the picture at the head of the page is drawn, in plain lengths the
@@ -203,8 +204,12 @@ export function WorkPage() {
 
       {work.kind === "episode" && <TheRestOfTheSeason work={work} />}
 
-      <CastRow title={t("work.cast")} credits={work.cast} />
-      <CastRow title={t("work.guest_stars")} credits={work.guest_stars} />
+      {(work.cast.length > 0 || work.guest_stars.length > 0) && (
+        <Together oneLine>
+          <CastRow title={t("work.cast")} credits={work.cast} />
+          <CastRow title={t("work.guest_stars")} credits={work.guest_stars} />
+        </Together>
+      )}
 
       {!holdsOthers && version && screen.plan && (
         <Chapters

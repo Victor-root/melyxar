@@ -197,6 +197,10 @@
   margin-bottom: var(--gap-section);
 }
 
+.rows-one-line {
+  flex-wrap: nowrap;
+}
+
 .rows-together > .section {
   /* As wide as it needs and no wider, until there is not the room, and then
      as narrow as it is given: that second half is what lets a row hand its
