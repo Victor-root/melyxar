@@ -81,6 +81,28 @@
   flex: 0 0 var(--card-width);
 }
 
+/* A row that holds two runs of cards, each under its own title, scrolled
+   together, with a hairline between them. */
+.row-track > .row-run {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-run-cards {
+  display: flex;
+  gap: var(--gap);
+}
+
+.row-run-cards > * {
+  flex: 0 0 var(--card-width);
+}
+
+.row-track > .row-seam {
+  flex: 0 0 1px;
+  margin-inline: var(--gap);
+}
+
 /* A still is a wide picture: a row of them at a poster's width would be a row
    of cropped middles. */
 .row-track > .card-lying {
@@ -89,7 +111,8 @@
 
 
 @media (min-width: 1400px) {
-  .row-track > * {
+  .row-track > *,
+  .row-run-cards > * {
     flex-basis: var(--card-width-wide);
   }
 

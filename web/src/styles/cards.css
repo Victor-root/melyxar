@@ -171,7 +171,8 @@
    scroll went from 200 ms to 50 ms once rows are drawn up front, for a cost
    paid once, as the page opens. The thousands of a library's grid keep the
    skipping, which is where it pays. */
-.row-track > .card {
+.row-track > .card,
+.row-run-cards > .card {
   content-visibility: visible;
 }
 

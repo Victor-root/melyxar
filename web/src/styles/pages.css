@@ -197,10 +197,6 @@
   margin-bottom: var(--gap-section);
 }
 
-.rows-one-line {
-  flex-wrap: nowrap;
-}
-
 .rows-together > .section {
   /* As wide as it needs and no wider, until there is not the room, and then
      as narrow as it is given: that second half is what lets a row hand its
@@ -226,6 +222,11 @@
   bottom: 0;
   left: calc(var(--gap-section) / -2);
   width: 1px;
+}
+
+/* The same hairline inside one row, between two runs of its cards. */
+.rows-sharing > .section + .section::before,
+.row-seam {
   /* The rim of a way in to a library, quieter: the accent, faint, and the
      light falling off it. A shadow drawn by filter rather than by box, so
      the light fades out at both ends with the line instead of stopping. */
