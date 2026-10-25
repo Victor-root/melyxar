@@ -316,6 +316,10 @@
     <string name="tv_setting_lighter">Mode allégé</string>
     <string name="tv_lighter_full">Complet</string>
     <string name="tv_lighter_on">Allégé</string>
+    <string name="tv_setting_frame_rate">Images par seconde</string>
+    <string name="tv_frame_rate_hidden">Masquées</string>
+    <string name="tv_frame_rate_shown">Affichées</string>
+    <string name="tv_frame_rate_meter">%1$d ips · plus lente %2$d ms</string>
     <string name="tv_settings_probe">Test de fluidité</string>
     <string name="tv_setting_probe_shadows">Ombres</string>
     <string name="tv_setting_probe_banner_fade">Fondu de la bannière</string>

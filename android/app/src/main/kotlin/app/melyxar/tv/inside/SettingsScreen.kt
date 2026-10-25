@@ -49,6 +49,7 @@ import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.FrameRate
 import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
@@ -395,6 +396,14 @@ fun SettingsScreen(sessions: Sessions) {
                     val names = listOf(stringResource(R.string.tv_lighter_full), stringResource(R.string.tv_lighter_on))
                     Line("lighter", title, names[ways.indexOf(Lighter.on)], memory) {
                         ask(title, ways, names, Lighter.on, choose = Lighter::choose)
+                    }
+                }
+                group("frame-rate", null, null) {
+                    val title = stringResource(R.string.tv_setting_frame_rate)
+                    val ways = listOf(false, true)
+                    val names = listOf(stringResource(R.string.tv_frame_rate_hidden), stringResource(R.string.tv_frame_rate_shown))
+                    Line("frame-rate", title, names[ways.indexOf(FrameRate.on)], memory) {
+                        ask(title, ways, names, FrameRate.on, choose = FrameRate::choose)
                     }
                 }
                 PROBE_PARTS.forEachIndexed { index, (part, name) ->
