@@ -183,3 +183,5 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
+
+apply(from = rootProject.file("fdroid-panel.gradle.kts"))
