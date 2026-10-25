@@ -54,7 +54,7 @@ import app.melyxar.tv.look.ServerPicture
 import kotlinx.coroutines.delay
 
 /** How many seconds the next episode is announced before it starts. */
-private const val COUNT_FROM_S = 10
+private const val COUNT_FROM_S = 20
 
 /** How wide the card is, and the still at its left. */
 private val CARD_WIDE = 740.dp
