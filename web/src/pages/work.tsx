@@ -72,7 +72,6 @@ import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
 import { useTabPage } from "../tab-page";
-import { Together } from "../components/together";
 
 /**
  * How wide the picture at the head of the page is drawn, in plain lengths the
@@ -204,12 +203,7 @@ export function WorkPage() {
 
       {work.kind === "episode" && <TheRestOfTheSeason work={work} />}
 
-      {(work.cast.length > 0 || work.guest_stars.length > 0) && (
-        <Together oneLine>
-          <CastRow title={t("work.cast")} credits={work.cast} />
-          <CastRow title={t("work.guest_stars")} credits={work.guest_stars} />
-        </Together>
-      )}
+      <CastRow cast={work.cast} guests={work.guest_stars} />
 
       {!holdsOthers && version && screen.plan && (
         <Chapters
@@ -651,17 +645,36 @@ function Marks({
 
 /** A row of people with their faces, under its title: the cast, or the
  *  guest stars of an episode. Nothing when there is nobody. */
-function CastRow({ title, credits }: { title: string; credits: Work["cast"] }) {
-  if (credits.length === 0) {
-    return null;
+/** The cast, and the guest stars of an episode after them in the same row,
+ *  each run under its own title with a hairline between the two. */
+function CastRow({ cast, guests }: { cast: Work["cast"]; guests: Work["guest_stars"] }) {
+  const { t } = useSettings();
+  const faces = (credits: Work["cast"]) =>
+    credits.map((credit, index) => <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />);
+  if (cast.length === 0 || guests.length === 0) {
+    const credits = cast.length === 0 ? guests : cast;
+    if (credits.length === 0) {
+      return null;
+    }
+    return (
+      <section className="section">
+        <RowHead mark={<PeopleIcon size={24} />} title={t(cast.length === 0 ? "work.guest_stars" : "work.cast")} />
+        <Row>{faces(credits)}</Row>
+      </section>
+    );
   }
+  const run = (key: string, title: string, credits: Work["cast"]) => (
+    <div key={key} className="row-run">
+      <RowHead mark={<PeopleIcon size={24} />} title={title} />
+      <div className="row-run-cards">{faces(credits)}</div>
+    </div>
+  );
   return (
     <section className="section">
-      <RowHead mark={<PeopleIcon size={24} />} title={title} />
       <Row>
-        {credits.map((credit, index) => (
-          <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />
-        ))}
+        {run("cast", t("work.cast"), cast)}
+        <span key="seam" className="row-seam" aria-hidden="true" />
+        {run("guests", t("work.guest_stars"), guests)}
       </Row>
     </section>
   );

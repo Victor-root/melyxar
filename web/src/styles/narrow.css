@@ -690,10 +690,6 @@
     flex: 1 1 100%;
   }
 
-  .rows-one-line {
-    flex-wrap: wrap;
-  }
-
   .row-single {
     --single-side: 30px;
   }

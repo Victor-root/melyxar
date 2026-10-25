@@ -1,7 +1,6 @@
 /*
- * Two rows that share a line, with a hairline between them while they do:
- * what is already under way on the home page, and the cast beside the guest
- * stars of an episode.
+ * The two rows of what is already under way on the home page, which share a
+ * line whenever both are short enough for one to hold them.
  *
  * Whether they do is the stylesheet's answer rather than this file's: it
  * lays them side by side until the line runs out, on the width of the
@@ -13,15 +12,7 @@
 
 import { useLayoutEffect, useRef, useState } from "react";
 
-export function Together({
-  children,
-  oneLine = false,
-}: {
-  children: React.ReactNode;
-  /** Kept on one line however long they are, each scrolling in its share
-   *  of it, rather than put one under the other once they no longer fit. */
-  oneLine?: boolean;
-}) {
+export function Together({ children }: { children: React.ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [sharing, setSharing] = useState(false);
 
@@ -48,7 +39,7 @@ export function Together({
   }, [children]);
 
   return (
-    <div className={`rows-together${oneLine ? " rows-one-line" : ""}${sharing ? " rows-sharing" : ""}`} ref={box}>
+    <div className={`rows-together${sharing ? " rows-sharing" : ""}`} ref={box}>
       {children}
     </div>
   );
