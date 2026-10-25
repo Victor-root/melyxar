@@ -193,7 +193,7 @@ fun Controls(
                 Spacer(Modifier.weight(1f))
                 if (work != null) {
                     PlayerButton(Icons.Info, onClick = { onMenu(Menu.Info) }, modifier = Modifier.remembered(memory, "info"))
-                    if (work.cast.isNotEmpty()) {
+                    if (work.cast.isNotEmpty() || work.guestStars.isNotEmpty()) {
                         PlayerButton(Icons.People, onClick = { onMenu(Menu.Cast) }, modifier = Modifier.remembered(memory, "cast"))
                     }
                 }
