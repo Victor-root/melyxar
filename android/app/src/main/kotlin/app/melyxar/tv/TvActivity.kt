@@ -6,15 +6,21 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.lifecycleScope
 import app.melyxar.R
 import app.melyxar.server.KnownServers
 import app.melyxar.server.Sessions
 import app.melyxar.server.network
+import app.melyxar.tv.look.FrameRate
+import app.melyxar.tv.look.FrameRateMeter
 import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.play.KeptWordsLook
 import app.melyxar.tv.look.TvScale
@@ -37,6 +43,7 @@ class TvActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Probe.watch(this)
         Lighter.keep(this)
+        FrameRate.keep(this)
         KeptWordsLook.keep(this)
         // Built while the window comes up rather than in its first frame:
         // making the client readies everything a secure connection needs.
@@ -47,7 +54,14 @@ class TvActivity : ComponentActivity() {
         val servers = KnownServers(this)
         val sessions = Sessions(this)
         opening = intent.getStringExtra(OPENING)
-        setContent { TvScale { TvApp(servers, sessions, opening, onOpened = { opening = null }, onLeave = ::finish) } }
+        setContent {
+            TvScale {
+                Box(Modifier.fillMaxSize()) {
+                    TvApp(servers, sessions, opening, onOpened = { opening = null }, onLeave = ::finish)
+                    FrameRateMeter(Modifier.align(Alignment.TopEnd))
+                }
+            }
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

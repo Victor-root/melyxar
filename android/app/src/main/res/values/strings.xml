@@ -311,6 +311,10 @@
     <string name="tv_setting_lighter">Lighter drawing</string>
     <string name="tv_lighter_full">Full</string>
     <string name="tv_lighter_on">Lighter</string>
+    <string name="tv_setting_frame_rate">Frames per second</string>
+    <string name="tv_frame_rate_hidden">Hidden</string>
+    <string name="tv_frame_rate_shown">Shown</string>
+    <string name="tv_frame_rate_meter">%1$d fps · slowest %2$d ms</string>
     <string name="tv_settings_probe">Smoothness test</string>
     <string name="tv_setting_probe_shadows">Shadows</string>
     <string name="tv_setting_probe_banner_fade">Banner fade</string>
