@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Handler
 import android.os.HandlerThread
+import android.view.Choreographer
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.activity.compose.LocalActivity
@@ -13,7 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,9 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import app.melyxar.R
-import kotlinx.coroutines.delay
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.roundToInt
 
 /**
  * Whether this television shows, in a corner, how many frames its screens
@@ -55,26 +54,27 @@ object FrameRate {
 }
 
 /** How often the corner says what it counted. */
-private const val SAID_EVERY_MS = 1_000L
+private const val SAID_EVERY_NS = 1_000_000_000L
 
 /**
- * The frames drawn over the last second and the slowest of them, read from
- * the window as each frame is finished, away from the thread that draws. A
- * screen standing still draws nothing, and says so: the one frame a second it
- * then shows is this corner drawing its own number.
+ * The frames over the last second and the slowest of them.
+ *
+ * Counted at every beat of the screen, as the web counts its own, whether
+ * anything was redrawn or not: a screen standing still keeps the cadence of
+ * the screen, and a beat missed is the thread that draws having been busy,
+ * which is a stutter whatever was on screen. The slowest is read from the
+ * frames really drawn, as the window finishes each, away from that thread.
  */
 @Composable
 fun FrameRateMeter(modifier: Modifier) {
     if (!FrameRate.on) return
     val window = LocalActivity.current?.window ?: return
-    val frames = remember { AtomicInteger() }
     val slowestNs = remember { AtomicLong() }
     var said by remember { mutableStateOf<Pair<Int, Long>?>(null) }
 
     DisposableEffect(window) {
         val thread = HandlerThread("frame-rate").apply { start() }
         val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
-            frames.incrementAndGet()
             slowestNs.accumulateAndGet(metrics.getMetric(FrameMetrics.TOTAL_DURATION), ::maxOf)
         }
         window.addOnFrameMetricsAvailableListener(listener, Handler(thread.looper))
@@ -83,11 +83,27 @@ fun FrameRateMeter(modifier: Modifier) {
             thread.quitSafely()
         }
     }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(SAID_EVERY_MS)
-            said = frames.getAndSet(0) to slowestNs.getAndSet(0) / 1_000_000
+    DisposableEffect(Unit) {
+        val beats = Choreographer.getInstance()
+        var since = 0L
+        var count = 0
+        val beat = object : Choreographer.FrameCallback {
+            override fun doFrame(atNs: Long) {
+                if (since == 0L) {
+                    since = atNs
+                } else {
+                    count += 1
+                }
+                if (atNs - since >= SAID_EVERY_NS) {
+                    said = (count * 1e9 / (atNs - since)).roundToInt() to slowestNs.getAndSet(0) / 1_000_000
+                    count = 0
+                    since = atNs
+                }
+                beats.postFrameCallback(this)
+            }
         }
+        beats.postFrameCallback(beat)
+        onDispose { beats.removeFrameCallback(beat) }
     }
 
     val (perSecond, slowestMs) = said ?: return
