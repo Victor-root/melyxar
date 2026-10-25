@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -43,10 +44,10 @@ private val ROW_ROOM = 18.dp
 
 /** A row's heading, as the web's: its icon in the accent, then its name. */
 @Composable
-fun RowHead(title: String, icon: ImageVector?, modifier: Modifier = Modifier) {
+fun RowHead(title: String, icon: ImageVector?, modifier: Modifier = Modifier, inset: Dp = Gutter) {
     val palette = LocalPalette.current
     Row(
-        modifier = modifier.padding(start = Gutter, bottom = 12.dp),
+        modifier = modifier.padding(start = inset, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

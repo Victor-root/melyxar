@@ -10,13 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -524,35 +525,54 @@ private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
     }
 }
 
+/** One face of the row of the cast, of the run it belongs to, and whether
+ *  it opens that run, which is where the run's title stands. */
+private data class InRun(val credit: Credit, val run: String, val opens: Boolean)
+
 /**
- * The cast and the guest stars on one line, as the web lays them, with the
- * home page's hairline between them: the guests as wide as they need, up to
- * half the screen, and the cast in what is left, each scrolling in its share.
+ * The cast, and the guest stars of an episode after them in the same row, as
+ * the web lays them: each run under its own title, scrolled together, with
+ * the home page's hairline between the two.
  */
 @Composable
 private fun CastAndGuests(work: Work, memory: FocusMemory) {
     val chrome = LocalChrome.current
     val palette = LocalPalette.current
-    @Composable
-    fun People(key: String, title: Int, credits: List<Credit>, modifier: Modifier) =
-        CardRow(stringResource(title), Icons.People, credits, key = { it.personId + it.role }, modifier = modifier) { credit ->
+    val cast = stringResource(R.string.tv_cast)
+    val guests = stringResource(R.string.tv_guest_stars)
+    if (work.cast.isEmpty() || work.guestStars.isEmpty()) {
+        val (key, title, credits) = if (work.cast.isEmpty()) Triple("guests", guests, work.guestStars) else Triple("cast", cast, work.cast)
+        CardRow(title, Icons.People, credits, key = { it.personId + it.role }) { credit ->
             CastMember(credit, Modifier.remembered(memory, "$key/${credit.personId}")) { chrome.go(Place.Person(credit.personId)) }
         }
-    if (work.cast.isEmpty() || work.guestStars.isEmpty()) {
-        val (key, title, credits) = if (work.cast.isEmpty()) {
-            Triple("guests", R.string.tv_guest_stars, work.guestStars)
-        } else {
-            Triple("cast", R.string.tv_cast, work.cast)
-        }
-        People(key, title, credits, Modifier)
         return
     }
-    BoxWithConstraints {
-        val guests = rowWidth(work.guestStars.size, FaceWidth, CardGap, Gutter).coerceAtMost(maxWidth / 2)
-        val cast = rowWidth(work.cast.size, FaceWidth, CardGap, Gutter).coerceAtMost(maxWidth - guests)
-        Row {
-            People("cast", R.string.tv_cast, work.cast, Modifier.width(cast))
-            People("guests", R.string.tv_guest_stars, work.guestStars, Modifier.width(guests).hairlineBefore(palette.accent))
+    val faces = remember(work.cast, work.guestStars) {
+        work.cast.mapIndexed { at, credit -> InRun(credit, "cast", at == 0) } +
+            work.guestStars.mapIndexed { at, credit -> InRun(credit, "guests", at == 0) }
+    }
+    CardRow(null, null, faces, key = { "${it.run}/${it.credit.personId}${it.credit.role}" }) { face ->
+        val parting = face.opens && face.run == "guests"
+        // The first guest stands a gap further on, the hairline in the
+        // middle of the air between the two runs.
+        Column(
+            Modifier
+                .then(if (parting) Modifier.hairlineBefore(palette.accent).padding(start = CardGap) else Modifier)
+                .width(FaceWidth),
+        ) {
+            // Every face keeps the room of a title, so the faces of both runs
+            // stand on one line; only the first of a run shows it.
+            RowHead(
+                if (face.run == "cast") cast else guests,
+                Icons.People,
+                Modifier
+                    .wrapContentWidth(Alignment.Start, unbounded = true)
+                    .alpha(if (face.opens) 1f else 0f),
+                inset = 0.dp,
+            )
+            CastMember(face.credit, Modifier.remembered(memory, "${face.run}/${face.credit.personId}")) {
+                chrome.go(Place.Person(face.credit.personId))
+            }
         }
     }
 }
