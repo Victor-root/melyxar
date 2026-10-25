@@ -412,7 +412,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             announced?.let {
                 UpNext(
                     it,
-                    running = playing || ended,
+                    secondsLeft = { if (ended) 0.0 else (playback.length ?: playback.seconds) - playback.seconds },
                     first = upNextFirst,
                     onPlay = { playNext(it) },
                     onCancel = { declined = true },
