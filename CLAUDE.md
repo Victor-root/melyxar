@@ -71,6 +71,13 @@ Toute nouvelle décision d'architecture est ajoutée au README des décisions av
 - Commits petits et descriptifs, en anglais. Commiter chaque étape terminée avant de passer à la suivante.
 - Pas d'intégration continue GitHub : la vérification se fait ici avant commit, puis dans le LXC par le mainteneur.
 
+## F-Droid Panel
+
+- `android/fdroid-panel.gradle.kts` envoie automatiquement chaque build release vers le F-Droid Panel du mainteneur. Il ne faut **jamais** le modifier à la main, ni supprimer la ligne `apply(from = rootProject.file("fdroid-panel.gradle.kts"))` à la fin de `android/app/build.gradle.kts`, même lors d'un nettoyage ou d'une mise à jour de Gradle ou du plugin Android.
+- Pour le mettre à jour, le retélécharger tel quel depuis https://raw.githubusercontent.com/Victor-root/F-Droid-Panel/main/tools/android/fdroid-panel.gradle.kts
+- Sa configuration (`fdroidPanel.url`, `fdroidPanel.repository`, `fdroidPanel.key`) est dans `android/keystore.properties`, qui ne doit jamais être commité, ni lu, ni modifié.
+- Chaque build release envoyé doit avoir un `versionCode` plus grand que le précédent, sinon le panneau le refuse.
+
 ## Environnement de production (résumé)
 
 - LXC Debian 13 non privilégié, 12 threads, 16 Go, 100 Go NVMe. Hôte Proxmox avec Intel Arc A380 passée via `/dev/dri`.
