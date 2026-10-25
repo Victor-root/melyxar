@@ -20,11 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,9 +50,7 @@ import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.ServerPicture
 import kotlinx.coroutines.delay
-
-/** How many seconds the next episode is announced before it starts. */
-private const val COUNT_FROM_S = 20
+import kotlin.math.ceil
 
 /** How wide the card is, and the still at its left. */
 private val CARD_WIDE = 740.dp
@@ -70,6 +66,9 @@ private val SHADE = Color.Black.copy(alpha = 0.72f)
 /** How wide the ring of the count is, and how thick its line. */
 private val RING_WIDE = 44.dp
 private val RING_LINE = 3.5.dp
+
+/** How often the film is read for what is left of it. */
+private const val READ_EVERY_MS = 250L
 
 /** How often the film is looked at for its credits. */
 private const val LOOKED_AT_EVERY_MS = 500L
@@ -93,9 +92,10 @@ fun rememberInCredits(playback: Playback): State<Boolean> = produceState(false, 
 @Composable
 fun UpNext(
     next: NextEpisode,
-    /** Whether the count goes on: while the film plays, or once it is over.
-     *  A film paused holds it where it is. */
-    running: Boolean,
+    /** Seconds of the film still to play, read off the player: the count is
+     *  the film running out, so it holds while the film is paused and
+     *  follows a jump. */
+    secondsLeft: () -> Double,
     first: FocusRequester,
     onPlay: () -> Unit,
     onCancel: () -> Unit,
@@ -103,15 +103,18 @@ fun UpNext(
 ) {
     val palette = LocalPalette.current
     val shape = RoundedCornerShape(14.dp)
-    var left by remember(next.id) { mutableIntStateOf(COUNT_FROM_S) }
-    val play by rememberUpdatedState(onPlay)
-    LaunchedEffect(next.id, running) {
-        if (!running) return@LaunchedEffect
-        while (left > 0) {
-            delay(1_000)
-            left -= 1
+    val reading by rememberUpdatedState(secondsLeft)
+    val left by produceState(ceil(reading()).toInt(), next.id) {
+        while (true) {
+            value = ceil(reading()).toInt().coerceAtLeast(0)
+            delay(READ_EVERY_MS)
         }
-        play()
+    }
+    // What was left when the card came, which the ring empties from.
+    val from = remember(next.id) { left }
+    val play by rememberUpdatedState(onPlay)
+    LaunchedEffect(next.id, left <= 0) {
+        if (left <= 0) play()
     }
     BackHandler(onBack = onCancel)
     // Rising into place as it fades in, rather than appearing all at once:
@@ -164,7 +167,7 @@ fun UpNext(
                     color = palette.textFaint,
                     modifier = Modifier.weight(1f),
                 )
-                Countdown(left, stringResource(R.string.tv_next_in, left))
+                Countdown(left, from, stringResource(R.string.tv_next_in, left))
             }
             Text(
                 whichEpisode(next.season, next.episode, next.title.orEmpty()) ?: next.title.orEmpty(),
@@ -184,10 +187,10 @@ fun UpNext(
 /** The seconds left, in a ring of the accent going out with them a second at
  *  a time, smoothly. */
 @Composable
-private fun Countdown(left: Int, said: String) {
+private fun Countdown(left: Int, from: Int, said: String) {
     val palette = LocalPalette.current
     val share by animateFloatAsState(
-        (left.toFloat() / COUNT_FROM_S).coerceIn(0f, 1f),
+        if (from > 0) (left.toFloat() / from).coerceIn(0f, 1f) else 0f,
         animationSpec = tween(1_000, easing = LinearEasing),
         label = "count",
     )

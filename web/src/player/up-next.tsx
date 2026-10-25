@@ -12,9 +12,6 @@ import type { NextEpisode, PlaybackSegment, UpNextMoment } from "../api";
 import { useBackClosesIt } from "../components/back-closes";
 import { useShownPicture } from "../components/picture";
 
-/** How many seconds the next episode is announced before it starts. */
-export const COUNT_FROM = 20;
-
 /** How wide the still is drawn, as the stylesheet draws it. */
 const STILL_ROOM = "(max-width: 700px) 90vw, 272px";
 
@@ -22,10 +19,11 @@ const STILL_ROOM = "(max-width: 700px) 90vw, 272px";
 const RING = 17;
 const ROUND = 2 * Math.PI * RING;
 
-/** How much of the ring is still lit with this many seconds left: all of it
- *  at the start of the count, none once it is over. */
-export function shareLeft(left: number): number {
-  return Math.min(Math.max(left / COUNT_FROM, 0), 1);
+/** How much of the ring is still lit with [left] seconds of the film to go,
+ *  out of the [from] it had when the card came: all of it then, none at the
+ *  end of the film. */
+export function shareLeft(left: number, from: number): number {
+  return from > 0 ? Math.min(Math.max(left / from, 0), 1) : 0;
 }
 
 /** Whether the next episode is offered: one there is, not turned down, and
@@ -60,23 +58,25 @@ export function tellOfUpNext(
 
 export function UpNext({
   next,
-  running,
+  left,
   t,
   onPlay,
   onCancel,
   onMoment,
 }: {
   next: NextEpisode;
-  /** Whether the count goes on: while the film plays, or once it is over. A
-      film paused holds it where it is. */
-  running: boolean;
+  /** Seconds of the film still to play, read off its own bar: the count is
+      the film running out, so it holds while the film is paused and follows
+      a jump. */
+  left: number;
   t: Say;
   onPlay: () => void;
   onCancel: () => void;
   /** Told of each step, for the journal. */
   onMoment: (moment: UpNextMoment) => void;
 }) {
-  const [left, setLeft] = useState(COUNT_FROM);
+  // What was left when the card came, which the ring empties from.
+  const [from] = useState(left);
   const play = useRef(onPlay);
   play.current = onPlay;
   const said = useRef(onMoment);
@@ -91,20 +91,14 @@ export function UpNext({
   }, [next.id]);
   const { picture, itDidNotLoad } = useShownPicture(next.still);
 
+  const over = left <= 0;
   useEffect(() => {
-    if (!running) {
-      return;
-    }
-    const timer = window.setInterval(() => setLeft((seconds) => seconds - 1), 1000);
-    return () => window.clearInterval(timer);
-  }, [next.id, running]);
-
-  useEffect(() => {
-    if (left <= 0) {
+    if (over) {
       said.current("counted_out");
       leave(() => play.current());
     }
-  }, [left, leave]);
+  }, [over, leave]);
+  const shown = Math.max(Math.ceil(left), 0);
 
   const which =
     next.season !== null && next.episode !== null
@@ -161,7 +155,7 @@ export function UpNext({
           <span
             className="player-up-next-count"
             role="timer"
-            aria-label={t("player.up_next.in", { seconds: Math.max(left, 0) })}
+            aria-label={t("player.up_next.in", { seconds: shown })}
           >
             <svg viewBox="0 0 40 40" aria-hidden="true">
               <circle className="player-up-next-track" cx="20" cy="20" r={RING} />
@@ -171,10 +165,10 @@ export function UpNext({
                 cy="20"
                 r={RING}
                 strokeDasharray={ROUND}
-                strokeDashoffset={ROUND * (1 - shareLeft(left))}
+                strokeDashoffset={ROUND * (1 - shareLeft(left, from))}
               />
             </svg>
-            <span aria-hidden="true">{Math.max(left, 0)}</span>
+            <span aria-hidden="true">{shown}</span>
           </span>
         </div>
         {name && <p className="player-up-next-name">{name}</p>}

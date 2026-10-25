@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NextEpisode, PlaybackSegment } from "../api";
-import { COUNT_FROM, shareLeft, upNextOffered } from "./up-next";
+import { shareLeft, upNextOffered } from "./up-next";
 
 const NEXT: NextEpisode = {
   id: "e2",
@@ -32,9 +32,10 @@ describe("the next episode", () => {
 
 describe("the ring of the count", () => {
   it("is whole at the start, half at half time and gone at the end", () => {
-    expect(shareLeft(COUNT_FROM)).toBe(1);
-    expect(shareLeft(COUNT_FROM / 2)).toBe(0.5);
-    expect(shareLeft(0)).toBe(0);
-    expect(shareLeft(-1)).toBe(0);
+    expect(shareLeft(37, 37)).toBe(1);
+    expect(shareLeft(18.5, 37)).toBe(0.5);
+    expect(shareLeft(0, 37)).toBe(0);
+    expect(shareLeft(-1, 37)).toBe(0);
+    expect(shareLeft(0, 0)).toBe(0);
   });
 });
