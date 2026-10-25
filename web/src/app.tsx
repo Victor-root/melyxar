@@ -29,6 +29,7 @@ import { Header } from "./components/header";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
 import { DebugJournal } from "./components/debug-journal";
+import { FrameRateMeter } from "./components/frame-rate";
 import { Tooltips } from "./components/tooltips";
 import { CamerasPage } from "./pages/cameras";
 import { LibraryPage } from "./pages/library";
@@ -203,6 +204,7 @@ function BehindTheDoor() {
             it out of the page. */}
         {/* DEBUG ONLY, TO BE REMOVED with components/debug-journal.tsx. */}
         <DebugJournal />
+        <FrameRateMeter />
         <Tooltips />
         <WhenLibrariesMove />
         {/* The player of music stands outside every page, so that going

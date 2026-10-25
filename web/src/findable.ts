@@ -58,6 +58,7 @@ export const FINDABLE: FindableSection[] = [
       ["nav.language"],
       ["me.accent", "me.accent_why"],
       ["settings.backdrop", "settings.backdrop_why"],
+      ["settings.frame_rate", "settings.frame_rate_why"],
       ["settings.header", "settings.header_buttons_why"],
       ["settings.header_hides", "settings.header_hides_why"],
       ["settings.header_hides_phone", "settings.header_hides_phone_why"],

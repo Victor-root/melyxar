@@ -72,6 +72,23 @@
   max-height: none;
 }
 
+/* The frame counter, in the top corner over everything, never in the way
+   of a press. */
+.frame-rate {
+  position: fixed;
+  top: calc(var(--safe-top) + 8px);
+  right: calc(var(--safe-right) + 8px);
+  z-index: 1000;
+  padding: 3px 8px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-deep) 80%, transparent);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 /* A tooltip, over everything the page can show, the windows and the notes
    said in the corner included. It never takes the pointer, so it cannot be
    what the pointer is on when it should be gone. */
