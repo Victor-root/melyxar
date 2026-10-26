@@ -16,7 +16,6 @@ import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { showListening } from "../../tab";
-import { api } from "../../api";
 import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
 import { useMusicMarks } from "../marks";
@@ -643,10 +642,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       const step = together(both, zero.advancing && one.advancing, performance.now(), fade);
       both = step.now;
       const tell = (moment: "handed_over" | "both_sounding") =>
-        api
-          .tellTheJournal({ song, saw: "music_decks", moment, ...decksHeard(zero, one, liveAt.current, fade, step.seconds) })
-          // Nothing waits on a line in a journal.
-          .catch(() => {});
+        server.tellTheJournalOfMusic({ song, saw: "decks", moment, ...decksHeard(zero, one, liveAt.current, fade, step.seconds) });
       if (told.events.includes("handedover")) {
         void tell("handed_over");
       }

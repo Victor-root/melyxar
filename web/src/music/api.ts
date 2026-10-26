@@ -211,6 +211,22 @@ export type LyricsSaw = { song: string } & (
   | { saw: "clock_stood_still"; position_ms: number; for_ms: number }
 );
 
+/** The two decks of the player of music, as the page last heard them. */
+export interface DecksHeard {
+  live_deck: number;
+  fade_seconds: number;
+  deck0_second: number;
+  deck0_length: number | null;
+  deck0_sounding: boolean;
+  deck1_second: number;
+  deck1_length: number | null;
+  deck1_sounding: boolean;
+  together_seconds: number;
+}
+
+/** A fact of the player of music, for the server's journal. */
+export type MusicSaw = { song: string; saw: "decks"; moment: "handed_over" | "both_sounding" } & DecksHeard;
+
 /** What a library of music does beyond the rest. */
 export interface MusicLibraryOptions {
   lyrics_online: boolean;
@@ -385,6 +401,9 @@ export const music = {
   /** Nothing waits on it: it is a line in a journal. */
   tellTheJournalOfLyrics: (said: LyricsSaw) =>
     post<{ written: boolean }>("/api/v1/system/journal/lyrics", said).catch(() => {}),
+  /** Nothing waits on it either. */
+  tellTheJournalOfMusic: (said: MusicSaw) =>
+    post<{ written: boolean }>("/api/v1/system/journal/music", said).catch(() => {}),
   /** What LRCLIB holds under an artist and a title, for an administrator. */
   lyricsOffers: (song: string, artist: string, title: string, signal?: AbortSignal) =>
     get<LyricsOffer[]>(`/api/v1/music/songs/${song}/lyrics/offers${query({ artist, title })}`, signal),
