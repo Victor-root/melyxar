@@ -855,7 +855,7 @@ fn cut_short(words: &str) -> &str {
 }
 
 /// The first `most` characters of some words, never cutting one in two.
-fn cut_to(words: &str, most: usize) -> &str {
+pub(crate) fn cut_to(words: &str, most: usize) -> &str {
     match words.char_indices().nth(most) {
         Some((at, _)) => &words[..at],
         None => words,

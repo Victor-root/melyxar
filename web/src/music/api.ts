@@ -224,8 +224,90 @@ export interface DecksHeard {
   together_seconds: number;
 }
 
-/** A fact of the player of music, for the server's journal. */
-export type MusicSaw = { song: string; saw: "decks"; moment: "handed_over" | "both_sounding" } & DecksHeard;
+/** What a deck says, named as an element of sound names it. */
+export type DeckEventName =
+  | "loadedmetadata"
+  | "canplay"
+  | "play"
+  | "playing"
+  | "waiting"
+  | "pause"
+  | "ended"
+  | "error"
+  | "handedover"
+  | "emptied";
+
+/** What the page asks of a deck, or does with it. */
+export type DeckAction =
+  | "load"
+  | "prepare"
+  | "play"
+  | "pause"
+  | "seek"
+  | "let_go"
+  | "hand_over_set"
+  | "hand_over_called_off"
+  | "hand_over_followed"
+  | "hand_over_on_another_deck"
+  | "hand_over_for_an_old_queue"
+  | "let_go_after_the_fade"
+  | "kept_after_the_fade";
+
+/** Why the queue moved. */
+export type QueueWhy =
+  | "picked"
+  | "next"
+  | "previous"
+  | "jumped"
+  | "ended"
+  | "handed_over"
+  | "could_not_play"
+  | "stopped"
+  | "resumed"
+  | "followed_another_tab"
+  | "shuffle"
+  | "repeat"
+  | "added"
+  | "removed"
+  | "moved"
+  | "unknown";
+
+/** A fact of the player of music, for the server's journal: the song
+ *  playing, as the page holds it, and what was seen. */
+export type MusicSaw = { song?: string } & (
+  | ({ saw: "decks"; moment: "handed_over" | "both_sounding" } & DecksHeard)
+  | {
+      saw: "deck_event";
+      deck: number;
+      live_deck: number;
+      event: DeckEventName;
+      second: number;
+      length: number | null;
+      paused: boolean;
+      deck_song: string | null;
+      error: string | null;
+    }
+  | {
+      saw: "deck_asked";
+      deck: number;
+      action: DeckAction;
+      deck_song?: string;
+      at_second?: number;
+      fade_seconds?: number;
+      and_play?: boolean;
+    }
+  | {
+      saw: "queue_moved";
+      why: QueueWhy;
+      from_song?: string;
+      at: number;
+      length: number;
+      shuffle: boolean;
+      repeat: "off" | "all" | "one";
+    }
+  | { saw: "pressed"; command: string; from: "interface" | "card"; holds: boolean; value?: number }
+  | { saw: "tab"; holds: boolean; following: boolean }
+);
 
 /** What a library of music does beyond the rest. */
 export interface MusicLibraryOptions {

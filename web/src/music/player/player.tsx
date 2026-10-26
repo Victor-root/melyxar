@@ -17,7 +17,7 @@ import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { showListening } from "../../tab";
 import { music as server } from "../api";
-import type { MusicPreferences, Song } from "../api";
+import type { DeckAction, DeckEventName, MusicPreferences, MusicSaw, QueueWhy, Song } from "../api";
 import { useMusicMarks } from "../marks";
 import { appMusic, watchDecks } from "./app-music";
 import type { DeckTold } from "./app-music";
@@ -25,6 +25,7 @@ import { aDeck } from "./deck";
 import type { Deck } from "./deck";
 import { APART, decksHeard, together } from "./doubled";
 import { formsPlayedHere } from "./forms";
+import { pressedFrom, songOfAddress, tellTheJournal } from "./journal";
 import { PREPARE_AHEAD_SECONDS, fadeBetween, handOverIn, secondsLeft } from "./handover";
 import { levelOf } from "./levelling";
 import { browserMixer, engineMixer } from "./mixer";
@@ -296,6 +297,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [turn, setTurn] = useState(0);
   const queueNow = useRef(queue);
   queueNow.current = queue;
+  /* Why the queue is about to move, said to the journal once it has. */
+  const queueWhy = useRef<QueueWhy>("unknown");
   const turnNow = useRef(turn);
   turnNow.current = turn;
   /* The song made ready in the other deck, and what calls off its taking
@@ -309,19 +312,38 @@ export function MusicProvider({ children }: { children: ReactNode }) {
      leaves alone. */
   const fading = useRef(false);
 
+  /* What is said to the server's journal of the decks, the queue and the
+     presses (journal.ts), with the song playing. */
+  const said = useCallback((saw: MusicSaw) => {
+    const song = current(queueNow.current)?.id;
+    tellTheJournal(song ? { ...saw, song } : saw);
+  }, []);
+  const askedOf = useCallback(
+    (deck: Deck, action: DeckAction, more: { at_second?: number; fade_seconds?: number; and_play?: boolean } = {}) =>
+      said({
+        saw: "deck_asked",
+        deck: decks.indexOf(deck),
+        action,
+        deck_song: songOfAddress(deck.getAttribute("src")) ?? undefined,
+        ...more,
+      }),
+    [decks, said],
+  );
+
   const load = useCallback(
     (next: Song, start: number, andPlay: boolean) => {
       const audio = live();
       startAt.current = start;
       offset.current = 0;
       audio.src = soundOf(next.id, start);
+      askedOf(audio, "load", { at_second: start, and_play: andPlay });
       time.set({ position: Math.floor(start), length: next.seconds ?? 0 });
       exact.set(start);
       if (andPlay) {
         void audio.play().catch(() => setPlaying(false));
       }
     },
-    [live],
+    [live, askedOf],
   );
 
   /* The next song made ready, or the one made ready let go. */
@@ -333,10 +355,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (prepared.current !== null) {
       prepared.current = null;
       const other = decks[1 - liveAt.current];
+      askedOf(other, "let_go");
       other.removeAttribute("src");
       other.load();
     }
-  }, [decks]);
+  }, [decks, askedOf]);
 
   // Another song, or the same one asked for again: its sound is asked for,
   // unless it already took over from the one before.
@@ -370,6 +393,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setPreferencesHere(chosen);
         if (chosen.resume_queue && kept && !tabs.followingNow.current) {
           resumeFrom.current = kept.position;
+          queueWhy.current = "resumed";
           setQueue({ songs: kept.songs, order: kept.order, at: kept.at, shuffle: kept.shuffle, repeat: kept.repeat });
         }
       });
@@ -426,6 +450,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const from = live();
     const to = decks[1 - liveAt.current];
     if (startedOn !== null && startedOn !== to) {
+      askedOf(startedOn, "hand_over_on_another_deck");
       return;
     }
     if (!after || !next || prepared.current !== next.id) {
@@ -433,6 +458,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       // of, rather than left playing beside the song the page follows,
       // which goes on to the right one when it ends.
       if (startedOn !== null) {
+        askedOf(to, "hand_over_for_an_old_queue");
         prepared.current = null;
         to.pause();
         to.removeAttribute("src");
@@ -445,6 +471,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       gains.current?.cross(liveAt.current, 1 - liveAt.current, fade, levelOf(next, volumeModeNow.current));
       void to.play().catch(() => setPlaying(false));
     }
+    askedOf(to, "hand_over_followed", { fade_seconds: fade });
     fading.current = fade > 0 && mixer() !== null;
     liveAt.current = 1 - liveAt.current;
     prepared.current = null;
@@ -452,6 +479,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     startAt.current = 0;
     alreadyPlaying.current = true;
     wantsToPlay.current = true;
+    queueWhy.current = "handed_over";
     setQueue(after);
     setTurn((was) => was + 1);
     time.set({ position: 0, length: next.seconds ?? 0 });
@@ -460,13 +488,16 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     const leaving = from.getAttribute("src");
     window.setTimeout(() => {
       if (from.getAttribute("src") === leaving) {
+        askedOf(from, "let_go_after_the_fade");
         from.pause();
         from.removeAttribute("src");
         from.load();
+      } else {
+        askedOf(from, "kept_after_the_fade");
       }
       fading.current = false;
     }, fade * 1000 + 100);
-  }, [decks, live, mixer]);
+  }, [decks, live, mixer, askedOf]);
 
   // What the deck playing says, turned into what the interface shows.
   // The other one is heard only once it takes over, and only its failing to
@@ -521,18 +552,26 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         other.preload = "auto";
         other.src = soundOf(next.id, 0);
         prepared.current = next.id;
+        askedOf(other, "prepare");
       }
       if (takeOver.current === null) {
         const fade = fadeBetween(crossfadeNow.current, now.seconds, next.seconds);
         const due = handOverIn(left, fade);
+        askedOf(audio, "hand_over_set", { at_second: audio.currentTime + due, fade_seconds: fade });
         if (appMusic) {
           // Done by the engine, which is on time in the background too.
           const engine = appMusic;
           engine.handOverAt(liveAt.current, 1 - liveAt.current, audio.currentTime + due, fade, levelOf(next, volumeModeNow.current));
-          takeOver.current = () => engine.cancelHandOver();
+          takeOver.current = () => {
+            askedOf(audio, "hand_over_called_off");
+            engine.cancelHandOver();
+          };
         } else {
           const timer = window.setTimeout(() => handOver(null), due * 1000);
-          takeOver.current = () => window.clearTimeout(timer);
+          takeOver.current = () => {
+            askedOf(audio, "hand_over_called_off");
+            window.clearTimeout(timer);
+          };
         }
       }
     };
@@ -562,6 +601,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         return;
       }
       wantsToPlay.current = true;
+      queueWhy.current = "ended";
       setQueue(after);
       setTurn((was) => was + 1);
     };
@@ -577,6 +617,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setWaiting(false);
       if (after) {
         wantsToPlay.current = true;
+        queueWhy.current = "could_not_play";
         setQueue(after);
         setTurn((was) => was + 1);
       } else {
@@ -621,7 +662,64 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         deck.removeEventListener("handedover", tookOver[at]);
       });
     };
-  }, [decks, live, soundThroughTheGain, handOver, letGoOfTheNext]);
+  }, [decks, live, soundThroughTheGain, handOver, letGoOfTheNext, askedOf]);
+
+  // Every word of either deck, written in the journal after the player has
+  // heard it, so the deck it takes for the one playing is the one it chose.
+  useEffect(() => {
+    const names: DeckEventName[] = [
+      "loadedmetadata",
+      "canplay",
+      "play",
+      "playing",
+      "waiting",
+      "pause",
+      "ended",
+      "error",
+      "handedover",
+      "emptied",
+    ];
+    const stopHearing = decks.flatMap((deck, at) =>
+      names.map((event) => {
+        const heard = () =>
+          said({
+            saw: "deck_event",
+            deck: at,
+            live_deck: liveAt.current,
+            event,
+            second: deck.currentTime,
+            length: Number.isFinite(deck.duration) ? deck.duration : null,
+            paused: deck.paused,
+            deck_song: songOfAddress(deck.getAttribute("src")),
+            error: event === "error" ? (deck.error?.message ?? null) : null,
+          });
+        deck.addEventListener(event, heard);
+        return () => deck.removeEventListener(event, heard);
+      }),
+    );
+    return () => stopHearing.forEach((stop) => stop());
+  }, [decks, said]);
+
+  // Each move of the queue, and why.
+  const queueBefore = useRef(queue);
+  useEffect(() => {
+    const was = queueBefore.current;
+    const why = queueWhy.current;
+    queueBefore.current = queue;
+    queueWhy.current = "unknown";
+    if (was === queue) {
+      return;
+    }
+    said({
+      saw: "queue_moved",
+      why,
+      from_song: current(was)?.id,
+      at: queue.at,
+      length: queue.songs.length,
+      shuffle: queue.shuffle,
+      repeat: queue.repeat,
+    });
+  }, [queue, said]);
 
   // Both decks of the application's engine, written in the journal at each
   // hand over and whenever both are heard sounding together past the fade.
@@ -634,24 +732,23 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     watchDecks((told) => {
       heard[told.deck] = told;
       const [zero, one] = heard;
-      const song = current(queueNow.current)?.id;
-      if (!zero || !one || !song) {
+      if (!zero || !one) {
         return;
       }
       const fade = crossfadeNow.current;
       const step = together(both, zero.advancing && one.advancing, performance.now(), fade);
       both = step.now;
       const tell = (moment: "handed_over" | "both_sounding") =>
-        server.tellTheJournalOfMusic({ song, saw: "decks", moment, ...decksHeard(zero, one, liveAt.current, fade, step.seconds) });
+        said({ saw: "decks", moment, ...decksHeard(zero, one, liveAt.current, fade, step.seconds) });
       if (told.events.includes("handedover")) {
-        void tell("handed_over");
+        tell("handed_over");
       }
       if (step.say) {
-        void tell("both_sounding");
+        tell("both_sounding");
       }
     });
     return () => watchDecks(null);
-  }, []);
+  }, [said]);
 
   // A song heard for long enough counts as listened to, once each time it
   // is played. Read as the time moves rather than drawn: nothing on the
@@ -704,17 +801,19 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const letGoOfTheSound = useCallback(() => {
     letGoOfTheNext();
     const audio = live();
+    askedOf(audio, "let_go");
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     wantsToPlay.current = false;
-  }, [live, letGoOfTheNext]);
+  }, [live, letGoOfTheNext, askedOf]);
 
   /* Silent at once and the bar set on its way out; the rest once it is gone,
      unless something was played again meanwhile. */
   const stop = useCallback(() => {
     const queueAtTheStop = queueNow.current;
     const audio = live();
+    askedOf(audio, "pause");
     audio.pause();
     wantsToPlay.current = false;
     setStopping(true);
@@ -727,18 +826,23 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       letGoOfTheSound();
       setPlaying(false);
       setWaiting(false);
+      queueWhy.current = "stopped";
       setQueue(EMPTY);
       time.set({ position: 0, length: 0 });
       exact.set(0);
     }, BAR_LEAVES_MS);
-  }, [live, letGoOfTheSound]);
+  }, [live, letGoOfTheSound, askedOf]);
 
   stopNow.current = stop;
 
-  const pause = useCallback(() => live().pause(), [live]);
+  const pause = useCallback(() => {
+    askedOf(live(), "pause");
+    live().pause();
+  }, [live, askedOf]);
   const resume = useCallback(() => {
+    askedOf(live(), "play");
     void live().play().catch(() => setPlaying(false));
-  }, [live]);
+  }, [live, askedOf]);
 
   /* What is done to the music in any tab is done by the one that holds the
      sound: see `tabs.ts`. */
@@ -752,6 +856,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       follow: (next, beat) => {
         if (next) {
           letGoOfTheSound();
+          queueWhy.current = "followed_another_tab";
           setQueue(next);
         }
         setPlaying(beat.playing);
@@ -768,6 +873,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     { queue, playing, waiting, loudness },
   );
   const { run } = tabs;
+  const holdsNow = useRef(tabs.holds);
+  holdsNow.current = tabs.holds;
+
+  // Whether this tab holds the sound, as it changes.
+  const { followingNow } = tabs;
+  useEffect(() => {
+    said({ saw: "tab", holds: tabs.holds, following: followingNow.current });
+  }, [tabs.holds, followingNow, said]);
 
   // A film on the screen stops the music for good, the bar going with it,
   // or pauses it until the film is closed, as the account chose: two sounds
@@ -814,11 +927,12 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   const commands = useMemo(() => {
     /* Another place in the queue, whose song is asked for. */
-    const change = (next: Queue | null, andPlay = true) => {
+    const change = (next: Queue | null, why: QueueWhy, andPlay = true) => {
       if (!next) {
         return;
       }
       wantsToPlay.current = andPlay;
+      queueWhy.current = why;
       setQueue(next);
       setTurn((was) => was + 1);
     };
@@ -827,7 +941,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (songs.length === 0) {
           return;
         }
-        change(playingFrom(songs, index, shuffle, queueNow.current.repeat));
+        change(playingFrom(songs, index, shuffle, queueNow.current.repeat), "picked");
       },
       toggle: () => {
         const now = current(queueNow.current);
@@ -838,15 +952,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         if (!audio.getAttribute("src")) {
           load(now, time.now.position, true);
         } else if (audio.paused) {
+          askedOf(audio, "play");
           void audio.play().catch(() => setPlaying(false));
         } else {
+          askedOf(audio, "pause");
           audio.pause();
         }
       },
       pause,
       resume,
       stop,
-      next: () => change(forward(queueNow.current)),
+      next: () => change(forward(queueNow.current), "next"),
       previous: () => {
         const { queue: back, restart } = backward(queueNow.current, time.now.position);
         if (restart) {
@@ -855,7 +971,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
             load(now, 0, true);
           }
         } else {
-          change(back);
+          change(back, "previous");
         }
       },
       seek: (seconds: number) => {
@@ -869,6 +985,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           takeOver.current();
           takeOver.current = null;
         }
+        askedOf(audio, "seek", { at_second: to });
         if (Number.isFinite(audio.duration)) {
           audio.currentTime = to;
         } else {
@@ -880,15 +997,22 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setVolume: (volume: number) =>
         setLoudness((was) => ({ volume: Math.min(Math.max(volume, 0), 1), muted: volume > 0 ? false : was.muted })),
       setMuted: (muted: boolean) => setLoudness((was) => ({ ...was, muted })),
-      toggleShuffle: () => setQueue((was) => withShuffle(was, !was.shuffle)),
-      cycleRepeat: () => setQueue((was) => ({ ...was, repeat: nextRepeat(was.repeat) })),
-      jump: (at: number) => change(jumpTo(queueNow.current, at)),
+      toggleShuffle: () => {
+        queueWhy.current = "shuffle";
+        setQueue((was) => withShuffle(was, !was.shuffle));
+      },
+      cycleRepeat: () => {
+        queueWhy.current = "repeat";
+        setQueue((was) => ({ ...was, repeat: nextRepeat(was.repeat) }));
+      },
+      jump: (at: number) => change(jumpTo(queueNow.current, at), "jumped"),
       playNext: (songs: Song[]) => {
         const empty = queueNow.current.songs.length === 0;
         const next = playNext(queueNow.current, songs);
         if (empty) {
-          change(next);
+          change(next, "added");
         } else {
+          queueWhy.current = "added";
           setQueue(next);
         }
       },
@@ -896,26 +1020,46 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         const empty = queueNow.current.songs.length === 0;
         const next = playLast(queueNow.current, songs);
         if (empty) {
-          change(next);
+          change(next, "added");
         } else {
+          queueWhy.current = "added";
           setQueue(next);
         }
       },
-      remove: (at: number) => setQueue((was) => without(was, at)),
-      move: (from: number, to: number) => setQueue((was) => moved(was, from, to)),
+      remove: (at: number) => {
+        queueWhy.current = "removed";
+        setQueue((was) => without(was, at));
+      },
+      move: (from: number, to: number) => {
+        queueWhy.current = "moved";
+        setQueue((was) => moved(was, from, to));
+      },
     };
-  }, [live, load, stop, pause, resume]);
+  }, [live, load, stop, pause, resume, askedOf]);
   commandsNow.current = commands;
 
   const controls = useMemo<MusicControls>(() => {
+    const pressed = (command: Command, args: unknown[]) =>
+      said({
+        saw: "pressed",
+        command,
+        from: pressedFrom(),
+        holds: holdsNow.current,
+        value: typeof args[0] === "number" ? args[0] : undefined,
+      });
     /* A command of the interface, done by the tab that holds the sound. */
     const sent =
       <Args extends unknown[]>(name: Command, local: (...args: Args) => void) =>
-      (...args: Args) =>
+      (...args: Args) => {
+        pressed(name, args);
         run(name, args, () => local(...args));
+      };
     /* A button hands its click to what it calls: a command that asks for
        nothing is sent without it. */
-    const sentBare = (name: Command, local: () => void) => () => run(name, [], local);
+    const sentBare = (name: Command, local: () => void) => () => {
+      pressed(name, []);
+      run(name, [], local);
+    };
     return {
       play: sent("play", commands.play),
       toggle: sentBare("toggle", commands.toggle),
@@ -935,7 +1079,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       preferences: preferences ?? DEFAULT_PREFERENCES,
       setPreferences,
     };
-  }, [commands, run, preferences, setPreferences]);
+  }, [commands, run, preferences, setPreferences, said]);
 
   const music = useMemo<Music>(
     () => ({ ...controls, queue, song, playing, waiting, loudness, stopping }),
