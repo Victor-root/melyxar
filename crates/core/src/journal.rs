@@ -72,6 +72,8 @@ pub fn tag_of(module: &str) -> &'static str {
         // together, since "why has this song no words" is answered by both.
         ("melyxar_app::music::lyrics", "lyrics"),
         ("melyxar_server::lyrics_watch", "lyrics"),
+        // What the page heard of the two decks of the player of music.
+        ("melyxar_server::music_watch", "music"),
         ("melyxar_metadata::lrclib", "lyrics"),
         // Everything else about the music library: covers, photos, tags,
         // the reading of the sound. Longer modules above win over this one.
@@ -111,6 +113,24 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_app::people", "metadata"),
         ("melyxar_app::online_subtitles", "subtitles"),
         ("melyxar_app::cards", "card"),
+        // The cameras watched live: declared, opened, relayed.
+        ("melyxar_app::cameras", "cameras"),
+        // How busy the machine is: the card, the disks, the minutes and the
+        // hours kept of them.
+        ("melyxar_app::measures", "measures"),
+        // What the server does as it comes up: being found on the home
+        // network, the provider of metadata made ready.
+        ("melyxar_app::neighbours", "startup"),
+        ("melyxar_app::state", "startup"),
+        // Collections gather works of the libraries.
+        ("melyxar_app::collections", "library"),
+        // The pictures of the server itself: its logo, the sign in screen,
+        // and the icons the application is drawn from.
+        ("melyxar_app::server", "images"),
+        ("melyxar_server::installing", "images"),
+        ("melyxar_server::libraries", "library"),
+        // What is being watched, as the live line tells it.
+        ("melyxar_server::live", "accounts"),
         // Which jobs run when.
         ("melyxar_app::schedule", "jobs"),
         // Measuring what a device decodes: the clips, and every result kept.
@@ -367,7 +387,11 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::thumbnails"), "upkeep");
         assert_eq!(tag_of("melyxar_app::schedule"), "jobs");
         assert_eq!(tag_of("melyxar_app::online_subtitles"), "subtitles");
-        assert_eq!(tag_of("melyxar_app::measures"), "melyxar", "what has no home of its own stays in the general tag");
+        assert_eq!(tag_of("melyxar_app::measures"), "measures");
+        assert_eq!(tag_of("melyxar_app::cameras"), "cameras");
+        assert_eq!(tag_of("melyxar_app::collections"), "library");
+        assert_eq!(tag_of("melyxar_server::music_watch"), "music");
+        assert_eq!(tag_of("melyxar_app::nothing_yet"), "melyxar", "what has no home of its own stays in the general tag");
         assert_eq!(
             tag_of("melyxar_ffmpeg::sound"),
             "openings",
