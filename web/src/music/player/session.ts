@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
 import { pictureSet } from "../../api";
 import { appMusic } from "./app-music";
 import type { Described } from "./app-music";
+import { pressedOnTheCard } from "./journal";
 import type { Music } from "./player";
 import { useMusicTime } from "./player";
 import { canStepOn } from "./queue";
@@ -159,7 +160,7 @@ export function useEngineCard(music: Music): void {
     if (!appMusic) {
       return;
     }
-    window.melyxarMusicAsked = (asked, seconds) => {
+    window.melyxarMusicAsked = (asked, seconds) => pressedOnTheCard(() => {
       const now = musicNow.current;
       switch (asked) {
         case "play":
@@ -185,7 +186,7 @@ export function useEngineCard(music: Music): void {
           now.seek(seconds);
           break;
       }
-    };
+    });
     return () => {
       window.melyxarMusicAsked = undefined;
     };

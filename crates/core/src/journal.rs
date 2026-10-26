@@ -72,8 +72,13 @@ pub fn tag_of(module: &str) -> &'static str {
         // together, since "why has this song no words" is answered by both.
         ("melyxar_app::music::lyrics", "lyrics"),
         ("melyxar_server::lyrics_watch", "lyrics"),
-        // What the page heard of the two decks of the player of music.
-        ("melyxar_server::music_watch", "music"),
+        // What the page saw of the player of music, a tag for each part of
+        // it: the sound of its two decks, the queue and why it moves, the
+        // presses, and which tab holds the sound.
+        ("melyxar_server::music_watch::decks", "music-decks"),
+        ("melyxar_server::music_watch::queue", "music-queue"),
+        ("melyxar_server::music_watch::controls", "music-controls"),
+        ("melyxar_server::music_watch::tabs", "music-tabs"),
         ("melyxar_metadata::lrclib", "lyrics"),
         // Everything else about the music library: covers, photos, tags,
         // the reading of the sound. Longer modules above win over this one.
@@ -390,7 +395,10 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::measures"), "measures");
         assert_eq!(tag_of("melyxar_app::cameras"), "cameras");
         assert_eq!(tag_of("melyxar_app::collections"), "library");
-        assert_eq!(tag_of("melyxar_server::music_watch"), "music");
+        assert_eq!(tag_of("melyxar_server::music_watch::decks"), "music-decks");
+        assert_eq!(tag_of("melyxar_server::music_watch::queue"), "music-queue");
+        assert_eq!(tag_of("melyxar_server::music_watch::controls"), "music-controls");
+        assert_eq!(tag_of("melyxar_server::music_watch::tabs"), "music-tabs");
         assert_eq!(tag_of("melyxar_app::nothing_yet"), "melyxar", "what has no home of its own stays in the general tag");
         assert_eq!(
             tag_of("melyxar_ffmpeg::sound"),

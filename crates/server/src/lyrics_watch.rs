@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::identifiers::parse_work;
+use crate::page::cut_to;
 
 pub fn router() -> Router<AppState> {
     Router::new().route(
@@ -114,13 +115,6 @@ struct FromThePage {
 #[derive(Debug, Serialize)]
 struct Written {
     written: bool,
-}
-
-fn cut_to(words: &str, most: usize) -> &str {
-    match words.char_indices().nth(most) {
-        Some((at, _)) => &words[..at],
-        None => words,
-    }
 }
 
 async fn what_the_page_saw(

@@ -1,13 +1,21 @@
-//! What the page saw of the two decks of the player of music, written into
-//! the journal under the `music` tag.
+//! What the page saw of the player of music, written into the journal under
+//! a tag for each part of it: `music-decks` for the sound, `music-queue` for
+//! what plays and why, `music-controls` for the presses, `music-tabs` for
+//! the tab that holds the sound.
 //!
-//! Twice a second song was heard playing over the first, on a phone, with
-//! nothing anywhere saying which deck held which or when the next one was
-//! started: the server sends the sound and never hears it. Like `page`, this
-//! is a closed list of facts the server names itself.
+//! The server sends the sound and never hears it: which deck held which
+//! song, which press moved the queue and which tab played are only known to
+//! the page. Like `page`, this is a closed list of facts the server names
+//! itself, and every name from outside is read before it is written down.
+
+mod controls;
+mod decks;
+mod queue;
+mod tabs;
 
 use axum::{Json, Router};
 use melyxar_app::AppState;
+use melyxar_core::id::WorkId;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
@@ -20,53 +28,23 @@ pub fn router() -> Router<AppState> {
     )
 }
 
-/// When the two decks were written down.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum Moment {
-    /// The next song has just taken over from the one before.
-    HandedOver,
-    /// Both decks have been sounding together for longer than any fade.
-    BothSounding,
-}
-
-impl Moment {
-    fn as_word(self) -> &'static str {
-        match self {
-            Self::HandedOver => "handed over",
-            Self::BothSounding => "both sounding",
-        }
-    }
-}
-
 /// One fact, named by the server.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "saw", rename_all = "snake_case")]
 enum Seen {
-    /// Both decks, as the page last heard them.
-    Decks {
-        moment: Moment,
-        /// The deck the page takes for the one playing.
-        live_deck: u8,
-        /// The crossfade asked for, in seconds.
-        fade_seconds: f64,
-        /// Seconds into what each deck plays, and its length when known.
-        deck0_second: f64,
-        #[serde(default)]
-        deck0_length: Option<f64>,
-        deck0_sounding: bool,
-        deck1_second: f64,
-        #[serde(default)]
-        deck1_length: Option<f64>,
-        deck1_sounding: bool,
-        /// How long both have been sounding together, in seconds.
-        together_seconds: f64,
-    },
+    Decks(decks::Decks),
+    DeckEvent(decks::Event),
+    DeckAsked(decks::Asked),
+    QueueMoved(queue::Moved),
+    Pressed(controls::Pressed),
+    Tab(tabs::Tab),
 }
 
 #[derive(Debug, Deserialize)]
 struct FromThePage {
-    song: String,
+    /// The song playing, as the page holds it, when there is one.
+    #[serde(default)]
+    song: Option<String>,
     #[serde(flatten)]
     seen: Seen,
 }
@@ -76,39 +54,33 @@ struct Written {
     written: bool,
 }
 
+/// A song named by the page, read as one.
+fn song_named(value: Option<&str>) -> Result<Option<WorkId>> {
+    value.map(parse_work).transpose()
+}
+
+/// Whose page saw it, and the song it was playing.
+struct Said {
+    account: String,
+    song: Option<WorkId>,
+}
+
 async fn what_the_page_saw(
-    _: crate::account::Viewer,
+    crate::account::Viewer(viewer): crate::account::Viewer,
     Json(said): Json<FromThePage>,
 ) -> Result<Json<Written>> {
-    // The identifier is a name from outside: read as one, written down only
-    // once it parses.
-    let song = tracing::field::display(parse_work(&said.song)?);
+    // Every account writes here, so each line says whose page saw it.
+    let by = Said {
+        account: viewer.name.clone(),
+        song: song_named(said.song.as_deref())?,
+    };
     match said.seen {
-        Seen::Decks {
-            moment,
-            live_deck,
-            fade_seconds,
-            deck0_second,
-            deck0_length,
-            deck0_sounding,
-            deck1_second,
-            deck1_length,
-            deck1_sounding,
-            together_seconds,
-        } => tracing::debug!(
-            song,
-            moment = moment.as_word(),
-            live_deck,
-            fade_seconds,
-            deck0_second,
-            deck0_length,
-            deck0_sounding,
-            deck1_second,
-            deck1_length,
-            deck1_sounding,
-            together_seconds,
-            "the two decks of the music"
-        ),
+        Seen::Decks(seen) => decks::write_decks(&by, &seen),
+        Seen::DeckEvent(seen) => decks::write_event(&by, &seen)?,
+        Seen::DeckAsked(seen) => decks::write_asked(&by, &seen)?,
+        Seen::QueueMoved(seen) => queue::write(&by, &seen)?,
+        Seen::Pressed(seen) => controls::write(&by, &seen),
+        Seen::Tab(seen) => tabs::write(&by, &seen),
     }
     Ok(Json(Written { written: true }))
 }
@@ -117,40 +89,65 @@ async fn what_the_page_saw(
 mod tests {
     use super::*;
 
+    const SONG: &str = "01a0f0c6-c1fa-769d-9f83-3467c8c4586b";
+
+    fn read(json: &str) -> std::result::Result<FromThePage, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
     #[test]
     fn every_route_this_module_declares_is_one_a_router_accepts() {
         let _ = router();
     }
 
     #[test]
-    fn the_decks_are_read_and_anything_else_is_refused() {
-        let song = "01a0f0c6-c1fa-769d-9f83-3467c8c4586b";
-        let decks = format!(
-            r#"{{"song":"{song}","saw":"decks","moment":"both_sounding","live_deck":1,"fade_seconds":0,
-                "deck0_second":143.2,"deck0_length":null,"deck0_sounding":true,
-                "deck1_second":61.5,"deck1_length":212.4,"deck1_sounding":true,"together_seconds":2.5}}"#
-        );
-        match serde_json::from_str::<FromThePage>(&decks).expect("read").seen {
-            Seen::Decks {
-                moment,
-                live_deck,
-                deck0_length,
-                deck1_length,
-                together_seconds,
-                ..
-            } => {
-                assert_eq!(moment.as_word(), "both sounding");
-                assert_eq!(live_deck, 1);
-                assert_eq!(deck0_length, None);
-                assert_eq!(deck1_length, Some(212.4));
-                assert_eq!(together_seconds, 2.5);
-            }
-        }
+    fn each_fact_is_read_by_its_name() {
+        let facts = [
+            format!(
+                r#"{{"song":"{SONG}","saw":"decks","moment":"both_sounding","live_deck":1,"fade_seconds":0,
+                    "deck0_second":143.2,"deck0_length":null,"deck0_sounding":true,
+                    "deck1_second":61.5,"deck1_length":212.4,"deck1_sounding":true,"together_seconds":2.5}}"#
+            ),
+            format!(
+                r#"{{"song":"{SONG}","saw":"deck_event","deck":0,"live_deck":0,"event":"ended","second":249.8,
+                    "length":249.8,"paused":true,"deck_song":"{SONG}","error":null}}"#
+            ),
+            format!(r#"{{"saw":"deck_asked","deck":1,"action":"prepare","deck_song":"{SONG}"}}"#),
+            format!(
+                r#"{{"song":"{SONG}","saw":"queue_moved","why":"ended","from_song":"{SONG}","at":3,"length":12,
+                    "shuffle":true,"repeat":"all"}}"#
+            ),
+            r#"{"saw":"pressed","command":"next","from":"card","holds":true}"#.to_string(),
+            r#"{"saw":"tab","holds":false,"following":true}"#.to_string(),
+        ];
+        let read: Vec<Seen> = facts
+            .iter()
+            .map(|json| read(json).unwrap_or_else(|error| panic!("{error}: {json}")).seen)
+            .collect();
+        assert!(matches!(read[0], Seen::Decks(_)));
+        assert!(matches!(read[1], Seen::DeckEvent(_)));
+        assert!(matches!(read[2], Seen::DeckAsked(_)));
+        assert!(matches!(read[3], Seen::QueueMoved(_)));
+        assert!(matches!(read[4], Seen::Pressed(_)));
+        assert!(matches!(read[5], Seen::Tab(_)));
+    }
+
+    #[test]
+    fn a_name_outside_the_list_is_refused() {
         for refused in [
-            format!(r#"{{"song":"{song}","saw":"anything_else","message":"hi"}}"#),
-            decks.replace("both_sounding", "whenever"),
+            r#"{"saw":"anything_else","message":"hi"}"#.to_string(),
+            r#"{"saw":"pressed","command":"dance","from":"card","holds":true}"#.to_string(),
+            r#"{"saw":"deck_asked","deck":1,"action":"explode"}"#.to_string(),
+            r#"{"saw":"deck_event","deck":0,"live_deck":0,"event":"whatever","second":0,"paused":true}"#.to_string(),
         ] {
-            assert!(serde_json::from_str::<FromThePage>(&refused).is_err(), "{refused}");
+            assert!(read(&refused).is_err(), "{refused}");
         }
+    }
+
+    #[test]
+    fn a_song_is_read_as_one() {
+        assert!(matches!(song_named(Some(SONG)), Ok(Some(_))));
+        assert!(matches!(song_named(None), Ok(None)));
+        assert!(song_named(Some("a song somebody likes")).is_err());
     }
 }
