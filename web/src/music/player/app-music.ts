@@ -89,12 +89,22 @@ export const appMusic: AppMusic | null =
   typeof window !== "undefined" ? (window.MelyxarMusic ?? null) : null;
 
 const listening = new Map<number, (told: DeckTold) => void>();
+let watching: ((told: DeckTold) => void) | null = null;
 
 if (appMusic) {
-  window.melyxarMusicTold = (told) => listening.get(told.deck)?.(told);
+  window.melyxarMusicTold = (told) => {
+    listening.get(told.deck)?.(told);
+    watching?.(told);
+  };
 }
 
 /** Hears what the engine says of `deck`. */
 export function hearDeck(deck: number, heard: (told: DeckTold) => void): void {
   listening.set(deck, heard);
+}
+
+/** Hears what the engine says of either deck, after the deck itself, or
+ *  nothing more. */
+export function watchDecks(heard: ((told: DeckTold) => void) | null): void {
+  watching = heard;
 }

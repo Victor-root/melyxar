@@ -414,6 +414,30 @@ enum Seen {
         #[serde(default)]
         to_height: Option<u32>,
     },
+    /// The two decks of the player of music, at a hand over and whenever
+    /// both are heard sounding together past the fade between them.
+    ///
+    /// Twice a second song was heard playing over the first, on a phone, with
+    /// nothing anywhere saying which deck held which or when the next one was
+    /// started. Both decks are written, as the page last heard them.
+    MusicDecks {
+        moment: DecksMoment,
+        /// The deck the page takes for the one playing.
+        live_deck: u8,
+        /// The crossfade asked for, in seconds.
+        fade_seconds: f64,
+        /// Seconds into what each deck plays, and its length when known.
+        deck0_second: f64,
+        #[serde(default)]
+        deck0_length: Option<f64>,
+        deck0_sounding: bool,
+        deck1_second: f64,
+        #[serde(default)]
+        deck1_length: Option<f64>,
+        deck1_sounding: bool,
+        /// How long both have been sounding together, in seconds.
+        together_seconds: f64,
+    },
     /// What the subtitles of the film hold, once the browser has read them.
     ///
     /// Said once for each set of subtitles the film is given. Nought cues
@@ -547,6 +571,26 @@ impl UpNextMoment {
             Self::SteppedToTheNextEpisode => "stepped_to_the_next_episode",
             Self::WentOnInTheRow => "went_on_in_the_row",
             Self::NowhereToGo => "nowhere_to_go",
+        }
+    }
+}
+
+/// When the two decks of the player of music were written down.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum DecksMoment {
+    /// The next song has just taken over from the one before.
+    HandedOver,
+    /// Both decks have been sounding together for longer than any fade.
+    BothSounding,
+}
+
+impl DecksMoment {
+    /// The word written in the journal.
+    fn as_word(self) -> &'static str {
+        match self {
+            Self::HandedOver => "handed_over",
+            Self::BothSounding => "both_sounding",
         }
     }
 }
@@ -813,6 +857,8 @@ struct FromThePage {
     session: Option<String>,
     #[serde(default)]
     source: Option<String>,
+    #[serde(default)]
+    song: Option<String>,
     #[serde(flatten)]
     seen: Seen,
 }
@@ -824,21 +870,26 @@ enum Reading {
     Session(melyxar_app::playback::SessionId),
     /// A film handed over as it lies on the disk.
     File(melyxar_core::id::MediaSourceId),
+    /// A song of the player of music.
+    Song(melyxar_core::id::WorkId),
 }
 
 impl Reading {
     /// The one reading named, or a refusal when the name is malformed or when
     /// there is not exactly one.
-    fn named(session: Option<&str>, source: Option<&str>) -> Result<Self> {
-        match (session, source) {
-            (Some(session), None) => session.parse().map(Self::Session).map_err(|_| {
+    fn named(session: Option<&str>, source: Option<&str>, song: Option<&str>) -> Result<Self> {
+        match (session, source, song) {
+            (Some(session), None, None) => session.parse().map(Self::Session).map_err(|_| {
                 crate::error::ServerError::invalid_input("the session identifier is malformed")
             }),
-            (None, Some(source)) => source.parse().map(Self::File).map_err(|_| {
+            (None, Some(source), None) => source.parse().map(Self::File).map_err(|_| {
                 crate::error::ServerError::invalid_input("the source identifier is malformed")
             }),
+            (None, None, Some(song)) => song.parse().map(Self::Song).map_err(|_| {
+                crate::error::ServerError::invalid_input("the song identifier is malformed")
+            }),
             _ => Err(crate::error::ServerError::invalid_input(
-                "a fact names either a session or a source",
+                "a fact names one session, source or song",
             )),
         }
     }
@@ -873,9 +924,11 @@ async fn what_the_page_saw(
     let account = tracing::field::display(&viewer.name);
     // The identifier is a name from outside: read as one, never used as one.
     // Written down as the page sent it only once it parses.
-    let (session, source) = match Reading::named(said.session.as_deref(), said.source.as_deref())? {
-        Reading::Session(session) => (Some(tracing::field::display(session)), None),
-        Reading::File(source) => (None, Some(tracing::field::display(source))),
+    let named = Reading::named(said.session.as_deref(), said.source.as_deref(), said.song.as_deref())?;
+    let (session, source, song) = match named {
+        Reading::Session(session) => (Some(tracing::field::display(session)), None, None),
+        Reading::File(source) => (None, Some(tracing::field::display(source)), None),
+        Reading::Song(song) => (None, None, Some(tracing::field::display(song))),
     };
 
     match said.seen {
@@ -1177,6 +1230,32 @@ async fn what_the_page_saw(
             ended,
             to = to.as_deref().map(cut_short),
             "the next episode card"
+        ),
+        Seen::MusicDecks {
+            moment,
+            live_deck,
+            fade_seconds,
+            deck0_second,
+            deck0_length,
+            deck0_sounding,
+            deck1_second,
+            deck1_length,
+            deck1_sounding,
+            together_seconds,
+        } => tracing::debug!(
+            account,
+            song,
+            moment = moment.as_word(),
+            live_deck,
+            fade_seconds,
+            deck0_second,
+            deck0_length,
+            deck0_sounding,
+            deck1_second,
+            deck1_length,
+            deck1_sounding,
+            together_seconds,
+            "the two decks of the music"
         ),
         Seen::QualityAdapted {
             why,
@@ -1508,7 +1587,7 @@ mod tests {
         )
         .expect("a fact about a file is read");
         assert!(matches!(
-            Reading::named(said.session.as_deref(), said.source.as_deref()),
+            Reading::named(said.session.as_deref(), said.source.as_deref(), said.song.as_deref()),
             Ok(Reading::File(_))
         ));
         match said.seen {
@@ -1608,13 +1687,45 @@ mod tests {
     #[test]
     fn a_fact_names_exactly_one_reading() {
         let named = "01a0a143-2ab0-748d-8924-e3208b7930c9";
-        assert!(matches!(Reading::named(Some(named), None), Ok(Reading::Session(_))));
-        assert!(matches!(Reading::named(None, Some(named)), Ok(Reading::File(_))));
-        // Both at once, neither, or a name that is not one: refused.
-        assert!(Reading::named(Some(named), Some(named)).is_err());
-        assert!(Reading::named(None, None).is_err());
-        assert!(Reading::named(None, Some("a film somebody likes")).is_err());
-        assert!(Reading::named(Some("x"), None).is_err());
+        assert!(matches!(Reading::named(Some(named), None, None), Ok(Reading::Session(_))));
+        assert!(matches!(Reading::named(None, Some(named), None), Ok(Reading::File(_))));
+        assert!(matches!(Reading::named(None, None, Some(named)), Ok(Reading::Song(_))));
+        // Two at once, none, or a name that is not one: refused.
+        assert!(Reading::named(Some(named), Some(named), None).is_err());
+        assert!(Reading::named(None, Some(named), Some(named)).is_err());
+        assert!(Reading::named(None, None, None).is_err());
+        assert!(Reading::named(None, Some("a film somebody likes"), None).is_err());
+        assert!(Reading::named(Some("x"), None, None).is_err());
+        assert!(Reading::named(None, None, Some("a song somebody likes")).is_err());
+    }
+
+    #[test]
+    fn the_two_decks_of_the_music_are_read() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"song":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"music_decks",
+                "moment":"both_sounding","live_deck":1,"fade_seconds":0,
+                "deck0_second":143.2,"deck0_length":null,"deck0_sounding":true,
+                "deck1_second":61.5,"deck1_length":212.4,"deck1_sounding":true,
+                "together_seconds":2.5}"#,
+        )
+        .expect("the decks are read");
+        match said.seen {
+            Seen::MusicDecks {
+                moment,
+                live_deck,
+                deck0_length,
+                deck1_length,
+                together_seconds,
+                ..
+            } => {
+                assert_eq!(moment.as_word(), "both_sounding");
+                assert_eq!(live_deck, 1);
+                assert_eq!(deck0_length, None);
+                assert_eq!(deck1_length, Some(212.4));
+                assert_eq!(together_seconds, 2.5);
+            }
+            other => panic!("read as the wrong fact: {other:?}"),
+        }
     }
 
     #[test]

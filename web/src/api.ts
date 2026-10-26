@@ -1359,7 +1359,21 @@ export type PageFact =
       /** What the browser shows, and what the times of the file give for this moment. */
       shown: SubtitleCue[];
       expected: SubtitleCue[];
-    };
+    }
+  | ({ saw: "music_decks"; moment: "handed_over" | "both_sounding" } & DecksHeard);
+
+/** The two decks of the player of music, as the page last heard them. */
+export interface DecksHeard {
+  live_deck: number;
+  fade_seconds: number;
+  deck0_second: number;
+  deck0_length: number | null;
+  deck0_sounding: boolean;
+  deck1_second: number;
+  deck1_length: number | null;
+  deck1_sounding: boolean;
+  together_seconds: number;
+}
 
 /** One subtitle as the journal is told of it: its times and the start of its words. */
 export interface SubtitleCue {
@@ -1368,9 +1382,10 @@ export interface SubtitleCue {
   text: string;
 }
 
-/** The reading a fact is about: the session a rebuilt film is fed from, or the
- *  source of one handed over as it is, for which no session is ever opened. */
-export type Reading = { session: string } | { source: string };
+/** The reading a fact is about: the session a rebuilt film is fed from, the
+ *  source of one handed over as it is, for which no session is ever opened,
+ *  or the song playing. */
+export type Reading = { session: string } | { source: string } | { song: string };
 
 export type PageSaw = Reading & PageFact;
 
