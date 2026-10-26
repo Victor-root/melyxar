@@ -16,12 +16,15 @@ import type { ReactNode } from "react";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { showListening } from "../../tab";
+import { api } from "../../api";
 import { music as server } from "../api";
 import type { MusicPreferences, Song } from "../api";
 import { useMusicMarks } from "../marks";
-import { appMusic } from "./app-music";
+import { appMusic, watchDecks } from "./app-music";
+import type { DeckTold } from "./app-music";
 import { aDeck } from "./deck";
 import type { Deck } from "./deck";
+import { APART, decksHeard, together } from "./doubled";
 import { formsPlayedHere } from "./forms";
 import { PREPARE_AHEAD_SECONDS, fadeBetween, handOverIn, secondsLeft } from "./handover";
 import { levelOf } from "./levelling";
@@ -415,19 +418,31 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   /* The next song takes over: started in the deck it was made ready in, at
      its own level at once, or faded in while the one before fades out. The
-     application's engine has already started it, on time, when it says so;
-     what is left is for the page to follow. */
-  const handOver = useCallback((startedAlready: boolean) => {
+     application's engine has already started it, on time, when it says so,
+     on the deck given; what is left is for the page to follow. */
+  const handOver = useCallback((startedOn: Deck | null) => {
     takeOver.current = null;
     const after = afterTheEnd(queueNow.current);
     const next = after ? current(after) : null;
     const from = live();
     const to = decks[1 - liveAt.current];
+    if (startedOn !== null && startedOn !== to) {
+      return;
+    }
     if (!after || !next || prepared.current !== next.id) {
+      // Started by the engine for a queue that has moved on since: let go
+      // of, rather than left playing beside the song the page follows,
+      // which goes on to the right one when it ends.
+      if (startedOn !== null) {
+        prepared.current = null;
+        to.pause();
+        to.removeAttribute("src");
+        to.load();
+      }
       return;
     }
     const fade = fadeBetween(crossfadeNow.current, current(queueNow.current)?.seconds ?? null, next.seconds);
-    if (!startedAlready) {
+    if (startedOn === null) {
       gains.current?.cross(liveAt.current, 1 - liveAt.current, fade, levelOf(next, volumeModeNow.current));
       void to.play().catch(() => setPlaying(false));
     }
@@ -442,10 +457,14 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     setTurn((was) => was + 1);
     time.set({ position: 0, length: next.seconds ?? 0 });
     exact.set(0);
+    // Unless the deck was given another song in the meantime.
+    const leaving = from.getAttribute("src");
     window.setTimeout(() => {
-      from.pause();
-      from.removeAttribute("src");
-      from.load();
+      if (from.getAttribute("src") === leaving) {
+        from.pause();
+        from.removeAttribute("src");
+        from.load();
+      }
       fading.current = false;
     }, fade * 1000 + 100);
   }, [decks, live, mixer]);
@@ -513,7 +532,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           engine.handOverAt(liveAt.current, 1 - liveAt.current, audio.currentTime + due, fade, levelOf(next, volumeModeNow.current));
           takeOver.current = () => engine.cancelHandOver();
         } else {
-          const timer = window.setTimeout(() => handOver(false), due * 1000);
+          const timer = window.setTimeout(() => handOver(null), due * 1000);
           takeOver.current = () => window.clearTimeout(timer);
         }
       }
@@ -593,19 +612,50 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }),
     );
     // The engine has started the next song on this deck, on time.
-    const tookOver = () => handOver(true);
-    for (const deck of decks) {
-      deck.addEventListener("handedover", tookOver);
-    }
+    const tookOver = decks.map((deck) => () => handOver(deck));
+    decks.forEach((deck, at) => deck.addEventListener("handedover", tookOver[at]));
     return () => {
       decks.forEach((deck, at) => {
         for (const [name, heard] of attached[at]) {
           deck.removeEventListener(name, heard);
         }
-        deck.removeEventListener("handedover", tookOver);
+        deck.removeEventListener("handedover", tookOver[at]);
       });
     };
   }, [decks, live, soundThroughTheGain, handOver, letGoOfTheNext]);
+
+  // Both decks of the application's engine, written in the journal at each
+  // hand over and whenever both are heard sounding together past the fade.
+  useEffect(() => {
+    if (!appMusic) {
+      return;
+    }
+    const heard: (DeckTold | null)[] = [null, null];
+    let both = APART;
+    watchDecks((told) => {
+      heard[told.deck] = told;
+      const [zero, one] = heard;
+      const song = current(queueNow.current)?.id;
+      if (!zero || !one || !song) {
+        return;
+      }
+      const fade = crossfadeNow.current;
+      const step = together(both, zero.advancing && one.advancing, performance.now(), fade);
+      both = step.now;
+      const tell = (moment: "handed_over" | "both_sounding") =>
+        api
+          .tellTheJournal({ song, saw: "music_decks", moment, ...decksHeard(zero, one, liveAt.current, fade, step.seconds) })
+          // Nothing waits on a line in a journal.
+          .catch(() => {});
+      if (told.events.includes("handedover")) {
+        void tell("handed_over");
+      }
+      if (step.say) {
+        void tell("both_sounding");
+      }
+    });
+    return () => watchDecks(null);
+  }, []);
 
   // A song heard for long enough counts as listened to, once each time it
   // is played. Read as the time moves rather than drawn: nothing on the

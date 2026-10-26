@@ -96,6 +96,9 @@ class MusicEngine private constructor(
             .build()
             .apply { addListener(Heard()) }
         var holds = false
+
+        /** Counted at each song given or let go of, to tell one from the next. */
+        var given = 0
         var volume = 1f
         var muted = false
         private var metadataSaid = false
@@ -104,6 +107,7 @@ class MusicEngine private constructor(
 
         fun load(address: String, andPlay: Boolean) {
             holds = true
+            given++
             metadataSaid = false
             error = null
             player.setMediaSource(sources.createMediaSource(MediaItem.fromUri(address)))
@@ -117,8 +121,11 @@ class MusicEngine private constructor(
 
         fun clear() {
             holds = false
+            given++
             player.stop()
             player.clearMediaItems()
+            // Said once more, so whoever heard it sounding hears it stop.
+            events += "emptied"
         }
 
         fun applyVolume() {
@@ -134,7 +141,7 @@ class MusicEngine private constructor(
                 position = player.currentPosition / 1000.0,
                 duration = player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 },
                 buffered = player.bufferedPosition / 1000.0,
-                playing = player.playWhenReady && player.playbackState != Player.STATE_ENDED,
+                playing = holds && player.playWhenReady && player.playbackState != Player.STATE_ENDED,
                 advancing = player.isPlaying,
                 error = error,
                 events = events.toList(),
@@ -278,6 +285,15 @@ class MusicEngine private constructor(
         to.player.play()
         started(to)
         changed()
+        // The deck handed over from is let go of here once its fade is done,
+        // not left to the page, which may be asleep in the background or
+        // have moved on: unless it was given another song since.
+        val leaving = from.given
+        main.postDelayed({
+            if (from.given == leaving) {
+                clear(due.from)
+            }
+        }, (due.fadeSeconds * 1000).toLong() + LET_GO_AFTER_FADE_MS)
     }
 
     /** A deck asked to sound: the one the card speaks of, with the focus. */
@@ -374,6 +390,9 @@ class MusicEngine private constructor(
 
         /** Close enough to its moment for a hand over to be done now. */
         private const val ON_TIME_MS = 8L
+
+        /** How long after its fade the deck handed over from is let go of. */
+        private const val LET_GO_AFTER_FADE_MS = 100L
 
         /** How loud the music stays under somebody else's few words. */
         private const val DUCKED = 0.2f
