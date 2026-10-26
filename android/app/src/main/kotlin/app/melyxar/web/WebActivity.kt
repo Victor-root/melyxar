@@ -180,6 +180,21 @@ class WebActivity : ComponentActivity() {
         }
     }
 
+    /** Opened again while open: the page stays as it is, and its music,
+     *  unless it is another server's, which the page leading the music
+     *  leaves for. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val origin = intent.getStringExtra(ORIGIN) ?: return
+        if (origin == server.origin) {
+            return
+        }
+        setIntent(intent)
+        server = KnownServer(origin = origin, name = intent.getStringExtra(NAME).orEmpty())
+        music.stopAll()
+        page.loadUrl(origin)
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun interfacePage() = WebView(this).apply {
         setBackgroundColor(Melyxar.ground.toArgb())

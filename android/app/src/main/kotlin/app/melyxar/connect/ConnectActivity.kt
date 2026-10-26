@@ -98,8 +98,14 @@ class ConnectActivity : ComponentActivity() {
         }
     }
 
+    /** The interface already open is brought back as it was rather than
+     *  opened a second time, which would set a second page leading the one
+     *  player of music. */
     private fun open(server: KnownServer) {
-        startActivity(WebActivity.opening(this, server))
+        startActivity(
+            WebActivity.opening(this, server)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+        )
         finish()
     }
 
