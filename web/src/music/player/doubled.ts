@@ -1,11 +1,11 @@
 /*
  * Two songs heard at once: both decks of the application's engine sounding
  * together for longer than the fade between them allows, which nothing else
- * would ever say (see the music_decks fact of the page journal).
+ * would ever say (see the music journal of the server).
  */
 
 import type { DeckTold } from "./app-music";
-import type { DecksHeard } from "../../api";
+import type { DecksHeard } from "../api";
 
 /** How long both decks may sound together past the fade before it is said:
  *  the engine speaks every quarter of a second, and the deck let go of
