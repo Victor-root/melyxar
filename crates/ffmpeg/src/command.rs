@@ -906,8 +906,16 @@ impl Command {
                 // opens an open group onto the time of the picture after it,
                 // and the browser drops one of the two: a picture lost at
                 // every segment of most discs.
+                //
+                // And each segment written on the film's own clock. Left to
+                // itself the muxer restarts every run at zero and puts the
+                // time it skipped in the header instead, which a browser does
+                // not read: it then guesses where each run belongs from the
+                // playlist, and a run begun one segment before the previous
+                // one is within its margin of error, so it was laid ten
+                // seconds late, over the segment after it. Measured.
                 push!("-hls_segment_options");
-                push!("movflags=+skip_sidx");
+                push!("movflags=+skip_sidx+frag_discont");
                 push!("-hls_segment_filename");
                 args.push(pattern.clone().into_os_string());
                 push!("-start_number");
@@ -2067,10 +2075,10 @@ mod tests {
     }
 
     #[test]
-    fn segments_carry_no_index_that_would_move_an_open_group() {
+    fn segments_carry_no_index_and_keep_the_film_clock() {
         let args = arguments(&segments_of(Input::new("/media/film.mkv")));
         let index = position(&args, "-hls_segment_options").expect("segment options are given");
-        assert_eq!(args[index + 1], "movflags=+skip_sidx");
+        assert_eq!(args[index + 1], "movflags=+skip_sidx+frag_discont");
     }
 
     /// A stream to a browser, the shape every test below is about.
