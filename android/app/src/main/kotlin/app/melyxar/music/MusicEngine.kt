@@ -77,7 +77,11 @@ class MusicEngine private constructor(
 
     private val tell = object : Runnable {
         override fun run() {
-            decks.forEach { it.tell() }
+            // A deck that has just taken over is told of first: told after
+            // the end of the one it took over from, it found the page already
+            // gone on to the same song the ordinary way, which let go of it
+            // and asked for the song again from its start.
+            decks.sortedByDescending { HANDED_OVER in it.events }.forEach { it.tell() }
             lookAtTheHandOver()
             if (decks.any { it.holds }) {
                 main.postDelayed(this, TELL_EVERY_MS)
@@ -281,7 +285,7 @@ class MusicEngine private constructor(
         to.gain.aim(due.level, due.fadeSeconds)
         // Said first, so the page takes this deck for the one playing before
         // it hears it start.
-        to.events += "handedover"
+        to.events += HANDED_OVER
         to.player.play()
         started(to)
         changed()
@@ -390,6 +394,9 @@ class MusicEngine private constructor(
 
         /** Close enough to its moment for a hand over to be done now. */
         private const val ON_TIME_MS = 8L
+
+        /** What a deck says when it has just taken over from the other. */
+        private const val HANDED_OVER = "handedover"
 
         /** How long after its fade the deck handed over from is let go of. */
         private const val LET_GO_AFTER_FADE_MS = 100L
