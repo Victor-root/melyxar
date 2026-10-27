@@ -12,7 +12,7 @@
  * the page of what is playing.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Picture } from "../../api";
 import { useShownPicture } from "../../components/picture";
 import { useMediaQuery } from "../../media-query";
@@ -25,6 +25,8 @@ import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { BAR_LEAVES_MS, useMusic } from "./player";
 import { useNowPlayingCovers } from "./covering";
+import { again, coverAt, drawn, waitBeforeAgain } from "./cover-tries";
+import type { CoverTry } from "./cover-tries";
 import { BehindThePlayer } from "./spectrum";
 
 export function MusicBar() {
@@ -111,18 +113,40 @@ export function MusicBar() {
   );
 }
 
-/** The cover of what is playing, or a plain square while there is none. */
+/** The cover of what is playing, or a plain square while there is none,
+ *  asked for again when it does not come (see cover-tries.ts). */
 export function Cover({ pictures, large = false }: { pictures: Picture[]; large?: boolean }) {
   const { picture, itDidNotLoad } = useShownPicture(pictures);
+  const src = picture?.src ?? null;
+  const [tried, setTried] = useState<CoverTry>({ src, times: 0, state: "loading" });
+  const cover = coverAt(tried, src);
+  const wait = waitBeforeAgain(cover);
+  useEffect(() => {
+    if (wait === null) {
+      return;
+    }
+    const asked = { src: cover.src, times: cover.times, state: cover.state };
+    const later = window.setTimeout(() => setTried(again(asked)), wait);
+    return () => window.clearTimeout(later);
+  }, [cover.src, cover.times, cover.state, wait]);
+  useEffect(() => {
+    if (cover.state === "gave_up") {
+      itDidNotLoad();
+    }
+  }, [cover.state, itDidNotLoad]);
   return (
     <span className={`music-now-cover${large ? " music-now-cover-large" : ""}`}>
-      {picture && (
+      {picture && drawn(cover) && (
         <img
+          // A picture of its own for each try: a browser keeps showing what
+          // an image had until what it is given next arrives.
+          key={`${picture.src}#${cover.times}`}
           src={picture.src}
           srcSet={picture.srcSet || undefined}
           sizes={large ? "(max-width: 600px) 80vw, 420px" : "56px"}
           alt=""
-          onError={itDidNotLoad}
+          onLoad={() => setTried({ ...cover, state: "loaded" })}
+          onError={() => setTried({ ...cover, state: "failed" })}
         />
       )}
     </span>
