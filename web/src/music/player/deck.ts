@@ -41,6 +41,7 @@ export function aDeck(at: number): Deck {
 
 /** What a deck knows before the engine has said anything. */
 const UNTOLD: Omit<DeckTold, "deck"> = {
+  given: 0,
   position: 0,
   duration: null,
   buffered: 0,
@@ -50,10 +51,27 @@ const UNTOLD: Omit<DeckTold, "deck"> = {
   events: [],
 };
 
+/**
+ * Whether what the engine says is about a song the deck was since given
+ * another for, `over` being the last song heard of before that.
+ *
+ * Words the engine said before a new song was asked for still reach the
+ * page after it: taken for the new song, the length and the place of the
+ * one before had the next song set to take over at the moment the one
+ * before would have ended, partway into the new one.
+ */
+export function aboutASongLetGo(given: number, over: number | null): boolean {
+  return over !== null && given <= over;
+}
+
 class NativeDeck extends EventTarget implements Deck {
   preload = "metadata";
   private address: string | null = null;
   private told: Omit<DeckTold, "deck"> = UNTOLD;
+  /** The last song of the engine heard of, and, once the deck is given
+   *  another or let go, the one whose words are no longer listened to. */
+  private heardGiven = 0;
+  private over: number | null = null;
   /** When the engine last said where the deck is, to carry its clock on
    *  between two of its words. */
   private toldAt = performance.now();
@@ -80,6 +98,7 @@ class NativeDeck extends EventTarget implements Deck {
   set src(address: string) {
     this.address = address;
     this.told = UNTOLD;
+    this.over = this.heardGiven;
     this.wanted = false;
     this.handing = true;
     queueMicrotask(() => {
@@ -99,6 +118,7 @@ class NativeDeck extends EventTarget implements Deck {
     this.handing = false;
     this.wanted = false;
     this.told = UNTOLD;
+    this.over = this.heardGiven;
   }
 
   load() {
@@ -108,6 +128,11 @@ class NativeDeck extends EventTarget implements Deck {
   }
 
   private heard(told: DeckTold) {
+    if (aboutASongLetGo(told.given, this.over)) {
+      return;
+    }
+    this.over = null;
+    this.heardGiven = told.given;
     const before = this.told;
     this.told = told;
     this.toldAt = performance.now();
