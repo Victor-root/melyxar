@@ -279,12 +279,23 @@ pub async fn plan(
     let remembered = database.playback_progress(user_id, source.work_id).await?;
 
     // What the viewer asked for now, otherwise what they chose last time for
-    // this very film, otherwise a track in the language they prefer. Only then
+    // this very film, otherwise, for an episode, the one they last chose in
+    // its series, otherwise a track in the language they prefer. Only then
     // does the file get to decide, which is what happens today for everyone.
+    let remembered_soundtrack = remembered.as_ref().and_then(|stored| stored.audio_track_id);
+    let chosen_here = [request.audio_track_id, remembered_soundtrack]
+        .into_iter()
+        .flatten()
+        .any(|wanted| tracks.iter().any(|track| track.id == wanted));
+    let from_the_series = match chosen_here {
+        true => None,
+        false => soundtrack_from_the_series(database, user_id, source.work_id, &tracks).await?,
+    };
     let audio = chosen_soundtrack(
         &tracks,
         request.audio_track_id,
-        remembered.as_ref().and_then(|stored| stored.audio_track_id),
+        remembered_soundtrack,
+        from_the_series,
         preferences
             .as_ref()
             .and_then(|values| values.preferred_audio_language.as_deref()),
@@ -483,14 +494,16 @@ fn chosen_soundtrack<'a>(
     tracks: &'a [Track],
     asked_for: Option<TrackId>,
     remembered: Option<TrackId>,
+    from_the_series: Option<TrackId>,
     preferred_language: Option<&str>,
 ) -> Option<&'a Track> {
     let by_id = |wanted: TrackId| tracks.iter().find(|track| track.id == wanted);
 
-    if let Some(track) = asked_for.and_then(by_id) {
-        return Some(track);
-    }
-    if let Some(track) = remembered.and_then(by_id) {
+    if let Some(track) = [asked_for, remembered, from_the_series]
+        .into_iter()
+        .flatten()
+        .find_map(by_id)
+    {
         return Some(track);
     }
 
@@ -503,6 +516,36 @@ fn chosen_soundtrack<'a>(
                 .map(melyxar_core::media::normalise_language)
                 .is_some_and(|spoken| spoken == wanted)
     })
+}
+
+/// In this episode's file, the soundtrack in the place the viewer last chose
+/// in another episode of its series, when both files lay their soundtracks
+/// out the same way.
+///
+/// Two soundtracks of one language, a dubbing of France and one of Quebec,
+/// cannot be told apart by the language preferred: chosen once by hand, the
+/// third soundtrack of a season stays the third for the episodes that follow.
+async fn soundtrack_from_the_series(
+    database: &melyxar_database::Database,
+    user_id: melyxar_core::id::UserId,
+    episode: WorkId,
+    tracks: &[Track],
+) -> Result<Option<TrackId>> {
+    let Some((chosen, there)) = database
+        .soundtrack_chosen_in_the_series(user_id, episode)
+        .await?
+    else {
+        return Ok(None);
+    };
+    let there = database.tracks_of_source(there).await?;
+    let found = melyxar_playback::the_same_soundtrack(&there, chosen, tracks);
+    // The line that follows names the file and the soundtrack it plays.
+    #[cfg(debug_assertions)]
+    tracing::debug!(
+        taken = found.is_some(),
+        "a soundtrack was chosen in another episode of the series"
+    );
+    Ok(found.map(|track| track.id))
 }
 
 /// Remembers the tracks a viewer chose, and the languages they were in.
@@ -1808,6 +1851,163 @@ mod tests {
             soundtrack_of(&state, user_id, source_id).await.as_deref(),
             Some("eng"),
             "the one the file marks as default"
+        );
+    }
+
+    /// An English soundtrack and two French ones, the dubbing of France
+    /// first, so the language preferred alone always lands on it.
+    fn three_soundtracks(source_id: MediaSourceId) -> Vec<Track> {
+        let mut english = audio(source_id, "aac", 2, true);
+        english.language = Some("eng".to_string());
+        let mut france = audio(source_id, "aac", 2, false);
+        france.title = Some("VFF".to_string());
+        france.stream_index = 2;
+        let mut quebec = audio(source_id, "aac", 2, false);
+        quebec.title = Some("VFQ".to_string());
+        quebec.stream_index = 3;
+        vec![video(source_id, "h264", 1080), english, france, quebec]
+    }
+
+    #[tokio::test]
+    async fn the_soundtrack_chosen_in_one_episode_carries_over_to_the_next() {
+        let (directory, state, user_id, _) =
+            state_with_film("Amber.Field.S01E01.mp4", "mov,mp4,m4a", three_soundtracks).await;
+        let database = state.database();
+        let library = database
+            .library_by_name("Films")
+            .await
+            .expect("read")
+            .expect("declared");
+        let series = database
+            .create_work(
+                library.id,
+                melyxar_core::work::WorkKind::Series,
+                "Amber Field",
+                "amber field",
+                Some(2021),
+            )
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(
+                library.id,
+                series.id,
+                1,
+                melyxar_core::work::WorkKind::Season,
+                "Season 1",
+                "season 1",
+            )
+            .await
+            .expect("season created");
+        let mut episodes = Vec::new();
+        for (number, laid_out) in [
+            (1, three_soundtracks as fn(MediaSourceId) -> Vec<Track>),
+            (2, three_soundtracks),
+            (3, two_soundtracks),
+        ] {
+            let episode = database
+                .create_child_work(
+                    library.id,
+                    season.id,
+                    number,
+                    melyxar_core::work::WorkKind::Episode,
+                    &format!("Episode {number}"),
+                    &format!("episode {number}"),
+                )
+                .await
+                .expect("episode created");
+            let file = format!("Amber.Field.S01E0{number}.mkv");
+            std::fs::write(
+                directory.path().join("films").join(&file),
+                b"not a real film",
+            )
+            .expect("file written");
+            let source_id = database
+                .insert_source(
+                    episode.id,
+                    library.roots[0].id,
+                    std::path::Path::new(&file),
+                    12_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("source recorded");
+            database
+                .store_analysis(
+                    source_id,
+                    &SourceAnalysis {
+                        container: Some("mov,mp4,m4a".to_string()),
+                        duration: Some(Millis::new(1_800_000)),
+                        overall_bitrate: None,
+                    },
+                    &laid_out(source_id),
+                    &[],
+                )
+                .await
+                .expect("analysis stored");
+            episodes.push((episode.id, source_id));
+        }
+        let mut preferences = database
+            .user(user_id)
+            .await
+            .expect("read")
+            .expect("present")
+            .preferences;
+        preferences.preferred_audio_language = Some("fre".to_string());
+        database
+            .save_preferences(user_id, &preferences)
+            .await
+            .expect("preferences saved");
+        let who = crate::an_ordinary_account(user_id);
+        let stream_index_of = |source_id: MediaSourceId| {
+            let (state, who) = (state.clone(), who.clone());
+            async move {
+                plan(
+                    &state,
+                    &who,
+                    &PlayRequest {
+                        source_id,
+                        profile: None,
+                        audio_track_id: None,
+                        subtitle: SubtitleAsked::Unsaid,
+                        preferred_video_codec: None,
+                        wide_gamut: None,
+                    },
+                )
+                .await
+                .expect("a plan")
+                .decision
+                .audio_stream_index
+            }
+        };
+
+        assert_eq!(
+            stream_index_of(episodes[1].1).await,
+            Some(2),
+            "the language preferred alone lands on the first French soundtrack"
+        );
+
+        let (first, first_source) = episodes[0];
+        let quebec = database
+            .tracks_of_source(first_source)
+            .await
+            .expect("read")
+            .into_iter()
+            .find(|track| track.stream_index == 3)
+            .expect("the third soundtrack");
+        remember_chosen_tracks(&state, &who, first, first_source, Some(quebec.id), None)
+            .await
+            .expect("choice remembered");
+
+        assert_eq!(
+            stream_index_of(episodes[1].1).await,
+            Some(3),
+            "the next episode starts on the soundtrack chosen in the one before"
+        );
+        assert_eq!(
+            stream_index_of(episodes[2].1).await,
+            Some(2),
+            "an episode laid out otherwise is left to the language preferred"
         );
     }
 

@@ -12,6 +12,7 @@
 
 pub mod decision;
 pub mod profile;
+pub mod soundtrack;
 pub mod subtitles;
 
 pub use decision::{
@@ -19,4 +20,5 @@ pub use decision::{
     SubtitleDelivery,
 };
 pub use profile::{ClientProfile, VideoCapability};
+pub use soundtrack::the_same_soundtrack;
 pub use subtitles::subtitle_by_mode;

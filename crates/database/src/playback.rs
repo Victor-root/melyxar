@@ -508,21 +508,65 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO playback_progress
-                (user_id, work_id, audio_track_id, subtitle_track_id, subtitles_off)
-             VALUES (?, ?, ?, ?, ?)
+                (user_id, work_id, audio_track_id, subtitle_track_id, subtitles_off, tracks_chosen_at)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT (user_id, work_id) DO UPDATE SET
                 audio_track_id = excluded.audio_track_id,
                 subtitle_track_id = excluded.subtitle_track_id,
-                subtitles_off = excluded.subtitles_off",
+                subtitles_off = excluded.subtitles_off,
+                tracks_chosen_at = excluded.tracks_chosen_at",
         )
         .bind(user_id.to_db_string())
         .bind(work_id.to_db_string())
         .bind(audio_track_id.map(|id| id.to_db_string()))
         .bind(subtitle_track_id.map(|id| id.to_db_string()))
         .bind(crate::convert::bool_to_int(subtitle_track_id.is_none()))
+        .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
         Ok(())
+    }
+
+    /// The soundtrack this viewer last chose by hand in another episode of the
+    /// series `episode` belongs to, with the file it is a track of.
+    ///
+    /// Only the latest choice counts: a viewer who went back to the first
+    /// soundtrack meant it for what follows too. Nothing for a work that is
+    /// not an episode, or when that choice named no soundtrack still known.
+    pub async fn soundtrack_chosen_in_the_series(
+        &self,
+        user_id: UserId,
+        episode: WorkId,
+    ) -> Result<Option<(TrackId, MediaSourceId)>> {
+        let row = sqlx::query(
+            "WITH series_of(episode_id, series_id) AS (
+                SELECT e.id, CASE p.kind WHEN 'season' THEN p.parent_id ELSE p.id END
+                FROM works e JOIN works p ON p.id = e.parent_id
+                WHERE e.kind = 'episode'),
+             latest AS (
+                SELECT pp.audio_track_id
+                FROM playback_progress pp
+                JOIN series_of other ON other.episode_id = pp.work_id
+                JOIN series_of this ON this.episode_id = ?
+                WHERE pp.user_id = ? AND pp.work_id <> this.episode_id
+                  AND other.series_id = this.series_id
+                  AND pp.tracks_chosen_at IS NOT NULL
+                  AND pp.audio_track_id IS NOT NULL
+                ORDER BY pp.tracks_chosen_at DESC
+                LIMIT 1)
+             SELECT t.id, t.source_id FROM latest JOIN tracks t ON t.id = latest.audio_track_id",
+        )
+        .bind(episode.to_db_string())
+        .bind(user_id.to_db_string())
+        .fetch_optional(self.reader())
+        .await?;
+        row.map(|row| {
+            Ok((
+                parse_id(&row.try_get::<String, _>("id")?)?,
+                parse_id(&row.try_get::<String, _>("source_id")?)?,
+            ))
+        })
+        .transpose()
     }
 
     /// Counts one more viewing of a work.
@@ -1843,6 +1887,189 @@ mod tests {
             stored.position,
             Millis::ZERO,
             "counting a viewing says nothing about where anyone is"
+        );
+    }
+
+    /// A soundtrack in the file behind an episode, recorded as analysis would.
+    async fn a_soundtrack_behind(
+        database: &Database,
+        work_id: WorkId,
+        library: LibraryId,
+    ) -> TrackId {
+        let root = database
+            .library_roots(library)
+            .await
+            .expect("roots read")
+            .remove(0);
+        let source_id = database
+            .insert_source(
+                work_id,
+                root.id,
+                Path::new(&format!("{work_id}.mkv")),
+                1_000,
+                now(),
+            )
+            .await
+            .expect("file recorded");
+        let track = melyxar_core::media::Track {
+            id: TrackId::new(),
+            source_id,
+            stream_index: 1,
+            language: Some("fre".to_string()),
+            title: None,
+            is_default: true,
+            is_forced: false,
+            kind: melyxar_core::media::TrackKind::Audio(melyxar_core::media::AudioDetails {
+                codec: "eac3".to_string(),
+                profile: None,
+                channels: 6,
+                channel_layout: None,
+                sample_rate: None,
+                bit_depth: None,
+                bitrate: None,
+                loudness: Default::default(),
+            }),
+        };
+        database
+            .store_analysis(
+                source_id,
+                &Default::default(),
+                std::slice::from_ref(&track),
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        track.id
+    }
+
+    #[tokio::test]
+    async fn an_episode_finds_the_soundtrack_last_chosen_in_its_series() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        let mut soundtracks = Vec::new();
+        for episode in &episodes {
+            soundtracks.push(a_soundtrack_behind(&database, *episode, library).await);
+        }
+        let chosen = |episode: WorkId| {
+            let database = database.clone();
+            async move {
+                database
+                    .soundtrack_chosen_in_the_series(user_id, episode)
+                    .await
+                    .expect("read")
+                    .map(|(track, _)| track)
+            }
+        };
+
+        assert_eq!(chosen(episodes[1]).await, None, "nothing chosen yet");
+
+        database
+            .record_chosen_tracks(user_id, episodes[0], Some(soundtracks[0]), None)
+            .await
+            .expect("choice recorded");
+        sqlx::query(
+            "UPDATE playback_progress SET tracks_chosen_at = '2020-01-01T00:00:00.000000000Z'",
+        )
+        .execute(database.writer())
+        .await
+        .expect("moment forced");
+        assert_eq!(chosen(episodes[1]).await, Some(soundtracks[0]));
+        assert_eq!(
+            chosen(episodes[0]).await,
+            None,
+            "an episode's own choice is its own business"
+        );
+
+        database
+            .record_chosen_tracks(user_id, episodes[2], Some(soundtracks[2]), None)
+            .await
+            .expect("choice recorded");
+        let (track, source) = database
+            .soundtrack_chosen_in_the_series(user_id, episodes[1])
+            .await
+            .expect("read")
+            .expect("found");
+        assert_eq!(track, soundtracks[2], "the latest choice wins");
+        let tracks = database
+            .tracks_of_source(source)
+            .await
+            .expect("tracks read");
+        assert_eq!(tracks[0].id, soundtracks[2], "with the file it belongs to");
+
+        // Watching the position move is not choosing anything.
+        database
+            .record_playback_progress(
+                user_id,
+                episodes[1],
+                Millis::new(5_000),
+                PlaybackState::InProgress,
+                now(),
+            )
+            .await
+            .expect("position recorded");
+        assert_eq!(chosen(episodes[1]).await, Some(soundtracks[2]));
+    }
+
+    #[tokio::test]
+    async fn a_choice_says_nothing_to_another_viewer_or_another_series_or_a_film() {
+        let (database, user_id, series, _, episodes) = one_series().await;
+        let library = database
+            .work(series)
+            .await
+            .expect("series read")
+            .expect("series present")
+            .library_id;
+        let soundtrack = a_soundtrack_behind(&database, episodes[0], library).await;
+        database
+            .record_chosen_tracks(user_id, episodes[0], Some(soundtrack), None)
+            .await
+            .expect("choice recorded");
+
+        let other = database
+            .create_user("guest", None, &Permissions::administrator())
+            .await
+            .expect("account created");
+        assert!(
+            database
+                .soundtrack_chosen_in_the_series(other.id, episodes[1])
+                .await
+                .expect("read")
+                .is_none()
+        );
+
+        let elsewhere = database
+            .create_work(library, WorkKind::Series, "Cold Ridge", "cold ridge", None)
+            .await
+            .expect("series created");
+        let lone = database
+            .create_child_work(
+                library,
+                elsewhere.id,
+                1,
+                WorkKind::Episode,
+                "Pilot",
+                "pilot",
+            )
+            .await
+            .expect("episode created");
+        assert!(
+            database
+                .soundtrack_chosen_in_the_series(user_id, lone.id)
+                .await
+                .expect("read")
+                .is_none()
+        );
+        assert!(
+            database
+                .soundtrack_chosen_in_the_series(user_id, series)
+                .await
+                .expect("read")
+                .is_none()
         );
     }
 }
