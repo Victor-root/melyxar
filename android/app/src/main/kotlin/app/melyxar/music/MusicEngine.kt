@@ -142,6 +142,7 @@ class MusicEngine private constructor(
             }
             val told = DeckTold(
                 deck = index,
+                given = given,
                 position = player.currentPosition / 1000.0,
                 duration = player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 },
                 buffered = player.bufferedPosition / 1000.0,
@@ -210,7 +211,15 @@ class MusicEngine private constructor(
         main.post(tell)
     }
 
-    fun load(deck: Int, address: String, andPlay: Boolean) = decks[deck].load(address, andPlay)
+    fun load(deck: Int, address: String, andPlay: Boolean) {
+        // A hand over counted on this deck's clock was for the song it held:
+        // left, it started the next song partway into this one, at the
+        // moment the one before would have ended.
+        if (handOver?.from == deck) {
+            cancelHandOver()
+        }
+        decks[deck].load(address, andPlay)
+    }
 
     fun clear(deck: Int) {
         decks[deck].clear()
@@ -425,6 +434,8 @@ class MusicEngine private constructor(
 @Serializable
 data class DeckTold(
     val deck: Int,
+    /** Which song given to the deck this is about, counted up at each. */
+    val given: Int,
     val position: Double,
     val duration: Double?,
     val buffered: Double,

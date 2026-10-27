@@ -56,6 +56,9 @@ export interface Described {
 /** What the engine says of one deck. */
 export interface DeckTold {
   deck: number;
+  /** Which song given to the deck this is about, counted up at each one
+   *  given or let go of. */
+  given: number;
   /** Seconds, on the deck's own clock. */
   position: number;
   /** Seconds, or nothing when what it plays has no known length. */
