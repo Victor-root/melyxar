@@ -1,107 +1,73 @@
 /*
  * The ring that turns while the server makes a film.
  *
- * Drawn to the shape Material's expressive circular indicator uses: a thin
- * neutral track, and over it an active indicator whose edge is not a smooth
- * circle but a wave running all the way round. A ring that merely spins says
- * "something is happening" and nothing else; the wave is what makes a long
- * wait read as work rather than as a hang, which is the whole reason that
- * shape exists.
+ * Material's expressive circular indicator, the one Omnify shows on its first
+ * load, to the figure (see `spinner-shape.ts` for its shape): a lit line with
+ * a wavy edge, the wave running along it at one wave a second, and a track
+ * finishing the circle with a gap at each end.
  *
- * The wave is worked out here from its own figures rather than copied in as a
- * string of three thousand coordinates. Two reasons: a path nobody can read is
- * a path nobody can change, and the figures are the thing worth changing when
- * the ring is drawn at another size.
- *
- * Nothing is fetched and nothing is timed here. The turning and the sweep are
- * the stylesheet's, so they run on the compositor and cost nothing while a
+ * Nothing is fetched and nothing is timed here. The turning, the sweep and
+ * the running wave are the stylesheet's, so nothing runs in script while a
  * film is being decoded beside them.
  */
 
-/** The square the ring is drawn in, which every figure below is against. */
-const BOX = 48;
+import type { CSSProperties } from "react";
 
-/** The ring itself: how far out, how far the wave rises off it, and how many
- *  waves go round. A whole number of waves, or the wave meets itself at the
- *  top of the ring with a step in it. */
-const RADIUS = 19;
-const AMPLITUDE = 1.5;
-const WAVES = 8;
+import { BOX, FLAT_PATH, TRACK_RADIUS, WAVY_PATH, trackAround, wavyAt } from "./spinner-shape";
 
-/** How many straight pieces make one wave. Enough that no facet shows at the
- *  size the ring is drawn, and not so many the path is a wall of numbers. */
-const PIECES = 16;
-
-/**
- * How many units the path is declared to measure, whatever its real length in
- * the square above works out to.
- *
- * The `pathLength` attribute rescales an SVG path's own length to whatever
- * this is set to, so the sweep below is written as plain numbers between
- * nought and a hundred rather than as a fraction of a length worked out here
- * in JavaScript and carried into the stylesheet through a custom property.
- *
- * That is not tidiness. A browser asked to animate `stroke-dasharray` between
- * two `calc()` expressions that each read a custom property has to work out,
- * on every frame, whether the two ends of the animation are even the same
- * kind of value before it can blend them, and at least one of the browsers
- * this player is watched in answers that question by not blending at all: it
- * holds one keyframe and jumps straight to the next, which is a ring that
- * teleports rather than one that sweeps. A hundred written twice needs no
- * such answer, because it is already the same number both times.
- */
-const A_WHOLE_TURN = 100;
-
-/** The wavy ring's outline, as a closed path of straight pieces. */
-function theWave(): string {
-  const middle = BOX / 2;
-  const steps = WAVES * PIECES;
-  const points: [number, number][] = [];
-  for (let step = 0; step <= steps; step += 1) {
-    const angle = (step / steps) * 2 * Math.PI;
-    const out = RADIUS + AMPLITUDE * Math.sin(WAVES * angle);
-    // Begun at the top, which is where a ring is read as beginning.
-    points.push([
-      middle + out * Math.cos(angle - Math.PI / 2),
-      middle + out * Math.sin(angle - Math.PI / 2),
-    ]);
-  }
-  // Closed rather than ended on the point it began at, so the two ends meet
-  // as one join instead of two caps sitting on each other.
-  return `M${points
-    .slice(0, -1)
-    .map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`)
-    .join("L")}Z`;
-}
-
-const WAVE = theWave();
+/** A path given as a style rather than an attribute, so a change of shape is
+ *  a transition the browser blends rather than a jump. */
+const drawn = (path: string) => ({ d: `path("${path}")` }) as CSSProperties;
 
 /**
  * Something is happening. Without a `percent`, nobody knows how long it will
- * take and the ring turns. With one, the wave is lit that far round from the
+ * take and the ring turns. With one, the line is lit that far round from the
  * top, and goes no further than what was measured.
  */
 export function Spinner({ percent }: { percent?: number }) {
   const known = percent !== undefined;
-  const lit = known ? Math.min(A_WHOLE_TURN, Math.max(0, percent)) : 0;
+  const lit = known ? Math.min(100, Math.max(0, percent)) : 0;
+  const wavy = !known || wavyAt(lit);
+  const track = known ? trackAround(lit, wavy) : null;
+  const middle = BOX / 2;
   return (
     <svg
-      className={`player-spinner${known ? " player-spinner-known" : ""}`}
+      className={`player-spinner${known ? " player-spinner-known" : ""}${wavy ? "" : " player-spinner-flat"}`}
       viewBox={`0 0 ${BOX} ${BOX}`}
       role="progressbar"
       aria-valuemin={known ? 0 : undefined}
-      aria-valuemax={known ? A_WHOLE_TURN : undefined}
+      aria-valuemax={known ? 100 : undefined}
       aria-valuenow={known ? Math.round(lit) : undefined}
       aria-valuetext={known ? undefined : ""}
       focusable="false"
     >
-      <circle className="player-spinner-track" cx={BOX / 2} cy={BOX / 2} r={RADIUS} />
-      <path
-        className="player-spinner-wave"
-        d={WAVE}
-        pathLength={A_WHOLE_TURN}
-        style={known ? { strokeDasharray: `${lit} ${A_WHOLE_TURN - lit}` } : undefined}
-      />
+      <g className="player-spinner-turn">
+        <g className="player-spinner-step">
+          {(!known || track) && (
+            <circle
+              className="player-spinner-track"
+              cx={middle}
+              cy={middle}
+              r={TRACK_RADIUS}
+              pathLength={100}
+              style={
+                track ? { strokeDasharray: `${track.length} ${100 - track.length}`, strokeDashoffset: -track.from } : undefined
+              }
+            />
+          )}
+          {(!known || lit > 0) && (
+            <path
+              className="player-spinner-wave"
+              d={wavy ? WAVY_PATH : FLAT_PATH}
+              pathLength={100}
+              style={{
+                ...drawn(wavy ? WAVY_PATH : FLAT_PATH),
+                ...(known ? { strokeDasharray: `${lit} ${100 - lit}` } : {}),
+              }}
+            />
+          )}
+        </g>
+      </g>
     </svg>
   );
 }
