@@ -46,7 +46,7 @@
         android:banner="@drawable/tv_banner"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher_light_c81e1e"
+        android:icon="@mipmap/ic_launcher_full_c81e1e"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Melyxar"
@@ -62,14 +62,14 @@
         </activity>
 
         <!-- The door again, once for each icon the phone's launcher can show,
-             only one of them on at a time: the logo on white, the one there
-             at first, on the dark ground, or alone with nothing behind it,
+             only one of them on at a time: the logo on the ground of the TV's
+             banner, the one there at first, or alone with nothing behind it,
              each in every accent offered, chosen in the settings of the
              interface (web/LauncherIcons.kt). -->
         <activity-alias
-            android:name=".connect.IconLightC81E1E"
+            android:name=".connect.IconFullC81E1E"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_c81e1e"
+            android:icon="@mipmap/ic_launcher_full_c81e1e"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -77,10 +77,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLightD9480F"
+            android:name=".connect.IconFullD9480F"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_d9480f"
+            android:icon="@mipmap/ic_launcher_full_d9480f"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -88,10 +88,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLightC2A100"
+            android:name=".connect.IconFullC2A100"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_c2a100"
+            android:icon="@mipmap/ic_launcher_full_c2a100"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -99,10 +99,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLight2F9E44"
+            android:name=".connect.IconFull2F9E44"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_2f9e44"
+            android:icon="@mipmap/ic_launcher_full_2f9e44"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -110,10 +110,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLight0C8599"
+            android:name=".connect.IconFull0C8599"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_0c8599"
+            android:icon="@mipmap/ic_launcher_full_0c8599"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -121,10 +121,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLight1C7ED6"
+            android:name=".connect.IconFull1C7ED6"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_1c7ed6"
+            android:icon="@mipmap/ic_launcher_full_1c7ed6"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -132,10 +132,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLight6741D9"
+            android:name=".connect.IconFull6741D9"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_6741d9"
+            android:icon="@mipmap/ic_launcher_full_6741d9"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -143,98 +143,10 @@
             </intent-filter>
         </activity-alias>
         <activity-alias
-            android:name=".connect.IconLightC2255C"
+            android:name=".connect.IconFullC2255C"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher_light_c2255c"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDarkC81E1E"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_c81e1e"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDarkD9480F"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_d9480f"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDarkC2A100"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_c2a100"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDark2F9E44"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_2f9e44"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDark0C8599"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_0c8599"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDark1C7ED6"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_1c7ed6"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDark6741D9"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_6741d9"
-            android:targetActivity=".connect.ConnectActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".connect.IconDarkC2255C"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_dark_c2255c"
+            android:icon="@mipmap/ic_launcher_full_c2255c"
             android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
