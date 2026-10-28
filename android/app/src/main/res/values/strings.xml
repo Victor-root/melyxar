@@ -311,6 +311,11 @@
     <string name="tv_setting_lighter">Lighter drawing</string>
     <string name="tv_lighter_full">Full</string>
     <string name="tv_lighter_on">Lighter</string>
+    <string name="tv_setting_banner">Banner colour</string>
+    <string name="tv_banner_red">Melyxar red</string>
+    <string name="tv_banner_accent">Accent colour</string>
+    <string name="tv_banner_to_apply">%1$s, to apply</string>
+    <string name="tv_banner_closes">Banner colour: Melyxar may close to change it</string>
     <string name="tv_setting_frame_rate">Frames per second</string>
     <string name="tv_frame_rate_hidden">Hidden</string>
     <string name="tv_frame_rate_shown">Shown</string>

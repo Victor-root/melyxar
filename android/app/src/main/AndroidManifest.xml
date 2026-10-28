@@ -43,7 +43,7 @@
          network (see server/Address.kt). -->
     <application
         android:allowBackup="false"
-        android:banner="@drawable/tv_banner"
+        android:banner="@drawable/tv_banner_c81e1e"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher_full_c81e1e"
@@ -54,12 +54,99 @@
 
         <activity
             android:name=".connect.ConnectActivity"
-            android:exported="true">
+            android:exported="true" />
+
+        <!-- The door on a television, once for each banner its launcher can
+             show, only one of them on at a time: the banner in every accent
+             offered, chosen in the television's settings (tv/door/Banners.kt). -->
+        <activity-alias
+            android:name=".connect.BannerC81E1E"
+            android:banner="@drawable/tv_banner_c81e1e"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.BannerD9480F"
+            android:banner="@drawable/tv_banner_d9480f"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.BannerC2A100"
+            android:banner="@drawable/tv_banner_c2a100"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.Banner2F9E44"
+            android:banner="@drawable/tv_banner_2f9e44"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.Banner0C8599"
+            android:banner="@drawable/tv_banner_0c8599"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.Banner1C7ED6"
+            android:banner="@drawable/tv_banner_1c7ed6"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.Banner6741D9"
+            android:banner="@drawable/tv_banner_6741d9"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".connect.BannerC2255C"
+            android:banner="@drawable/tv_banner_c2255c"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".connect.ConnectActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
 
         <!-- The door again, once for each icon the phone's launcher can show,
              only one of them on at a time: the logo on the ground of the TV's
