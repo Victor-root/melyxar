@@ -79,6 +79,14 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_server::music_watch::queue", "music-queue"),
         ("melyxar_server::music_watch::controls", "music-controls"),
         ("melyxar_server::music_watch::tabs", "music-tabs"),
+        // What the application saw of a camera it opened itself, a tag for
+        // each side of it.
+        ("melyxar_server::camera_watch::open", "camera-open"),
+        ("melyxar_server::camera_watch::delay", "camera-delay"),
+        ("melyxar_server::camera_watch::frames", "camera-frames"),
+        ("melyxar_server::camera_watch::net", "camera-net"),
+        ("melyxar_server::camera_watch::screen", "camera-screen"),
+        ("melyxar_server::camera_watch::errors", "camera-error"),
         ("melyxar_metadata::lrclib", "lyrics"),
         // Everything else about the music library: covers, photos, tags,
         // the reading of the sound. Longer modules above win over this one.
@@ -399,6 +407,12 @@ mod tests {
         assert_eq!(tag_of("melyxar_server::music_watch::queue"), "music-queue");
         assert_eq!(tag_of("melyxar_server::music_watch::controls"), "music-controls");
         assert_eq!(tag_of("melyxar_server::music_watch::tabs"), "music-tabs");
+        assert_eq!(tag_of("melyxar_server::camera_watch::open"), "camera-open");
+        assert_eq!(tag_of("melyxar_server::camera_watch::delay"), "camera-delay");
+        assert_eq!(tag_of("melyxar_server::camera_watch::frames"), "camera-frames");
+        assert_eq!(tag_of("melyxar_server::camera_watch::net"), "camera-net");
+        assert_eq!(tag_of("melyxar_server::camera_watch::screen"), "camera-screen");
+        assert_eq!(tag_of("melyxar_server::camera_watch::errors"), "camera-error");
         assert_eq!(tag_of("melyxar_app::nothing_yet"), "melyxar", "what has no home of its own stays in the general tag");
         assert_eq!(
             tag_of("melyxar_ffmpeg::sound"),

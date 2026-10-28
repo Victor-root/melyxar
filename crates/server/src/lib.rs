@@ -16,6 +16,7 @@ pub mod bandwidth;
 pub mod activity;
 pub mod calibration;
 pub mod cameras;
+pub mod camera_watch;
 pub mod catalogue;
 pub mod collections;
 pub mod deletion;
