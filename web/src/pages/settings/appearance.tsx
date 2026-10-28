@@ -191,8 +191,7 @@ function IconOfTheApp({ icon }: { icon: AppIcon }) {
           value={ground}
           onPick={setGround}
           options={[
-            ["light", t("app_icon.light")],
-            ["dark", t("app_icon.dark")],
+            ["full", t("app_icon.full")],
             ["clear", t("app_icon.clear")],
           ]}
         />

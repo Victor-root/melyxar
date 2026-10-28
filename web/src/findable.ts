@@ -72,7 +72,7 @@ export const FINDABLE: FindableSection[] = [
     choices: {
       "nav.theme": ["theme.system", "theme.dark", "theme.light"],
       "settings.theme_phone": ["theme.same", "theme.system", "theme.dark", "theme.light"],
-      "settings.app_icon": ["app_icon.light", "app_icon.dark", "app_icon.clear"],
+      "settings.app_icon": ["app_icon.full", "app_icon.clear"],
       "settings.backdrop": [
         "backdrop.light",
         "backdrop.library",

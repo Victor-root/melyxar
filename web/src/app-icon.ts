@@ -10,7 +10,7 @@
  */
 
 /** The grounds the logo can sit on. */
-export type LauncherGround = "light" | "dark" | "clear";
+export type LauncherGround = "full" | "clear";
 
 export interface AppIcon {
   /** The ground shown now. */

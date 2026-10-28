@@ -11,11 +11,12 @@ import app.melyxar.theme.nearestOffered
 import app.melyxar.theme.parseHex
 
 /** The grounds the logo can sit on in the launcher, by the name the page
- *  knows them under: white, the dark ground, or nothing at all. */
-private val GROUNDS = listOf("light", "dark", "clear")
+ *  knows them under: the ground of the TV's banner, or nothing at all. The
+ *  one nothing sits on first, since it is read first when two are on. */
+private val GROUNDS = listOf("clear", "full")
 
 /** The icon shown until one is chosen, the one the manifest leaves on. */
-private const val USUAL_GROUND = "light"
+private const val USUAL_GROUND = "full"
 private val USUAL_TINT = OFFERED_ACCENTS.first()
 
 private const val KEPT = "launcher_icon"
@@ -74,13 +75,32 @@ class LauncherIcons(private val context: Context) {
         if (!differs(ground, follows, accent)) {
             return
         }
-        val tint = tintFor(follows, accent)
+        showOnly(ground to tintFor(follows, accent))
+    }
+
+    /**
+     * Leaves one icon on when several are. The white and the dark grounds
+     * were dropped for the banner's: a phone that had chosen the logo alone
+     * finds the new usual icon on beside it, since nothing ever turned that
+     * one off, and keeps the logo alone.
+     */
+    fun settle() {
+        val on = GROUNDS.sumOf { ground -> OFFERED_ACCENTS.count { isOn(ground, it) } }
+        if (on > 1) {
+            showOnly(shown())
+        }
+    }
+
+    private fun showOnly(icon: Pair<String, String>) {
         GROUNDS.forEach { each ->
             OFFERED_ACCENTS.forEach { offered ->
-                val on = each == ground && offered == tint
                 context.packageManager.setComponentEnabledSetting(
                     of(each, offered),
-                    if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    if (each to offered == icon) {
+                        PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    } else {
+                        PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    },
                     PackageManager.DONT_KILL_APP,
                 )
             }
