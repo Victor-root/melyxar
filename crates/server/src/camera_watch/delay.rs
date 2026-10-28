@@ -1,11 +1,11 @@
 //! How far behind the camera the picture is, under the `camera-delay` tag:
-//! every second, and every change of speed made to catch up.
+//! every few seconds, and every change of speed made to catch up.
 
 use serde::Deserialize;
 
-use super::{Said, Second};
+use super::{Said, Summary};
 
-pub(super) fn write_second(by: &Said, seen: &Second) {
+pub(super) fn write_summary(by: &Said, seen: &Summary) {
     tracing::debug!(
         account = by.account,
         camera = by.camera,
@@ -13,8 +13,10 @@ pub(super) fn write_second(by: &Said, seen: &Second) {
         at_ms = by.at_ms,
         state = seen.state.as_word(),
         playing = seen.playing,
+        most_behind_ms = seen.most_behind_ms,
+        pictures_in_decoder = seen.in_decoder,
         speed = seen.speed,
-        lost_standing_still_ms = seen.lost_ms,
+        fell_behind_since_playing_ms = seen.fell_behind_ms,
         "{}ms behind the camera",
         seen.behind_ms
     );

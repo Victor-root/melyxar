@@ -1,12 +1,12 @@
 //! The pictures of a camera, under the `camera-frames` tag: received, shown
-//! and dropped every second, and the moments the picture stands still or
+//! and dropped every few seconds, and the moments the picture stands still or
 //! waits for the camera.
 
 use serde::Deserialize;
 
-use super::{Said, Second};
+use super::{Said, Summary};
 
-pub(super) fn write_second(by: &Said, seen: &Second) {
+pub(super) fn write_summary(by: &Said, seen: &Summary) {
     tracing::debug!(
         account = by.account,
         camera = by.camera,
@@ -15,7 +15,8 @@ pub(super) fn write_second(by: &Said, seen: &Second) {
         received = seen.received,
         shown = seen.shown,
         dropped = seen.dropped,
-        "pictures in the last second"
+        "pictures in the last {}s",
+        seen.over_s
     );
 }
 
