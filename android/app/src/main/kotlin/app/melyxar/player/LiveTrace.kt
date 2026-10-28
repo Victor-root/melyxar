@@ -1,11 +1,12 @@
 package app.melyxar.player
 
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.Choreographer
 import androidx.annotation.OptIn
+import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -13,56 +14,56 @@ import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.Log as MediaLog
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DecoderReuseEvaluation
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import app.melyxar.BuildConfig
-import app.melyxar.player.CameraLog.DELAY
-import app.melyxar.player.CameraLog.FRAMES
-import app.melyxar.player.CameraLog.NET
-import app.melyxar.player.CameraLog.OPEN
-import app.melyxar.player.CameraLog.SCREEN
 import java.io.IOException
+import kotlinx.serialization.json.put
 
 private const val PULSE_MS = 1_000L
 
 /** A frame of the application later than this is the application held. */
 private const val HELD_MS = 100L
 
-/** Lines of the camera's description worth keeping: the streams and their
- *  formats. The rest of it says nothing about a picture. */
+/** Lines of the camera's description worth keeping in the logcat: the
+ *  streams and their formats. The rest of it says nothing about a picture. */
 private val DESCRIBED = listOf("m=", "a=rtpmap", "a=fmtp", "a=framerate", "a=control", "a=range", "b=")
 
 /** Lines of the exchange with the camera never written: the account is in
  *  them. */
 private val SECRET = listOf("authorization:", "proxy-authorization:", "www-authenticate:")
 
+/** The steps of RTSP, by the names the server's journal knows them under. */
+private val STEPS = mapOf(
+    "OPTIONS" to "options",
+    "DESCRIBE" to "describe",
+    "SETUP" to "setup",
+    "PLAY" to "play",
+    "PAUSE" to "pause",
+    "TEARDOWN" to "teardown",
+    "GET_PARAMETER" to "get_parameter",
+    "SET_PARAMETER" to "set_parameter",
+)
+
 /**
- * The journal of one camera watched live, in the debug build only (see
- * [CameraLog] for its tags). The account written into the address never
- * reaches it: it is taken out of every line, whatever wrote it.
+ * What one camera watched live does, told to its [journal]: how long to the
+ * first picture, how far behind the camera it is every second, the pictures
+ * received, shown and dropped, the moments it stands still, and every error.
  */
 @OptIn(UnstableApi::class)
-internal class LiveTrace(private val player: ExoPlayer, address: String, where: String) : AnalyticsListener {
-    private val secrets: List<String> = Uri.parse(address).let { uri ->
-        listOfNotNull(uri.encodedUserInfo, uri.userInfo)
-            .flatMap { listOf(it) + it.split(':') }
-            .filter { it.length >= 2 }
-            .distinct()
-    }
-    private val started = SystemClock.elapsedRealtime()
+internal class LiveTrace(private val player: ExoPlayer, private val journal: CameraJournal) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
 
-    private var firstLoad = 0L
-    private var firstTracks = 0L
-    private var decoderReady = 0L
+    private var firstLoad: Long? = null
+    private var firstTracks: Long? = null
+    private var decoderReady: Long? = null
     private var firstFrame = 0L
     private var frames = 0L
 
-    /** Where the picture and the clock stood at the first frame, to tell
-     *  how much time was lost standing still since. */
+    /** Where the picture stood at the first frame, to tell how much time
+     *  was lost standing still since. */
     private var positionAtFirst = 0L
     private var shownBefore = 0
     private var droppedBefore = 0
@@ -82,7 +83,7 @@ internal class LiveTrace(private val player: ExoPlayer, address: String, where: 
         override fun doFrame(frameTimeNanos: Long) {
             if (lastFrameNanos != 0L) {
                 val gap = (frameTimeNanos - lastFrameNanos) / 1_000_000
-                if (gap > HELD_MS) say(SCREEN, "the application was held ${gap}ms between two frames of its own")
+                if (gap > HELD_MS) journal.tell(SCREEN, "held") { put("ms", gap) }
             }
             lastFrameNanos = frameTimeNanos
             Choreographer.getInstance().postFrameCallback(this)
@@ -90,21 +91,14 @@ internal class LiveTrace(private val player: ExoPlayer, address: String, where: 
     }
 
     init {
-        CameraLog.opened(secrets)
-        say(OPEN, "open on $where: $address")
-        if (BuildConfig.TRACES) {
-            clock.postDelayed(pulse, PULSE_MS)
-            Choreographer.getInstance().postFrameCallback(held)
-        }
+        clock.postDelayed(pulse, PULSE_MS)
+        Choreographer.getInstance().postFrameCallback(held)
     }
 
-    private fun since() = SystemClock.elapsedRealtime() - started
-
-    fun say(tag: String, line: String) = CameraLog.say(tag, "+${since()}ms $line")
-
     private fun beat() {
+        // Stopped, behind the television's other apps: nothing to tell.
+        if (player.playbackState == Player.STATE_IDLE) return
         val video = player.videoDecoderCounters
-        val sound = player.audioDecoderCounters
         val shown = video?.renderedOutputBufferCount ?: 0
         val dropped = video?.droppedBufferCount ?: 0
         val queued = video?.queuedInputBufferCount ?: 0
@@ -115,211 +109,227 @@ internal class LiveTrace(private val player: ExoPlayer, address: String, where: 
         queuedBefore = queued
         droppedBefore = dropped
 
-        val behind = player.totalBufferedDuration
         // Time since the first frame that the picture did not move: what
         // the camera sent meanwhile is still to be shown, or was lost.
         val lost = if (firstFrame > 0) (SystemClock.elapsedRealtime() - firstFrame) - (player.currentPosition - positionAtFirst) else 0
-        say(
-            DELAY,
-            "behind ${behind}ms (held at most 300 before catching up), speed ${player.playbackParameters.speed}, " +
-                "position ${player.currentPosition}ms, lost to standing still since the first frame ${lost}ms, " +
-                "state ${stateName(player.playbackState)}",
-        )
-        say(
-            FRAMES,
-            "received $newlyQueued shown $newlyShown dropped $newlyDropped in the last second " +
-                "(in all received $queued shown $shown dropped $dropped skipped ${video?.skippedOutputBufferCount}), " +
-                "sound received ${sound?.queuedInputBufferCount} played ${sound?.renderedOutputBufferCount} dropped ${sound?.droppedBufferCount}",
-        )
+        val runtime = Runtime.getRuntime()
+        journal.tell(DELAY, "second") {
+            put("state", stateName(player.playbackState))
+            put("playing", player.isPlaying)
+            put("behind_ms", player.totalBufferedDuration)
+            put("speed", player.playbackParameters.speed)
+            put("lost_ms", lost)
+            put("received", newlyQueued)
+            put("shown", newlyShown)
+            put("dropped", newlyDropped)
+            put("memory_mb", (runtime.totalMemory() - runtime.freeMemory()) / 1_048_576)
+            put("most_memory_mb", runtime.maxMemory() / 1_048_576)
+        }
         if (player.playbackState == Player.STATE_READY && player.isPlaying && newlyShown == 0) {
             stillFor += 1
-            say(FRAMES, "the picture stood still for ${stillFor}s while playing, $newlyQueued frames received meanwhile")
+            journal.tell(FRAMES, "stood_still") {
+                put("seconds", stillFor)
+                put("received", newlyQueued)
+            }
         } else {
             stillFor = 0
         }
-        val runtime = Runtime.getRuntime()
-        say(SCREEN, "memory ${(runtime.totalMemory() - runtime.freeMemory()) / 1_048_576}MB of ${runtime.maxMemory() / 1_048_576}MB")
     }
 
     private fun stateName(state: Int) = when (state) {
-        Player.STATE_IDLE -> "IDLE"
-        Player.STATE_BUFFERING -> "BUFFERING"
-        Player.STATE_READY -> "READY"
-        Player.STATE_ENDED -> "ENDED"
-        else -> "$state"
+        Player.STATE_BUFFERING -> "buffering"
+        Player.STATE_READY -> "ready"
+        Player.STATE_ENDED -> "ended"
+        else -> "idle"
+    }
+
+    private fun kindOf(type: Int) = when (type) {
+        C.TRACK_TYPE_VIDEO -> "video"
+        C.TRACK_TYPE_AUDIO -> "audio"
+        else -> "other"
     }
 
     override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
-        say(OPEN, "state ${stateName(state)} at ${eventTime.eventPlaybackPositionMs}ms, ${eventTime.totalBufferedDurationMs}ms behind")
         when {
             state == Player.STATE_BUFFERING && firstFrame > 0 -> {
                 stalledAt = SystemClock.elapsedRealtime()
-                say(FRAMES, "waiting for the camera, ${eventTime.totalBufferedDurationMs}ms in hand")
+                journal.tell(FRAMES, "waiting") { put("in_hand_ms", eventTime.totalBufferedDurationMs) }
             }
             state == Player.STATE_READY && stalledAt > 0 -> {
-                say(FRAMES, "picture moving again after waiting ${SystemClock.elapsedRealtime() - stalledAt}ms")
+                journal.tell(FRAMES, "moving_again") { put("waited_ms", SystemClock.elapsedRealtime() - stalledAt) }
                 stalledAt = 0
             }
         }
     }
 
-    override fun onIsPlayingChanged(eventTime: AnalyticsListener.EventTime, isPlaying: Boolean) {
-        say(OPEN, "playing $isPlaying")
-    }
-
-    override fun onPlayWhenReadyChanged(eventTime: AnalyticsListener.EventTime, playWhenReady: Boolean, reason: Int) {
-        say(OPEN, "playWhenReady $playWhenReady reason $reason")
-    }
-
     override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
-        CameraLog.error("+${since()}ms player error ${error.errorCodeName} at ${eventTime.eventPlaybackPositionMs}ms", error)
+        journal.failed("player", error, error.errorCodeName)
     }
 
     override fun onTracksChanged(eventTime: AnalyticsListener.EventTime, tracks: Tracks) {
-        if (firstTracks == 0L && !tracks.isEmpty) {
-            firstTracks = since()
+        if (firstTracks == null && !tracks.isEmpty) {
+            firstTracks = journal.since()
         }
         for (group in tracks.groups) {
             for (i in 0 until group.length) {
                 val format = group.getTrackFormat(i)
-                say(
-                    OPEN,
-                    "track ${format.sampleMimeType} ${format.codecs} ${format.width}x${format.height} ${format.frameRate}fps " +
-                        "${format.sampleRate}Hz ${format.channelCount}ch bitrate ${format.bitrate} " +
-                        "supported=${group.isTrackSupported(i)} selected=${group.isTrackSelected(i)}",
-                )
+                journal.tell(OPEN, "stream") {
+                    put("kind", kindOf(group.type))
+                    (format.codecs ?: format.sampleMimeType)?.let { put("codec", it) }
+                    if (format.width > 0) put("width", format.width)
+                    if (format.height > 0) put("height", format.height)
+                    if (format.frameRate > 0) put("fps", format.frameRate)
+                    if (format.sampleRate > 0) put("sample_rate", format.sampleRate)
+                    if (format.channelCount > 0) put("channels", format.channelCount)
+                    put("supported", group.isTrackSupported(i))
+                    put("selected", group.isTrackSelected(i))
+                }
             }
         }
     }
 
     override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
-        decoderReady = since()
-        say(OPEN, "video decoder $decoderName ready in ${initializationDurationMs}ms")
-    }
-
-    override fun onVideoInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
-        say(OPEN, "video format ${format.sampleMimeType} ${format.codecs} ${format.width}x${format.height} ${format.frameRate}fps")
-    }
-
-    override fun onVideoDecoderReleased(eventTime: AnalyticsListener.EventTime, decoderName: String) {
-        say(OPEN, "video decoder $decoderName let go")
+        decoderReady = journal.since()
+        journal.tell(OPEN, "decoder") {
+            put("kind", "video")
+            put("name", decoderName)
+            put("ready_ms", initializationDurationMs)
+        }
     }
 
     override fun onAudioDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
-        say(OPEN, "audio decoder $decoderName ready in ${initializationDurationMs}ms")
-    }
-
-    override fun onAudioInputFormatChanged(eventTime: AnalyticsListener.EventTime, format: Format, decoderReuseEvaluation: DecoderReuseEvaluation?) {
-        say(OPEN, "audio format ${format.sampleMimeType} ${format.codecs} ${format.sampleRate}Hz ${format.channelCount}ch")
-    }
-
-    override fun onAudioPositionAdvancing(eventTime: AnalyticsListener.EventTime, playoutStartSystemTimeMs: Long) {
-        say(OPEN, "sound playing")
+        journal.tell(OPEN, "decoder") {
+            put("kind", "audio")
+            put("name", decoderName)
+            put("ready_ms", initializationDurationMs)
+        }
     }
 
     override fun onAudioUnderrun(eventTime: AnalyticsListener.EventTime, bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) {
-        say(FRAMES, "sound ran dry, last fed ${elapsedSinceLastFeedMs}ms ago")
+        journal.tell(FRAMES, "sound_ran_dry") { put("last_fed_ms", elapsedSinceLastFeedMs) }
     }
 
     override fun onAudioSinkError(eventTime: AnalyticsListener.EventTime, audioSinkError: Exception) {
-        CameraLog.error("+${since()}ms audio sink error", audioSinkError)
+        journal.failed("audio_sink", audioSinkError)
     }
 
     override fun onAudioCodecError(eventTime: AnalyticsListener.EventTime, audioCodecError: Exception) {
-        CameraLog.error("+${since()}ms audio codec error", audioCodecError)
+        journal.failed("audio_codec", audioCodecError)
     }
 
     override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
-        CameraLog.error("+${since()}ms video codec error", videoCodecError)
+        journal.failed("video_codec", videoCodecError)
     }
 
     override fun onVideoSizeChanged(eventTime: AnalyticsListener.EventTime, videoSize: VideoSize) {
-        say(SCREEN, "picture ${videoSize.width}x${videoSize.height} pixel ratio ${videoSize.pixelWidthHeightRatio}")
+        if (videoSize.width > 0) {
+            journal.tell(SCREEN, "picture") {
+                put("width", videoSize.width)
+                put("height", videoSize.height)
+            }
+        }
     }
 
     override fun onSurfaceSizeChanged(eventTime: AnalyticsListener.EventTime, width: Int, height: Int) {
-        say(SCREEN, "drawn into ${width}x$height")
+        if (width > 0) {
+            journal.tell(SCREEN, "drawn") {
+                put("width", width)
+                put("height", height)
+            }
+        }
     }
 
     override fun onRenderedFirstFrame(eventTime: AnalyticsListener.EventTime, output: Any, renderTimeMs: Long) {
-        if (firstFrame == 0L) {
-            firstFrame = SystemClock.elapsedRealtime()
-            positionAtFirst = player.currentPosition
-            say(
-                OPEN,
-                "first picture after ${since()}ms: first data at ${firstLoad}ms, streams known at ${firstTracks}ms, " +
-                    "decoder ready at ${decoderReady}ms",
-            )
-        } else {
-            say(OPEN, "first picture again, onto a new surface")
+        if (firstFrame != 0L) return
+        firstFrame = SystemClock.elapsedRealtime()
+        positionAtFirst = player.currentPosition
+        journal.tell(OPEN, "first_picture") {
+            firstLoad?.let { put("first_data_ms", it) }
+            firstTracks?.let { put("streams_ms", it) }
+            decoderReady?.let { put("decoder_ms", it) }
         }
     }
 
     override fun onVideoFrameProcessingOffset(eventTime: AnalyticsListener.EventTime, totalProcessingOffsetUs: Long, frameCount: Int) {
         frames += frameCount
-        if (frameCount > 0) {
-            say(FRAMES, "$frameCount frames shown, ${totalProcessingOffsetUs / frameCount / 1_000}ms early on average (negative is late)")
-        }
     }
 
     override fun onDroppedVideoFrames(eventTime: AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
-        say(FRAMES, "dropped $droppedFrames frames in ${elapsedMs}ms, too late to show")
+        journal.tell(FRAMES, "dropped") {
+            put("frames", droppedFrames)
+            put("within_ms", elapsedMs)
+        }
     }
 
     override fun onLoadStarted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData, retryCount: Int) {
-        if (firstLoad == 0L) firstLoad = since()
-        say(NET, "load started type ${mediaLoadData.dataType} track ${mediaLoadData.trackType} retry $retryCount ${loadEventInfo.uri}")
-    }
-
-    override fun onLoadCompleted(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
-        say(NET, "load completed track ${mediaLoadData.trackType} ${loadEventInfo.bytesLoaded} bytes in ${loadEventInfo.loadDurationMs}ms")
-    }
-
-    override fun onLoadCanceled(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData) {
-        say(NET, "load canceled track ${mediaLoadData.trackType} after ${loadEventInfo.bytesLoaded} bytes")
+        if (firstLoad == null) firstLoad = journal.since()
     }
 
     override fun onLoadError(eventTime: AnalyticsListener.EventTime, loadEventInfo: LoadEventInfo, mediaLoadData: MediaLoadData, error: IOException, wasCanceled: Boolean) {
-        CameraLog.error("+${since()}ms load error track ${mediaLoadData.trackType} canceled=$wasCanceled", error)
+        journal.failed("load", error, if (wasCanceled) "canceled" else null)
     }
 
     override fun onPlayerReleased(eventTime: AnalyticsListener.EventTime) {
         clock.removeCallbacks(pulse)
         Choreographer.getInstance().removeFrameCallback(held)
-        say(OPEN, "let go after ${since()}ms and $frames frames")
-        CameraLog.closed(secrets)
+        journal.tell(OPEN, "let_go") { put("frames", frames) }
+        journal.closed()
     }
 
     companion object {
+        /** When each step of the exchange was asked, by its sequence number. */
+        private val asked = mutableMapOf<String, Pair<String, Long>>()
+
         /**
-         * Writes the exchange with the camera, its own description of its
-         * streams among it, without a line that holds the account. The
-         * transport the camera agreed to (over UDP or within the TCP
-         * connection) is in it, and so how long each answer took.
+         * Tells each step of the exchange with the camera and its answer:
+         * how long it took and the transport the camera agreed to, in its
+         * own packets or within the connection. In the debug build the
+         * exchange is also written whole to the logcat, the camera's own
+         * description of its streams among it, without a line that holds
+         * the account.
          */
         fun hearTheExchange() {
-            if (!BuildConfig.TRACES) return
             MediaLog.setLogger(object : MediaLog.Logger {
                 override fun d(tag: String, message: String, throwable: Throwable?) {
                     if (tag != "RtspClient") return MediaLog.Logger.DEFAULT.d(tag, message, throwable)
-                    message.lineSequence()
-                        .filter { line -> line.isNotBlank() && SECRET.none { line.lowercase().startsWith(it) } }
-                        .filter { line -> line.length < 2 || line[1] != '=' || DESCRIBED.any(line::startsWith) }
-                        .forEach { CameraLog.say(OPEN, "camera says $it") }
+                    val journal = CameraJournal.current ?: return
+                    val lines = message.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+                    exchanged(journal, lines)
+                    if (BuildConfig.TRACES) {
+                        lines.filter { line -> SECRET.none { line.lowercase().startsWith(it) } }
+                            .filter { line -> line.length < 2 || line[1] != '=' || DESCRIBED.any(line::startsWith) }
+                            .forEach { Log.i(NET, journal.hidden("camera says $it")) }
+                    }
                 }
 
                 override fun i(tag: String, message: String, throwable: Throwable?) = MediaLog.Logger.DEFAULT.i(tag, message, throwable)
 
-                override fun w(tag: String, message: String, throwable: Throwable?) {
-                    if (tag.startsWith("Rtsp")) CameraLog.say(NET, "$tag warns: $message ${CameraLog.causes(throwable)}")
-                    MediaLog.Logger.DEFAULT.w(tag, message, throwable)
-                }
+                override fun w(tag: String, message: String, throwable: Throwable?) = MediaLog.Logger.DEFAULT.w(tag, message, throwable)
 
                 override fun e(tag: String, message: String, throwable: Throwable?) {
-                    if (tag.startsWith("Rtsp")) CameraLog.error("$tag: $message", throwable)
+                    if (tag.startsWith("Rtsp")) CameraJournal.current?.failed("rtsp", throwable ?: IOException(message))
                     MediaLog.Logger.DEFAULT.e(tag, message, throwable)
                 }
             })
+        }
+
+        private fun exchanged(journal: CameraJournal, lines: List<String>) {
+            val first = lines.firstOrNull() ?: return
+            val sequence = lines.firstOrNull { it.lowercase().startsWith("cseq:") }?.substringAfter(':')?.trim() ?: return
+            if (!first.startsWith("RTSP/")) {
+                val step = STEPS[first.substringBefore(' ')] ?: "other"
+                synchronized(asked) { asked[sequence] = step to SystemClock.elapsedRealtime() }
+                journal.tell(NET, "exchange") { put("step", step) }
+                return
+            }
+            val (step, at) = synchronized(asked) { asked.remove(sequence) } ?: ("other" to null)
+            val transport = lines.firstOrNull { it.lowercase().startsWith("transport:") }
+            journal.tell(NET, "exchange") {
+                put("step", step)
+                first.split(' ').getOrNull(1)?.toIntOrNull()?.let { put("status", it) }
+                at?.let { put("answer_ms", SystemClock.elapsedRealtime() - it) }
+                transport?.let { put("transport", if (it.uppercase().contains("/TCP")) "tcp" else "udp") }
+            }
         }
     }
 }

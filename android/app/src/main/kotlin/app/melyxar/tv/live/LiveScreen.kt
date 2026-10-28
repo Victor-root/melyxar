@@ -65,7 +65,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
-import app.melyxar.player.CameraLog
+import app.melyxar.player.CameraJournal
+import app.melyxar.player.OPEN
 import app.melyxar.player.livePlayer
 import app.melyxar.server.Camera
 import app.melyxar.tv.inside.NoBarPinned
@@ -79,6 +80,8 @@ import app.melyxar.tv.play.Who
 import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.put
 
 /** How long the controls stay up once the remote stops, as the film's. */
 private const val CONTROLS_FOR_MS = 4_000L
@@ -106,6 +109,13 @@ fun LiveScreen(camera: Camera) {
     val api = LocalServer.current
     val context = LocalContext.current
     NoBarPinned()
+    val journal = remember(camera.id) {
+        CameraJournal(camera.name, "television") { fact -> runBlocking { api.tellTheCameraJournal(fact) } }
+    }
+    DisposableEffect(journal) {
+        journal.screen("made")
+        onDispose { journal.screen("closed") }
+    }
     // Asked here rather than through the answers kept for the screens: it
     // holds a password, and is let go with the screen.
     var address by remember { mutableStateOf<String?>(null) }
@@ -118,13 +128,12 @@ fun LiveScreen(camera: Camera) {
         address = null
         failed = false
         val asked = SystemClock.elapsedRealtime()
-        CameraLog.say(CameraLog.SCREEN, "television asks the server where ${camera.name} is, try $tries")
         address = try {
             api.liveAddress(camera.id).also {
-                CameraLog.say(CameraLog.OPEN, "the server answered in ${SystemClock.elapsedRealtime() - asked}ms")
+                journal.tell(OPEN, "opened") { put("server_answer_ms", SystemClock.elapsedRealtime() - asked) }
             }
         } catch (refused: IOException) {
-            CameraLog.error("the server did not say where ${camera.name} is after ${SystemClock.elapsedRealtime() - asked}ms", refused)
+            journal.failed("server", refused)
             failed = true
             null
         }
@@ -217,9 +226,10 @@ fun LiveScreen(camera: Camera) {
         address?.let { opened ->
             LivePicture(
                 opened,
+                journal,
                 onPlaying = { playing = it },
                 onFailed = {
-                    CameraLog.say(CameraLog.SCREEN, "television says the camera cannot be played")
+                    journal.screen("cannot_play")
                     failed = true
                 },
                 onPicture = { picture = it },
@@ -261,7 +271,7 @@ fun LiveScreen(camera: Camera) {
                         }, { named = it })
                     }
                     LiveButton(Icons.Restart, stringResource(R.string.camera_reconnect), {
-                        CameraLog.say(CameraLog.SCREEN, "reconnect pressed")
+                        journal.screen("reconnect")
                         tries += 1
                     }, { named = it })
                     named?.let {
@@ -339,13 +349,14 @@ private fun MovingHint(modifier: Modifier) {
 @Composable
 private fun LivePicture(
     address: String,
+    journal: CameraJournal,
     onPlaying: (Boolean) -> Unit,
     onFailed: () -> Unit,
     onPicture: (VideoSize) -> Unit,
     modifier: Modifier,
 ) {
     val context = LocalContext.current
-    val player: ExoPlayer = remember(address) { livePlayer(context, address, "television") }
+    val player: ExoPlayer = remember(address) { livePlayer(context, address, journal) }
     DisposableEffect(player) {
         val heard = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = onPlaying(isPlaying)
@@ -356,7 +367,6 @@ private fun LivePicture(
         }
         player.addListener(heard)
         onDispose {
-            CameraLog.say(CameraLog.SCREEN, "television screen left, camera let go")
             player.removeListener(heard)
             player.release()
             onPlaying(false)
@@ -365,11 +375,11 @@ private fun LivePicture(
     // A live picture is not left playing behind the television's other apps,
     // and comes back to now rather than to where it was left.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        CameraLog.say(CameraLog.SCREEN, "television screen no longer seen, camera stopped")
+        journal.screen("not_seen")
         player.stop()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
-        CameraLog.say(CameraLog.SCREEN, "television screen seen, camera started from now")
+        journal.screen("seen")
         player.prepare()
         player.play()
     }
