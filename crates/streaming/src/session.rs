@@ -685,7 +685,7 @@ impl Session {
         // the longer a film had played.
         let wanted = self.enough_from(from);
         let mut ready = 0;
-        while ready < wanted && self.finished_being_written(from + ready).await {
+        while ready < wanted && self.ready_to_hand_over(from + ready).await {
             ready += 1;
         }
 
@@ -814,6 +814,37 @@ impl Session {
         every_box_is_whole(&self.path_of(index)).await
     }
 
+    /// Whether a segment can be handed over as it lies on the disk: whole, and
+    /// not about to be made again by the run at work.
+    async fn ready_to_hand_over(&self, index: u32) -> bool {
+        self.finished_being_written(index).await && !self.about_to_be_made_again(index).await
+    }
+
+    /// Whether the run at work is about to write this segment over one an
+    /// earlier run left.
+    ///
+    /// Two runs do not join: the sound is rebuilt and lands up to one of its
+    /// own frames away, and the browser hops the gap. Read in the maintainer's
+    /// journal: a viewer going back, the new run's first segment followed by
+    /// the next one from an older run when the tool was a fifth of a second
+    /// from writing it, and once past the seam the picture stood still for ten
+    /// seconds on the next whole picture while the sound went on.
+    async fn about_to_be_made_again(&self, index: u32) -> bool {
+        let began_at = {
+            let mut running = self.running.lock().await;
+            let Some(at_work) = running.as_mut() else {
+                return false;
+            };
+            if at_work.process.has_exited()
+                || !already_on_its_way(at_work.from, self.written_to(at_work), index)
+            {
+                return false;
+            }
+            at_work.began_at
+        };
+        self.who_wrote(index, began_at).await == WhoWrote::AnEarlierRun
+    }
+
     /// How many segments make a comfortable start from here.
     ///
     /// The usual handful, or whatever is left of the film when the viewer
@@ -842,7 +873,7 @@ impl Session {
         self.last_asked.store(index, Ordering::Relaxed);
 
         let path = self.path_of(index);
-        if self.finished_being_written(index).await {
+        if self.ready_to_hand_over(index).await {
             // The ordinary case, and the one the journal used to say nothing
             // about: a film playing on writes nothing at all, so the order a
             // player asked for its segments in could not be read anywhere. It
@@ -1242,10 +1273,10 @@ impl Session {
         let rungs_down_at_first = self.stepped_down.load(Ordering::SeqCst);
         loop {
             let tool_is_gone = self.the_tool_is_gone().await;
-            if path.exists() && appeared.is_none() {
+            if appeared.is_none() && path.exists() && !self.about_to_be_made_again(index).await {
                 appeared = Some(Instant::now());
             }
-            if self.finished_being_written(index).await {
+            if self.ready_to_hand_over(index).await {
                 let appeared = appeared.unwrap_or(began);
                 return Ok(WhatItTook {
                     appearing: appeared.saturating_duration_since(began),
@@ -2739,6 +2770,55 @@ mod tests {
             producing_from(&session).await,
             Some(38 - WORTH_WAITING_FOR),
             "and the walk was served by the one tool throughout"
+        );
+        session.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_segment_the_run_at_work_is_about_to_make_comes_from_that_run() {
+        // A viewer going back a little lands in front of film an earlier run
+        // produced. Handed the earlier run's next segment, the browser holds a
+        // seam it hops, and the picture was read standing still for ten
+        // seconds past it while the sound went on.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let session = a_session_still_at_work(directory.path()).await;
+
+        session.segment(40).await.expect("the segment jumped to");
+        for _ in 0..600 {
+            if session.finished_being_written(43).await {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(
+            session.finished_being_written(43).await,
+            "the first run never finished segment 43"
+        );
+
+        session.segment(38).await.expect("a little way back");
+        let began_at = session
+            .running
+            .lock()
+            .await
+            .as_ref()
+            .map(|at_work| at_work.began_at)
+            .expect("a run at work");
+        assert_eq!(
+            session.who_wrote(43, began_at).await,
+            WhoWrote::AnEarlierRun,
+            "the new run already wrote segment 43, so this proves nothing"
+        );
+
+        session.segment(43).await.expect("a segment just ahead of the new run");
+        assert_eq!(
+            session.who_wrote(43, began_at).await,
+            WhoWrote::ThisRun,
+            "what was handed over came from the earlier run"
+        );
+        assert_eq!(
+            producing_from(&session).await,
+            Some(38),
+            "and the run at work was waited for rather than started again"
         );
         session.close().await;
     }
