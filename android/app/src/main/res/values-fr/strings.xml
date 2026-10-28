@@ -316,6 +316,11 @@
     <string name="tv_setting_lighter">Mode allégé</string>
     <string name="tv_lighter_full">Complet</string>
     <string name="tv_lighter_on">Allégé</string>
+    <string name="tv_setting_banner">Couleur de la bannière</string>
+    <string name="tv_banner_red">Rouge Melyxar</string>
+    <string name="tv_banner_accent">Couleur d’accentuation</string>
+    <string name="tv_banner_to_apply">%1$s, à appliquer</string>
+    <string name="tv_banner_closes">Couleur de la bannière : Melyxar peut se fermer pour la changer</string>
     <string name="tv_setting_frame_rate">Images par seconde</string>
     <string name="tv_frame_rate_hidden">Masquées</string>
     <string name="tv_frame_rate_shown">Affichées</string>

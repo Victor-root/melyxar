@@ -45,6 +45,7 @@ import app.melyxar.server.Opening
 import app.melyxar.server.Sessions
 import app.melyxar.theme.OFFERED_ACCENTS
 import app.melyxar.theme.parseHex
+import app.melyxar.tv.door.Banners
 import app.melyxar.tv.languageName
 import app.melyxar.tv.look.ChoiceList
 import app.melyxar.tv.look.Glyph
@@ -376,6 +377,22 @@ fun SettingsScreen(sessions: Sessions) {
                         ask(title, openings, names, opening) { chosenOpening ->
                             sessions.openOn(api.origin, chosenOpening)
                             opening = chosenOpening
+                        }
+                    }
+                }
+                group("banner", null, null) {
+                    val banners = remember { Banners(context) }
+                    var follows by remember { mutableStateOf(banners.follows()) }
+                    val ways = listOf(false, true)
+                    val names = listOf(stringResource(R.string.tv_banner_red), stringResource(R.string.tv_banner_accent))
+                    val now = names[ways.indexOf(follows)]
+                    // An accent changed since keeps the banner as it was until
+                    // it is chosen again, since changing it can close Melyxar.
+                    val shown = if (banners.differs(follows, chosen.accentColor)) stringResource(R.string.tv_banner_to_apply, now) else now
+                    Line("banner", stringResource(R.string.tv_setting_banner), shown, memory) {
+                        ask(resources.getString(R.string.tv_banner_closes), ways, names, follows) { wanted ->
+                            follows = wanted
+                            banners.choose(wanted, chosen.accentColor)
                         }
                     }
                 }
