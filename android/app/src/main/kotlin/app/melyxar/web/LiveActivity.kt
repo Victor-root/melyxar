@@ -23,6 +23,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
+import app.melyxar.player.CameraLog
 import app.melyxar.player.livePlayer
 
 /**
@@ -40,6 +41,7 @@ class LiveActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CameraLog.say(CameraLog.SCREEN, "phone screen made for ${intent.getStringExtra(NAME)}, again=${savedInstanceState != null}")
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -75,9 +77,11 @@ class LiveActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         val address = intent.getStringExtra(ADDRESS) ?: return finish()
-        player = livePlayer(this, address).also { opened ->
+        CameraLog.say(CameraLog.SCREEN, "phone screen seen, camera opened")
+        player = livePlayer(this, address, "phone").also { opened ->
             opened.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
+                    CameraLog.say(CameraLog.SCREEN, "phone screen says the camera cannot be played")
                     said.text = getString(R.string.camera_cannot_play)
                     said.visibility = View.VISIBLE
                 }
@@ -87,10 +91,21 @@ class LiveActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        CameraLog.say(CameraLog.SCREEN, "phone screen no longer seen, camera let go (finishing=$isFinishing)")
         picture.player = null
         player?.release()
         player = null
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        CameraLog.say(CameraLog.SCREEN, "phone screen closed (changing configuration=$isChangingConfigurations)")
+        super.onDestroy()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        CameraLog.say(CameraLog.SCREEN, "the phone asks for memory back, level $level")
+        super.onTrimMemory(level)
     }
 
     private companion object {
@@ -106,8 +121,10 @@ class LiveActivity : ComponentActivity() {
         @JavascriptInterface
         fun watch(address: String, name: String) {
             if (!address.startsWith("rtsp://") && !address.startsWith("rtsps://")) {
+                CameraLog.say(CameraLog.SCREEN, "the page asked for $name at an address that is not RTSP, refused")
                 return
             }
+            CameraLog.say(CameraLog.SCREEN, "the page asks for $name")
             context.startActivity(
                 Intent(context, LiveActivity::class.java)
                     .putExtra(ADDRESS, address)

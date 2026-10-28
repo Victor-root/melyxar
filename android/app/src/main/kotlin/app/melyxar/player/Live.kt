@@ -9,6 +9,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.rtsp.RtspMediaSource
+import app.melyxar.BuildConfig
 
 /** How much a camera is held ahead before it shows, and at most, in
  *  milliseconds: a moment, so what is shown is what is happening. */
@@ -24,10 +25,11 @@ private val sound = AudioAttributes.Builder()
  * A camera watched live: the application opens its RTSP address itself, with
  * the account the server wrote into it, and nothing passes through the
  * server. Held as little ahead as plays smoothly, and kept there by
- * [LiveEdge], so the picture stays under a second behind the camera.
+ * [LiveEdge], so the picture stays under a second behind the camera. [where]
+ * names the screen it is watched on, in the journal.
  */
 @OptIn(UnstableApi::class)
-fun livePlayer(context: Context, address: String): ExoPlayer =
+fun livePlayer(context: Context, address: String, where: String): ExoPlayer =
     ExoPlayer.Builder(context)
         .setAudioAttributes(sound, true)
         .setLoadControl(
@@ -37,16 +39,16 @@ fun livePlayer(context: Context, address: String): ExoPlayer =
         )
         .build()
         .apply {
-            LiveTrace.hearDescriptions()
+            LiveTrace.hearTheExchange()
             val open = {
                 setMediaSource(
                     RtspMediaSource.Factory()
-                        .setDebugLoggingEnabled(true)
+                        .setDebugLoggingEnabled(BuildConfig.TRACES)
                         .createMediaSource(MediaItem.fromUri(address)),
                 )
                 prepare()
             }
-            val trace = LiveTrace(this, address)
+            val trace = LiveTrace(this, address, where)
             addAnalyticsListener(trace)
             addAnalyticsListener(LiveEdge(this, trace, reopen = open))
             open()

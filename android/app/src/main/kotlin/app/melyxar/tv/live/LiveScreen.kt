@@ -1,5 +1,6 @@
 package app.melyxar.tv.live
 
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -64,6 +65,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import app.melyxar.R
+import app.melyxar.player.CameraLog
 import app.melyxar.player.livePlayer
 import app.melyxar.server.Camera
 import app.melyxar.tv.inside.NoBarPinned
@@ -115,9 +117,14 @@ fun LiveScreen(camera: Camera) {
     LaunchedEffect(camera.id, tries) {
         address = null
         failed = false
+        val asked = SystemClock.elapsedRealtime()
+        CameraLog.say(CameraLog.SCREEN, "television asks the server where ${camera.name} is, try $tries")
         address = try {
-            api.liveAddress(camera.id)
-        } catch (_: IOException) {
+            api.liveAddress(camera.id).also {
+                CameraLog.say(CameraLog.OPEN, "the server answered in ${SystemClock.elapsedRealtime() - asked}ms")
+            }
+        } catch (refused: IOException) {
+            CameraLog.error("the server did not say where ${camera.name} is after ${SystemClock.elapsedRealtime() - asked}ms", refused)
             failed = true
             null
         }
@@ -211,7 +218,10 @@ fun LiveScreen(camera: Camera) {
             LivePicture(
                 opened,
                 onPlaying = { playing = it },
-                onFailed = { failed = true },
+                onFailed = {
+                    CameraLog.say(CameraLog.SCREEN, "television says the camera cannot be played")
+                    failed = true
+                },
                 onPicture = { picture = it },
                 modifier = Modifier.fillMaxSize().offset {
                     val room = roomAround(screen.width, screen.height, picture.width, picture.height, picture.pixelWidthHeightRatio)
@@ -250,7 +260,10 @@ fun LiveScreen(camera: Camera) {
                             first.requestFocus()
                         }, { named = it })
                     }
-                    LiveButton(Icons.Restart, stringResource(R.string.camera_reconnect), { tries += 1 }, { named = it })
+                    LiveButton(Icons.Restart, stringResource(R.string.camera_reconnect), {
+                        CameraLog.say(CameraLog.SCREEN, "reconnect pressed")
+                        tries += 1
+                    }, { named = it })
                     named?.let {
                         Text(it, fontSize = 15.sp, color = palette.textSoft, maxLines = 1, modifier = Modifier.padding(start = 14.dp))
                     }
@@ -332,7 +345,7 @@ private fun LivePicture(
     modifier: Modifier,
 ) {
     val context = LocalContext.current
-    val player: ExoPlayer = remember(address) { livePlayer(context, address) }
+    val player: ExoPlayer = remember(address) { livePlayer(context, address, "television") }
     DisposableEffect(player) {
         val heard = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = onPlaying(isPlaying)
@@ -343,6 +356,7 @@ private fun LivePicture(
         }
         player.addListener(heard)
         onDispose {
+            CameraLog.say(CameraLog.SCREEN, "television screen left, camera let go")
             player.removeListener(heard)
             player.release()
             onPlaying(false)
@@ -350,8 +364,12 @@ private fun LivePicture(
     }
     // A live picture is not left playing behind the television's other apps,
     // and comes back to now rather than to where it was left.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { player.stop() }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        CameraLog.say(CameraLog.SCREEN, "television screen no longer seen, camera stopped")
+        player.stop()
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        CameraLog.say(CameraLog.SCREEN, "television screen seen, camera started from now")
         player.prepare()
         player.play()
     }

@@ -59,13 +59,13 @@ internal class LiveEdge(
             val speed = Math.round(wanted / SPEED_STEP) * SPEED_STEP
             if (speed != player.playbackParameters.speed) {
                 player.setPlaybackSpeed(speed)
-                trace.say("speed $speed with ${player.totalBufferedDuration}ms behind")
+                trace.say(CameraLog.DELAY, "catching up: speed $speed with ${player.totalBufferedDuration}ms behind")
             }
             return
         }
         val soundOn = !player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO)
         if (soundOn && player.playbackState == Player.STATE_BUFFERING && player.totalBufferedDuration > SOUND_WAITED_MS) {
-            trace.say("sound held the picture with ${player.totalBufferedDuration}ms received, opened again without it")
+            trace.say(CameraLog.NET, "the sound held the picture with ${player.totalBufferedDuration}ms received, opened again without it")
             // Opened again rather than the sound let go while it plays: a
             // camera's streams are chosen once, as it is opened, and choosing
             // again under way loses the picture.
