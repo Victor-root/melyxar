@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
+import kotlinx.serialization.json.put
 
 /** How far behind the camera the picture is let be, in milliseconds. */
 private const val BEHIND_AT_MOST_MS = 300L
@@ -35,7 +36,7 @@ private const val LOOKED_EVERY_MS = 250L
 @OptIn(UnstableApi::class)
 internal class LiveEdge(
     private val player: ExoPlayer,
-    private val trace: LiveTrace,
+    private val journal: CameraJournal,
     /** Opens the camera again from the start. */
     private val reopen: () -> Unit,
 ) : AnalyticsListener {
@@ -59,13 +60,16 @@ internal class LiveEdge(
             val speed = Math.round(wanted / SPEED_STEP) * SPEED_STEP
             if (speed != player.playbackParameters.speed) {
                 player.setPlaybackSpeed(speed)
-                trace.say(CameraLog.DELAY, "catching up: speed $speed with ${player.totalBufferedDuration}ms behind")
+                journal.tell(DELAY, "catching_up") {
+                    put("speed", speed)
+                    put("behind_ms", player.totalBufferedDuration)
+                }
             }
             return
         }
         val soundOn = !player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO)
         if (soundOn && player.playbackState == Player.STATE_BUFFERING && player.totalBufferedDuration > SOUND_WAITED_MS) {
-            trace.say(CameraLog.NET, "the sound held the picture with ${player.totalBufferedDuration}ms received, opened again without it")
+            journal.tell(NET, "reopened_without_sound") { put("received_ms", player.totalBufferedDuration) }
             // Opened again rather than the sound let go while it plays: a
             // camera's streams are chosen once, as it is opened, and choosing
             // again under way loses the picture.

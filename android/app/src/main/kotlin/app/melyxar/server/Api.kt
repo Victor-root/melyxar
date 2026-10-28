@@ -286,6 +286,12 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         send("POST", "/api/v1/system/journal/page", fact)
     }
 
+    /** One fact seen of a camera watched live, for the journal, among those
+     *  the server names (`camera_watch`). */
+    suspend fun tellTheCameraJournal(fact: JsonObject) {
+        send("POST", "/api/v1/system/journal/camera", fact)
+    }
+
     /** How far the server has got making a rebuilt film's first piece. */
     suspend fun preparation(id: String): Preparation = get("/api/v1/stream/$id/preparation", Preparation.serializer())
 
