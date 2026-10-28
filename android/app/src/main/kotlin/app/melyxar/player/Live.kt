@@ -24,9 +24,9 @@ private val sound = AudioAttributes.Builder()
  * A camera watched live: the application opens its RTSP address itself, with
  * the account the server wrote into it, and nothing passes through the
  * server. Held as little ahead as plays smoothly, and kept there by
- * [LiveEdge], so the picture stays under a second behind the camera. All
- * of it is told to [journal]; the exchange with the camera is heard for it,
- * which is why the RTSP client says what it does.
+ * [LiveEdge], so the picture stays under a second behind the camera even
+ * after hours. All of it is told to [journal]; the exchange with the camera
+ * is heard for it, which is why the RTSP client says what it does.
  */
 @OptIn(UnstableApi::class)
 fun livePlayer(context: Context, address: String, journal: CameraJournal): ExoPlayer =
@@ -49,8 +49,10 @@ fun livePlayer(context: Context, address: String, journal: CameraJournal): ExoPl
                 prepare()
             }
             journal.openingAt(address)
-            addAnalyticsListener(LiveTrace(this, journal))
-            addAnalyticsListener(LiveEdge(this, journal, reopen = open))
+            val drift = LiveDrift(this)
+            addAnalyticsListener(drift)
+            addAnalyticsListener(LiveTrace(this, journal, drift))
+            addAnalyticsListener(LiveEdge(this, journal, drift, reopen = open))
             open()
             playWhenReady = true
         }

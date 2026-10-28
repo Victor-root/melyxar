@@ -2,6 +2,7 @@ package app.melyxar.player
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -25,6 +26,11 @@ private const val SOUND_WAITED_MS = 1_500L
 
 private const val LOOKED_EVERY_MS = 250L
 
+/** How far behind the clock the picture may fall before it is brought back
+ *  to live, and the least time between two returns, in milliseconds. */
+private const val FALLEN_AT_MOST_MS = 1_000L
+private const val BACK_AT_MOST_EVERY_MS = 30_000L
+
 /**
  * Keeps a camera at now. What has come from the camera and not been shown
  * yet is how far behind the picture is: past [BEHIND_AT_MOST_MS] it is played
@@ -32,15 +38,22 @@ private const val LOOKED_EVERY_MS = 250L
  * watched. A camera can also announce a sound it never sends, or one the
  * player cannot read, which would hold the picture: when the camera keeps
  * sending while the player still waits, it is opened again without its sound.
+ *
+ * Playing faster cannot make up the moments the picture waited for the camera:
+ * nothing is in hand to play. When these add up past [FALLEN_AT_MOST_MS], the
+ * camera is asked for its picture again from where the clock is, a small jump
+ * forward.
  */
 @OptIn(UnstableApi::class)
 internal class LiveEdge(
     private val player: ExoPlayer,
     private val journal: CameraJournal,
+    private val drift: LiveDrift,
     /** Opens the camera again from the start. */
     private val reopen: () -> Unit,
 ) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
+    private var backAt = 0L
     private val look = object : Runnable {
         override fun run() {
             keepAtNow()
@@ -54,6 +67,16 @@ internal class LiveEdge(
 
     private fun keepAtNow() {
         if (player.playbackState == Player.STATE_READY) {
+            val fell = drift.fellBehind()
+            val now = SystemClock.elapsedRealtime()
+            if (fell > FALLEN_AT_MOST_MS && now - backAt > BACK_AT_MOST_EVERY_MS) {
+                backAt = now
+                journal.tell(DELAY, "back_to_live") { put("fell_behind_ms", fell) }
+                // Past what is in hand, so the camera is asked again rather
+                // than the player moving within what it holds.
+                player.seekTo(player.currentPosition + fell)
+                return
+            }
             val behind = player.totalBufferedDuration - BEHIND_AT_MOST_MS
             val wanted = if (behind > 0) (1f + behind / 1_000f * SPEED_PER_SECOND_BEHIND).coerceAtMost(FASTEST) else 1f
             // In steps, so the speed is not changed on every look.

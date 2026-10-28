@@ -58,7 +58,11 @@ private val STEPS = mapOf(
  * every error.
  */
 @OptIn(UnstableApi::class)
-internal class LiveTrace(private val player: ExoPlayer, private val journal: CameraJournal) : AnalyticsListener {
+internal class LiveTrace(
+    private val player: ExoPlayer,
+    private val journal: CameraJournal,
+    private val drift: LiveDrift,
+) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
 
     private var firstLoad: Long? = null
@@ -67,10 +71,6 @@ internal class LiveTrace(private val player: ExoPlayer, private val journal: Cam
     private var firstFrame = 0L
     private var frames = 0L
 
-    /** When and where the picture first played, since the camera was last
-     *  opened, to tell how far it has fallen behind the clock since. */
-    private var playingSince = 0L
-    private var positionAtPlaying = 0L
     private var shownBefore = 0
     private var droppedBefore = 0
     private var queuedBefore = 0
@@ -150,9 +150,6 @@ internal class LiveTrace(private val player: ExoPlayer, private val journal: Cam
     }
 
     private fun summarize() {
-        // How much more time went by on the clock than in the picture since
-        // it first played: what the picture fell behind the camera since.
-        val fellBehind = if (playingSince > 0) (SystemClock.elapsedRealtime() - playingSince) - (player.currentPosition - positionAtPlaying) else 0
         val runtime = Runtime.getRuntime()
         journal.tell(DELAY, "summary") {
             put("over_s", beats)
@@ -162,7 +159,7 @@ internal class LiveTrace(private val player: ExoPlayer, private val journal: Cam
             put("most_behind_ms", mostBehind)
             put("in_decoder", inDecoder)
             put("speed", player.playbackParameters.speed)
-            put("fell_behind_ms", fellBehind)
+            put("fell_behind_ms", drift.fellBehind())
             put("received", received)
             put("shown", shownSince)
             put("dropped", droppedSince)
@@ -190,10 +187,6 @@ internal class LiveTrace(private val player: ExoPlayer, private val journal: Cam
     }
 
     override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
-        if (state == Player.STATE_READY && playingSince == 0L) {
-            playingSince = SystemClock.elapsedRealtime()
-            positionAtPlaying = player.currentPosition
-        }
         when {
             state == Player.STATE_BUFFERING && firstFrame > 0 -> {
                 stalledAt = SystemClock.elapsedRealtime()
@@ -204,11 +197,6 @@ internal class LiveTrace(private val player: ExoPlayer, private val journal: Cam
                 stalledAt = 0
             }
         }
-    }
-
-    override fun onTimelineChanged(eventTime: AnalyticsListener.EventTime, reason: Int) {
-        // Opened again: the clock is read again from the picture's first play.
-        if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) playingSince = 0
     }
 
     override fun onPlayerError(eventTime: AnalyticsListener.EventTime, error: PlaybackException) {
