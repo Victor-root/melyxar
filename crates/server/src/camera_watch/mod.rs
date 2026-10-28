@@ -44,7 +44,7 @@ enum Seen {
     Decoder(open::Decoder),
     FirstPicture(open::FirstPicture),
     LetGo(open::LetGo),
-    Second(Second),
+    Summary(Summary),
     CatchingUp(delay::CatchingUp),
     StoodStill(frames::StoodStill),
     Waiting(frames::Waiting),
@@ -108,17 +108,25 @@ impl State {
     }
 }
 
-/// Each second of a camera open: written as three lines, the delay, the
-/// frames and the memory, each under its own tag.
+/// Every few seconds of a camera open: written as three lines, the delay,
+/// the frames and the memory, each under its own tag.
 #[derive(Debug, Deserialize)]
-struct Second {
+struct Summary {
+    /// Seconds the summary covers.
+    over_s: u32,
     state: State,
     playing: bool,
     /// What has come from the camera and is not shown yet.
     behind_ms: i64,
+    /// The most of it at once over these seconds.
+    most_behind_ms: i64,
+    /// Pictures handed to the decoder and not out of it yet: what the
+    /// decoder holds back adds to how far behind the camera the picture is.
+    in_decoder: i64,
     speed: f64,
-    /// Time since the first picture that the picture did not move.
-    lost_ms: i64,
+    /// How much more time went by on the clock than in the picture since it
+    /// first played: what it fell behind the camera since.
+    fell_behind_ms: i64,
     received: i64,
     shown: i64,
     dropped: i64,
@@ -155,9 +163,9 @@ async fn what_the_application_saw(
         Seen::Decoder(seen) => open::write_decoder(&by, &seen),
         Seen::FirstPicture(seen) => open::write_first_picture(&by, &seen),
         Seen::LetGo(seen) => open::write_let_go(&by, &seen),
-        Seen::Second(seen) => {
-            delay::write_second(&by, &seen);
-            frames::write_second(&by, &seen);
+        Seen::Summary(seen) => {
+            delay::write_summary(&by, &seen);
+            frames::write_summary(&by, &seen);
             screen::write_memory(&by, &seen);
         }
         Seen::CatchingUp(seen) => delay::write_catching_up(&by, &seen),
@@ -202,7 +210,7 @@ mod tests {
             r#""saw":"decoder","kind":"video","name":"c2.android.avc.decoder","ready_ms":31"#,
             r#""saw":"first_picture","first_data_ms":300,"streams_ms":410,"decoder_ms":480"#,
             r#""saw":"let_go","frames":1500"#,
-            r#""saw":"second","state":"ready","playing":true,"behind_ms":340,"speed":1.05,"lost_ms":120,"received":25,"shown":24,"dropped":1,"memory_mb":61,"most_memory_mb":256"#,
+            r#""saw":"summary","over_s":10,"state":"ready","playing":true,"behind_ms":340,"most_behind_ms":420,"in_decoder":2,"speed":1.05,"fell_behind_ms":120,"received":25,"shown":24,"dropped":1,"memory_mb":61,"most_memory_mb":256"#,
             r#""saw":"catching_up","speed":1.2,"behind_ms":900"#,
             r#""saw":"stood_still","seconds":3,"received":0"#,
             r#""saw":"waiting","in_hand_ms":20"#,

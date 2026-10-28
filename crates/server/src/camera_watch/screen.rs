@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-use super::{Said, Second};
+use super::{Said, Summary};
 
 /// What happened to the screen.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -95,7 +95,7 @@ pub(super) fn write_held(by: &Said, seen: &Held) {
     );
 }
 
-pub(super) fn write_memory(by: &Said, seen: &Second) {
+pub(super) fn write_memory(by: &Said, seen: &Summary) {
     tracing::debug!(
         account = by.account,
         camera = by.camera,
