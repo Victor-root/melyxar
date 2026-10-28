@@ -46,6 +46,7 @@ enum Seen {
     LetGo(open::LetGo),
     Summary(Summary),
     CatchingUp(delay::CatchingUp),
+    BackToLive(delay::BackToLive),
     StoodStill(frames::StoodStill),
     Waiting(frames::Waiting),
     MovingAgain(frames::MovingAgain),
@@ -169,6 +170,7 @@ async fn what_the_application_saw(
             screen::write_memory(&by, &seen);
         }
         Seen::CatchingUp(seen) => delay::write_catching_up(&by, &seen),
+        Seen::BackToLive(seen) => delay::write_back_to_live(&by, &seen),
         Seen::StoodStill(seen) => frames::write_stood_still(&by, &seen),
         Seen::Waiting(seen) => frames::write_waiting(&by, &seen),
         Seen::MovingAgain(seen) => frames::write_moving_again(&by, &seen),
@@ -212,6 +214,7 @@ mod tests {
             r#""saw":"let_go","frames":1500"#,
             r#""saw":"summary","over_s":10,"state":"ready","playing":true,"behind_ms":340,"most_behind_ms":420,"in_decoder":2,"speed":1.05,"fell_behind_ms":120,"received":25,"shown":24,"dropped":1,"memory_mb":61,"most_memory_mb":256"#,
             r#""saw":"catching_up","speed":1.2,"behind_ms":900"#,
+            r#""saw":"back_to_live","fell_behind_ms":1040"#,
             r#""saw":"stood_still","seconds":3,"received":0"#,
             r#""saw":"waiting","in_hand_ms":20"#,
             r#""saw":"moving_again","waited_ms":2400"#,

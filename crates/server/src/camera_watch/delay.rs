@@ -1,5 +1,6 @@
 //! How far behind the camera the picture is, under the `camera-delay` tag:
-//! every few seconds, and every change of speed made to catch up.
+//! every few seconds, every change of speed made to catch up, and every
+//! return to live once the picture fell too far behind the clock.
 
 use serde::Deserialize;
 
@@ -37,5 +38,21 @@ pub(super) fn write_catching_up(by: &Said, seen: &CatchingUp) {
         behind_ms = seen.behind_ms,
         "played at {} to catch up",
         seen.speed
+    );
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct BackToLive {
+    fell_behind_ms: i64,
+}
+
+pub(super) fn write_back_to_live(by: &Said, seen: &BackToLive) {
+    tracing::debug!(
+        account = by.account,
+        camera = by.camera,
+        screen = by.screen,
+        at_ms = by.at_ms,
+        "back to live after falling {}ms behind the clock",
+        seen.fell_behind_ms
     );
 }
