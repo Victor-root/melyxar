@@ -97,3 +97,20 @@ pub(super) fn write_reopened(by: &Said, seen: &ReopenedWithoutSound) {
         "the sound held the picture, opened again without it"
     );
 }
+
+#[derive(Debug, Deserialize)]
+pub(super) struct ReopenedStuck {
+    /// How long the player had waited for the camera.
+    waited_ms: i64,
+}
+
+pub(super) fn write_reopened_stuck(by: &Said, seen: &ReopenedStuck) {
+    tracing::debug!(
+        account = by.account,
+        camera = by.camera,
+        screen = by.screen,
+        at_ms = by.at_ms,
+        "nothing came from the camera for {}ms, opened again",
+        seen.waited_ms
+    );
+}

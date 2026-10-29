@@ -31,6 +31,11 @@ private const val LOOKED_EVERY_MS = 250L
 private const val FALLEN_AT_MOST_MS = 1_000L
 private const val BACK_AT_MOST_EVERY_MS = 30_000L
 
+/** How long the player may wait for the camera before it is opened again,
+ *  in milliseconds: a camera that stops sending is never waited for until
+ *  the player gives up, ten minutes later. */
+private const val WAITED_AT_MOST_MS = 10_000L
+
 /**
  * Keeps a camera at now. What has come from the camera and not been shown
  * yet is how far behind the picture is: past [BEHIND_AT_MOST_MS] it is played
@@ -41,8 +46,10 @@ private const val BACK_AT_MOST_EVERY_MS = 30_000L
  *
  * Playing faster cannot make up the moments the picture waited for the camera:
  * nothing is in hand to play. When these add up past [FALLEN_AT_MOST_MS], the
- * camera is asked for its picture again from where the clock is, a small jump
- * forward.
+ * camera is opened again, which only it can bring back to now: a jump forward
+ * within the player asked the camera nothing, threw away what was in hand and
+ * waited for good. A camera that sends nothing for [WAITED_AT_MOST_MS] is
+ * opened again the same way.
  */
 @OptIn(UnstableApi::class)
 internal class LiveEdge(
@@ -54,6 +61,8 @@ internal class LiveEdge(
 ) : AnalyticsListener {
     private val clock = Handler(Looper.getMainLooper())
     private var backAt = 0L
+    /** Since when the player waits for the camera, or nought while it plays. */
+    private var waitingSince = 0L
     private val look = object : Runnable {
         override fun run() {
             keepAtNow()
@@ -72,9 +81,7 @@ internal class LiveEdge(
             if (fell > FALLEN_AT_MOST_MS && now - backAt > BACK_AT_MOST_EVERY_MS) {
                 backAt = now
                 journal.tell(DELAY, "back_to_live") { put("fell_behind_ms", fell) }
-                // Past what is in hand, so the camera is asked again rather
-                // than the player moving within what it holds.
-                player.seekTo(player.currentPosition + fell)
+                reopen()
                 return
             }
             val behind = player.totalBufferedDuration - BEHIND_AT_MOST_MS
@@ -90,6 +97,13 @@ internal class LiveEdge(
             }
             return
         }
+        val waited = if (waitingSince > 0) SystemClock.elapsedRealtime() - waitingSince else 0L
+        if (player.playbackState == Player.STATE_BUFFERING && waited > WAITED_AT_MOST_MS) {
+            journal.tell(NET, "reopened_stuck") { put("waited_ms", waited) }
+            waitingSince = SystemClock.elapsedRealtime()
+            reopen()
+            return
+        }
         val soundOn = !player.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_AUDIO)
         if (soundOn && player.playbackState == Player.STATE_BUFFERING && player.totalBufferedDuration > SOUND_WAITED_MS) {
             journal.tell(NET, "reopened_without_sound") { put("received_ms", player.totalBufferedDuration) }
@@ -100,6 +114,14 @@ internal class LiveEdge(
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                 .build()
             reopen()
+        }
+    }
+
+    override fun onPlaybackStateChanged(eventTime: AnalyticsListener.EventTime, state: Int) {
+        waitingSince = when {
+            state != Player.STATE_BUFFERING -> 0L
+            waitingSince == 0L -> SystemClock.elapsedRealtime()
+            else -> waitingSince
         }
     }
 
