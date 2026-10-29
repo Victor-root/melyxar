@@ -22,6 +22,7 @@ pub mod catalogue;
 pub mod collections;
 pub mod deletion;
 pub mod hand_edits;
+pub mod import;
 pub mod home;
 pub mod images;
 pub mod jobs;
