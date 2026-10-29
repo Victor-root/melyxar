@@ -42,6 +42,7 @@ import {
   sungAt,
   toHundredth,
   toKeep,
+  withABreakAfter,
   waitsForAMoment,
 } from "./lyrics-editing";
 import type { EditedLine } from "./lyrics-editing";
@@ -311,14 +312,26 @@ export function LyricsEditor({
   );
 
   const chosenIndex = lines.findIndex((line) => line.key === selected);
-  /** A line after the one chosen, or at the end, with words or a break. */
-  const addLine = (at: number | null) => {
-    const line = aLine(at, "");
+  /** A line without a moment after the one chosen, or at the end. */
+  const addLine = () => {
+    const line = aLine(null, "");
     edit((all) => {
       const after = all.findIndex((one) => one.key === selectedNow.current);
       return after < 0 ? [...all, line] : [...all.slice(0, after + 1), line, ...all.slice(after + 1)];
     });
     setSelected(line.key);
+  };
+
+  /** A break right after the line chosen, the next line starting later to
+      make room, then chosen itself to be sized on the timeline. */
+  const addBreak = () => {
+    const chosen = selectedNow.current;
+    if (chosen === null) {
+      return;
+    }
+    const pause = aLine(null, "");
+    edit((all) => withABreakAfter(all, chosen, length * 1000, pause));
+    setSelected(pause.key);
   };
 
   /* The keys, everywhere in the editor but where something is typed. Space
@@ -597,14 +610,15 @@ export function LyricsEditor({
         </span>
         {mode === "lines" && (
           <span className="lyrics-editor-tools">
-            <button type="button" className="button button-small" onClick={() => addLine(null)}>
+            <button type="button" className="button button-small" onClick={addLine}>
               {t("lyrics_editor.add_line")}
             </button>
             <button
               type="button"
               className="button button-small"
-              title={t("lyrics_editor.add_break_why")}
-              onClick={() => addLine(toHundredth(hearing.position() * 1000))}
+              title={t(lines[chosenIndex]?.at != null ? "lyrics_editor.add_break_why" : "lyrics_editor.add_break_choose")}
+              disabled={lines[chosenIndex]?.at == null}
+              onClick={addBreak}
             >
               {t("lyrics_editor.add_break")}
             </button>

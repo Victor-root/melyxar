@@ -212,6 +212,39 @@ export function endedAt(lines: EditedLine[], key: number, at: number, songMs: nu
   return placed === next.at ? lines : lines.map((one) => (one.key === next.key ? { ...one, at: placed } : one));
 }
 
+/** How long a break lasts when it is added. */
+export const BREAK_MS = 5_000;
+
+/** The lines with a break, `pause`, put right after the stamped line `key`,
+ *  where that line ends: the next line starts that much later to make room,
+ *  never so late that it lasts less than the shortest, and every other line
+ *  stays where it is. After the last line the break comes as long after it
+ *  starts, before the end of the song. The same lines when the line has no
+ *  moment, or no room is left. */
+export function withABreakAfter(
+  lines: EditedLine[],
+  key: number,
+  songMs: number,
+  pause: EditedLine = aLine(null, ""),
+): EditedLine[] {
+  const line = lines.find((one) => one.key === key);
+  if (!line || line.at === null) {
+    return lines;
+  }
+  const start = line.at;
+  const [next, after] = lines
+    .filter((one): one is EditedLine & { at: number } => one.at !== null && one.key !== key && one.at > start)
+    .sort((one, other) => one.at - other.at);
+  const at = next ? next.at : Math.min(start + BREAK_MS, songMs - SHORTEST_MS);
+  const nextAt = next ? Math.min(next.at + BREAK_MS, (after ? after.at : songMs) - SHORTEST_MS) : null;
+  if (at <= start || (nextAt !== null && nextAt <= at)) {
+    return lines;
+  }
+  const moved = lines.map((one) => (next && nextAt !== null && one.key === next.key ? { ...one, at: toHundredth(nextAt) } : one));
+  const index = lines.indexOf(line);
+  return [...moved.slice(0, index + 1), { ...pause, at: toHundredth(at) }, ...moved.slice(index + 1)];
+}
+
 /** The next line after `index` that waits to be stamped as the song plays:
  *  the gaps between verses are passed over. -1 past the last. */
 export function nextToStamp(lines: readonly EditedLine[], index: number): number {
