@@ -1508,10 +1508,20 @@ export type ImportAccountChoice =
   | { becomes: "new"; key: string; name: string; password: string }
   | { becomes: "nothing"; key: string };
 
+/** Which of what each account did is taken up. */
+export interface ImportParts {
+  watched: boolean;
+  left_partway: boolean;
+  favourites: boolean;
+  listens: boolean;
+  playlists: boolean;
+}
+
 export interface ImportChoices {
   accounts: ImportAccountChoice[];
   /** The collections taken up, by their name over there. */
   collections: string[];
+  parts: ImportParts;
 }
 
 /** What was taken up. */

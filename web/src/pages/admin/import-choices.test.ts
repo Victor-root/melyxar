@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ImportPreview } from "../../api";
-import { choicesOf, firstCollections, firstPlans, readyToTakeUp } from "./import-choices";
+import { ALL_PARTS, choicesOf, firstCollections, firstPlans, readyToTakeUp } from "./import-choices";
 
 const preview: ImportPreview = {
   server: "emby",
@@ -43,13 +43,15 @@ describe("readyToTakeUp and choicesOf", () => {
     expect(readyToTakeUp(plans)).toBe(false);
     plans["2"] = { ...plans["2"], name: " Ben ", password: "quiet harbour" };
     expect(readyToTakeUp(plans)).toBe(true);
-    expect(choicesOf(plans, new Set(["Rainy days"]))).toEqual({
+    const parts = { ...ALL_PARTS, favourites: false };
+    expect(choicesOf(plans, new Set(["Rainy days"]), parts)).toEqual({
       accounts: [
         { becomes: "existing", key: "1", user: "u-ada" },
         { becomes: "new", key: "2", name: "Ben", password: "quiet harbour" },
         { becomes: "nothing", key: "3" },
       ],
       collections: ["Rainy days"],
+      parts,
     });
   });
 

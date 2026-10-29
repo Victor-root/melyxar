@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { api } from "../../api";
 import { ApiError } from "../../api";
-import type { ImportKind, ImportPreview, ImportReport, ManagedAccount } from "../../api";
+import type { ImportKind, ImportParts, ImportPreview, ImportReport, ManagedAccount } from "../../api";
 import { figuresOf, useAsked } from "../../asking";
 import { Modal } from "../../components/modal";
 import { PageHead, Panel, Picker, Setting, Stat, StatePill, Toggle } from "../../components/panel";
@@ -21,17 +21,16 @@ import {
   CollectionIcon,
   DownloadIcon,
   EyeIcon,
-  HeartIcon,
   MusicIcon,
   PlaybackIcon,
   PlaylistIcon,
+  TickIcon,
   WarningIcon,
 } from "../../icons";
-import type { IconProps } from "../../icons";
 import { useMarkActions } from "../../marks";
 import { useMusicMarks } from "../../music/marks";
 import { useSettings } from "../../settings";
-import { choicesOf, firstCollections, firstPlans, readyToTakeUp } from "./import-choices";
+import { ALL_PARTS, choicesOf, firstCollections, firstPlans, readyToTakeUp } from "./import-choices";
 import type { AccountPlan } from "./import-choices";
 
 /** What a refusal of the server said, worded. */
@@ -64,6 +63,7 @@ export function AdminImport() {
   const [read, setRead] = useState<{ path: string; preview: ImportPreview } | null>(null);
   const [plans, setPlans] = useState<Record<string, AccountPlan>>({});
   const [collections, setCollections] = useState<Set<string>>(new Set());
+  const [parts, setParts] = useState<ImportParts>(ALL_PARTS);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -81,6 +81,7 @@ export function AdminImport() {
       setRead({ path: path.trim(), preview });
       setPlans(firstPlans(preview));
       setCollections(firstCollections(preview));
+      setParts(ALL_PARTS);
     } catch (error) {
       setRead(null);
       setRefused(refusalWording(error, t));
@@ -97,7 +98,7 @@ export function AdminImport() {
     setBusy(true);
     setRefused(null);
     try {
-      setReport(await api.importTakeUp(read.path, choicesOf(plans, collections)));
+      setReport(await api.importTakeUp(read.path, choicesOf(plans, collections, parts)));
       setRead(null);
       // Every screen showing what was watched, liked or listened to reads it
       // again: it changed for whole accounts at once.
@@ -166,6 +167,8 @@ export function AdminImport() {
             setPlans={setPlans}
             collections={collections}
             setCollections={setCollections}
+            parts={parts}
+            setParts={setParts}
             busy={busy}
             onTakeUp={() => setAsking(true)}
           />
@@ -194,10 +197,14 @@ export function AdminImport() {
   );
 }
 
-/** The heart of a favourite, as a picture that is always filled. */
-function FavouriteIcon(props: IconProps) {
-  return <HeartIcon filled {...props} />;
-}
+/** Each part that can be left out, and what it is called. */
+const PARTS: [keyof ImportParts, string][] = [
+  ["watched", "import.watched"],
+  ["left_partway", "import.left_partway"],
+  ["favourites", "import.favourites"],
+  ["listens", "import.listens"],
+  ["playlists", "import.playlists"],
+];
 
 const KIND_ICONS: Record<ImportKind, typeof PlaybackIcon> = {
   movie: PlaybackIcon,
@@ -217,6 +224,8 @@ function Preview({
   setPlans,
   collections,
   setCollections,
+  parts,
+  setParts,
   busy,
   onTakeUp,
 }: {
@@ -226,6 +235,8 @@ function Preview({
   setPlans: (plans: Record<string, AccountPlan>) => void;
   collections: Set<string>;
   setCollections: (collections: Set<string>) => void;
+  parts: ImportParts;
+  setParts: (parts: ImportParts) => void;
   busy: boolean;
   onTakeUp: () => void;
 }) {
@@ -245,6 +256,7 @@ function Preview({
         icon={EyeIcon}
         title={t("import.found_title")}
         lead={t("import.found_lead")}
+        wide
         action={<StatePill state="ok">{t(`import.server.${preview.server}`)}</StatePill>}
       >
         <div className="stats">
@@ -257,10 +269,6 @@ function Preview({
               state={found.found === found.total ? "ok" : "attention"}
             />
           ))}
-          <Stat icon={PlaybackIcon} label={t("import.watched")} value={preview.taken.watched} />
-          <Stat icon={PlaybackIcon} label={t("import.left_partway")} value={preview.taken.left_partway} />
-          <Stat icon={FavouriteIcon} label={t("import.favourites")} value={preview.taken.favourites} />
-          <Stat icon={MusicIcon} label={t("import.listens")} value={preview.taken.listens} />
         </div>
         {preview.lost_count > 0 && (
           <details className="import-lost">
@@ -283,6 +291,24 @@ function Preview({
             </ul>
           </details>
         )}
+      </Panel>
+
+      <Panel icon={TickIcon} title={t("import.parts")} lead={t("import.parts_lead")}>
+        {PARTS.map(([part, label]) => (
+          <Setting
+            key={part}
+            label={t(label)}
+            why={t(`import.part.${part}`, {
+              count: part === "playlists" ? preview.playlists.length : preview.taken[part],
+            })}
+          >
+            <Toggle
+              label={t(label)}
+              checked={parts[part]}
+              onChange={(on) => setParts({ ...parts, [part]: on })}
+            />
+          </Setting>
+        ))}
       </Panel>
 
       <Panel icon={AccountIcon} title={t("import.accounts")} lead={t("import.accounts_lead")}>
