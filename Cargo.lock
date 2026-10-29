@@ -1603,6 +1603,7 @@ dependencies = [
  "melyxar-core",
  "melyxar-database",
  "melyxar-ffmpeg",
+ "melyxar-import",
  "melyxar-jobs",
  "melyxar-library",
  "melyxar-media-probe",
@@ -1626,6 +1627,7 @@ dependencies = [
  "tokio",
  "tracing",
  "unicode-security",
+ "uuid",
  "x509-parser",
 ]
 
