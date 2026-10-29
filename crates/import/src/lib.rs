@@ -16,6 +16,7 @@
 mod copy;
 mod emby;
 mod guid;
+pub mod matching;
 
 use std::path::Path;
 
