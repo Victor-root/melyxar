@@ -257,11 +257,20 @@ pub async fn trim(
     Ok(())
 }
 
-/// The wave of a song to cut, read from its file every time rather than kept:
-/// a cut changes the file, and the spectrum kept from the scan follows only
-/// once the song has been analysed again.
+/// The wave of a song, to cut it or to place the lines of its lyrics on it,
+/// read from its file every time rather than kept: a cut changes the file,
+/// and the spectrum kept from the scan follows only once the song has been
+/// analysed again. Reading it writes nothing, so it is for whoever edits the
+/// tags of songs or their lyrics, whether or not the library lets its files
+/// be written.
 pub async fn wave(state: &AppState, who: &User, song: WorkId) -> Result<Wave> {
-    let on_disk = writable(state, who, song).await?;
+    if !who.permissions.may_edit_tags && !who.permissions.is_administrator {
+        return Err(AppError::Domain(melyxar_core::Error::new(
+            melyxar_core::error::ErrorCode::Forbidden,
+            "this account may neither edit the tags of songs nor their lyrics",
+        )));
+    }
+    let on_disk = on_disk(state, who, song).await?;
     let tools = state
         .tools()
         .cloned()
@@ -403,6 +412,17 @@ async fn copy_into(from: &Path, to: &Path) -> std::result::Result<(), String> {
         .map_err(|error| format!("no copy could be kept: {error}"))
 }
 
+/// The song's file, once it is sure this account may read it.
+async fn on_disk(state: &AppState, who: &User, song: WorkId) -> Result<SongOnDisk> {
+    let on_disk = state
+        .database()
+        .song_on_disk(song)
+        .await?
+        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("song")))?;
+    may_read(who, on_disk.library_id)?;
+    Ok(on_disk)
+}
+
 /// The song's file, once it is sure this account may write into it.
 async fn writable(state: &AppState, who: &User, song: WorkId) -> Result<SongOnDisk> {
     if !who.permissions.may_edit_tags {
@@ -411,12 +431,7 @@ async fn writable(state: &AppState, who: &User, song: WorkId) -> Result<SongOnDi
             "this account may not edit the tags of songs",
         )));
     }
-    let on_disk = state
-        .database()
-        .song_on_disk(song)
-        .await?
-        .ok_or_else(|| AppError::Domain(melyxar_core::Error::not_found("song")))?;
-    may_read(who, on_disk.library_id)?;
+    let on_disk = on_disk(state, who, song).await?;
     if !state
         .database()
         .music_library_options(on_disk.library_id)
@@ -504,6 +519,27 @@ mod tests {
         assert!(!cut_holds(Millis::new(5_000), Millis::new(5_900), length), "under a second");
         assert!(!cut_holds(Millis::new(0), Millis::new(200_001), length), "past the end");
         assert!(cut_holds(Millis::new(0), Millis::new(900_000), None), "a length nobody knows");
+    }
+
+    #[tokio::test]
+    async fn the_wave_is_for_an_administrator_even_where_files_are_not_written() {
+        let (_directory, state) = crate::an_empty_server().await;
+        let viewer = crate::a_viewer(&state).await;
+        let forbidden = |outcome: Result<Wave>| {
+            matches!(outcome, Err(AppError::Domain(error)) if error.to_string().contains("may neither edit"))
+        };
+        assert!(forbidden(wave(&state, &viewer, WorkId::new()).await));
+
+        let administrator = state
+            .database()
+            .create_user("Boss", None, &melyxar_core::user::Permissions::administrator())
+            .await
+            .expect("account created");
+        let missing = wave(&state, &administrator, WorkId::new()).await;
+        assert!(
+            matches!(missing, Err(AppError::Domain(error)) if error.to_string().contains("song")),
+            "let through, to a song that is not there"
+        );
     }
 
     #[test]
