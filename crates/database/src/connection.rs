@@ -430,6 +430,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_lyrics_written_by_hand_so_far_become_the_version_in_service() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("database opens");
+        crate::MIGRATOR
+            .run_to(124, &pool)
+            .await
+            .expect("migrated to just before the versions");
+        for statement in [
+            "INSERT INTO libraries (id, name, kind, created_at, updated_at)
+             VALUES ('music', 'Music', 'music', '2026-10-29T00:00:00Z', '2026-10-29T00:00:00Z')",
+            "INSERT INTO library_roots (id, library_id, label, path) VALUES ('root', 'music', 'disk-one', '/srv/music')",
+            "INSERT INTO works (id, library_id, kind, title, sort_title, added_at, updated_at)
+             VALUES ('song', 'music', 'song', 'Tides', 'tides', '2026-10-29T00:00:00Z', '2026-10-29T00:00:00Z')",
+            "INSERT INTO media_sources (id, work_id, root_id, relative_path, size_bytes, modified_at, added_at)
+             VALUES ('file', 'song', 'root', 'Amber Field/01 Tides.flac', 10, '2026-10-29T00:00:00Z', '2026-10-29T00:00:00Z')",
+            "INSERT INTO music_lyrics_by_hand (song_id, words, written_at)
+             VALUES ('song', '[00:01.00]Written', '2026-10-29T01:00:00Z')",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("written");
+        }
+
+        crate::MIGRATOR.run(&pool).await.expect("migrated");
+
+        let kept: (String, Option<String>, Option<String>, String, String, i64) = sqlx::query_as(
+            "SELECT song_id, root_path, relative_path, words, written_at, in_use FROM music_lyrics_versions",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read");
+        assert_eq!(
+            kept,
+            (
+                "song".to_string(),
+                Some("/srv/music".to_string()),
+                Some("Amber Field/01 Tides.flac".to_string()),
+                "[00:01.00]Written".to_string(),
+                "2026-10-29T01:00:00Z".to_string(),
+                1
+            )
+        );
+    }
+
+    #[tokio::test]
     async fn a_door_that_had_a_picture_keeps_it_as_its_chosen_background() {
         for (picture, style, expected) in [
             (Some("door.webp"), "library", "picture"),
