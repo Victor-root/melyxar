@@ -183,7 +183,9 @@ private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusReque
                 Synopsis(
                     biographyText,
                     title = person.name,
-                    maxLines = 6,
+                    // As much as the web's page shows: the first screen filled,
+                    // the rest a press away.
+                    maxLines = 12,
                     modifier = Modifier.remembered(memory, "about").focusRequester(biography),
                 )
             }
