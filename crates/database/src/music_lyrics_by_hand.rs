@@ -69,6 +69,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_lyrics_of_a_song_follow_it_into_the_song_it_is_merged_into() {
+        let (database, library, _) = collection().await;
+        let songs = database.music_songs(library, SongOrder::Title, false, 0, 2).await.expect("read").items;
+        let (gone, here) = (songs[0].id, songs[1].id);
+        let now = melyxar_core::time::now();
+        let timing = LyricsTiming { conclusion: "aligned".into(), shift_ms: 120, moves_ms: vec![120], lines_moved: 1, confidence: 0.5 };
+        let found = crate::music_lyrics::LookedUpLyrics { plain: Some("Chosen".into()), ..Default::default() };
+        // In this order, since each forgets what was set after the one before.
+        database.keep_lyrics_by_hand(here, "[00:09.00]Its own", now).await.expect("kept");
+        database.keep_lyrics_by_hand(gone, "[00:01.00]Written", now).await.expect("kept");
+        database.keep_looked_up_lyrics(gone, &found, now, 4).await.expect("kept");
+        database.keep_lyrics_timing(gone, &timing, now).await.expect("kept");
+        database.set_lyrics_offset(gone, 800, now).await.expect("set");
+
+        database.merge_work_into(gone, here).await.expect("merged");
+        assert_eq!(database.looked_up_lyrics(here).await.expect("read"), Some(found));
+        assert_eq!(database.lyrics_timing(here).await.expect("read"), Some(timing));
+        assert_eq!(database.lyrics_offset(here).await.expect("read"), 800);
+        assert_eq!(
+            database.lyrics_by_hand(here).await.expect("read").as_deref(),
+            Some("[00:09.00]Its own"),
+            "what the song kept already stays"
+        );
+    }
+
+    #[tokio::test]
+    async fn words_written_by_hand_survive_a_merge_into_a_song_without_any() {
+        let (database, library, _) = collection().await;
+        let songs = database.music_songs(library, SongOrder::Title, false, 0, 2).await.expect("read").items;
+        let (gone, here) = (songs[0].id, songs[1].id);
+        database.keep_lyrics_by_hand(gone, "[00:01.00]Written", melyxar_core::time::now()).await.expect("kept");
+        database.merge_work_into(gone, here).await.expect("merged");
+        assert_eq!(database.lyrics_by_hand(here).await.expect("read").as_deref(), Some("[00:01.00]Written"));
+    }
+
+    #[tokio::test]
     async fn words_written_by_hand_forget_how_the_lines_were_lined_up_and_moved() {
         let (database, library, _) = collection().await;
         let song = database.music_songs(library, SongOrder::Title, false, 0, 1).await.expect("read").items[0].id;
