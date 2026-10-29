@@ -24,6 +24,7 @@ import type { Wording } from "../readable";
 import type { SongWave } from "./api";
 import type { EditedLine } from "./lyrics-editing";
 import { stampOf } from "./lyrics-editing";
+import type { HandSeen } from "./scrubbing";
 import { WaveDrawing, WaveOverview, useWheelZoom } from "./wave-view";
 import { asClock } from "../clock";
 import { clockOf, paged, rulerOf, showing, zoomed } from "./wave-stretch";
@@ -52,8 +53,9 @@ export interface TimelineActs {
   end: (key: number, at: number) => void;
   /** The mark was let go. */
   settle: () => void;
-  /** The playhead taken, dragged and let go, at a moment in seconds. */
-  scrub: (phase: "take" | "drag" | "let go", seconds: number) => void;
+  /** The playhead taken, dragged and let go: every place the hand was seen
+      at since the last time, the latest last. */
+  scrub: (phase: "take" | "drag" | "let go", seen: HandSeen[]) => void;
 }
 
 /** A stamped line where it falls, and where the next one does. */
@@ -163,6 +165,10 @@ export const LyricsTimeline = memo(function LyricsTimeline({
   const across = (seconds: number) => ((seconds - shown.from) / span) * 100;
   const momentAt = (clientX: number, box: { left: number; width: number }) =>
     Math.min(Math.max(shown.from + ((clientX - box.left) / box.width) * span, 0), length);
+  const seenAt = (event: { clientX: number; timeStamp: number }, box: { left: number; width: number }): HandSeen => ({
+    seconds: momentAt(event.clientX, box),
+    stamp: event.timeStamp,
+  });
 
   const take = (key: number, end: "start" | "end", event: PointerEvent<HTMLElement>) => {
     const box = bar.current?.getBoundingClientRect();
@@ -224,26 +230,29 @@ export const LyricsTimeline = memo(function LyricsTimeline({
           const box = event.currentTarget.getBoundingClientRect();
           event.currentTarget.setPointerCapture(event.pointerId);
           scrubbing.current = { left: box.left, width: box.width };
-          acts.scrub("take", momentAt(event.clientX, box));
+          acts.scrub("take", [seenAt(event, box)]);
         }}
         onPointerMove={(event) => {
           const hand = scrubbing.current;
           if (hand && event.currentTarget.hasPointerCapture(event.pointerId)) {
-            acts.scrub("drag", momentAt(event.clientX, hand));
+            // Every place the hand went through since the last frame, each
+            // with its moment, rather than only the last.
+            const gathered = event.nativeEvent.getCoalescedEvents?.() ?? [];
+            acts.scrub("drag", (gathered.length > 0 ? gathered : [event]).map((one) => seenAt(one, hand)));
           }
         }}
         onPointerUp={(event) => {
           const hand = scrubbing.current;
           if (hand) {
             scrubbing.current = null;
-            acts.scrub("let go", momentAt(event.clientX, hand));
+            acts.scrub("let go", [seenAt(event, hand)]);
           }
         }}
         onPointerCancel={(event) => {
           const hand = scrubbing.current;
           if (hand) {
             scrubbing.current = null;
-            acts.scrub("let go", momentAt(event.clientX, hand));
+            acts.scrub("let go", [seenAt(event, hand)]);
           }
         }}
       >
