@@ -2,8 +2,8 @@
  * The song's wave in the lyrics editor, each stamped line a bubble of its
  * words from where it starts to where the next one does. The start of a
  * bubble is taken and dragged to move its line, or moved by the arrows once
- * it holds the focus; its end is dragged to make the line last longer or
- * less long. A press on the bubble chooses its line, and a press on the
+ * it holds the focus; its end, which is where the next line starts, is
+ * dragged to make the line last longer or less long. A press on the bubble chooses its line, and a press on the
  * wave anywhere else takes the song there.
  *
  * The playhead is moved by whatever plays the song, through `follow`, never
@@ -225,7 +225,7 @@ export const LyricsTimeline = memo(function LyricsTimeline({
                   <span className="lyrics-bubble-number">{mark.number}</span>
                   {mark.line.text || "♪"}
                 </span>
-                {right <= 100 && (
+                {right <= 100 && mark.until < length * 1000 && (
                   <span
                     className="lyrics-bubble-end"
                     aria-hidden="true"
