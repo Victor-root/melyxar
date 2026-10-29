@@ -3122,6 +3122,14 @@
   margin-left: var(--gap-tight);
 }
 
+/* Its figure under the slider rather than over it: at the top of the
+   window, over it was under the window's title. */
+.lyrics-editor-volume .player-loudness-said {
+  top: calc(100% + 10px);
+  bottom: auto;
+  transform-origin: top center;
+}
+
 .lyrics-editor-history {
   display: flex;
   gap: 2px;
