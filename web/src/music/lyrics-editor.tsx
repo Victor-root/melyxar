@@ -27,6 +27,7 @@ import { music as server } from "./api";
 import type { Song, SongLyrics } from "./api";
 import { HeardSong } from "./heard-song";
 import { Scrubber } from "./scrubbing";
+import type { HandSeen } from "./scrubbing";
 import {
   NOTHING_EDITED,
   aLine,
@@ -224,17 +225,17 @@ export function LyricsEditor({
   }, [song.id]);
   const playOn = useRef(false);
   const scrub = useCallback(
-    (phase: "take" | "drag" | "let go", seconds: number) => {
-      const at = Math.min(Math.max(seconds, 0), length || Infinity);
+    (phase: "take" | "drag" | "let go", seen: HandSeen[]) => {
+      const at = Math.min(Math.max(seen[seen.length - 1].seconds, 0), length || Infinity);
       if (phase === "take") {
         playOn.current = hearing.playing;
         if (hearing.playing) {
           hearing.pause();
         }
-        scrubber.current?.begin(at);
+        scrubber.current?.begin(seen[0]);
         shown(at, false);
       } else if (phase === "drag") {
-        scrubber.current?.to(at);
+        scrubber.current?.to(seen);
         shown(at, false);
       } else {
         scrubber.current?.end();

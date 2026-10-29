@@ -1,75 +1,66 @@
 /*
- * A song heard at the pace of a hand dragging the playhead along it, as an
- * editing desk does: the song plays on without a break, its speed following
- * the hand, faster as it moves faster, slowing down to a stop like a tape
- * once it stands still, and backwards when it goes back.
+ * The song heard while the hand drags the playhead along it in the lyrics
+ * editor, as an editing desk plays it: at the speed the hand moves, slowed
+ * down, sped up and run backwards like a tape, and silent while the hand
+ * holds still.
  *
- * Where the sound is chases where the hand is: a gap between the two is made
- * up within a twelfth of a second, which is what sets the speed, and the
- * speed itself changes smoothly, so that a hand moving in small jumps is not
- * heard as a warble. The speed is worked out on a beat of its own, apart
- * from the hand, so the song slows down even when no move comes.
- *
- * The song is read once, whole, into memory: as one channel and at a lower
- * rate than it was recorded, which is plenty to tell a syllable by, and
- * backwards too the first time the hand goes back.
+ * The sound is made on the thread the browser makes sound on, one block of
+ * samples at a time (scrub-worklet.ts). This hands it the song, read once
+ * into memory as one channel and at a rate plenty to tell a syllable by,
+ * and the path of the hand: every place it was seen at, the ones the
+ * browser gathers between two frames included, each with the moment it was
+ * there on the clock of the sound.
  */
 
+import scrubWorklet from "./scrub-worklet?worker&url";
+import type { HandPoint } from "./scrub-follow";
+import type { ScrubWord } from "./scrub-worklet";
 import { soundOf } from "./player/player";
-
-/** The fastest the song is heard while dragged, either way. */
-const FASTEST = 4;
-
-/** How soon the sound makes up the gap to the hand, in seconds. */
-const CHASE_SECONDS = 0.08;
-
-/** How soon the speed reaches the one the gap asks for, in seconds. */
-const EASE_SECONDS = 0.03;
-
-/** Under this speed the song is no longer heard: a hand at rest. */
-const QUIET_BELOW = 0.04;
-
-/** How often the speed is worked out, in milliseconds. */
-const BEAT_MS = 10;
-
-/** How long the sound takes to come in and go out, in seconds. */
-const FADE_SECONDS = 0.01;
 
 /** The rate the song is read at: a voice is told well below it. */
 const READ_AT_RATE = 22_050;
 
-/** The speed the song is heard at, `seconds` after it was heard at `rate`,
- *  for the hand to be `gap` seconds ahead of the sound: negative is
- *  backwards. */
-export function speedAfter(rate: number, gap: number, seconds: number): number {
-  const wanted = Math.min(Math.max(gap / CHASE_SECONDS, -FASTEST), FASTEST);
-  return rate + (wanted - rate) * Math.min(1, seconds / EASE_SECONDS);
+/** How much later than the time it takes to be heard the sound follows the
+ *  hand, and how late it is at the least and at the most, in seconds: the
+ *  hand is seen up to a frame late, and the sound is only ever smooth
+ *  between two places the hand was seen at. */
+const LATE_BEYOND = 0.04;
+const LEAST_LATE = 0.06;
+const MOST_LATE = 0.4;
+
+/** What the sound says it plays, said this long ago or more, in
+ *  milliseconds, was said before it was paused. */
+const STALE_MS = 200;
+
+/** Where the hand was along the song, in seconds, and when, in milliseconds
+ *  as the page's events are stamped. */
+export interface HandSeen {
+  seconds: number;
+  stamp: number;
 }
 
-/** Whether the song is heard at this speed. */
-export function heardAt(rate: number): boolean {
-  return Math.abs(rate) >= QUIET_BELOW;
+/** How far ahead of the page's clock the clock of the sound is, in seconds,
+ *  `now` milliseconds into the page's: from what the sound says it plays,
+ *  and when, unless it said so before it was paused; then from where the
+ *  sound is made, `making`, less the time it `takes` to be heard. */
+export function clocksApart(heard: AudioTimestamp, now: number, making: number, takes: number): number {
+  const { contextTime, performanceTime } = heard;
+  if (contextTime !== undefined && performanceTime !== undefined && performanceTime > 0 && now - performanceTime < STALE_MS) {
+    return contextTime - performanceTime / 1000;
+  }
+  return making - takes - now / 1000;
 }
 
 export class Scrubber {
   private context: AudioContext | null = null;
-  private forwards: AudioBuffer | null = null;
-  private backwards: AudioBuffer | null = null;
-  private reading: Promise<void> | null = null;
-  private stop = new AbortController();
-  /** The sound coming in and going out, and how loud it is heard. */
-  private loudness: GainNode | null = null;
+  private sound: AudioWorkletNode | null = null;
   private volume: GainNode | null = null;
   private level = 1;
-  private source: AudioBufferSourceNode | null = null;
-  private sourceGoesBack = false;
-  /** Where the hand is, where the sound is, both in seconds, and how fast
-      the sound goes. */
-  private hand = 0;
-  private heard = 0;
-  private rate = 0;
-  private beat = 0;
-  private beatAt = 0;
+  private reading: Promise<void> | null = null;
+  private readonly stop = new AbortController();
+  /** How far ahead of the page's clock the clock of the sound is, read when
+      the playhead is taken and kept while it is held, in seconds. */
+  private apart = 0;
 
   constructor(private readonly song: string) {}
 
@@ -77,17 +68,24 @@ export class Scrubber {
   read(): void {
     this.reading ??= (async () => {
       const answer = await fetch(soundOf(this.song, 0), { signal: this.stop.signal });
-      const bytes = await answer.arrayBuffer();
-      const context = new AudioContext({ sampleRate: READ_AT_RATE });
+      const read = await new OfflineAudioContext(1, 1, READ_AT_RATE).decodeAudioData(await answer.arrayBuffer());
+      if (this.stop.signal.aborted) {
+        return;
+      }
+      const context = new AudioContext({ latencyHint: "interactive" });
       this.context = context;
-      const read = await context.decodeAudioData(bytes);
-      this.forwards = oneChannel(context, read);
-      this.volume = context.createGain();
-      this.volume.gain.value = this.level;
-      this.volume.connect(context.destination);
-      this.loudness = context.createGain();
-      this.loudness.gain.value = 0;
-      this.loudness.connect(this.volume);
+      await context.audioWorklet.addModule(scrubWorklet);
+      if (this.stop.signal.aborted) {
+        return;
+      }
+      const sound = new AudioWorkletNode(context, "melyxar-scrub", { numberOfInputs: 0, outputChannelCount: [1] });
+      const volume = context.createGain();
+      volume.gain.value = this.level;
+      sound.connect(volume).connect(context.destination);
+      this.sound = sound;
+      this.volume = volume;
+      const samples = oneChannel(read);
+      this.tell({ kind: "sound", samples, rate: read.sampleRate }, [samples.buffer]);
     })().catch(() => {
       // Not heard while dragged, and dragged all the same.
     });
@@ -101,124 +99,55 @@ export class Scrubber {
     }
   }
 
-  /** The hand took the playhead at `at` seconds. */
-  begin(at: number): void {
+  /** The hand took the playhead. */
+  begin(hand: HandSeen): void {
     const context = this.context;
-    this.hand = at;
-    this.heard = at;
-    this.rate = 0;
     if (!context) {
       return;
     }
     void context.resume();
-    window.clearInterval(this.beat);
-    this.beatAt = context.currentTime;
-    this.beat = window.setInterval(() => this.follow(), BEAT_MS);
+    const takes = context.baseLatency + (context.outputLatency || 0);
+    this.apart = clocksApart(context.getOutputTimestamp(), performance.now(), context.currentTime, takes);
+    const late = Math.min(Math.max(takes + LATE_BEYOND, LEAST_LATE), MOST_LATE);
+    this.tell({ kind: "take", point: this.pointOf(hand), late });
   }
 
-  /** The hand moved the playhead to `at` seconds. */
-  to(at: number): void {
-    this.hand = at;
+  /** Every place the hand was seen at since, the latest last. */
+  to(hands: readonly HandSeen[]): void {
+    this.tell({ kind: "move", points: hands.map((hand) => this.pointOf(hand)) });
   }
 
   /** The hand let go: the sound goes out. */
   end(): void {
-    window.clearInterval(this.beat);
-    this.rate = 0;
-    this.fadeTo(0);
-    this.letGoOfSource();
+    this.tell({ kind: "let go" });
   }
 
   /** Lets go of the song for good. */
   close(): void {
-    this.end();
     this.stop.abort();
     void this.context?.close();
     this.context = null;
-    this.forwards = null;
-    this.backwards = null;
+    this.sound = null;
+    this.volume = null;
   }
 
-  /** On each beat: the sound moves on at its speed, and the speed is set
-      anew from how far the hand is. */
-  private follow(): void {
-    const context = this.context;
-    const forwards = this.forwards;
-    if (!context || !forwards) {
-      return;
-    }
-    const now = context.currentTime;
-    const seconds = now - this.beatAt;
-    this.beatAt = now;
-    this.heard = Math.min(Math.max(this.heard + this.rate * seconds, 0), forwards.duration);
-    this.rate = speedAfter(this.rate, this.hand - this.heard, seconds);
-    if (!heardAt(this.rate)) {
-      // Taken up again from where the sound stands once the hand moves.
-      this.fadeTo(0);
-      this.letGoOfSource();
-      return;
-    }
-    const goesBack = this.rate < 0;
-    if (!this.source || this.sourceGoesBack !== goesBack) {
-      this.startSource(context, forwards, goesBack);
-    }
-    if (this.source) {
-      this.source.playbackRate.value = Math.abs(this.rate);
-    }
-    this.fadeTo(1);
+  private pointOf(hand: HandSeen): HandPoint {
+    return { at: hand.seconds, time: hand.stamp / 1000 + this.apart };
   }
 
-  private startSource(context: AudioContext, forwards: AudioBuffer, goesBack: boolean): void {
-    this.letGoOfSource();
-    if (goesBack) {
-      this.backwards ??= backwardsOf(context, forwards);
-    }
-    const source = context.createBufferSource();
-    source.buffer = goesBack ? this.backwards : forwards;
-    source.playbackRate.value = Math.abs(this.rate);
-    source.connect(this.loudness ?? context.destination);
-    const offset = goesBack ? forwards.duration - this.heard : this.heard;
-    this.loudness?.gain.setValueAtTime(0, context.currentTime);
-    source.start(context.currentTime, Math.min(Math.max(offset, 0), forwards.duration));
-    this.source = source;
-    this.sourceGoesBack = goesBack;
-  }
-
-  private letGoOfSource(): void {
-    const source = this.source;
-    this.source = null;
-    if (source && this.context) {
-      source.stop(this.context.currentTime + FADE_SECONDS);
-    }
-  }
-
-  private fadeTo(level: number): void {
-    const context = this.context;
-    if (context && this.loudness) {
-      this.loudness.gain.setTargetAtTime(level, context.currentTime, FADE_SECONDS / 3);
-    }
+  private tell(word: ScrubWord, handedOver: Transferable[] = []): void {
+    this.sound?.port.postMessage(word, handedOver);
   }
 }
 
 /** The song as one channel, its channels heard together. */
-function oneChannel(context: AudioContext, read: AudioBuffer): AudioBuffer {
-  const one = context.createBuffer(1, read.length, read.sampleRate);
-  const into = one.getChannelData(0);
+function oneChannel(read: AudioBuffer): Float32Array {
+  const one = new Float32Array(read.length);
   for (let channel = 0; channel < read.numberOfChannels; channel += 1) {
     const from = read.getChannelData(channel);
     for (let at = 0; at < from.length; at += 1) {
-      into[at] += from[at] / read.numberOfChannels;
+      one[at] += from[at] / read.numberOfChannels;
     }
   }
   return one;
-}
-
-function backwardsOf(context: AudioContext, forwards: AudioBuffer): AudioBuffer {
-  const backwards = context.createBuffer(1, forwards.length, forwards.sampleRate);
-  const from = forwards.getChannelData(0);
-  const into = backwards.getChannelData(0);
-  for (let at = 0; at < from.length; at += 1) {
-    into[at] = from[from.length - 1 - at];
-  }
-  return backwards;
 }
