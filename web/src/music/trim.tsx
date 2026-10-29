@@ -1,6 +1,7 @@
 /*
- * One song cut short at either end, from the tag manager: the silence a
- * ripper left before the first note, most of the time.
+ * One song cut short at either end, from the tag manager or straight from
+ * the song's menu: the silence a ripper left before the first note, most of
+ * the time.
  *
  * The song's loudness, read from its file a hundred times a second, is drawn
  * along a bar, so where it is silent is seen at a glance, and a handle at
@@ -16,18 +17,22 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent, PointerEvent } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
+import { useAccount } from "../account";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
+import { Toggle } from "../components/panel";
 import { refusalKey } from "../i18n";
 import { PlayIcon, ScissorsIcon } from "../icons";
 import { useToast } from "../notifications/toasts";
 import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import { music as server } from "./api";
+import type { Song } from "./api";
 import { HeardSong } from "./heard-song";
 import { PauseIcon } from "./player/icons";
 import { useMusic } from "./player/player";
+import type { MenuLine } from "./song-menu";
 import { SHORTEST_CUT_SECONDS, keptWithin, soundBetween } from "./trim-cut";
 import { WaveDrawing, WaveOverview, useSongWave, useWheelZoom } from "./wave-view";
 import { clockOf, showing, zoomed } from "./wave-stretch";
@@ -42,11 +47,29 @@ const HEARD_SECONDS = 6;
 
 type End = "from" | "to";
 
+/** The line of the menu of one song that cuts it, and the window it opens,
+ *  for an account that may write the tags of songs. The screens showing the
+ *  song read it again once the server has read its library again. */
+export function useSongTrim(songs: Song[]): { lines: MenuLine[]; dialog: ReactNode } {
+  const { t } = useSettings();
+  const { account } = useAccount();
+  const [trimming, setTrimming] = useState(false);
+  const song = songs.length === 1 ? songs[0] : null;
+  const length = song?.duration_ms != null ? song.duration_ms / 1000 : song?.seconds;
+  if (!song || length == null || account?.may_edit_tags !== true) {
+    return { lines: [], dialog: null };
+  }
+  return {
+    lines: [{ key: "trim", said: t("music.trim.open"), mark: <ScissorsIcon size={17} />, act: () => setTrimming(true) }],
+    dialog: trimming && <TrimSong song={song.id} title={song.title} length={length} onClose={() => setTrimming(false)} />,
+  };
+}
+
 export function TrimSong({
   song,
   title,
   length,
-  keepACopy,
+  keepACopy: keptByTheTags,
   onTrimmed,
   onClose,
 }: {
@@ -54,12 +77,15 @@ export function TrimSong({
   title: string;
   /** How long the song plays now, in seconds. */
   length: number;
-  keepACopy: boolean;
+  /** Chosen by the tag manager it is opened from; asked here otherwise. */
+  keepACopy?: boolean;
   /** Told how long the song plays once it is cut. */
-  onTrimmed: (length: number) => void;
+  onTrimmed?: (length: number) => void;
   onClose: () => void;
 }) {
   const { t } = useSettings();
+  const [keptHere, setKeptHere] = useState(true);
+  const keepACopy = keptByTheTags ?? keptHere;
   const toast = useToast();
   const { watch } = useRunning();
   const { playing, toggle } = useMusic();
@@ -191,7 +217,7 @@ export function TrimSong({
       toast({ state: "ok", title: t("music.trim.done", { title }) });
       // The server reads the library again once the file is cut.
       watch();
-      onTrimmed(cut.to - cut.from);
+      onTrimmed?.(cut.to - cut.from);
       onClose();
     } catch (error) {
       setRefused(refusalOf(error));
@@ -306,6 +332,13 @@ export function TrimSong({
           {t("music.trim.hear_end")}
         </button>
       </div>
+
+      {keptByTheTags === undefined && (
+        <label className="trim-option">
+          <Toggle label={t("music.tag.keep_a_copy")} checked={keptHere} onChange={setKeptHere} />
+          <span title={t("music.tag.keep_a_copy_why")}>{t("music.tag.keep_a_copy")}</span>
+        </label>
+      )}
 
       {wave === null && <p className="trim-note">{t("music.trim.no_wave")}</p>}
       {refused && <p className="notice">{t(refusalKey(refused))}</p>}

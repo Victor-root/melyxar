@@ -2950,6 +2950,17 @@
   text-align: center;
 }
 
+.trim-option {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .trim-warning {
   color: var(--text-soft);
   font-size: 13px;
