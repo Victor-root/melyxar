@@ -57,7 +57,10 @@ export class Scrubber {
   private backwards: AudioBuffer | null = null;
   private reading: Promise<void> | null = null;
   private stop = new AbortController();
+  /** The sound coming in and going out, and how loud it is heard. */
   private loudness: GainNode | null = null;
+  private volume: GainNode | null = null;
+  private level = 1;
   private source: AudioBufferSourceNode | null = null;
   private sourceGoesBack = false;
   /** Where the hand is, where the sound is, both in seconds, and how fast
@@ -79,12 +82,23 @@ export class Scrubber {
       this.context = context;
       const read = await context.decodeAudioData(bytes);
       this.forwards = oneChannel(context, read);
+      this.volume = context.createGain();
+      this.volume.gain.value = this.level;
+      this.volume.connect(context.destination);
       this.loudness = context.createGain();
       this.loudness.gain.value = 0;
-      this.loudness.connect(context.destination);
+      this.loudness.connect(this.volume);
     })().catch(() => {
       // Not heard while dragged, and dragged all the same.
     });
+  }
+
+  /** How loud the song is heard, from nought to one. */
+  setVolume(level: number): void {
+    this.level = level;
+    if (this.volume) {
+      this.volume.gain.value = level;
+    }
   }
 
   /** The hand took the playhead at `at` seconds. */
