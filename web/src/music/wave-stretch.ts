@@ -42,6 +42,15 @@ export function showing(shown: Stretch, length: number, at: number): Stretch {
   return shown;
 }
 
+/** The stretch shown, turned like a page when `at` runs out of it: `at`
+ *  then stands a little way in from the start. Left alone otherwise, so
+ *  what follows a song playing is not drawn again at every moment. */
+export function paged(shown: Stretch, length: number, at: number): Stretch {
+  const span = shown.to - shown.from;
+  const room = span * 0.1;
+  return at >= shown.from && at <= shown.to - room ? shown : placed(at - room, span, length);
+}
+
 function placed(from: number, span: number, length: number): Stretch {
   const start = Math.min(Math.max(from, 0), Math.max(length - span, 0));
   return { from: start, to: start + span };

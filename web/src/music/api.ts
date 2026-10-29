@@ -147,7 +147,7 @@ export interface LyricLine {
 
 /** The words of a song, and where they were found. */
 export interface SongLyrics {
-  source: "song" | "beside" | "online";
+  source: "by_hand" | "song" | "beside" | "online";
   plain: string;
   /** Empty when the words carry no moments. */
   lines: LyricLine[];
@@ -495,6 +495,11 @@ export const music = {
   unsynchroniseLyrics: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/sync`),
   setLyricsOffset: (song: string, offsetMs: number) =>
     put<null>(`/api/v1/music/songs/${song}/lyrics/offset`, { offset_ms: offsetMs }),
+  /** Keeps the lyrics written in the editor, before any other the song has:
+   *  the lines when they carry moments, else the plain words. */
+  writeLyrics: (song: string, written: { plain: string; lines: LyricLine[] }) =>
+    put<null>(`/api/v1/music/songs/${song}/lyrics/by_hand`, written),
+  forgetLyricsByHand: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/by_hand`),
   /** Nothing for a song whose sound was not read yet. */
   spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
     const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);
