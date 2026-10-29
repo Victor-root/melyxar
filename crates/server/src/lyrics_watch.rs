@@ -29,6 +29,7 @@ const ENOUGH_OF_A_LINE: usize = 40;
 #[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 enum Source {
+    ByHand,
     Song,
     Beside,
     Online,
@@ -37,6 +38,7 @@ enum Source {
 impl Source {
     fn as_word(self) -> &'static str {
         match self {
+            Self::ByHand => "written by hand",
             Self::Song => "in the song",
             Self::Beside => "in a file beside the song",
             Self::Online => "from LRCLIB",

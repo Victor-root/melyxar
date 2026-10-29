@@ -1,6 +1,7 @@
 //! The lyrics of a song, looked for from the nearest to the furthest: written
-//! inside the song, in a file of the same name beside it, then asked of
-//! LRCLIB when its library allows it (see `docs/architecture/06-musique.md`).
+//! by hand in the editor, inside the song, in a file of the same name beside
+//! it, then asked of LRCLIB when its library allows it (see
+//! `docs/architecture/06-musique.md`).
 //!
 //! What is in or beside the song is read afresh each time, so words added to
 //! a file are there at the next listen. What LRCLIB answers is kept, found or
@@ -10,7 +11,7 @@
 use std::path::Path;
 
 use melyxar_core::id::WorkId;
-use melyxar_core::music_lyrics::{Lyrics, read_lyrics};
+use melyxar_core::music_lyrics::{Lyrics, SyncedLine, read_lyrics, write_lyrics};
 use melyxar_core::user::User;
 use melyxar_database::music_lyrics::LookedUpLyrics;
 use melyxar_metadata::lrclib::{Asked, LrcLibClient};
@@ -23,6 +24,8 @@ use crate::{AppError, AppState, Result};
 /// Where the words of a song were found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
+    /// Written by an administrator in the editor.
+    ByHand,
     /// Written inside the song.
     Song,
     /// In a file of the same name beside it.
@@ -33,6 +36,7 @@ pub enum Source {
 impl Source {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::ByHand => "by_hand",
             Self::Song => "song",
             Self::Beside => "beside",
             Self::Online => "online",
@@ -140,6 +144,16 @@ pub(crate) async fn found_lyrics(state: &AppState, who: &User, song: WorkId) -> 
     may_read_the_work(state, who, song).await?;
     let database = state.database();
 
+    if let Some(words) = database.lyrics_by_hand(song).await? {
+        tracing::debug!(%song, "lyrics: written by hand, nothing else is looked at");
+        return Ok(Some(SongLyrics {
+            lyrics: read_lyrics(&words),
+            source: Source::ByHand,
+            instrumental: false,
+            synchronised: None,
+            offset_ms: 0,
+        }));
+    }
     let file = database.music_song_file(song).await?;
     tracing::debug!(
         %song,
@@ -290,7 +304,8 @@ pub async fn offers(state: &AppState, who: &User, song: WorkId, artist: &str, ti
 }
 
 /// Takes one entry of LRCLIB as the words of a song, kept like any answer of
-/// LRCLIB so the song is not looked up again over it.
+/// LRCLIB so the song is not looked up again over it, in place of words
+/// written by hand: the last choice made is the one shown.
 pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> Result<()> {
     may_manage(who)?;
     may_read_the_work(state, who, song).await?;
@@ -308,6 +323,7 @@ pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> R
             LOOKUP_METHOD,
         )
         .await?;
+    state.database().forget_lyrics_by_hand(song).await?;
     Ok(())
 }
 
@@ -318,6 +334,47 @@ pub async fn forget(state: &AppState, who: &User, song: WorkId) -> Result<()> {
     may_read_the_work(state, who, song).await?;
     tracing::debug!(%song, "lyrics: what was kept online is forgotten");
     state.database().forget_looked_up_lyrics(song).await?;
+    Ok(())
+}
+
+/// The longest a song written by hand may run, past which a line is a slip.
+const LATEST_LINE_MS: i64 = 10 * 3600 * 1000;
+
+/// The most words a song written by hand may hold.
+const MOST_WORDS: usize = 200_000;
+
+/// Keeps the words an administrator wrote for a song, for every account and
+/// before any other: stamped lines when `lines` has any, in whatever order
+/// they come, else `plain`. What lined them up or moved them is forgotten,
+/// since they were written over the lines as they were shown.
+pub async fn write_by_hand(state: &AppState, who: &User, song: WorkId, plain: &str, lines: Vec<SyncedLine>) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    let invalid = |why: &str| Err(AppError::Domain(melyxar_core::Error::invalid_input(why)));
+    if lines.iter().any(|line| !(0..=LATEST_LINE_MS).contains(&line.at.get())) {
+        return invalid("a line of lyrics is sung between the start of the song and ten hours in");
+    }
+    let mut lyrics = Lyrics { plain: plain.to_string(), synced: lines };
+    lyrics.synced.sort_by_key(|line| line.at);
+    let words = write_lyrics(&lyrics);
+    if words.trim().is_empty() {
+        return invalid("lyrics written by hand have words");
+    }
+    if words.len() > MOST_WORDS {
+        return invalid("lyrics written by hand are too long");
+    }
+    tracing::debug!(%song, lines = lyrics.synced.len(), chars = words.len(), "lyrics: written by hand");
+    state.database().keep_lyrics_by_hand(song, &words, melyxar_core::time::now()).await?;
+    Ok(())
+}
+
+/// Forgets the words written by hand for a song, so the ones it had before
+/// are shown again.
+pub async fn forget_by_hand(state: &AppState, who: &User, song: WorkId) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    tracing::debug!(%song, "lyrics: what was written by hand is forgotten");
+    state.database().forget_lyrics_by_hand(song).await?;
     Ok(())
 }
 
@@ -429,6 +486,53 @@ mod tests {
             Vec::new(),
             "without a title nothing is searched for"
         );
+    }
+
+    #[tokio::test]
+    async fn words_written_by_hand_come_before_any_other_until_forgotten() {
+        let (_directory, state) = crate::an_empty_server().await;
+        let database = state.database();
+        let administrator = database
+            .create_user("Boss", None, &melyxar_core::user::Permissions::administrator())
+            .await
+            .expect("account created");
+        let library = database
+            .create_library("Music", melyxar_core::library::LibraryKind::Music, "en", &[])
+            .await
+            .expect("library created");
+        let song = database
+            .create_work(library.id, melyxar_core::work::WorkKind::Song, "Tides", "Tides", None)
+            .await
+            .expect("song created")
+            .id;
+        let at = |ms: i64, text: &str| SyncedLine { at: melyxar_core::time::Millis::new(ms), text: text.to_string() };
+        assert_eq!(lyrics_of(&state, &administrator, song).await.expect("read"), None);
+
+        write_by_hand(&state, &administrator, song, "", vec![at(5_000, "Second"), at(1_000, "First")])
+            .await
+            .expect("written");
+        let written = lyrics_of(&state, &administrator, song).await.expect("read").expect("found");
+        assert_eq!(written.source, Source::ByHand);
+        assert_eq!(written.lyrics.synced, vec![at(1_000, "First"), at(5_000, "Second")], "in the order they are sung");
+        assert_eq!(written.lyrics.plain, "First\nSecond");
+
+        set_offset(&state, &administrator, song, 500).await.expect("moved");
+        let moved = lyrics_of(&state, &administrator, song).await.expect("read").expect("found");
+        assert_eq!(moved.lyrics.synced[0].at.get(), 1_500);
+        write_by_hand(&state, &administrator, song, "Just words\n\nMore", Vec::new()).await.expect("written");
+        let plain = lyrics_of(&state, &administrator, song).await.expect("read").expect("found");
+        assert_eq!((plain.offset_ms, plain.lyrics.synced.len()), (0, 0), "the move was written over");
+        assert_eq!(plain.lyrics.plain, "Just words\n\nMore");
+
+        let invalid = |outcome: Result<()>| matches!(outcome, Err(AppError::Domain(_)));
+        assert!(invalid(write_by_hand(&state, &administrator, song, "  \n ", Vec::new()).await));
+        assert!(invalid(write_by_hand(&state, &administrator, song, "", vec![at(-10, "Before")]).await));
+        let viewer = crate::a_viewer(&state).await;
+        assert!(invalid(write_by_hand(&state, &viewer, song, "Words", Vec::new()).await));
+        assert!(invalid(forget_by_hand(&state, &viewer, song).await));
+
+        forget_by_hand(&state, &administrator, song).await.expect("forgotten");
+        assert_eq!(lyrics_of(&state, &administrator, song).await.expect("read"), None);
     }
 
     #[test]

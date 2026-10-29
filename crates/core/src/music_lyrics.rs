@@ -70,6 +70,30 @@ pub fn read_lyrics(text: &str) -> Lyrics {
     Lyrics { plain, synced }
 }
 
+/// Lyrics written back in the form they are read in: each stamped line after
+/// its moment to the hundredth of a second, as every player reads them, or
+/// the plain words when no line has a moment.
+pub fn write_lyrics(lyrics: &Lyrics) -> String {
+    if lyrics.synced.is_empty() {
+        return lyrics.plain.trim().to_string();
+    }
+    lyrics
+        .synced
+        .iter()
+        .map(|line| {
+            let hundredths = (line.at.get().max(0) + 5) / 10;
+            format!(
+                "[{:02}:{:02}.{:02}]{}",
+                hundredths / 6000,
+                hundredths / 100 % 60,
+                hundredths % 100,
+                line.text.trim()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The moments a line opens with, in milliseconds, and the words after them.
 fn stamps_of(line: &str) -> (Vec<i64>, &str) {
     let mut stamps = Vec::new();
@@ -182,6 +206,28 @@ mod tests {
         assert!(read.synced.is_empty());
         assert_eq!(read.plain, "Just the words\nand more words");
         assert!(read_lyrics("   \n ").is_empty());
+    }
+
+    #[test]
+    fn stamped_lines_are_written_to_the_hundredth_and_read_back_the_same() {
+        let lyrics = Lyrics {
+            plain: String::new(),
+            synced: vec![line(0, "Start"), line(7_784, " First line "), line(59_996, ""), line(3_725_430, "Late")],
+        };
+        let written = write_lyrics(&lyrics);
+        assert_eq!(written, "[00:00.00]Start\n[00:07.78]First line\n[01:00.00]\n[62:05.43]Late");
+        assert_eq!(
+            read_lyrics(&written).synced,
+            vec![line(0, "Start"), line(7_780, "First line"), line(60_000, ""), line(3_725_430, "Late")]
+        );
+    }
+
+    #[test]
+    fn words_without_moments_are_written_as_they_are() {
+        let lyrics = Lyrics { plain: "  [Chorus]\nJust words\n\nMore words ".into(), synced: Vec::new() };
+        let written = write_lyrics(&lyrics);
+        assert_eq!(written, "[Chorus]\nJust words\n\nMore words");
+        assert_eq!(read_lyrics(&written).plain, written);
     }
 
     #[test]
