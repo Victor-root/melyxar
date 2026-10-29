@@ -222,6 +222,7 @@ export function LyricsEditor({
         scrubber.current?.to(at);
         shown(at, false);
       } else {
+        scrubber.current?.end();
         seek(at);
         if (playOn.current) {
           hearing.play();
