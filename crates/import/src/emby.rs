@@ -20,8 +20,8 @@ use sqlx::sqlite::SqliteConnection;
 use time::OffsetDateTime;
 
 use crate::copy::{has_table, opened};
-use crate::guid;
-use crate::{Account, Backup, Collection, Item, Kind, Library, Mark, Playlist, Refusal, Server};
+use crate::{Account, Backup, Collection, Item, Kind, Library, Mark, Playlist, Refusal, Server, TICKS_A_MILLISECOND};
+use crate::{guid, provider};
 
 const LIBRARY: i64 = 4;
 const MOVIE: i64 = 5;
@@ -40,9 +40,6 @@ const ARTISTS_LINK: i64 = 0;
 const ALBUM_ARTISTS_LINK: i64 = 1;
 /// How a library is linked to the folders it is made of.
 const FOLDERS_LINK: i64 = 8;
-
-/// How long a tick is, Emby counting time in tenths of a microsecond.
-const TICKS_A_MILLISECOND: i64 = 10_000;
 
 /// Where the files of an Emby server are.
 pub(crate) struct Found {
@@ -287,7 +284,7 @@ async fn items(library: &mut SqliteConnection) -> Result<Vec<Item>, Refusal> {
             name: row.try_get::<Option<String>, _>("Name")?.unwrap_or_default(),
             year: number("ProductionYear")?,
             path: row.try_get("Path")?,
-            ids: provider_ids(row.try_get::<Option<String>, _>("ProviderIds")?.as_deref()),
+            ids: provider::ids(row.try_get::<Option<String>, _>("ProviderIds")?.as_deref()),
             season,
             episode,
             parent: parent.map(|parent| parent.to_string()),
@@ -323,18 +320,6 @@ async fn artists(library: &mut SqliteConnection) -> Result<HashMap<i64, Vec<Stri
         }
     }
     Ok(artists.into_iter().map(|(item, (_, names))| (item, names)).collect())
-}
-
-/// `Tmdb=603|Imdb=tt0133093|Official Website=...`, the provider in lower
-/// case, for the identifiers alone.
-fn provider_ids(written: Option<&str>) -> Vec<(String, String)> {
-    written
-        .unwrap_or_default()
-        .split('|')
-        .filter_map(|pair| pair.split_once('='))
-        .map(|(provider, id)| (provider.trim().to_ascii_lowercase(), id.trim().to_string()))
-        .filter(|(provider, id)| !id.is_empty() && !provider.contains(' '))
-        .collect()
 }
 
 async fn marks(library: &mut SqliteConnection) -> Result<Vec<Mark>, Refusal> {
@@ -443,7 +428,7 @@ async fn collections(library: &mut SqliteConnection) -> Result<Vec<Collection>, 
     let mut collections = Vec::with_capacity(rows.len());
     for row in rows {
         let id: i64 = row.try_get("Id")?;
-        let from_provider = provider_ids(row.try_get::<Option<String>, _>("ProviderIds")?.as_deref())
+        let from_provider = provider::ids(row.try_get::<Option<String>, _>("ProviderIds")?.as_deref())
             .iter()
             .any(|(provider, _)| provider == "tmdb");
         collections.push(Collection {
@@ -453,18 +438,4 @@ async fn collections(library: &mut SqliteConnection) -> Result<Vec<Collection>, 
         });
     }
     Ok(collections)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn provider_ids_keep_the_identifiers_and_leave_the_links() {
-        assert_eq!(
-            provider_ids(Some("Tmdb=603|IMDB=tt0133093|Official Website=https://example.org/x|Tvdb=")),
-            vec![("tmdb".to_string(), "603".to_string()), ("imdb".to_string(), "tt0133093".to_string())]
-        );
-        assert!(provider_ids(None).is_empty());
-    }
 }
