@@ -3204,6 +3204,87 @@
   gap: var(--gap-tight);
 }
 
+/* Every version written by hand, the latest first (lyrics-versions.tsx). */
+.lyrics-versions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.lyrics-versions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.lyrics-versions-why,
+.lyrics-versions-none {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12.5px;
+}
+
+.lyrics-versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 210px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.lyrics-version {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.lyrics-version:hover {
+  background: var(--surface-hover);
+}
+
+.lyrics-version-in-use {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.lyrics-version-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lyrics-version-opening {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lyrics-version-said {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.lyrics-editor-versions {
+  flex: none;
+}
+
 /* The desk: a ruler, a track of the lines, a track of the sound, and the
    playhead across all three. */
 .lyrics-desk {

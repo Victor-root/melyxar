@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { refusalOf } from "../asking";
 import { asPreciseClock } from "../clock";
 import { Modal } from "../components/modal";
-import { DeleteIcon, PlayIcon, RefreshIcon, ResetIcon } from "../icons";
+import { DeleteIcon, HistoryIcon, PlayIcon, RefreshIcon, ResetIcon } from "../icons";
 import { useToast } from "../notifications/toasts";
 import type { Wording } from "../readable";
 import { useSettings } from "../settings";
@@ -49,6 +49,7 @@ import type { EditedLine } from "./lyrics-editing";
 import { LyricsLines, NUDGE_MS } from "./lyrics-lines";
 import type { LineActs } from "./lyrics-lines";
 import { AsText, TapAlong } from "./lyrics-modes";
+import { LyricsVersions } from "./lyrics-versions";
 import { LyricsTimeline } from "./lyrics-timeline";
 import type { TimelineActs, TimelineHandle } from "./lyrics-timeline";
 import { useMusicMarks } from "./marks";
@@ -107,6 +108,9 @@ export function LyricsEditor({
   const [refused, setRefused] = useState<string | null>(null);
   const [asking, setAsking] = useState<"leave" | "revert" | null>(null);
   const [shifting, setShifting] = useState(false);
+  const [showingVersions, setShowingVersions] = useState(false);
+  /** Moves each time a version is kept or set aside from here. */
+  const [versionsRead, setVersionsRead] = useState(0);
 
   /* What the song has is taken as the lines each time it is read: on the
      way in, and once the originals are brought back. */
@@ -453,6 +457,7 @@ export function LyricsEditor({
       }
       setKept(sorted);
       setByHand(true);
+      setVersionsRead((count) => count + 1);
       lyricsHaveMoved();
       onChanged?.();
       toast({ state: "ok", title: t("lyrics_editor.saved", { title: song.title }) });
@@ -463,15 +468,21 @@ export function LyricsEditor({
     }
   };
 
+  /** The lyrics the song shows now read again, here and wherever they are. */
+  const reread = async () => {
+    lyricsHaveMoved();
+    onChanged?.();
+    take(await server.lyrics(song.id));
+  };
+
   const revert = async () => {
     setAsking(null);
     setBusy(true);
     setRefused(null);
     try {
-      await server.forgetLyricsByHand(song.id);
-      lyricsHaveMoved();
-      onChanged?.();
-      take(await server.lyrics(song.id));
+      await server.setLyricsByHandAside(song.id);
+      await reread();
+      setVersionsRead((count) => count + 1);
       toast({ state: "ok", title: t("lyrics_editor.reverted", { title: song.title }) });
     } catch (error) {
       setRefused(`lyrics_dialog.refused.${refusalOf(error)}`);
@@ -504,6 +515,15 @@ export function LyricsEditor({
               <span className="lyrics-editor-status-out">{t("lyrics_editor.status_out_of_turn", { count: disorder.size })}</span>
             )}
           </span>
+          <button
+            type="button"
+            className="button button-quiet"
+            aria-expanded={showingVersions}
+            onClick={() => setShowingVersions((was) => !was)}
+          >
+            <HistoryIcon size={16} />
+            {t("lyrics_versions.title")}
+          </button>
           {byHand && (
             <button type="button" className="button button-quiet" disabled={busy} onClick={() => setAsking("revert")}>
               <RefreshIcon size={16} />
@@ -667,6 +687,18 @@ export function LyricsEditor({
           }}
           t={t}
         />
+      )}
+
+      {showingVersions && (
+        <div className="lyrics-editor-versions">
+          <LyricsVersions
+            song={song.id}
+            read={versionsRead}
+            unsaved={changed}
+            saysWhenEmpty
+            onChanged={() => void reread()}
+          />
+        </div>
       )}
 
       {refused && <p className="notice">{t(refused)}</p>}

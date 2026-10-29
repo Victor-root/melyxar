@@ -165,6 +165,20 @@ export interface SongLyrics {
   offset_ms: number;
 }
 
+/** One version of the lyrics written by hand for a song, kept until it is
+    deleted by hand. */
+export interface LyricsVersion {
+  id: number;
+  written_at: string;
+  /** The one shown, before any other words the song has. */
+  in_use: boolean;
+  lines: number;
+  /** Whether its lines carry their moments. */
+  stamped: boolean;
+  /** Its first words. */
+  opening: string;
+}
+
 /** One entry of LRCLIB offered for a song, to be taken as its words. */
 export interface LyricsOffer {
   id: number;
@@ -499,7 +513,14 @@ export const music = {
    *  the lines when they carry moments, else the plain words. */
   writeLyrics: (song: string, written: { plain: string; lines: LyricLine[] }) =>
     put<null>(`/api/v1/music/songs/${song}/lyrics/by_hand`, written),
-  forgetLyricsByHand: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/by_hand`),
+  /** Sets the lyrics written by hand aside: every version stays. */
+  setLyricsByHandAside: (song: string) => remove<null>(`/api/v1/music/songs/${song}/lyrics/by_hand`),
+  lyricsVersions: (song: string, signal?: AbortSignal) =>
+    get<LyricsVersion[]>(`/api/v1/music/songs/${song}/lyrics/versions`, signal),
+  useLyricsVersion: (song: string, version: number) =>
+    put<null>(`/api/v1/music/songs/${song}/lyrics/versions/${version}`, {}),
+  deleteLyricsVersion: (song: string, version: number) =>
+    remove<null>(`/api/v1/music/songs/${song}/lyrics/versions/${version}`),
   /** Nothing for a song whose sound was not read yet. */
   spectrum: async (song: string, signal?: AbortSignal): Promise<SongSpectrum | null> => {
     const answer = await getRaw(`/api/v1/music/songs/${song}/spectrum`, "application/octet-stream", signal);
