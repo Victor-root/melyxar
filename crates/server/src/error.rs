@@ -218,6 +218,38 @@ impl From<melyxar_app::avatars::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::import::Trouble> for ServerError {
+    /// A refusal says which thing to put right: the version to upgrade to
+    /// for a server too old, and for an account that could not be made, its
+    /// name and the rule it broke.
+    fn from(trouble: melyxar_app::import::Trouble) -> Self {
+        use melyxar_app::import::Refused;
+
+        let details = match trouble {
+            melyxar_app::import::Trouble::Failed(error) => return Self::from(error),
+            melyxar_app::import::Trouble::Refused(refused) => match refused {
+                Refused::PathNeeded => serde_json::json!({ "reason": "path_needed" }),
+                Refused::NotFound => serde_json::json!({ "reason": "not_found" }),
+                Refused::NotAServer => serde_json::json!({ "reason": "not_a_server" }),
+                Refused::TooOld(server) => serde_json::json!({
+                    "reason": "too_old",
+                    "server": server,
+                    "oldest": server.oldest_read(),
+                }),
+                Refused::Unreadable(why) => serde_json::json!({ "reason": "unreadable", "why": why }),
+                Refused::Account { name, why } => serde_json::json!({
+                    "reason": "account",
+                    "name": name,
+                    "why": why.as_str(),
+                    "shortest": melyxar_app::accounts::SHORTEST_PASSWORD,
+                }),
+            },
+        };
+        let said = format!("refused: {}", details["reason"].as_str().unwrap_or_default());
+        Self::with_details(StatusCode::BAD_REQUEST, ErrorCode::InvalidInput, details, said)
+    }
+}
+
 impl From<melyxar_app::accounts::Trouble> for ServerError {
     /// A refusal carries the word saying which thing to put right, and the
     /// rule it broke where there is one: the shortest a password may be and

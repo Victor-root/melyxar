@@ -26,6 +26,7 @@ pub mod error;
 pub mod general;
 pub(crate) mod identifiers;
 pub mod images;
+pub mod import;
 pub mod installing;
 pub mod interface;
 pub mod jobs;
