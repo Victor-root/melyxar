@@ -26,6 +26,7 @@ import { useSettings } from "../settings";
 import { music } from "./api";
 import type { LyricsOffer, Song, SongLyrics } from "./api";
 import { LyricsEditor } from "./lyrics-editor";
+import { LyricsVersions } from "./lyrics-versions";
 import { SAME_LENGTH_MS, lengthGap, offersMissingLines } from "./lyrics-offers";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
@@ -258,6 +259,16 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
           </div>
         </div>
       </section>
+
+      <LyricsVersions
+        song={song.id}
+        read={again}
+        onChanged={() => {
+          setTaken(null);
+          setAgain((count) => count + 1);
+          lyricsHaveMoved();
+        }}
+      />
 
       <form
         className="search-pill finder-search lyrics-search"
