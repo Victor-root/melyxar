@@ -1,11 +1,12 @@
 //! An Emby data folder made up here, with the tables and settings files a 4.9
 //! server writes, read back as a backup.
 
+mod common;
+
 use std::path::Path;
 
+use common::database;
 use melyxar_import::{Kind, Refusal, Server, read};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
-use sqlx::{Connection, Executor};
 
 const LIBRARY_SCHEMA: &str = "
 CREATE TABLE MediaItems (Id INTEGER PRIMARY KEY AUTOINCREMENT, guid GUID, type INT NOT NULL, ParentId INT,
@@ -92,13 +93,6 @@ const POLICY_OF_BEN: &str = r#"<?xml version="1.0"?>
   <EnabledFolders><string>01234567-89ab-cdef-0123-456789abcdef</string></EnabledFolders>
   <EnableAllFolders>false</EnableAllFolders>
 </UserPolicy>"#;
-
-async fn database(path: &Path, sql: &str) {
-    let options = SqliteConnectOptions::new().filename(path).create_if_missing(true);
-    let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
-    connection.execute(sqlx::raw_sql(sqlx::AssertSqlSafe(sql))).await.unwrap();
-    connection.close().await.unwrap();
-}
 
 async fn an_emby_folder(root: &Path) {
     std::fs::create_dir_all(root.join("data")).unwrap();

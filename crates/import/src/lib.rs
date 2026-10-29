@@ -5,9 +5,10 @@
 //!
 //! Read from a copy, never from the files themselves: a server still running
 //! keeps writing them, and opening them even to read takes locks and leaves
-//! files behind. Nothing here knows about Melyxar's database or its rules: it
-//! says what the other server kept, in its own words, and the server decides
-//! what is taken up and where it goes.
+//! files behind. Jellyfin's own backup, a zip of its tables written out as
+//! JSON, is read once unzipped. Nothing here knows about Melyxar's database
+//! or its rules: it says what the other server kept, in its own words, and
+//! the server decides what is taken up and where it goes.
 //!
 //! What is read is recognised by the tables found, never by a version number,
 //! and a backup older than what is read here is refused with the version to
@@ -16,12 +17,18 @@
 mod copy;
 mod emby;
 mod guid;
+mod jellyfin;
 pub mod matching;
+mod provider;
 
 use std::path::Path;
 
 use serde::Serialize;
 use time::OffsetDateTime;
+
+/// How long a tick is, both servers counting time in tenths of a
+/// microsecond as .NET does.
+const TICKS_A_MILLISECOND: i64 = 10_000;
 
 /// The server a backup came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -172,15 +179,18 @@ impl From<std::io::Error> for Refusal {
     }
 }
 
-/// Reads the data folder of an Emby or Jellyfin server, or a copy of it,
-/// copying what it needs into `work` first, which is left for the caller to
-/// clear.
+/// Reads the data folder of an Emby or Jellyfin server, or a copy of it, or
+/// the backup Jellyfin makes of itself once unzipped, copying what it needs
+/// into `work` first, which is left for the caller to clear.
 pub async fn read(from: &Path, work: &Path) -> Result<Backup, Refusal> {
     if !from.exists() {
         return Err(Refusal::NotFound(from.display().to_string()));
     }
     if let Some(found) = emby::Found::at(from) {
         return emby::read(&found, work).await;
+    }
+    if let Some(found) = jellyfin::Found::at(from) {
+        return jellyfin::read(&found, work).await;
     }
     Err(Refusal::NotAServer)
 }

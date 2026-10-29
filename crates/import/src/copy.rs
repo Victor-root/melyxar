@@ -37,3 +37,13 @@ pub(crate) async fn has_table(connection: &mut SqliteConnection, table: &str) ->
         .await?
         .is_some())
 }
+
+/// Whether a table of a database has a column, whatever the case of its name.
+pub(crate) async fn has_column(connection: &mut SqliteConnection, table: &str, column: &str) -> Result<bool, Refusal> {
+    Ok(sqlx::query("SELECT 1 FROM pragma_table_info(?) WHERE name = ? COLLATE NOCASE")
+        .bind(table)
+        .bind(column)
+        .fetch_optional(connection)
+        .await?
+        .is_some())
+}
