@@ -21,14 +21,15 @@ import { useSongDeletion } from "./delete-song";
 import { useSongLyrics } from "./lyrics-dialog";
 import { QueueIcon } from "./player/icons";
 import { useMusicControls } from "./player/player";
+import { useSongTrim } from "./trim";
 
 /** A line a screen adds to the menu. */
 export type MenuLine = MenuEntry & { act: () => void };
 
 /** What can be done with songs beyond pressing them, in the order a menu and
  *  a line of a list both offer them, and the windows that adding to a
- *  playlist, choosing lyrics and deleting open, to be drawn wherever the
- *  actions are. */
+ *  playlist, choosing lyrics, cutting and deleting open, to be drawn
+ *  wherever the actions are. */
 export function useSongActions(songs: Song[], deletable = false): { actions: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const navigate = useGoTo();
@@ -37,6 +38,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
   const one = songs.length === 1 ? songs[0] : null;
   const deletion = useSongDeletion(deletable ? songs : []);
   const lyrics = useSongLyrics(songs);
+  const trim = useSongTrim(songs);
   const actions: MenuLine[] = [
     { key: "next", said: t("music.play_next"), mark: <PlayAllIcon size={17} />, act: () => player.playNext(songs) },
     { key: "last", said: t("music.play_last"), mark: <QueueIcon size={17} />, act: () => player.playLast(songs) },
@@ -48,6 +50,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
       ? [{ key: "artist", said: t("music.go_to_artist"), mark: <ProfileIcon size={17} />, act: () => navigate(`/music/artist/${one.artists[0].id}`) }]
       : []),
     ...lyrics.lines,
+    ...trim.lines,
     ...deletion.lines,
   ];
   return {
@@ -56,6 +59,7 @@ export function useSongActions(songs: Song[], deletable = false): { actions: Men
       <>
         {adding && <AddToPlaylist songs={songs} onClose={() => setAdding(false)} />}
         {lyrics.dialog}
+        {trim.dialog}
         {deletion.dialog}
       </>
     ),
