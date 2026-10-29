@@ -1360,9 +1360,10 @@
 
 /* The bar and the page of what is playing are part of the interface, so in
    the colours of the theme they are read in: the player's own white is for a
-   picture that is always dark. */
+   picture that is always dark. The editor of lyrics borrows its volume. */
 .music-bar-dock .player-button,
 .music-now .player-button,
+.lyrics-editor-volume .player-button,
 .music-bar-dock .player-clock,
 .music-now .player-clock,
 .music-bar-dock .player-preview-time,
@@ -1372,7 +1373,8 @@
 }
 
 .music-bar-dock .player-button:hover:not(:disabled),
-.music-now .player-button:hover:not(:disabled) {
+.music-now .player-button:hover:not(:disabled),
+.lyrics-editor-volume .player-button:hover:not(:disabled) {
   color: var(--accent-bright);
 }
 
@@ -1384,7 +1386,8 @@
 .music-bar-dock .player-rail-track,
 .music-now .player-rail-track,
 .music-bar-dock .player-loudness::before,
-.music-now .player-loudness::before {
+.music-now .player-loudness::before,
+.lyrics-editor-volume .player-loudness::before {
   background: color-mix(in srgb, var(--text) 22%, transparent);
 }
 
@@ -3110,6 +3113,13 @@
 .lyrics-editor-choice button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* The volume the player has, set from here too. */
+.lyrics-editor-volume {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--gap-tight);
 }
 
 .lyrics-editor-history {

@@ -52,6 +52,7 @@ import { AsText, TapAlong } from "./lyrics-modes";
 import { LyricsTimeline } from "./lyrics-timeline";
 import type { TimelineActs, TimelineHandle } from "./lyrics-timeline";
 import { useMusicMarks } from "./marks";
+import { Volume } from "./player/controls";
 import { PauseIcon } from "./player/icons";
 import { LIT_AHEAD_MS } from "./player/lyrics";
 import { currentMusicClock, useMusic } from "./player/player";
@@ -199,8 +200,17 @@ export function LyricsEditor({
      memory as the editor opens. A song that played when the playhead was
      taken plays on from where it is let go. */
   const scrubber = useRef<Scrubber | null>(null);
+  /* As loud as the player, whose volume is the one set here too. */
+  const level = player.loudness.muted ? 0 : player.loudness.volume;
+  const levelNow = useRef(level);
+  levelNow.current = level;
+  useEffect(() => {
+    hearing.setVolume(level);
+    scrubber.current?.setVolume(level);
+  }, [hearing, level]);
   useEffect(() => {
     const one = new Scrubber(song.id);
+    one.setVolume(levelNow.current);
     one.read();
     scrubber.current = one;
     return () => {
@@ -349,7 +359,7 @@ export function LyricsEditor({
         return;
       }
       const target = event.target as HTMLElement | null;
-      const typing = !!target?.closest("input, textarea, select, [contenteditable='true']");
+      const typing = !!target?.closest("input:not([type='range']), textarea, select, [contenteditable='true']");
       if (asking !== null || event.defaultPrevented || typing) {
         return;
       }
@@ -554,6 +564,9 @@ export function LyricsEditor({
               {rateSaid(one)}
             </button>
           ))}
+        </span>
+        <span className="lyrics-editor-volume">
+          <Volume music={player} />
         </span>
         <div className="lyrics-editor-history">
           <button

@@ -21,6 +21,7 @@ export class HeardSong {
   /** Whether it is meant to play, which the sound does once it is read. */
   private wanted = false;
   private rate = 1;
+  private volume = 1;
 
   constructor(
     private readonly song: string,
@@ -87,6 +88,14 @@ export class HeardSong {
     }
   }
 
+  /** How loud it plays, from nought to one. */
+  setVolume(volume: number): void {
+    this.volume = volume;
+    if (this.audio) {
+      this.audio.volume = volume;
+    }
+  }
+
   /** Lets go of the sound, keeping where it stood. */
   stop(): void {
     this.at = this.position();
@@ -102,6 +111,7 @@ export class HeardSong {
     this.at = start;
     this.began = start;
     audio.preservesPitch = true;
+    audio.volume = this.volume;
     audio.addEventListener("loadedmetadata", () => {
       if (this.audio !== audio) {
         return;
