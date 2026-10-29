@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -79,14 +81,33 @@ private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester,
     val films = person.works.filter { it.kind == "movie" }
     val series = person.works.filter { it.kind != "movie" }
     val opening = (films.firstOrNull() ?: series.firstOrNull())?.id
+    // The first work the remote lands on as the page opens leaves the page at
+    // its top, the person shown whole; it scrolls once the remote moves on.
+    var landing by remember { mutableStateOf(true) }
+    var landed by remember { mutableStateOf(false) }
 
     @Composable
-    fun Work(card: Card, under: String) = WorkCard(
+    fun Work(card: Card, under: String, head: PageHead) = WorkCard(
         card,
         onClick = { chrome.go(Place.Opened(card.id)) },
         modifier = Modifier
             .remembered(memory, "$under/${card.id}")
-            .then(if (card.id == opening) Modifier.focusRequester(firstWork) else Modifier),
+            .then(
+                if (card.id == opening) {
+                    Modifier.focusRequester(firstWork).onFocusChanged {
+                        if (it.hasFocus && landing) {
+                            landed = true
+                            head.hold("landing", true)
+                        } else if (!it.hasFocus && landed) {
+                            landing = false
+                            landed = false
+                            head.hold("landing", false)
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     )
 
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
@@ -98,10 +119,10 @@ private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester,
                 }
             }
             section("films", films) {
-                CardRow(stringResource(R.string.tv_person_films), Icons.Film, films, key = { it.id }) { Work(it, "film") }
+                CardRow(stringResource(R.string.tv_person_films), Icons.Film, films, key = { it.id }) { Work(it, "film", head) }
             }
             section("series", series) {
-                CardRow(stringResource(R.string.tv_person_series), Icons.Series, series, key = { it.id }) { Work(it, "series") }
+                CardRow(stringResource(R.string.tv_person_series), Icons.Series, series, key = { it.id }) { Work(it, "series", head) }
             }
         }
     }
