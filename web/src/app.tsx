@@ -59,6 +59,7 @@ import { AdminTasks } from "./pages/admin/tasks";
 import { AdminJournal } from "./pages/admin/journal";
 import { AdminDiagnostics } from "./pages/admin/diagnostics";
 import { AdminSettings } from "./pages/admin/settings";
+import { AdminImport } from "./pages/admin/import";
 import { MySettingsLayout } from "./pages/settings/layout";
 import { MyAbout } from "./pages/settings/about";
 import { MyProfile } from "./pages/settings/profile";
@@ -255,6 +256,7 @@ function BehindTheDoor() {
                   <Route path="journal" element={<AdminJournal />} />
                   <Route path="diagnostics" element={<AdminDiagnostics />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="import" element={<AdminImport />} />
                 </Route>
                 <Route path="/settings" element={<MySettingsLayout />}>
                   <Route index element={<MyProfile />} />
