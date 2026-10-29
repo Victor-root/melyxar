@@ -397,7 +397,8 @@ data class Plan(
     val chosenAudioId: String? = null,
     val chosenSubtitleId: String? = null,
     val resumeFromSeconds: Double? = null,
-    val durationMinutes: Double? = null,
+    /** How long the film lasts, to the millisecond. */
+    val durationSeconds: Double? = null,
     val audio: List<Track> = emptyList(),
     val subtitles: List<Track> = emptyList(),
     val segments: List<Segment> = emptyList(),

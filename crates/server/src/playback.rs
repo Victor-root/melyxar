@@ -208,6 +208,9 @@ struct PlanView {
     /// Every reason behind the answer, as codes a page turns into sentences.
     reasons: Vec<serde_json::Value>,
     duration_minutes: Option<i64>,
+    /// How long the film lasts to the millisecond, for a player that counts
+    /// down to its end: whole minutes end it up to half a minute early.
+    duration_seconds: Option<f64>,
     /// Where this viewer stopped last time, in seconds, when they did.
     resume_from_seconds: Option<f64>,
     audio: Vec<TrackView>,
@@ -467,6 +470,7 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
         expensive: plan.decision.method.is_expensive(),
         reasons: reasons_of(plan),
         duration_minutes: plan.duration.map(whole_minutes),
+        duration_seconds: plan.duration.map(|duration| duration.as_seconds_f64()),
         // Seconds rather than milliseconds: it is what a player is set to.
         resume_from_seconds: plan.resume_from.map(|position| position.as_seconds_f64()),
         audio,

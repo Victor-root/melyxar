@@ -330,7 +330,7 @@ class Playback(
     /** How long the film lasts, as the server knows it, the player's own
      *  count of a film still being rebuilt being only what is made so far. */
     val length: Double?
-        get() = plan?.durationMinutes?.let { it * 60 }
+        get() = plan?.durationSeconds
             ?: player.duration.takeIf { it != C.TIME_UNSET }?.let { it / 1000.0 }
 
     private val painted: Track? get() = plan?.subtitles?.firstOrNull { it.id == subtitle && it.burnsIn }
