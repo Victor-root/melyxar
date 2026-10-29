@@ -8,13 +8,13 @@
  * bar changes size or what it shows.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, PointerEvent, ReactNode, RefObject, SetStateAction } from "react";
 import { ZoomInIcon, ZoomOutIcon } from "../icons";
 import type { Wording } from "../readable";
 import { music as server } from "./api";
 import type { SongWave } from "./api";
-import { CLOSEST_SECONDS, barsOf, panned, zoomed } from "./wave-stretch";
+import { CLOSEST_SECONDS, barsOf, panned, swingOf, zoomed } from "./wave-stretch";
 import type { Stretch } from "./wave-stretch";
 
 /** How much closer a press of a zoom button brings the bar. */
@@ -23,9 +23,6 @@ const ZOOM_STEP = 2;
 /** How much closer a pixel of the wheel brings it. */
 const ZOOM_A_PIXEL = 0.0025;
 
-/** The width of one bar of the wave and the gap after it, in pixels. */
-const BAR = 3;
-const GAP = 1.5;
 
 const NO_WAVE: SongWave = { momentsASecond: 1, levels: new Uint8Array(0) };
 
@@ -85,10 +82,13 @@ export function WaveOverview({
   shown,
   setShown,
   zoom,
+  swing = false,
   t,
   children,
 }: {
   wave: SongWave | null | undefined;
+  /** Drawn as the sound swings rather than in decibels. */
+  swing?: boolean;
   length: number;
   shown: Stretch;
   setShown: Dispatch<SetStateAction<Stretch>>;
@@ -144,7 +144,7 @@ export function WaveOverview({
         <ZoomOutIcon size={18} />
       </button>
       <div className="wave-strip" onPointerDown={take} onPointerMove={drag} onPointerUp={letGo} onPointerCancel={letGo}>
-        <WaveDrawing wave={wave} shown={whole.current} className="wave-strip-drawing" />
+        <WaveDrawing wave={wave} shown={whole.current} swing={swing} className="wave-strip-drawing" />
         {children}
         <span className="wave-window" style={{ left: ofWhole(shown.from), right: `calc(100% - ${ofWhole(shown.to)})` }} />
       </div>
@@ -162,22 +162,30 @@ export function WaveOverview({
   );
 }
 
-/** The wave drawn for a stretch of the song, again only when the stretch or
- *  the size of the drawing changes. */
+/** The wave drawn for a stretch of the song, one solid shape mirrored either
+ *  side of its middle as an editing desk draws sound, the loudest moment
+ *  under each pixel deciding how far it reaches. Drawn again only when the
+ *  stretch or the size of the drawing changes. */
 export function WaveDrawing({
   wave,
   shown,
+  swing = false,
   className,
 }: {
   /** Nothing yet while it is read, and null for a file that could not be. */
   wave: SongWave | null | undefined;
   shown: Stretch;
+  /** Drawn as the sound swings, each attack standing out, rather than in
+      decibels, where a fade and a silence do. */
+  swing?: boolean;
   className: string;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const size = useRef<{ width: number; height: number } | null>(null);
-  const drawn = useRef({ wave, shown });
-  drawn.current = { wave, shown };
+  // The loudest moment of the song, which swings all the way.
+  const loudest = useMemo(() => (wave ? wave.levels.reduce((most, level) => Math.max(most, level), 0) / 255 : 1), [wave]);
+  const drawn = useRef({ wave, shown, swing, loudest });
+  drawn.current = { wave, shown, swing, loudest };
 
   const paint = () => {
     const element = canvas.current;
@@ -192,16 +200,20 @@ export function WaveDrawing({
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
     context.fillStyle = getComputedStyle(element).color;
-    const count = Math.max(1, Math.floor(width / (BAR + GAP)));
-    const bars = barsOf(drawn.current.wave ?? NO_WAVE, drawn.current.shown, count);
+    const count = Math.max(1, Math.round(width));
+    const levels = barsOf(drawn.current.wave ?? NO_WAVE, drawn.current.shown, count);
     const step = width / count;
-    const thick = Math.min(BAR, step * 0.7);
-    bars.forEach((level, index) => {
-      const tall = Math.max(2, level * height * 0.92);
-      context.beginPath();
-      context.roundRect(index * step, (height - tall) / 2, thick, tall, thick / 2);
-      context.fill();
-    });
+    const middle = height / 2;
+    const reach = levels.map((level) => Math.max(0.5, (drawn.current.swing ? swingOf(level, drawn.current.loudest) : level) * middle * 0.96));
+    context.beginPath();
+    context.moveTo(0, middle);
+    reach.forEach((up, index) => context.lineTo(index * step + step / 2, middle - up));
+    context.lineTo(width, middle);
+    for (let index = reach.length - 1; index >= 0; index -= 1) {
+      context.lineTo(index * step + step / 2, middle + reach[index]);
+    }
+    context.closePath();
+    context.fill();
   };
 
   useLayoutEffect(() => {
@@ -217,7 +229,7 @@ export function WaveDrawing({
     return () => watcher.disconnect();
   }, []);
 
-  useLayoutEffect(paint, [wave, shown]);
+  useLayoutEffect(paint, [wave, shown, swing]);
 
   return <canvas className={`wave-drawing ${className}${wave === undefined ? " wave-drawing-waiting" : ""}`} ref={canvas} />;
 }

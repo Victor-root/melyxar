@@ -3186,154 +3186,227 @@
   gap: var(--gap-tight);
 }
 
-.lyrics-timeline-bar {
-  height: 116px;
-  overflow: hidden;
-  container-type: inline-size;
-}
-
-.lyrics-timeline-wave {
-  inset: 34px 0 8px;
-  height: calc(100% - 42px);
-  color: color-mix(in srgb, var(--accent) 70%, var(--text-faint));
-}
-
-.lyrics-timeline-edge {
-  top: auto;
-  bottom: 6px;
-}
-
-.lyrics-timeline-head {
-  top: 0;
-  bottom: 0;
-}
-
-/* Where a line starts: a thin line across the whole wave, taken a little
-   to its right so the end of the bubble before it stays its own to take. */
-.lyrics-mark {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
-  width: 12px;
-  margin-left: -4px;
-  cursor: ew-resize;
-  touch-action: none;
-}
-
-.lyrics-mark::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 2px;
-  border-radius: 1px;
-  background: color-mix(in srgb, var(--text) 45%, transparent);
-  transition: background var(--quick) var(--ease);
-}
-
-.lyrics-mark:hover::before,
-.lyrics-mark:focus-visible::before {
-  background: var(--text);
-}
-
-.lyrics-mark:focus-visible {
-  outline: none;
-}
-
-.lyrics-mark-chosen::before {
-  width: 3px;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
-}
-
-/* The words of a line, from where it starts to where the next one does. */
-.lyrics-bubble {
-  position: absolute;
-  top: 6px;
-  z-index: 1;
+/* The desk: a ruler, a track of the lines, a track of the sound, and the
+   playhead across all three. */
+.lyrics-desk {
+  position: relative;
   display: flex;
-  height: 22px;
+  flex-direction: column;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
+  background: var(--surface-deep);
+  container-type: inline-size;
+  touch-action: none;
+  user-select: none;
+}
+
+.lyrics-ruler {
+  position: relative;
+  flex: none;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.lyrics-ruler-tick,
+.lyrics-ruler-mark {
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+}
+
+.lyrics-ruler-tick {
+  height: 5px;
+  background: color-mix(in srgb, var(--text) 25%, transparent);
+}
+
+.lyrics-ruler-mark {
+  height: 11px;
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+}
+
+.lyrics-ruler-moment {
+  position: absolute;
+  bottom: 11px;
+  left: 4px;
   color: var(--text-soft);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lyrics-track {
+  position: relative;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.lyrics-track-words {
+  height: 36px;
+}
+
+.lyrics-track-sound {
+  height: 96px;
+  border-bottom: 0;
+}
+
+/* A line, from where it starts to where the next one does. */
+.lyrics-clip {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-raised));
+  color: var(--text);
   cursor: pointer;
   transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease);
 }
 
-.lyrics-bubble:hover {
-  border-color: var(--border-strong);
-  color: var(--text);
+.lyrics-clip:hover {
+  border-color: var(--accent);
 }
 
-.lyrics-bubble-break {
+.lyrics-clip-break {
   border-style: dashed;
+  border-color: var(--border-strong);
   background: transparent;
   color: var(--text-faint);
 }
 
-.lyrics-bubble-words {
+.lyrics-clip-chosen,
+.lyrics-clip-chosen:hover {
+  border-color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 55%, var(--surface-raised));
+  box-shadow: inset 0 0 0 1px var(--accent-bright);
+}
+
+.lyrics-clip-words {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  padding: 3px 10px 3px 6px;
+  padding: 0 10px;
   font-size: 12px;
-  font-weight: 550;
-  line-height: 1.3;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.lyrics-bubble-number {
+.lyrics-clip-number {
   margin-right: 6px;
-  color: var(--text-faint);
+  opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }
 
-/* Where a line ends, taken to make it last longer or less long. */
-.lyrics-bubble-end {
+/* Either edge of a line, taken to move where it starts or where it ends. */
+.lyrics-clip-edge {
   position: absolute;
   top: 0;
-  right: 0;
   bottom: 0;
   width: 8px;
   cursor: ew-resize;
   touch-action: none;
 }
 
-.lyrics-bubble-end::after {
+.lyrics-clip-start {
+  left: 0;
+}
+
+.lyrics-clip-end {
+  right: 0;
+}
+
+.lyrics-clip-edge::after {
   content: "";
   position: absolute;
-  top: 50%;
-  right: 3px;
-  width: 2px;
-  height: 10px;
-  margin-top: -5px;
-  border-radius: 1px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
   background: currentColor;
   opacity: 0;
   transition: opacity var(--quick) var(--ease);
 }
 
-.lyrics-bubble:hover .lyrics-bubble-end::after,
-.lyrics-bubble-chosen .lyrics-bubble-end::after {
-  opacity: 0.7;
+.lyrics-clip-start::after {
+  left: 1px;
 }
 
-.lyrics-bubble-chosen,
-.lyrics-bubble-chosen:hover {
-  z-index: 1;
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-contrast);
+.lyrics-clip-end::after {
+  right: 1px;
 }
 
-.lyrics-bubble-chosen .lyrics-bubble-number {
-  color: inherit;
-  opacity: 0.75;
+.lyrics-clip:hover .lyrics-clip-edge::after,
+.lyrics-clip-chosen .lyrics-clip-edge::after {
+  opacity: 0.5;
+}
+
+.lyrics-clip-edge:hover::after,
+.lyrics-clip-edge:focus-visible::after {
+  opacity: 1;
+}
+
+.lyrics-clip-edge:focus-visible {
+  outline: none;
+}
+
+/* The sound of the song, one clip with its wave in it. */
+.lyrics-sound {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, var(--surface-deep));
+  cursor: pointer;
+}
+
+.lyrics-sound::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.lyrics-sound-wave {
+  position: absolute;
+  inset: 4px 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  color: color-mix(in srgb, var(--accent) 30%, var(--text));
+  transition: opacity var(--calm) var(--ease);
+}
+
+/* The playhead: across every track, its cap on the ruler. */
+.lyrics-head {
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  background: var(--accent-bright);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--surface-deep) 60%, transparent),
+    0 0 8px var(--accent-glow);
+}
+
+.lyrics-head::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -6px;
+  width: 14px;
+  height: 18px;
+  background: var(--accent-bright);
+  clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%);
 }
 
 .lyrics-strip-mark {
@@ -3672,8 +3745,8 @@
     display: none;
   }
 
-  .lyrics-timeline-bar {
-    height: 100px;
+  .lyrics-track-sound {
+    height: 72px;
   }
 
   .lyrics-lines {
