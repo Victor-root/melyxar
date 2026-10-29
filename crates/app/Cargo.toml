@@ -18,6 +18,7 @@ melyxar-library = { workspace = true }
 melyxar-container = { workspace = true }
 melyxar-media-probe = { workspace = true }
 melyxar-metadata = { workspace = true }
+melyxar-import = { workspace = true }
 melyxar-translate = { workspace = true }
 melyxar-playback = { workspace = true }
 melyxar-sound = { workspace = true }
@@ -30,6 +31,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+uuid = { workspace = true }
 serde_json = { workspace = true }
 png = { workspace = true }
 notify = { workspace = true }
