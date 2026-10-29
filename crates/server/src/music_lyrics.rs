@@ -1,7 +1,8 @@
 //! The lyrics of a song chosen by hand, for an administrator: what LRCLIB
 //! holds under an artist and a title, taking one of its entries as the words
-//! of a song, forgetting what was taken or found so it is looked up again, and
-//! lining the stamps of the lines up with the words heard in the song.
+//! of a song, forgetting what was taken or found so it is looked up again,
+//! lining the stamps of the lines up with the words heard in the song, and
+//! the words written in the editor.
 //!
 //! Reading the lyrics of a song is `music.rs`; this is only for changing them.
 
@@ -10,6 +11,8 @@ use axum::routing::get;
 use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_app::music::lyrics::Offer;
+use melyxar_core::music_lyrics::SyncedLine;
+use melyxar_core::time::Millis;
 use serde::{Deserialize, Serialize};
 
 use crate::account::Viewer;
@@ -28,6 +31,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(synchronise).delete(unsynchronise),
         )
         .route("/api/v1/music/songs/{id}/lyrics/offset", axum::routing::put(set_offset))
+        .route(
+            "/api/v1/music/songs/{id}/lyrics/by_hand",
+            axum::routing::put(write_by_hand).delete(forget_by_hand),
+        )
 }
 
 /// One entry of LRCLIB offered for a song, as the window lists it.
@@ -144,6 +151,48 @@ async fn set_offset(
     Json(asked): Json<OffsetAsked>,
 ) -> Result<Json<()>> {
     melyxar_app::music::lyrics::set_offset(&state, &who, parse_work(&id)?, asked.offset_ms).await?;
+    Ok(Json(()))
+}
+
+#[derive(Debug, Deserialize)]
+struct WrittenLine {
+    at_ms: i64,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Written {
+    /// The words, kept when no line has a moment.
+    #[serde(default)]
+    plain: String,
+    /// The lines with their moments, in any order.
+    #[serde(default)]
+    lines: Vec<WrittenLine>,
+}
+
+/// Keeps the words written in the editor, for every account and before any
+/// other.
+async fn write_by_hand(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Json(written): Json<Written>,
+) -> Result<Json<()>> {
+    let lines = written
+        .lines
+        .into_iter()
+        .map(|line| SyncedLine { at: Millis::new(line.at_ms), text: line.text })
+        .collect();
+    melyxar_app::music::lyrics::write_by_hand(&state, &who, parse_work(&id)?, &written.plain, lines).await?;
+    Ok(Json(()))
+}
+
+async fn forget_by_hand(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<()>> {
+    melyxar_app::music::lyrics::forget_by_hand(&state, &who, parse_work(&id)?).await?;
     Ok(Json(()))
 }
 
