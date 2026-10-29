@@ -26,6 +26,7 @@ import { useSettings } from "../settings";
 import { music as server } from "./api";
 import type { Song, SongLyrics } from "./api";
 import { HeardSong } from "./heard-song";
+import { Scrubber } from "./scrubbing";
 import {
   NOTHING_EDITED,
   aLine,
@@ -192,6 +193,43 @@ export function LyricsEditor({
     [hearing, length, shown],
   );
   const toggle = useCallback(() => (hearing.playing ? hearing.pause() : hearing.play()), [hearing]);
+
+  /* The song heard at the pace of the hand dragging the playhead, read into
+     memory as the editor opens. A song that played when the playhead was
+     taken plays on from where it is let go. */
+  const scrubber = useRef<Scrubber | null>(null);
+  useEffect(() => {
+    const one = new Scrubber(song.id);
+    one.read();
+    scrubber.current = one;
+    return () => {
+      one.close();
+      scrubber.current = null;
+    };
+  }, [song.id]);
+  const playOn = useRef(false);
+  const scrub = useCallback(
+    (phase: "take" | "drag" | "let go", seconds: number) => {
+      const at = Math.min(Math.max(seconds, 0), length || Infinity);
+      if (phase === "take") {
+        playOn.current = hearing.playing;
+        if (hearing.playing) {
+          hearing.pause();
+        }
+        scrubber.current?.begin(at);
+        shown(at, false);
+      } else if (phase === "drag") {
+        scrubber.current?.to(at);
+        shown(at, false);
+      } else {
+        seek(at);
+        if (playOn.current) {
+          hearing.play();
+        }
+      }
+    },
+    [hearing, length, seek, shown],
+  );
   const changeRate = (next: number) => {
     setRate(next);
     hearing.setRate(next);
@@ -266,9 +304,9 @@ export function LyricsEditor({
       move: (key, at) => setAt(key, at, `move:${key}`),
       end: (key, at) => edit((all) => endedAt(all, key, at, length * 1000), `end:${key}`),
       settle: () => change({ kind: "settle" }),
-      seek,
+      scrub,
     }),
-    [setAt, edit, seek, length],
+    [setAt, edit, scrub, length],
   );
 
   const chosenIndex = lines.findIndex((line) => line.key === selected);
