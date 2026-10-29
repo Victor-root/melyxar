@@ -1,0 +1,164 @@
+/* Taking up an Emby or Jellyfin server: one column, since each panel holds
+   a list or a form that wants the width. */
+.import-panels {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 920px;
+}
+
+.import-takes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 var(--gap);
+  padding-left: 20px;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.import-versions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+.import-from {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight) var(--gap);
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.import-from-label {
+  flex-basis: 100%;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.import-from .field-line {
+  flex: 1 1 260px;
+  min-width: 0;
+  font-family: ui-monospace, "SFMono-Regular", "Consolas", monospace;
+}
+
+.import-from .setting-why {
+  flex-basis: 100%;
+}
+
+.import-taken p {
+  margin: 0;
+}
+
+.import-taken p + p {
+  margin-top: 6px;
+}
+
+.import-lost {
+  margin-top: var(--gap);
+}
+
+.import-lost summary {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--attention);
+  cursor: pointer;
+}
+
+.import-lost ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  margin: var(--gap-tight) 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.import-lost li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--gap-tight);
+  font-size: 13.5px;
+}
+
+.import-lost-name {
+  color: var(--text);
+}
+
+.import-lost-kind {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.import-lost-path {
+  flex-basis: 100%;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-tight) var(--gap);
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.import-account:first-child {
+  border-top: 0;
+}
+
+.import-account-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.import-account-new {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+.import-account-new .field-line {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.import-collection {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  color: var(--text-soft);
+}
+
+.import-go {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+
+.import-go .setting-why {
+  flex: 1 1 320px;
+}
+
+.import-go .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -446,6 +446,19 @@ export const FINDABLE: FindableSection[] = [
       ],
     },
   },
+  {
+    area: "admin",
+    path: "import",
+    name: "admin.import",
+    files: ["pages/admin/import.tsx"],
+    named: [
+      ["import.title"],
+      ["import.versions", "import.versions_why"],
+      ["import.found_title", "import.found_lead"],
+      ["import.accounts", "import.accounts_lead"],
+      ["import.lists", "import.lists_lead"],
+    ],
+  },
 ];
 
 /** A setting or a section found, and where it leads. */

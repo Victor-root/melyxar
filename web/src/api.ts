@@ -1468,6 +1468,63 @@ export interface SystemInfo {
   maintenance: boolean;
 }
 
+/** What an Emby or Jellyfin server called a thing it kept. */
+export type ImportKind = "movie" | "series" | "season" | "episode" | "video" | "song" | "album" | "artist";
+
+/** What would be taken up, all accounts together, of what was found here. */
+export interface ImportTaken {
+  watched: number;
+  left_partway: number;
+  favourites: number;
+  listens: number;
+}
+
+/** A backup of Emby or Jellyfin read, and what taking it up would do. */
+export interface ImportPreview {
+  server: "emby" | "jellyfin";
+  /** The oldest version of that server whose backups are read. */
+  oldest_read: string;
+  accounts: {
+    key: string;
+    name: string;
+    administrator: boolean;
+    disabled: boolean;
+    /** The account here that goes by the same name, if one does. */
+    here: { id: string; name: string } | null;
+  }[];
+  found: { kind: ImportKind; found: number; total: number }[];
+  taken: ImportTaken;
+  playlists: { name: string; owner: string | null; items: number; found: number }[];
+  collections: { name: string; items: number; found: number; automatic: boolean | null }[];
+  /** What somebody did something with and was found nowhere here, the first
+      few hundred of `lost_count`. */
+  lost: { kind: ImportKind; name: string; year: number | null; path: string | null }[];
+  lost_count: number;
+}
+
+/** What becomes of one account of the other server. */
+export type ImportAccountChoice =
+  | { becomes: "existing"; key: string; user: string }
+  | { becomes: "new"; key: string; name: string; password: string }
+  | { becomes: "nothing"; key: string };
+
+export interface ImportChoices {
+  accounts: ImportAccountChoice[];
+  /** The collections taken up, by their name over there. */
+  collections: string[];
+}
+
+/** What was taken up. */
+export interface ImportReport {
+  accounts_made: number;
+  accounts_joined: number;
+  taken: ImportTaken;
+  playlists: number;
+  collections: number;
+  /** Playlists and collections left as they were, one of that name being here. */
+  left_alone: string[];
+}
+
 /**
  * A failure carrying the code the server sent.
  *
@@ -2489,6 +2546,11 @@ export const api = {
   accounts: (signal?: AbortSignal) => get<ManagedAccount[]>("/api/v1/accounts", signal),
   createAccount: (name: string, password: string, rights: Rights) =>
     post<ManagedAccount>("/api/v1/accounts", { name, password, rights }),
+  /* An Emby or Jellyfin data folder on the server, read without writing
+     anything, then taken up as chosen. */
+  importPreview: (path: string) => post<ImportPreview>("/api/v1/import/preview", { path }),
+  importTakeUp: (path: string, choices: ImportChoices) =>
+    post<ImportReport>("/api/v1/import/take_up", { path, ...choices }),
   setRights: (account: string, rights: Rights) =>
     put<ManagedAccount>(`/api/v1/accounts/${account}/rights`, rights),
   renameAccount: (account: string, name: string) =>

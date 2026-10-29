@@ -23,6 +23,7 @@ import {
   BellIcon,
   DeviceIcon,
   DiagnosticsIcon,
+  DownloadIcon,
   FolderIcon,
   GraphicsCardIcon,
   JournalIcon,
@@ -139,6 +140,7 @@ const SECTIONS: SectionGroup[] = [
         label: "admin.settings",
         spread: true,
       },
+      { path: "import", icon: DownloadIcon, label: "admin.import" },
     ],
   },
 ];
