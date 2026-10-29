@@ -4,7 +4,7 @@
  * whether it can be sent yet.
  */
 
-import type { ImportAccountChoice, ImportChoices, ImportPreview } from "../../api";
+import type { ImportAccountChoice, ImportChoices, ImportParts, ImportPreview } from "../../api";
 
 /** What becomes of one account over there, as the screen holds it. */
 export interface AccountPlan {
@@ -38,7 +38,20 @@ export function firstCollections(preview: ImportPreview): Set<string> {
   return new Set(preview.collections.filter((collection) => collection.automatic !== true).map((c) => c.name));
 }
 
-export function choicesOf(plans: Record<string, AccountPlan>, collections: Set<string>): ImportChoices {
+/** Everything is taken up until something is unticked. */
+export const ALL_PARTS: ImportParts = {
+  watched: true,
+  left_partway: true,
+  favourites: true,
+  listens: true,
+  playlists: true,
+};
+
+export function choicesOf(
+  plans: Record<string, AccountPlan>,
+  collections: Set<string>,
+  parts: ImportParts,
+): ImportChoices {
   const accounts: ImportAccountChoice[] = Object.entries(plans).map(([key, plan]) => {
     switch (plan.becomes) {
       case "existing":
@@ -49,7 +62,7 @@ export function choicesOf(plans: Record<string, AccountPlan>, collections: Set<s
         return { becomes: "nothing", key };
     }
   });
-  return { accounts, collections: [...collections] };
+  return { accounts, collections: [...collections], parts };
 }
 
 /** Whether there is something to take up, and every account made has a name

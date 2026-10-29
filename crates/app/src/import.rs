@@ -157,6 +157,39 @@ pub struct Choices {
     pub accounts: Vec<AccountChoice>,
     /// The collections taken up, by their name over there.
     pub collections: Vec<String>,
+    #[serde(default)]
+    pub parts: Parts,
+}
+
+/// Which of what each account did is taken up; all of it unless said.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(default)]
+pub struct Parts {
+    /// What was watched, and how many times.
+    pub watched: bool,
+    /// Where a film or an episode was left partway.
+    pub left_partway: bool,
+    pub favourites: bool,
+    pub listens: bool,
+    pub playlists: bool,
+}
+
+impl Default for Parts {
+    fn default() -> Self {
+        Self { watched: true, left_partway: true, favourites: true, listens: true, playlists: true }
+    }
+}
+
+impl Parts {
+    /// Whether this progress is of a part taken up: left partway when it was
+    /// not finished and has a position, watched otherwise.
+    fn keeps(&self, progress: &TakenProgress) -> bool {
+        if !progress.watched && progress.position.get() > 0 {
+            self.left_partway
+        } else {
+            self.watched
+        }
+    }
 }
 
 /// What was taken up.
@@ -339,7 +372,15 @@ async fn taken_up(state: &AppState, who: &User, read: &Read, choices: &Choices) 
     let kind_of: HashMap<&str, Kind> = backup.items.iter().map(|item| (item.key.as_str(), item.kind)).collect();
     for (key, user) in &becomes {
         let marks: Vec<&Mark> = backup.marks.iter().filter(|mark| &mark.account == key).collect();
-        let (progress, listens, favourites) = what_to_take_up(read, &kind_of, &marks);
+        let (mut progress, mut listens, mut favourites) = what_to_take_up(read, &kind_of, &marks);
+        let parts = choices.parts;
+        progress.retain(|one| parts.keeps(one));
+        if !parts.listens {
+            listens.clear();
+        }
+        if !parts.favourites {
+            favourites.clear();
+        }
         report.taken.watched += progress.iter().filter(|one| one.watched).count();
         report.taken.left_partway += progress.iter().filter(|one| !one.watched && one.position.get() > 0).count();
         report.taken.listens += listens.len();
@@ -349,7 +390,7 @@ async fn taken_up(state: &AppState, who: &User, read: &Read, choices: &Choices) 
         database.take_up_favourites(*user, &favourites).await?;
     }
 
-    for playlist in &backup.playlists {
+    for playlist in backup.playlists.iter().filter(|_| choices.parts.playlists) {
         // A playlist shared with everybody goes to the one taking it up.
         let owner = match &playlist.owner {
             Some(owner) => match becomes.get(owner) {
@@ -686,6 +727,7 @@ mod tests {
                 AccountChoice::New { key: "2".into(), name: "Ben".into(), password: "quiet harbour lights".into() },
             ],
             collections: vec!["Rainy days".into()],
+            parts: Parts::default(),
         };
         let report = taken_up(&state, &ada, &read, &choices).await.unwrap();
         assert_eq!((report.accounts_joined, report.accounts_made), (1, 1));
@@ -717,12 +759,37 @@ mod tests {
             &Choices {
                 accounts: vec![AccountChoice::Existing { key: "1".into(), user: ada.id }],
                 collections: vec!["Rainy days".into()],
+                parts: Parts::default(),
             },
         )
         .await
         .unwrap();
         assert_eq!((again.playlists, again.collections), (0, 0));
         assert_eq!(again.left_alone, vec!["Evening", "Rainy days"]);
+    }
+
+    #[tokio::test]
+    async fn only_the_parts_chosen_are_taken_up() {
+        let directory = tempfile::tempdir().unwrap();
+        let (state, ada, harbour, road, _) = a_server(directory.path()).await;
+        let read = looked_for(&state, a_backup()).await.unwrap();
+        let choices = Choices {
+            accounts: vec![
+                AccountChoice::Existing { key: "1".into(), user: ada.id },
+                AccountChoice::New { key: "2".into(), name: "Ben".into(), password: "quiet harbour lights".into() },
+            ],
+            collections: vec![],
+            parts: Parts { watched: false, favourites: false, playlists: false, ..Parts::default() },
+        };
+        let report = taken_up(&state, &ada, &read, &choices).await.unwrap();
+        assert_eq!((report.taken.watched, report.taken.left_partway, report.taken.favourites), (0, 1, 0));
+        assert_eq!(report.playlists, 0);
+
+        let database = state.database();
+        assert!(database.playback_progress(ada.id, harbour).await.unwrap().is_none());
+        assert!(database.playlists(ada.id, None).await.unwrap().is_empty());
+        let (ben, _) = database.user_by_name("Ben").await.unwrap().unwrap();
+        assert!(database.playback_progress(ben.id, road).await.unwrap().is_some());
     }
 
     #[tokio::test]
