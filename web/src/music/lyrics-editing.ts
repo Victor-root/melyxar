@@ -186,6 +186,50 @@ export function shifted(lines: readonly EditedLine[], from: number, by: number):
   );
 }
 
+/** The shortest a line, or a break, lasts once its end is dragged. */
+export const SHORTEST_MS = 100;
+
+/** The lines once the end of a stamped line is dragged to `at`, `songMs`
+ *  being where the song ends. A line ends where the next stamped one starts,
+ *  so lengthening it starts that one later. A line with words ended before
+ *  the next one starts gets a break, an empty line, where it now ends; the
+ *  same drag then moves that break, and the break goes once it is pulled
+ *  against the line after it. Never shorter than the shortest, nor past the
+ *  line after the next, nor past the end of the song. The same lines when
+ *  nothing moves. */
+export function endedAt(lines: EditedLine[], key: number, at: number, songMs: number): EditedLine[] {
+  const line = lines.find((one) => one.key === key);
+  if (!line || line.at === null) {
+    return lines;
+  }
+  const start = line.at;
+  const later = lines
+    .filter((one): one is EditedLine & { at: number } => one.at !== null && one.key !== key && one.at > start)
+    .sort((one, other) => one.at - other.at);
+  const [next, after] = later;
+  const earliest = start + SHORTEST_MS;
+  const latest = (after ? after.at : songMs) - SHORTEST_MS;
+  const moved = (target: EditedLine, to: number) => {
+    const placed = toHundredth(Math.min(Math.max(to, earliest), Math.max(latest, earliest)));
+    return placed === target.at ? lines : lines.map((one) => (one.key === target.key ? { ...one, at: placed } : one));
+  };
+  const isBreak = (one: EditedLine) => one.text.trim() === "";
+
+  if (next && isBreak(next) && !isBreak(line)) {
+    return after && at >= after.at - SHORTEST_MS ? lines.filter((one) => one.key !== next.key) : moved(next, at);
+  }
+  if (next && (isBreak(line) || at >= next.at)) {
+    return moved(next, at);
+  }
+  const ends = next ? next.at : songMs;
+  if (at >= ends - SHORTEST_MS) {
+    return lines;
+  }
+  const index = lines.indexOf(line);
+  const pause = aLine(toHundredth(Math.max(at, earliest)), "");
+  return [...lines.slice(0, index + 1), pause, ...lines.slice(index + 1)];
+}
+
 /** The next line after `index` that waits to be stamped as the song plays:
  *  the gaps between verses are passed over. -1 past the last. */
 export function nextToStamp(lines: readonly EditedLine[], index: number): number {

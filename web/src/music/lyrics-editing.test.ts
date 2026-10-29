@@ -5,6 +5,7 @@ import {
   aLine,
   asText,
   edited,
+  endedAt,
   inSungOrder,
   fromText,
   linesOf,
@@ -124,6 +125,52 @@ describe("shifted", () => {
     const lines = [aLine(1_000, "a"), aLine(null, "b"), aLine(2_000, "c")];
     expect(said(shifted(lines, 0, -1_500))).toEqual([[0, "a"], [null, "b"], [500, "c"]]);
     expect(said(shifted(lines, 2, 250))).toEqual([[1_000, "a"], [null, "b"], [2_250, "c"]]);
+  });
+});
+
+describe("endedAt", () => {
+  const song = 10_000;
+
+  it("lengthens a line by starting the next one later, never past the one after", () => {
+    const lines = [aLine(1_000, "a"), aLine(3_000, "b"), aLine(6_000, "c")];
+    expect(said(endedAt(lines, lines[0].key, 4_000, song))).toEqual([[1_000, "a"], [4_000, "b"], [6_000, "c"]]);
+    expect(said(endedAt(lines, lines[0].key, 7_000, song))).toEqual([[1_000, "a"], [5_900, "b"], [6_000, "c"]]);
+  });
+
+  it("shortens a line with a break where it now ends, which the same drag moves and takes away", () => {
+    const lines = [aLine(1_000, "a"), aLine(3_000, "b")];
+    const shortened = endedAt(lines, lines[0].key, 2_000, song);
+    expect(said(shortened)).toEqual([[1_000, "a"], [2_000, ""], [3_000, "b"]]);
+    const moved = endedAt(shortened, lines[0].key, 2_500, song);
+    expect(said(moved)).toEqual([[1_000, "a"], [2_500, ""], [3_000, "b"]]);
+    expect(moved[1].key).toBe(shortened[1].key);
+    const gone = endedAt(moved, lines[0].key, 2_950, song);
+    expect(said(gone)).toEqual(said(lines));
+    expect(said(endedAt(gone, lines[0].key, 3_500, song))).toEqual([[1_000, "a"], [3_500, "b"]]);
+  });
+
+  it("never makes a line shorter than the shortest", () => {
+    const lines = [aLine(1_000, "a"), aLine(2_000, ""), aLine(3_000, "b")];
+    expect(said(endedAt(lines, lines[0].key, 500, song))).toEqual([[1_000, "a"], [1_100, ""], [3_000, "b"]]);
+  });
+
+  it("ends the last line with a break before the end of the song, and leaves it be past that", () => {
+    const lines = [aLine(1_000, "a")];
+    expect(said(endedAt(lines, lines[0].key, 4_000, song))).toEqual([[1_000, "a"], [4_000, ""]]);
+    expect(endedAt(lines, lines[0].key, 9_950, song)).toBe(lines);
+  });
+
+  it("moves the line after a break either way", () => {
+    const lines = [aLine(1_000, "a"), aLine(2_000, ""), aLine(3_000, "b")];
+    expect(said(endedAt(lines, lines[1].key, 2_500, song))[2]).toEqual([2_500, "b"]);
+    expect(said(endedAt(lines, lines[1].key, 1_500, song))[2]).toEqual([2_100, "b"]);
+  });
+
+  it("leaves lines without a moment, and moves that change nothing, as they are", () => {
+    const lines = [aLine(null, "a"), aLine(3_000, "b")];
+    expect(endedAt(lines, lines[0].key, 2_000, song)).toBe(lines);
+    const stamped = [aLine(1_000, "a"), aLine(3_000, "b")];
+    expect(endedAt(stamped, stamped[0].key, 3_000, song)).toBe(stamped);
   });
 });
 

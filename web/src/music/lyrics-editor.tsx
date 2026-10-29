@@ -30,6 +30,7 @@ import {
   NOTHING_EDITED,
   aLine,
   edited,
+  endedAt,
   inSungOrder,
   linesOf,
   nextToStamp,
@@ -263,10 +264,11 @@ export function LyricsEditor({
     () => ({
       select: setSelected,
       move: (key, at) => setAt(key, at, `move:${key}`),
+      end: (key, at) => edit((all) => endedAt(all, key, at, length * 1000), `end:${key}`),
       settle: () => change({ kind: "settle" }),
       seek,
     }),
-    [setAt, seek],
+    [setAt, edit, seek, length],
   );
 
   const chosenIndex = lines.findIndex((line) => line.key === selected);
