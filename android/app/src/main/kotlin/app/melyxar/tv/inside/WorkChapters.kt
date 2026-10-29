@@ -50,7 +50,7 @@ fun inventedMoments(length: Double): List<Double> {
  *  shorter. */
 private fun lengthOf(plan: Plan): Double {
     val covered = plan.thumbnails?.let { it.counted * it.everySeconds } ?: 0.0
-    val said = plan.durationMinutes?.let { it * 60 } ?: 0.0
+    val said = plan.durationSeconds ?: 0.0
     return if (said > 0 && covered > 0) minOf(said, covered) else maxOf(said, covered)
 }
 

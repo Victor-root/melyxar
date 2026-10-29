@@ -12,8 +12,8 @@ class WorkChaptersTest {
     private val sheets = Thumbnails("/sheets", everySeconds = 10.0, width = 160, height = 90, columns = 10, rows = 10, counted = 720)
 
     /** Only what the chapters are worked out from. */
-    private fun plan(chapters: List<Chapter> = emptyList(), thumbnails: Thumbnails? = null, minutes: Double? = null) =
-        Plan(url = "", method = "direct_play", durationMinutes = minutes, thumbnails = thumbnails, chapters = chapters)
+    private fun plan(chapters: List<Chapter> = emptyList(), thumbnails: Thumbnails? = null, seconds: Double? = null) =
+        Plan(url = "", method = "direct_play", durationSeconds = seconds, thumbnails = thumbnails, chapters = chapters)
 
     @Test
     fun startsAtTheBeginningAndKeepsToRoundDistances() {
@@ -48,7 +48,7 @@ class WorkChaptersTest {
 
     @Test
     fun inventsThemFromThePicturesWhenTheFileNamesNone() {
-        val found = chaptersShownOf(plan(thumbnails = sheets, minutes = 120.0))
+        val found = chaptersShownOf(plan(thumbnails = sheets, seconds = 7200.0))
         assertEquals(12, found.size)
         assertTrue(found.all { it.title == null })
         assertEquals(600.0, found[1].atSecond)
@@ -56,13 +56,13 @@ class WorkChaptersTest {
 
     @Test
     fun inventsNoneWithoutPicturesToPutOnThem() {
-        assertEquals(emptyList<Chapter>(), chaptersShownOf(plan(minutes = 120.0)))
+        assertEquals(emptyList<Chapter>(), chaptersShownOf(plan(seconds = 7200.0)))
     }
 
     @Test
     fun keepsToTheShorterOfWhatTheFileSaysAndWhatThePicturesCover() {
         // The pictures cover two hours and the file says half an hour.
-        val found = chaptersShownOf(plan(thumbnails = sheets, minutes = 30.0))
+        val found = chaptersShownOf(plan(thumbnails = sheets, seconds = 1800.0))
         assertTrue(found.last().atSecond < 1800)
     }
 }
