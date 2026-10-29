@@ -7,6 +7,7 @@ import {
   edited,
   endedAt,
   inSungOrder,
+  withABreakAfter,
   fromText,
   linesOf,
   nextToStamp,
@@ -157,6 +158,48 @@ describe("endedAt", () => {
     expect(endedAt(lines, lines[0].key, 2_000, song)).toBe(lines);
     const stamped = [aLine(1_000, "a"), aLine(3_000, "b")];
     expect(endedAt(stamped, stamped[0].key, 3_000, song)).toBe(stamped);
+  });
+});
+
+describe("withABreakAfter", () => {
+  const song = 60_000;
+
+  it("puts a break where the line ends, the next line starting five seconds later and no other moving", () => {
+    const lines = [aLine(1_000, "a"), aLine(4_000, "b"), aLine(15_000, "c")];
+    const pause = aLine(null, "");
+    const done = withABreakAfter(lines, lines[0].key, song, pause);
+    expect(said(done)).toEqual([[1_000, "a"], [4_000, ""], [9_000, "b"], [15_000, "c"]]);
+    expect(done[1].key).toBe(pause.key);
+  });
+
+  it("leaves the next line the shortest it may last when it lasts less than the break", () => {
+    const lines = [aLine(1_000, "a"), aLine(4_000, "b"), aLine(6_000, "c")];
+    expect(said(withABreakAfter(lines, lines[0].key, song))).toEqual([[1_000, "a"], [4_000, ""], [5_900, "b"], [6_000, "c"]]);
+  });
+
+  it("keeps the order of the list", () => {
+    const lines = [aLine(1_000, "a"), aLine(4_000, "b"), aLine(null, "c"), aLine(20_000, "d")];
+    expect(said(withABreakAfter(lines, lines[1].key, song))).toEqual([
+      [1_000, "a"],
+      [4_000, "b"],
+      [20_000, ""],
+      [null, "c"],
+      [25_000, "d"],
+    ]);
+  });
+
+  it("comes five seconds after the last line starts, before the end of the song", () => {
+    const lines = [aLine(1_000, "a")];
+    expect(said(withABreakAfter(lines, lines[0].key, song))).toEqual([[1_000, "a"], [6_000, ""]]);
+    expect(said(withABreakAfter(lines, lines[0].key, 3_000))).toEqual([[1_000, "a"], [2_900, ""]]);
+  });
+
+  it("leaves a line without a moment, and one with no room after it, as they are", () => {
+    const lines = [aLine(null, "a"), aLine(59_950, "b")];
+    expect(withABreakAfter(lines, lines[0].key, song)).toBe(lines);
+    expect(withABreakAfter(lines, lines[1].key, song)).toBe(lines);
+    const packed = [aLine(1_000, "a"), aLine(2_000, "b"), aLine(2_100, "c")];
+    expect(withABreakAfter(packed, packed[0].key, song)).toBe(packed);
   });
 });
 
