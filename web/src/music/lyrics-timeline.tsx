@@ -1,25 +1,31 @@
 /*
- * The song's wave in the lyrics editor, each stamped line a bubble of its
- * words from where it starts to where the next one does. The start of a
- * bubble is taken and dragged to move its line, or moved by the arrows once
- * it holds the focus; its end, which is where the next line starts, is
- * dragged to make the line last longer or less long. A press on the bubble chooses its line, and a press on the
- * wave anywhere else takes the song there.
+ * The song in the lyrics editor laid out as an editing desk lays out a
+ * timeline: a ruler of moments on top, a track of the lines, each a clip of
+ * its words from where it starts to where the next one does, and the sound
+ * of the song under them as one clip with its wave drawn in it.
+ *
+ * A clip's left edge is taken and dragged to move its line, or moved by the
+ * arrows once it holds the focus; its right edge, which is where the next
+ * line starts, to make the line last longer or less long. A press on a clip
+ * chooses its line. A press anywhere else, the ruler and the sound
+ * included, takes the song there and follows the hand while it is held, the
+ * playhead running across every track with its cap on the ruler.
  *
  * The playhead is moved by whatever plays the song, through `follow`, never
- * by drawing the bar again: the bar is drawn again only when the lines, the
- * line chosen or the stretch shown change, and it turns like a page when the
- * song runs off it.
+ * by drawing the timeline again: it is drawn again only when the lines, the
+ * line chosen, its width or the stretch shown change, and it turns like a
+ * page when the song runs off it.
  */
 
-import { Fragment, memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, Ref } from "react";
 import type { Wording } from "../readable";
 import type { SongWave } from "./api";
 import type { EditedLine } from "./lyrics-editing";
 import { stampOf } from "./lyrics-editing";
 import { WaveDrawing, WaveOverview, useWheelZoom } from "./wave-view";
-import { clockOf, paged, showing, zoomed } from "./wave-stretch";
+import { asClock } from "../clock";
+import { clockOf, paged, rulerOf, showing, zoomed } from "./wave-stretch";
 import type { Stretch } from "./wave-stretch";
 
 /** How much of the song the bar shows at first: enough for a few lines, few
@@ -77,13 +83,25 @@ export const LyricsTimeline = memo(function LyricsTimeline({
   const [shown, setShown] = useState<Stretch>(() => ({ from: 0, to: Math.min(length, FIRST_SHOWN_SECONDS) }));
   const bar = useRef<HTMLDivElement>(null);
   const head = useRef<HTMLSpanElement>(null);
+  const [width, setWidth] = useState(0);
   const shownNow = useRef(shown);
   shownNow.current = shown;
   const lastAt = useRef(0);
+  /** The bar's place on the screen while the playhead is dragged along it. */
+  const scrubbing = useRef<{ left: number; width: number } | null>(null);
   /** The end of a line held, and the bar's place on the screen, read when
       it is taken. */
   const held = useRef<{ key: number; end: "start" | "end"; left: number; width: number } | null>(null);
   useWheelZoom(bar, length, setShown);
+  useEffect(() => {
+    const element = bar.current;
+    if (!element) {
+      return;
+    }
+    const watcher = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    watcher.observe(element);
+    return () => watcher.disconnect();
+  }, []);
 
   useEffect(() => {
     setShown((was) => (was.to > length ? { from: 0, to: Math.min(length, FIRST_SHOWN_SECONDS) } : was));
@@ -190,44 +208,90 @@ export const LyricsTimeline = memo(function LyricsTimeline({
     });
 
   const ofWhole = (ms: number) => `${(ms / 1000 / length) * 100}%`;
-  const close = span < length - 0.001;
+  const ruler = rulerOf(shown, width);
+  const said = (seconds: number) => (ruler.step < 1 ? clockOf(seconds) : asClock(seconds));
+  const soundFrom = Math.max(across(0), 0);
+  const soundTo = Math.min(across(length), 100);
 
   return (
     <div className="lyrics-timeline">
       <div
-        className="wave-bar lyrics-timeline-bar"
+        className="lyrics-desk"
         ref={bar}
-        onPointerDown={(event) => acts.seek(momentAt(event.clientX, event.currentTarget.getBoundingClientRect()))}
-      >
-        <WaveDrawing wave={wave} shown={shown} className="wave-bar-drawing lyrics-timeline-wave" />
-        {marks.map((mark) => {
-          const left = across(mark.at / 1000);
-          const right = across(mark.until / 1000);
-          if (right < 0 || left > 100) {
-            return null;
+        onPointerDown={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          scrubbing.current = { left: box.left, width: box.width };
+          acts.seek(momentAt(event.clientX, box));
+        }}
+        onPointerMove={(event) => {
+          const hand = scrubbing.current;
+          if (hand && event.currentTarget.hasPointerCapture(event.pointerId)) {
+            acts.seek(momentAt(event.clientX, hand));
           }
-          const chosen = mark.line.key === selected;
-          const from = Math.max(left, 0);
-          const to = Math.min(right, 100);
-          const words = mark.line.text || t("lyrics_editor.break");
-          return (
-            <Fragment key={mark.line.key}>
+        }}
+        onPointerUp={() => (scrubbing.current = null)}
+        onPointerCancel={() => (scrubbing.current = null)}
+      >
+        <div className="lyrics-ruler" aria-hidden="true">
+          {ruler.ticks.map((at) => (
+            <span key={`t${at}`} className="lyrics-ruler-tick" style={{ left: `${across(at)}%` }} />
+          ))}
+          {ruler.written.map((at) => (
+            <span key={`w${at}`} className="lyrics-ruler-mark" style={{ left: `${across(at)}%` }}>
+              <span className="lyrics-ruler-moment">{said(at)}</span>
+            </span>
+          ))}
+        </div>
+
+        <div className="lyrics-track lyrics-track-words">
+          {marks.map((mark) => {
+            const left = across(mark.at / 1000);
+            const right = across(mark.until / 1000);
+            if (right < 0 || left > 100) {
+              return null;
+            }
+            const chosen = mark.line.key === selected;
+            const from = Math.max(left, 0);
+            const to = Math.min(right, 100);
+            const words = mark.line.text || t("lyrics_editor.break");
+            return (
               <span
-                className={`lyrics-bubble${chosen ? " lyrics-bubble-chosen" : ""}${mark.line.text ? "" : " lyrics-bubble-break"}`}
-                style={{ left: `${from}%`, width: `max(4px, calc(${to - from}cqw - 3px))` }}
+                key={mark.line.key}
+                className={`lyrics-clip${chosen ? " lyrics-clip-chosen" : ""}${mark.line.text ? "" : " lyrics-clip-break"}`}
+                style={{ left: `${from}%`, width: `max(4px, calc(${to - from}cqw - 2px))` }}
                 title={`${stampOf(mark.at)} · ${words}`}
                 onPointerDown={(event) => {
                   event.stopPropagation();
                   acts.select(mark.line.key);
                 }}
               >
-                <span className="lyrics-bubble-words">
-                  <span className="lyrics-bubble-number">{mark.number}</span>
+                <span className="lyrics-clip-words">
+                  <span className="lyrics-clip-number">{mark.number}</span>
                   {mark.line.text || "♪"}
                 </span>
+                {left >= 0 && (
+                  <span
+                    role="slider"
+                    tabIndex={0}
+                    className="lyrics-clip-edge lyrics-clip-start"
+                    aria-label={t("lyrics_editor.line_number", { number: mark.number })}
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(length * 1000)}
+                    aria-valuenow={mark.at}
+                    aria-valuetext={stampOf(mark.at)}
+                    onPointerDown={(event) => take(mark.line.key, "start", event)}
+                    onPointerMove={drag}
+                    onPointerUp={letGo}
+                    onPointerCancel={letGo}
+                    onKeyDown={(event) => keys(mark, event)}
+                    onKeyUp={() => acts.settle()}
+                    onFocus={() => acts.select(mark.line.key)}
+                  />
+                )}
                 {right <= 100 && mark.until < length * 1000 && (
                   <span
-                    className="lyrics-bubble-end"
+                    className="lyrics-clip-edge lyrics-clip-end"
                     aria-hidden="true"
                     onPointerDown={(event) => take(mark.line.key, "end", event)}
                     onPointerMove={drag}
@@ -236,39 +300,19 @@ export const LyricsTimeline = memo(function LyricsTimeline({
                   />
                 )}
               </span>
-              {left >= 0 && (
-                <span
-                  role="slider"
-                  tabIndex={0}
-                  className={`lyrics-mark${chosen ? " lyrics-mark-chosen" : ""}`}
-                  style={{ left: `${left}%` }}
-                  aria-label={t("lyrics_editor.line_number", { number: mark.number })}
-                  aria-valuemin={0}
-                  aria-valuemax={Math.round(length * 1000)}
-                  aria-valuenow={mark.at}
-                  aria-valuetext={stampOf(mark.at)}
-                  title={`${stampOf(mark.at)} · ${words}`}
-                  onPointerDown={(event) => take(mark.line.key, "start", event)}
-                  onPointerMove={drag}
-                  onPointerUp={letGo}
-                  onPointerCancel={letGo}
-                  onKeyDown={(event) => keys(mark, event)}
-                  onKeyUp={() => acts.settle()}
-                  onFocus={() => acts.select(mark.line.key)}
-                />
-              )}
-            </Fragment>
-          );
-        })}
-        {close && (
-          <>
-            <span className="wave-edge wave-edge-from lyrics-timeline-edge">{clockOf(shown.from)}</span>
-            <span className="wave-edge wave-edge-to lyrics-timeline-edge">{clockOf(shown.to)}</span>
-          </>
-        )}
-        <span className="wave-head lyrics-timeline-head" ref={head} />
+            );
+          })}
+        </div>
+
+        <div className="lyrics-track lyrics-track-sound">
+          <span className="lyrics-sound" style={{ left: `${soundFrom}%`, right: `${100 - soundTo}%` }}>
+            <WaveDrawing wave={wave} shown={shown} swing className="lyrics-sound-wave" />
+          </span>
+        </div>
+
+        <span className="wave-head lyrics-head" ref={head} />
       </div>
-      <WaveOverview wave={wave} length={length} shown={shown} setShown={setShown} zoom={zoom} t={t}>
+      <WaveOverview wave={wave} length={length} shown={shown} setShown={setShown} zoom={zoom} swing t={t}>
         {marks.map((mark) => (
           <span
             key={mark.line.key}

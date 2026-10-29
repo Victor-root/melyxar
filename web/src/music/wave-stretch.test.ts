@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barsOf, clockOf, paged, panned, showing, zoomed } from "./wave-stretch";
+import { barsOf, clockOf, paged, panned, rulerOf, showing, swingOf, zoomed } from "./wave-stretch";
 
 const waveOf = (momentsASecond: number, levels: number[]) => ({ momentsASecond, levels: new Uint8Array(levels) });
 
@@ -63,6 +63,37 @@ describe("barsOf", () => {
 
   it("draws nothing past the end of the wave", () => {
     expect(barsOf(waveOf(4, [255]), { from: 0, to: 1 }, 2)).toEqual([1, 0]);
+  });
+});
+
+describe("swingOf", () => {
+  it("turns decibels over sixty back into how far the sound swings", () => {
+    expect(swingOf(1)).toBe(1);
+    expect(swingOf(0)).toBe(0);
+    expect(swingOf(2 / 3)).toBeCloseTo(0.1, 6);
+    expect(swingOf(0.5)).toBeCloseTo(0.0316, 4);
+  });
+
+  it("swings all the way at the loudest level of the song", () => {
+    expect(swingOf(0.8, 0.8)).toBe(1);
+    expect(swingOf(0.8 - 1 / 3, 0.8)).toBeCloseTo(0.1, 6);
+    expect(swingOf(0.5, 0)).toBe(0);
+  });
+});
+
+describe("rulerOf", () => {
+  it("writes the finest step that keeps the moments apart, ticks between them", () => {
+    const ruler = rulerOf({ from: 0, to: 30 }, 1000);
+    expect(ruler.step).toBe(5);
+    expect(ruler.written).toEqual([0, 5, 10, 15, 20, 25, 30]);
+    expect(ruler.ticks.slice(0, 5)).toEqual([1, 2, 3, 4, 6]);
+  });
+
+  it("starts at the first moment on the stretch shown, in tenths when close in", () => {
+    const ruler = rulerOf({ from: 12.33, to: 13.83 }, 1000);
+    expect(ruler.step).toBe(0.2);
+    expect(ruler.written[0]).toBe(12.4);
+    expect(ruler.written[ruler.written.length - 1]).toBe(13.8);
   });
 });
 
