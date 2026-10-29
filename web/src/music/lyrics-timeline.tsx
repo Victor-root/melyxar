@@ -9,7 +9,8 @@
  * line starts, to make the line last longer or less long. A press on a clip
  * chooses its line. A press anywhere else, the ruler and the sound
  * included, takes the song there and follows the hand while it is held, the
- * playhead running across every track with its cap on the ruler.
+ * song heard at the pace of the hand (scrubbing.ts), the playhead running
+ * across every track with its cap on the ruler.
  *
  * The playhead is moved by whatever plays the song, through `follow`, never
  * by drawing the timeline again: it is drawn again only when the lines, the
@@ -51,7 +52,8 @@ export interface TimelineActs {
   end: (key: number, at: number) => void;
   /** The mark was let go. */
   settle: () => void;
-  seek: (seconds: number) => void;
+  /** The playhead taken, dragged and let go, at a moment in seconds. */
+  scrub: (phase: "take" | "drag" | "let go", seconds: number) => void;
 }
 
 /** A stamped line where it falls, and where the next one does. */
@@ -222,16 +224,28 @@ export const LyricsTimeline = memo(function LyricsTimeline({
           const box = event.currentTarget.getBoundingClientRect();
           event.currentTarget.setPointerCapture(event.pointerId);
           scrubbing.current = { left: box.left, width: box.width };
-          acts.seek(momentAt(event.clientX, box));
+          acts.scrub("take", momentAt(event.clientX, box));
         }}
         onPointerMove={(event) => {
           const hand = scrubbing.current;
           if (hand && event.currentTarget.hasPointerCapture(event.pointerId)) {
-            acts.seek(momentAt(event.clientX, hand));
+            acts.scrub("drag", momentAt(event.clientX, hand));
           }
         }}
-        onPointerUp={() => (scrubbing.current = null)}
-        onPointerCancel={() => (scrubbing.current = null)}
+        onPointerUp={(event) => {
+          const hand = scrubbing.current;
+          if (hand) {
+            scrubbing.current = null;
+            acts.scrub("let go", momentAt(event.clientX, hand));
+          }
+        }}
+        onPointerCancel={(event) => {
+          const hand = scrubbing.current;
+          if (hand) {
+            scrubbing.current = null;
+            acts.scrub("let go", momentAt(event.clientX, hand));
+          }
+        }}
       >
         <div className="lyrics-ruler" aria-hidden="true">
           {ruler.ticks.map((at) => (
