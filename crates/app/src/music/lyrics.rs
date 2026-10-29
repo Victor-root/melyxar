@@ -304,8 +304,8 @@ pub async fn offers(state: &AppState, who: &User, song: WorkId, artist: &str, ti
 }
 
 /// Takes one entry of LRCLIB as the words of a song, kept like any answer of
-/// LRCLIB so the song is not looked up again over it, in place of words
-/// written by hand: the last choice made is the one shown.
+/// LRCLIB so the song is not looked up again over it, the words written by
+/// hand set aside, never lost: the last choice made is the one shown.
 pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> Result<()> {
     may_manage(who)?;
     may_read_the_work(state, who, song).await?;
@@ -323,7 +323,7 @@ pub async fn choose(state: &AppState, who: &User, song: WorkId, entry: i64) -> R
             LOOKUP_METHOD,
         )
         .await?;
-    state.database().forget_lyrics_by_hand(song).await?;
+    state.database().set_lyrics_by_hand_aside(song).await?;
     Ok(())
 }
 
@@ -368,14 +368,83 @@ pub async fn write_by_hand(state: &AppState, who: &User, song: WorkId, plain: &s
     Ok(())
 }
 
-/// Forgets the words written by hand for a song, so the ones it had before
-/// are shown again.
-pub async fn forget_by_hand(state: &AppState, who: &User, song: WorkId) -> Result<()> {
+/// Sets the words written by hand for a song aside, so the ones it had
+/// before are shown again. Every version stays, to be put back.
+pub async fn set_by_hand_aside(state: &AppState, who: &User, song: WorkId) -> Result<()> {
     may_manage(who)?;
     may_read_the_work(state, who, song).await?;
-    tracing::debug!(%song, "lyrics: what was written by hand is forgotten");
-    state.database().forget_lyrics_by_hand(song).await?;
+    tracing::debug!(%song, "lyrics: what was written by hand is set aside");
+    state.database().set_lyrics_by_hand_aside(song).await?;
     Ok(())
+}
+
+/// One version of the lyrics written by hand for a song, as a list shows it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Version {
+    pub id: i64,
+    pub written_at: melyxar_core::time::Timestamp,
+    pub in_use: bool,
+    /// How many lines it has, and whether they carry their moments.
+    pub lines: u32,
+    pub stamped: bool,
+    /// Its first words, to tell it from the others.
+    pub opening: String,
+}
+
+/// How much of its first words a version is shown by.
+const OPENING_CHARS: usize = 60;
+
+/// Every version written by hand for a song, the latest first.
+pub async fn versions(state: &AppState, who: &User, song: WorkId) -> Result<Vec<Version>> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    Ok(state
+        .database()
+        .lyrics_versions(song)
+        .await?
+        .into_iter()
+        .map(|kept| {
+            let read = read_lyrics(&kept.words);
+            let stamped = !read.synced.is_empty();
+            let lines = if stamped {
+                read.synced.iter().filter(|line| !line.text.trim().is_empty()).count()
+            } else {
+                read.plain.lines().filter(|line| !line.trim().is_empty()).count()
+            };
+            let opening = read.plain.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or_default();
+            Version {
+                id: kept.id,
+                written_at: kept.written_at,
+                in_use: kept.in_use,
+                lines: u32::try_from(lines).unwrap_or(u32::MAX),
+                stamped,
+                opening: opening.chars().take(OPENING_CHARS).collect(),
+            }
+        })
+        .collect())
+}
+
+/// Puts a version written by hand back in service, before any other words
+/// the song has.
+pub async fn use_version(state: &AppState, who: &User, song: WorkId, version: i64) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    tracing::debug!(%song, version, "lyrics: a version written by hand is put back");
+    match state.database().use_lyrics_version(song, version).await? {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::not_found("that version of the lyrics"))),
+    }
+}
+
+/// Deletes a version written by hand for good: the only way one goes.
+pub async fn delete_version(state: &AppState, who: &User, song: WorkId, version: i64) -> Result<()> {
+    may_manage(who)?;
+    may_read_the_work(state, who, song).await?;
+    tracing::info!(%song, version, "lyrics: a version written by hand was deleted");
+    match state.database().delete_lyrics_version(song, version).await? {
+        true => Ok(()),
+        false => Err(AppError::Domain(melyxar_core::Error::not_found("that version of the lyrics"))),
+    }
 }
 
 /// The words written inside the song, or in a file of the same name beside
@@ -529,10 +598,25 @@ mod tests {
         assert!(invalid(write_by_hand(&state, &administrator, song, "", vec![at(-10, "Before")]).await));
         let viewer = crate::a_viewer(&state).await;
         assert!(invalid(write_by_hand(&state, &viewer, song, "Words", Vec::new()).await));
-        assert!(invalid(forget_by_hand(&state, &viewer, song).await));
+        assert!(invalid(set_by_hand_aside(&state, &viewer, song).await));
+        assert!(invalid(versions(&state, &viewer, song).await.map(|_| ())));
+        assert!(invalid(use_version(&state, &viewer, song, 1).await));
+        assert!(invalid(delete_version(&state, &viewer, song, 1).await));
 
-        forget_by_hand(&state, &administrator, song).await.expect("forgotten");
+        set_by_hand_aside(&state, &administrator, song).await.expect("set aside");
         assert_eq!(lyrics_of(&state, &administrator, song).await.expect("read"), None);
+
+        let kept = versions(&state, &administrator, song).await.expect("read");
+        let said: Vec<(u32, bool, &str, bool)> =
+            kept.iter().map(|one| (one.lines, one.stamped, one.opening.as_str(), one.in_use)).collect();
+        assert_eq!(said, vec![(2, false, "Just words", false), (2, true, "First", false)], "every save, kept");
+        use_version(&state, &administrator, song, kept[1].id).await.expect("put back");
+        let back = lyrics_of(&state, &administrator, song).await.expect("read").expect("found");
+        assert_eq!((back.source, back.lyrics.synced.len()), (Source::ByHand, 2));
+
+        delete_version(&state, &administrator, song, kept[1].id).await.expect("deleted");
+        assert_eq!(lyrics_of(&state, &administrator, song).await.expect("read"), None, "deleted by hand, gone");
+        assert!(invalid(use_version(&state, &administrator, song, kept[1].id).await), "no longer there");
     }
 
     #[test]

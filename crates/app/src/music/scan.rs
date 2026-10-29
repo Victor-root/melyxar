@@ -157,10 +157,16 @@ pub(crate) async fn file_root(
 /// Takes away what the filing left behind: albums no song is on any more and
 /// artists nobody is credited as, with their pictures. Asked once per scan,
 /// after every root is filed, since a song can leave an album on one disk for
-/// one on another.
+/// one on another. The lyrics written by hand for a song taken away go to
+/// the song now filed where its file was.
 pub(crate) async fn prune(state: &AppState, library: &Library) -> Result<()> {
-    let swept = state.database().prune_music(library.id).await?;
+    let database = state.database();
+    let swept = database.prune_music(library.id).await?;
     crate::images::forget_the_pictures(state, &swept.picture_paths).await;
+    let taken_up = database.take_up_lyrics_versions().await?;
+    if taken_up > 0 {
+        tracing::info!(library = library.name, versions = taken_up, "lyrics written by hand went back to their song");
+    }
     Ok(())
 }
 

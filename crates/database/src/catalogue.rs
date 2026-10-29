@@ -1455,8 +1455,12 @@ pub(crate) async fn merge_within(
              FROM music_lyrics_timing WHERE song_id = ?",
             "INSERT OR IGNORE INTO music_lyrics_offsets (song_id, offset_ms, set_at)
              SELECT ?, offset_ms, set_at FROM music_lyrics_offsets WHERE song_id = ?",
-            "INSERT OR IGNORE INTO music_lyrics_by_hand (song_id, words, written_at)
-             SELECT ?, words, written_at FROM music_lyrics_by_hand WHERE song_id = ?",
+            // Every version written by hand goes along, the one in service
+            // set aside when the song it joins has one of its own.
+            "UPDATE music_lyrics_versions SET in_use = 0
+              WHERE song_id = ?2
+                AND EXISTS (SELECT 1 FROM music_lyrics_versions kept WHERE kept.song_id = ?1 AND kept.in_use = 1)",
+            "UPDATE music_lyrics_versions SET song_id = ?1 WHERE song_id = ?2",
         ] {
             sqlx::query(carried)
                 .bind(into.to_db_string())

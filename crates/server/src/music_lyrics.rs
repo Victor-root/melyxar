@@ -33,7 +33,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/songs/{id}/lyrics/offset", axum::routing::put(set_offset))
         .route(
             "/api/v1/music/songs/{id}/lyrics/by_hand",
-            axum::routing::put(write_by_hand).delete(forget_by_hand),
+            axum::routing::put(write_by_hand).delete(set_by_hand_aside),
+        )
+        .route("/api/v1/music/songs/{id}/lyrics/versions", get(versions))
+        .route(
+            "/api/v1/music/songs/{id}/lyrics/versions/{version}",
+            axum::routing::put(use_version).delete(delete_version),
         )
 }
 
@@ -187,12 +192,66 @@ async fn write_by_hand(
     Ok(Json(()))
 }
 
-async fn forget_by_hand(
+/// Sets the words written by hand aside: every version stays.
+async fn set_by_hand_aside(
     State(state): State<AppState>,
     Viewer(who): Viewer,
     Path(id): Path<String>,
 ) -> Result<Json<()>> {
-    melyxar_app::music::lyrics::forget_by_hand(&state, &who, parse_work(&id)?).await?;
+    melyxar_app::music::lyrics::set_by_hand_aside(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(()))
+}
+
+/// One version of the lyrics written by hand, as the list shows it.
+#[derive(Debug, Serialize)]
+struct VersionView {
+    id: i64,
+    written_at: String,
+    in_use: bool,
+    lines: u32,
+    /// Whether its lines carry their moments.
+    stamped: bool,
+    opening: String,
+}
+
+async fn versions(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<VersionView>>> {
+    let versions = melyxar_app::music::lyrics::versions(&state, &who, parse_work(&id)?).await?;
+    Ok(Json(
+        versions
+            .into_iter()
+            .map(|version| VersionView {
+                id: version.id,
+                written_at: melyxar_core::time::to_text(version.written_at),
+                in_use: version.in_use,
+                lines: version.lines,
+                stamped: version.stamped,
+                opening: version.opening,
+            })
+            .collect(),
+    ))
+}
+
+/// Puts a version back in service.
+async fn use_version(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path((id, version)): Path<(String, i64)>,
+) -> Result<Json<()>> {
+    melyxar_app::music::lyrics::use_version(&state, &who, parse_work(&id)?, version).await?;
+    Ok(Json(()))
+}
+
+/// Deletes a version for good.
+async fn delete_version(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path((id, version)): Path<(String, i64)>,
+) -> Result<Json<()>> {
+    melyxar_app::music::lyrics::delete_version(&state, &who, parse_work(&id)?, version).await?;
     Ok(Json(()))
 }
 
