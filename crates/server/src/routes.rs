@@ -70,6 +70,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::collections::router())
         .merge(crate::general::router())
         .merge(crate::images::router())
+        .merge(crate::import::router())
         .merge(crate::installing::router())
         .merge(crate::jobs::router())
         .merge(crate::libraries::router())
