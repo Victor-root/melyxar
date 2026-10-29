@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { barsOf, clockOf, panned, showing, zoomed } from "./wave-stretch";
+import { barsOf, clockOf, paged, panned, showing, zoomed } from "./wave-stretch";
 
 const waveOf = (momentsASecond: number, levels: number[]) => ({ momentsASecond, levels: new Uint8Array(levels) });
 
@@ -36,6 +36,19 @@ describe("showing", () => {
   it("moves just enough for the moment to be on it", () => {
     expect(showing({ from: 10, to: 20 }, 100, 25)).toEqual({ from: 16, to: 26 });
     expect(showing({ from: 10, to: 20 }, 100, 5)).toEqual({ from: 4, to: 14 });
+  });
+});
+
+describe("paged", () => {
+  it("is left alone while the moment is on it", () => {
+    const shown = { from: 10, to: 20 };
+    expect(paged(shown, 100, 18.9)).toBe(shown);
+  });
+
+  it("turns over once the moment runs off it, either way", () => {
+    expect(paged({ from: 10, to: 20 }, 100, 19.5)).toEqual({ from: 18.5, to: 28.5 });
+    expect(paged({ from: 10, to: 20 }, 100, 4)).toEqual({ from: 3, to: 13 });
+    expect(paged({ from: 10, to: 20 }, 100, 99)).toEqual({ from: 90, to: 100 });
   });
 });
 

@@ -3009,3 +3009,659 @@
   width: 320px;
   max-height: none;
 }
+
+/* --------------------------------------------------------------------------
+ * The lyrics of a song written again by hand while it plays: what plays it,
+ * its wave with a mark where each line starts, then the lines
+ * (lyrics-editor.tsx)
+ * ----------------------------------------------------------------------- */
+
+.lyrics-editor {
+  width: min(1080px, 100%);
+  height: min(900px, 100%);
+}
+
+.lyrics-editor .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  overflow: hidden;
+}
+
+.lyrics-editor .modal-foot {
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.lyrics-editor-transport {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.lyrics-editor-play {
+  display: grid;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transition: transform var(--quick) var(--ease), background var(--quick) var(--ease);
+}
+
+.lyrics-editor-play:hover {
+  background: var(--accent-bright);
+  transform: scale(1.05);
+}
+
+.lyrics-editor-skip {
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-editor-clock {
+  margin: 0 var(--gap-tight);
+  font-size: 19px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-editor-length {
+  color: var(--text-faint);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* A choice of a few, side by side in one pill: the speed, the way of
+   writing, which lines are moved. */
+.lyrics-editor-choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-deep);
+}
+
+.lyrics-editor-choice button {
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.lyrics-editor-choice button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.lyrics-editor-choice button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.lyrics-editor-choice button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lyrics-editor-history {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.lyrics-editor-redo svg {
+  transform: scaleX(-1);
+}
+
+.lyrics-editor-modes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-tight) var(--gap);
+}
+
+.lyrics-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-tight);
+}
+
+.lyrics-editor-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.lyrics-editor-keys {
+  flex: none;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.lyrics-editor-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-right: auto;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.lyrics-editor-status-waiting,
+.lyrics-editor-status-out {
+  color: var(--attention);
+}
+
+.lyrics-editor-ask {
+  width: min(460px, 100%);
+}
+
+.lyrics-editor-ask .modal-body p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.lyrics-editor-ask .modal-foot {
+  justify-content: flex-end;
+}
+
+/* The wave, each line a mark where it starts with its words up to the
+   next one. */
+.lyrics-timeline {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--gap-tight);
+}
+
+.lyrics-timeline-bar {
+  height: 116px;
+  overflow: hidden;
+  container-type: inline-size;
+}
+
+.lyrics-timeline-wave {
+  inset: 34px 0 8px;
+  height: calc(100% - 42px);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-faint));
+}
+
+.lyrics-timeline-edge {
+  top: auto;
+  bottom: 6px;
+}
+
+.lyrics-timeline-head {
+  top: 0;
+  bottom: 0;
+}
+
+.lyrics-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 14px;
+  margin-left: -7px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.lyrics-mark::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+  transition: background var(--quick) var(--ease);
+}
+
+.lyrics-mark:hover::before,
+.lyrics-mark:focus-visible::before {
+  background: var(--text);
+}
+
+.lyrics-mark:focus-visible {
+  outline: none;
+}
+
+.lyrics-mark-words {
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  display: block;
+  overflow: hidden;
+  padding: 3px 8px 3px 4px;
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lyrics-mark-number {
+  margin-right: 6px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-mark-chosen {
+  z-index: 1;
+}
+
+.lyrics-mark-chosen::before {
+  width: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.lyrics-mark-chosen .lyrics-mark-words {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.lyrics-mark-chosen .lyrics-mark-number {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.lyrics-strip-mark {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+  pointer-events: none;
+}
+
+.lyrics-strip-mark-chosen {
+  width: 2px;
+  background: var(--accent);
+}
+
+/* The lines one under the other: only they scroll. */
+.lyrics-lines {
+  flex: 1 1 auto;
+  min-height: 120px;
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.lyrics-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease);
+}
+
+.lyrics-line:hover {
+  background: var(--surface-hover);
+}
+
+.lyrics-line-chosen,
+.lyrics-line-chosen:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+/* The line sung, lit as the player lights it. */
+.lyrics-line-sung .lyrics-line-number {
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.lyrics-line-sung .lyrics-line-words {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.lyrics-line-number {
+  flex: none;
+  min-width: 28px;
+  padding: 2px 4px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.lyrics-line-moment {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.lyrics-line-time {
+  width: 82px;
+  padding: 5px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-deep);
+  color: var(--text);
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.lyrics-line-time:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.lyrics-line-time-waiting {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--attention) 60%, transparent);
+}
+
+.lyrics-line-time-out {
+  border-color: var(--attention);
+  color: var(--attention);
+}
+
+.lyrics-line-button {
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.lyrics-line-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.lyrics-line-button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.lyrics-line-stamp:hover:not(:disabled) {
+  color: var(--accent-bright);
+}
+
+.lyrics-line-remove:hover:not(:disabled) {
+  color: var(--trouble);
+}
+
+.lyrics-line-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 14.5px;
+}
+
+.lyrics-line-words:hover {
+  border-color: var(--border);
+}
+
+.lyrics-line-words:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface-deep);
+  color: var(--text);
+}
+
+.lyrics-line-words::placeholder {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+.lyrics-line-warning {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--attention);
+}
+
+/* Every line, or those from one on, moved by a few seconds. */
+.lyrics-shift {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-tight) var(--gap);
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.lyrics-shift-by {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.lyrics-shift-by input {
+  width: 84px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-deep);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tapping along: the line awaited large, the one placed before it and the
+   two after it soft. */
+.lyrics-tap {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  /* Kept from the top when it runs taller than the room: centred, what does
+     not fit would be cut off above, where nothing scrolls to. */
+  justify-content: safe center;
+  gap: var(--gap);
+  min-height: 0;
+  padding: var(--gap) 0;
+  text-align: center;
+}
+
+.lyrics-tap-why {
+  flex: none;
+  max-width: 62ch;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
+/* Only the lines give way to a window too short for all of it: the button
+   that places a line stays in sight. */
+.lyrics-tap-lines {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(720px, 100%);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.lyrics-tap-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.lyrics-tap-moment {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lyrics-tap-before .lyrics-tap-words,
+.lyrics-tap-after .lyrics-tap-words {
+  color: var(--text-faint);
+  font-size: 16px;
+}
+
+.lyrics-tap-awaited {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-raised));
+}
+
+.lyrics-tap-awaited .lyrics-tap-words {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.lyrics-tap-count {
+  color: var(--accent-bright);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lyrics-tap-done {
+  margin: 0;
+  color: var(--ok);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.lyrics-tap-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap);
+}
+
+/* The words as text. */
+.lyrics-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  min-height: 0;
+}
+
+.lyrics-text-why {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.lyrics-text-field {
+  flex: 1 1 auto;
+  min-height: 160px;
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-deep);
+  color: var(--text);
+  font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  font-size: 13.5px;
+  line-height: 1.6;
+  resize: none;
+}
+
+.lyrics-text-field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+@media (max-height: 760px) {
+  .lyrics-tap-why {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .lyrics-editor .modal-body {
+    overflow-y: auto;
+  }
+
+  .lyrics-editor-keys {
+    display: none;
+  }
+
+  .lyrics-timeline-bar {
+    height: 100px;
+  }
+
+  .lyrics-lines {
+    flex: none;
+    overflow: visible;
+  }
+
+  /* The words go under the moment and its buttons. */
+  .lyrics-line {
+    flex-wrap: wrap;
+  }
+
+  .lyrics-line-words {
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  .lyrics-line-remove {
+    margin-left: auto;
+  }
+
+  .lyrics-tap {
+    flex: none;
+  }
+
+  .lyrics-tap-lines {
+    overflow: visible;
+  }
+
+  /* No keys on a phone: the button that places a line stays in reach. */
+  .lyrics-tap-actions {
+    position: sticky;
+    bottom: calc(var(--gap-wide) * -1);
+    align-self: stretch;
+    margin-inline: calc(var(--gap-wide) * -1);
+    padding: var(--gap) var(--gap-wide);
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .lyrics-tap-awaited .lyrics-tap-words {
+    font-size: 20px;
+  }
+}

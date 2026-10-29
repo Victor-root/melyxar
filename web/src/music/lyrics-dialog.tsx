@@ -9,7 +9,8 @@
  * entries under it, nearest to that length first. Only the entries scroll.
  *
  * Whatever changes here is read again by the lyrics on screen, so the words
- * taken are the words shown at once.
+ * taken are the words shown at once. The lyrics are written again by hand in
+ * the editor, opened from here or straight from the menu.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -18,12 +19,13 @@ import { useAccount } from "../account";
 import { refusalOf, useAsked } from "../asking";
 import { asPreciseClock } from "../clock";
 import { Modal } from "../components/modal";
-import { CloseIcon, DownloadIcon, SearchIcon, SubtitlesIcon } from "../icons";
+import { CloseIcon, DownloadIcon, EditIcon, SearchIcon, SubtitlesIcon } from "../icons";
 import { outOfAHundred, shiftInSeconds } from "../readable";
 import { useRunning } from "../running";
 import { useSettings } from "../settings";
 import { music } from "./api";
 import type { LyricsOffer, Song, SongLyrics } from "./api";
+import { LyricsEditor } from "./lyrics-editor";
 import { SAME_LENGTH_MS, lengthGap, offersMissingLines } from "./lyrics-offers";
 import { useMusicMarks } from "./marks";
 import type { MenuLine } from "./song-menu";
@@ -32,19 +34,28 @@ import { Cover } from "./songs";
 /** How long typing rests before LRCLIB is asked. */
 const ASKED_AFTER_MS = 500;
 
-/** The line of the menu and the window it opens, for one song and an
+/** The lines of the menu and the windows they open, for one song and an
     administrator only. */
 export function useSongLyrics(songs: Song[]): { lines: MenuLine[]; dialog: ReactNode } {
   const { t } = useSettings();
   const { account } = useAccount();
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<"choose" | "edit" | null>(null);
   const song = songs.length === 1 ? songs[0] : null;
   if (!song || account?.is_administrator !== true) {
     return { lines: [], dialog: null };
   }
+  const close = () => setAsking(null);
   return {
-    lines: [{ key: "lyrics", said: t("lyrics_dialog.menu"), mark: <SubtitlesIcon size={17} />, act: () => setAsking(true) }],
-    dialog: asking ? <LyricsDialog song={song} onClose={() => setAsking(false)} /> : null,
+    lines: [
+      { key: "lyrics", said: t("lyrics_dialog.menu"), mark: <SubtitlesIcon size={17} />, act: () => setAsking("choose") },
+      { key: "lyrics_editor", said: t("lyrics_editor.menu"), mark: <EditIcon size={17} />, act: () => setAsking("edit") },
+    ],
+    dialog:
+      asking === "choose" ? (
+        <LyricsDialog song={song} onClose={close} />
+      ) : asking === "edit" ? (
+        <LyricsEditor song={song} onClose={close} />
+      ) : null,
   };
 }
 
@@ -61,6 +72,7 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
   const [listenAsked, setListenAsked] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   // LRCLIB is asked once typing rests, and at once on Enter.
   useEffect(() => {
@@ -194,6 +206,17 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
             </span>
           )}
           <div className="finder-head-actions">
+            {!current.waiting && (
+              <button
+                type="button"
+                className="button button-small"
+                title={t("lyrics_editor.menu")}
+                onClick={() => setEditing(true)}
+              >
+                <EditIcon size={15} />
+                {t("lyrics_editor.open")}
+              </button>
+            )}
             {stamped &&
               (lyrics.synchronised?.conclusion === "aligned" && !listeningRuns ? (
                 <button
@@ -329,6 +352,17 @@ function LyricsDialog({ song, onClose }: { song: Song; onClose: () => void }) {
           );
         })}
       </div>
+
+      {editing && (
+        <LyricsEditor
+          song={song}
+          onClose={() => setEditing(false)}
+          onChanged={() => {
+            setTaken(null);
+            setAgain((count) => count + 1);
+          }}
+        />
+      )}
     </Modal>
   );
 }
