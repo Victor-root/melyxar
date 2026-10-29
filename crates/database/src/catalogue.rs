@@ -1443,6 +1443,20 @@ pub(crate) async fn merge_within(
              SELECT user_id, ?, created_at FROM favorites WHERE work_id = ?",
             "INSERT OR IGNORE INTO watchlist (user_id, work_id, created_at)
              SELECT user_id, ?, created_at FROM watchlist WHERE work_id = ?",
+            // The lyrics of a song, as they were chosen, lined up, moved or
+            // written by hand: a song file moved or renamed outside Melyxar
+            // comes back as another song and is merged into it, and none of
+            // this can be had again from the file.
+            "INSERT OR IGNORE INTO music_lyrics (song_id, plain, synced, instrumental, looked_up_at, method)
+             SELECT ?, plain, synced, instrumental, looked_up_at, method FROM music_lyrics WHERE song_id = ?",
+            "INSERT OR IGNORE INTO music_lyrics_timing
+                (song_id, conclusion, shift_ms, moves_ms, lines_moved, confidence, measured_at)
+             SELECT ?, conclusion, shift_ms, moves_ms, lines_moved, confidence, measured_at
+             FROM music_lyrics_timing WHERE song_id = ?",
+            "INSERT OR IGNORE INTO music_lyrics_offsets (song_id, offset_ms, set_at)
+             SELECT ?, offset_ms, set_at FROM music_lyrics_offsets WHERE song_id = ?",
+            "INSERT OR IGNORE INTO music_lyrics_by_hand (song_id, words, written_at)
+             SELECT ?, words, written_at FROM music_lyrics_by_hand WHERE song_id = ?",
         ] {
             sqlx::query(carried)
                 .bind(into.to_db_string())
