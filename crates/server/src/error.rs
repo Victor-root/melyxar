@@ -242,6 +242,7 @@ impl From<melyxar_app::import::Trouble> for ServerError {
                     "name": name,
                     "why": why.as_str(),
                     "shortest": melyxar_app::accounts::SHORTEST_PASSWORD,
+                    "longest": melyxar_app::accounts::LONGEST_NAME,
                 }),
             },
         };

@@ -1,10 +1,4 @@
-/* Taking up an Emby or Jellyfin server: one column, since each panel holds
-   a list or a form that wants the width. */
-.import-panels {
-  grid-template-columns: minmax(0, 1fr);
-  max-width: 920px;
-}
-
+/* Taking up an Emby or Jellyfin server. */
 .import-takes {
   display: flex;
   flex-direction: column;
@@ -145,7 +139,9 @@
   color: var(--text-soft);
 }
 
+/* The last step, under every panel and across them all. */
 .import-go {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

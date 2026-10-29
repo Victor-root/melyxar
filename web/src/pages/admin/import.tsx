@@ -13,7 +13,7 @@ import { useState } from "react";
 import { api } from "../../api";
 import { ApiError } from "../../api";
 import type { ImportKind, ImportPreview, ImportReport, ManagedAccount } from "../../api";
-import { refusalOf, useAsked } from "../../asking";
+import { figuresOf, useAsked } from "../../asking";
 import { Modal } from "../../components/modal";
 import { PageHead, Panel, Picker, Setting, Stat, StatePill, Toggle } from "../../components/panel";
 import {
@@ -36,9 +36,11 @@ import type { AccountPlan } from "./import-choices";
 
 /** What a refusal of the server said, worded. */
 function refusalWording(error: unknown, t: ReturnType<typeof useSettings>["t"]): string {
-  const reason = refusalOf(error);
-  const details = error instanceof ApiError ? (error.details ?? {}) : {};
-  switch (reason) {
+  if (!(error instanceof ApiError) || !error.reason) {
+    return t("refused.generic");
+  }
+  const details = error.details ?? {};
+  switch (error.reason) {
     case "too_old":
       return t("import.refused.too_old", {
         server: t(`import.server.${String(details.server)}`),
@@ -47,19 +49,12 @@ function refusalWording(error: unknown, t: ReturnType<typeof useSettings>["t"]):
     case "account":
       return t("import.refused.account", {
         name: String(details.name),
-        why: t(`refused.account.${String(details.why)}`, {
-          shortest: Number(details.shortest),
-          longest: Number(details.longest),
-        }),
+        why: t(`refused.account.${String(details.why)}`, figuresOf(error)),
       });
     case "unreadable":
       return t("import.refused.unreadable", { why: String(details.why) });
-    case "path_needed":
-    case "not_found":
-    case "not_a_server":
-      return t(`import.refused.${reason}`);
     default:
-      return t("refused.generic");
+      return t(`import.refused.${error.reason}`);
   }
 }
 
@@ -118,7 +113,7 @@ export function AdminImport() {
   return (
     <>
       <PageHead lead={t("import.lead")} />
-      <div className="panels import-panels">
+      <div className="panels">
         <Panel icon={DownloadIcon} title={t("import.title")}>
           <ul className="import-takes">
             <li>{t("import.takes.accounts")}</li>
