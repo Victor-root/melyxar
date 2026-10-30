@@ -20,6 +20,10 @@ import { DoorBackground } from "./door-background";
 import { useFillingTheScreen } from "./filling-the-screen";
 import { ServerMark } from "./server-mark";
 
+/** What a server is called before its own name has arrived, as the server
+ *  itself calls one nobody named. */
+export const UNNAMED = "Melyxar";
+
 /** When it is expected to end, as this browser reads an hour. */
 function useBackAt(standing: Standing): string | null {
   const { language } = useSettings();
@@ -73,7 +77,7 @@ export function MaintenanceScreen({
         <h1 className="maintenance-title">{t("maintenance.title")}</h1>
         {/* What the administrator wrote, or that this server is closed. */}
         <p className="maintenance-message">
-          {standing.message ?? t("maintenance.closed", { name: wearing?.server_name ?? "" })}
+          {standing.message ?? t("maintenance.closed", { name: wearing?.server_name ?? UNNAMED })}
         </p>
         <p className="maintenance-when">
           {backAt ? t("maintenance.back_at", { time: backAt }) : t("maintenance.back_soon")}
