@@ -82,6 +82,8 @@ pub enum Event {
     /// An administrator closed the server for maintenance, or opened it again.
     MaintenanceOn { by: String },
     MaintenanceOff { by: String },
+    /// Maintenance switched itself off at the end it was given.
+    MaintenanceEnded,
 }
 
 /// One film watched on one device, from its start to its end.
@@ -167,6 +169,7 @@ const SERVER_STARTED: &str = "server_started";
 const SERVER_STOPPED: &str = "server_stopped";
 const MAINTENANCE_ON: &str = "server_maintenance_on";
 const MAINTENANCE_OFF: &str = "server_maintenance_off";
+const MAINTENANCE_ENDED: &str = "server_maintenance_ended";
 const SIGNED_IN: &str = "signed_in";
 pub(crate) const SIGN_IN_REFUSED: &str = "sign_in_refused";
 pub(crate) const SIGN_IN_HELD_BACK: &str = "sign_in_held_back";
@@ -436,6 +439,7 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
         ),
         Event::MaintenanceOn { by } => line(MAINTENANCE_ON, None, None, json!({ "by": by })),
         Event::MaintenanceOff { by } => line(MAINTENANCE_OFF, None, None, json!({ "by": by })),
+        Event::MaintenanceEnded => line(MAINTENANCE_ENDED, None, None, json!({})),
     })
 }
 
