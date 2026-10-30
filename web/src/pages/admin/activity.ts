@@ -89,6 +89,8 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
       };
     case "server_stopped":
       return { title: t("activity.server_stopped"), note: null };
+    case "server_maintenance_ended":
+      return { title: t("activity.server_maintenance_ended"), note: null };
     case "server_maintenance_on":
     case "server_maintenance_off":
       return {
