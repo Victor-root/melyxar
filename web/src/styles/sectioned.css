@@ -465,9 +465,9 @@
     font-size: 24px;
   }
 
-  /* Room for two lines kept on every page, filled or not, so the name
-     stands at the same height whatever is said under it: a second line used
-     to push it up the band. */
+  /* Two lines at most, laid out as if there were one: the name stands where
+     a single line puts it, in the middle of the band, and a second line
+     reaches down under it rather than pushing it up. */
   .page-head-words p {
     display: -webkit-box;
     overflow: hidden;
@@ -475,6 +475,7 @@
     -webkit-line-clamp: 2;
     line-height: 1.35;
     min-height: calc(2 * 1.35em);
+    margin-bottom: calc(-1 * 1.35em);
   }
 
   .page-head-actions {
