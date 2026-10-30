@@ -29,28 +29,7 @@ export function AdminDiagnostics() {
 
   return (
     <>
-      <PageHead
-        lead={t("admin.diagnostics_lead")}
-        actions={
-          <>
-            <button
-              className="button button-accent"
-              onClick={copy}
-              disabled={!report.answer}
-            >
-              {t(copied === "yes" ? "report.copied" : "report.copy")}
-            </button>
-            <button
-              className="button"
-              onClick={report.again}
-              disabled={report.waiting}
-            >
-              <RefreshIcon size={16} />
-              {t("admin.read_again")}
-            </button>
-          </>
-        }
-      />
+      <PageHead lead={t("admin.diagnostics_lead")} />
 
       {copied === "failed" && (
         <p className="panel-notice">{t("report.select")}</p>
@@ -60,6 +39,25 @@ export function AdminDiagnostics() {
         icon={DiagnosticsIcon}
         title={t("admin.report")}
         lead={t("admin.report_lead")}
+        action={
+          <>
+            <button
+              className="button button-small"
+              onClick={report.again}
+              disabled={report.waiting}
+            >
+              <RefreshIcon size={15} />
+              {t("admin.read_again")}
+            </button>
+            <button
+              className="button button-small button-accent"
+              onClick={copy}
+              disabled={!report.answer}
+            >
+              {t(copied === "yes" ? "report.copied" : "report.copy")}
+            </button>
+          </>
+        }
       >
         {report.failure && (
           <p className="panel-notice panel-notice-trouble">
