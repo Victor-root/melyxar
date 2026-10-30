@@ -50,6 +50,8 @@ export function AdminSettings() {
     <>
       <PageHead lead={t("admin.settings_lead")} />
       <div className="panels">
+        <MaintenancePanel />
+
         <ServerPanel />
 
         <DoorPanel />
@@ -87,9 +89,6 @@ export function AdminSettings() {
             />
           </Setting>
         </Panel>
-
-        {/* Wide, so last: the narrow panels above pair up beside each other. */}
-        <MaintenancePanel />
       </div>
     </>
   );
