@@ -531,6 +531,11 @@ async fn serve(config: Config) -> anyhow::Result<()> {
         .await
         .context("applying how the server is reached")?;
 
+    // A server restarted in the middle of a maintenance stays in it.
+    melyxar_app::maintenance::bring_back(&state)
+        .await
+        .context("reading whether the server is in maintenance")?;
+
     // Said to the home network, so the applications there find it on their
     // own; not from an address nothing else can reach.
     let announced = (!address.ip().is_loopback())

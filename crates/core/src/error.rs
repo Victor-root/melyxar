@@ -34,6 +34,9 @@ pub enum ErrorCode {
     /// yet, so another cannot start until one ends.
     NoRoomLeft,
     ExternalServiceUnavailable,
+    /// The server is closed for maintenance to everybody but its
+    /// administrators.
+    Maintenance,
     Internal,
 }
 
@@ -55,6 +58,7 @@ impl ErrorCode {
             Self::DependencyMissing => "dependency_missing",
             Self::NoRoomLeft => "no_room_left",
             Self::ExternalServiceUnavailable => "external_service_unavailable",
+            Self::Maintenance => "maintenance",
             Self::Internal => "internal",
         }
     }

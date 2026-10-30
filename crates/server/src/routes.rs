@@ -75,6 +75,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::jobs::router())
         .merge(crate::libraries::router())
         .merge(crate::live::router())
+        .merge(crate::maintenance::router())
         .merge(crate::music::router())
         .merge(crate::lyrics_watch::router())
         .merge(crate::music_watch::router())
@@ -113,6 +114,7 @@ struct SystemInfo {
     setup_complete: bool,
     /// Whether playback can work at all. A library still browses without it.
     playback_available: bool,
+    /// Whether the server is closed for maintenance right now.
     maintenance: bool,
     features: Features,
 }
@@ -141,7 +143,8 @@ async fn system_info(State(state): State<AppState>) -> Result<Json<SystemInfo>> 
         // that has not, and it is what the wizard keys on.
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
         playback_available: state.can_play_media(),
-        maintenance: settings.maintenance_enabled,
+        maintenance: melyxar_app::maintenance::seen(&state).state
+            == melyxar_app::maintenance::Phase::On,
         features: Features {
             hardware_acceleration: state.hardware_acceleration_names(),
             wide_gamut_conversion: state.can_convert_wide_gamut(),

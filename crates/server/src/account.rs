@@ -92,7 +92,7 @@ pub fn router() -> Router<AppState> {
 
 /// The addresses that answer without anybody signed in.
 ///
-/// Five of them, each for a reason that cannot be got round.
+/// Six of them, each for a reason that cannot be got round.
 ///
 /// A watchdog or a reverse proxy has to be able to ask whether this server is
 /// alive without holding an account. The sign in screen has to draw the name
@@ -100,9 +100,10 @@ pub fn router() -> Router<AppState> {
 /// branding address is for and why it says nothing else, and it offers the
 /// names on this server, which is the one deliberate disclosure here and is
 /// turned off from two places. Signing in cannot itself require being signed
-/// in. And a server nobody has set up yet has no account to sign in as, so the
-/// one that makes the first account answers to whoever reaches a brand new
-/// server first, and shuts behind itself.
+/// in, and a door says whether the server is closed for maintenance before
+/// anybody has. And a server nobody has set up yet has no account to sign in
+/// as, so the one that makes the first account answers to whoever reaches a
+/// brand new server first, and shuts behind itself.
 ///
 /// The interface's own files are open too, and are not in the list: they are
 /// the page that draws the sign in screen, and a page nobody can load is a
@@ -121,6 +122,7 @@ fn answers_to_anybody(path: &str) -> bool {
         || matches!(
             path,
             "/api/v1/system/health"
+                | crate::maintenance::STANDING
                 | "/api/v1/public/branding"
                 | "/api/v1/public/names"
                 | "/api/v1/session"
@@ -139,13 +141,26 @@ pub async fn at_the_gate(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let open = answers_to_anybody(request.uri().path());
+    let path = request.uri().path();
+    let open = answers_to_anybody(path);
+    // During a maintenance, the surface answers whoever is not an
+    // administrator with the code that says so. A page of the interface is
+    // answered by the interface itself, which knows a page from its files.
+    let may_close = crate::routes::on_the_surface(path)
+        && !open
+        && !crate::maintenance::still_answered(path, request.method());
 
     match who_is_asking(&state, request.headers()).await {
         Ok(Some(holder)) => {
+            if may_close && melyxar_app::maintenance::shuts_out(&state, Some(&holder.user)) {
+                return crate::maintenance::turned_away(&state);
+            }
             request.extensions_mut().insert(holder);
         }
         Ok(None) if open => {}
+        Ok(None) if may_close && melyxar_app::maintenance::shuts_out(&state, None) => {
+            return crate::maintenance::turned_away(&state);
+        }
         Ok(None) => {
             return ServerError::unauthenticated("nobody is signed in").into_response();
         }

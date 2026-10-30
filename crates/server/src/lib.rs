@@ -32,6 +32,7 @@ pub mod interface;
 pub mod jobs;
 pub mod libraries;
 pub mod live;
+pub mod maintenance;
 pub mod music;
 pub mod music_playlists;
 pub mod lyrics_watch;

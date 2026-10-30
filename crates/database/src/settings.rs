@@ -109,9 +109,6 @@ pub struct ServerSettings {
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
     pub show_user_picker: bool,
-    pub maintenance_enabled: bool,
-    pub maintenance_message: Option<String>,
-    pub maintenance_until: Option<Timestamp>,
     /// Write companion metadata files next to a media file. Needs a writable
     /// root, which is checked before anything is attempted rather than failing
     /// file by file. Reading them is a setting of the work below.
@@ -265,14 +262,23 @@ pub struct Access {
     pub public_names: Option<String>,
 }
 
+/// Maintenance as kept: whether it is on, when it takes hold, when it is
+/// expected to end and what the administrator said about it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Maintenance {
+    pub enabled: bool,
+    pub starts_at: Option<Timestamp>,
+    pub until: Option<Timestamp>,
+    pub message: Option<String>,
+}
+
 impl Database {
     /// Reads the settings row, which the first migration guarantees exists.
     pub async fn server_settings(&self) -> Result<ServerSettings> {
         let row = sqlx::query(
             "SELECT server_name, logo_path, splash_path, login_background_path,
                     login_background_style, door_slogan, global_custom_css, default_theme,
-                    show_user_picker, maintenance_enabled, maintenance_message,
-                    maintenance_until, read_companion_files, write_companion_files, watched_threshold,
+                    show_user_picker, read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
                     thumbnails_rows, updated_at
@@ -293,12 +299,6 @@ impl Database {
             global_custom_css: row.try_get("global_custom_css")?,
             default_theme: default_theme_of(&row.try_get::<String, _>("default_theme")?),
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
-            maintenance_enabled: int_to_bool(row.try_get("maintenance_enabled")?),
-            maintenance_message: row.try_get("maintenance_message")?,
-            maintenance_until: parse_optional_timestamp(
-                row.try_get::<Option<String>, _>("maintenance_until")?
-                    .as_deref(),
-            )?,
             write_companion_files: int_to_bool(row.try_get("write_companion_files")?),
             watched_threshold: row.try_get("watched_threshold")?,
             activity_retention_days: row.try_get("activity_retention_days")?,
@@ -321,8 +321,7 @@ impl Database {
             "UPDATE server_settings SET
                 server_name = ?, logo_path = ?, splash_path = ?, login_background_path = ?,
                 login_background_style = ?, global_custom_css = ?, default_theme = ?,
-                show_user_picker = ?, maintenance_enabled = ?,
-                maintenance_message = ?, maintenance_until = ?, read_companion_files = ?,
+                show_user_picker = ?, read_companion_files = ?,
                 write_companion_files = ?, watched_threshold = ?, activity_retention_days = ?,
                 check_for_updates = ?, tone_mapping_disabled = ?, updated_at = ?
              WHERE id = 1",
@@ -335,9 +334,6 @@ impl Database {
         .bind(&settings.global_custom_css)
         .bind(settings.default_theme.as_str())
         .bind(bool_to_int(settings.show_user_picker))
-        .bind(bool_to_int(settings.maintenance_enabled))
-        .bind(&settings.maintenance_message)
-        .bind(settings.maintenance_until.map(timestamp_to_text))
         .bind(bool_to_int(settings.work.read_companion_files))
         .bind(bool_to_int(settings.write_companion_files))
         .bind(settings.watched_threshold)
@@ -801,24 +797,42 @@ impl Database {
         Ok(self.server_settings().await?.work)
     }
 
-    /// Turns maintenance on or off, along with its message.
+    /// Maintenance as it is kept.
+    pub async fn maintenance(&self) -> Result<Maintenance> {
+        let row = sqlx::query(
+            "SELECT maintenance_enabled, maintenance_starts_at, maintenance_until, maintenance_message
+             FROM server_settings WHERE id = 1",
+        )
+        .fetch_one(self.reader())
+        .await?;
+        Ok(Maintenance {
+            enabled: int_to_bool(row.try_get("maintenance_enabled")?),
+            starts_at: parse_optional_timestamp(
+                row.try_get::<Option<String>, _>("maintenance_starts_at")?.as_deref(),
+            )?,
+            until: parse_optional_timestamp(
+                row.try_get::<Option<String>, _>("maintenance_until")?.as_deref(),
+            )?,
+            message: row.try_get("maintenance_message")?,
+        })
+    }
+
+    /// Turns maintenance on or off, with when it takes hold, when it is
+    /// expected to end and what it says.
     ///
     /// A dedicated call rather than a full save, because it is the one setting
     /// changed in a hurry and it must not carry stale neighbours with it.
-    pub async fn set_maintenance(
-        &self,
-        enabled: bool,
-        message: Option<&str>,
-        until: Option<Timestamp>,
-    ) -> Result<()> {
+    pub async fn set_maintenance(&self, maintenance: &Maintenance) -> Result<()> {
         sqlx::query(
             "UPDATE server_settings
-             SET maintenance_enabled = ?, maintenance_message = ?, maintenance_until = ?, updated_at = ?
+             SET maintenance_enabled = ?, maintenance_starts_at = ?, maintenance_until = ?,
+                 maintenance_message = ?, updated_at = ?
              WHERE id = 1",
         )
-        .bind(bool_to_int(enabled))
-        .bind(message)
-        .bind(until.map(timestamp_to_text))
+        .bind(bool_to_int(maintenance.enabled))
+        .bind(maintenance.starts_at.map(timestamp_to_text))
+        .bind(maintenance.until.map(timestamp_to_text))
+        .bind(&maintenance.message)
         .bind(timestamp_to_text(now()))
         .execute(self.writer())
         .await?;
@@ -973,7 +987,7 @@ mod tests {
         let settings = database.server_settings().await.expect("settings readable");
 
         assert_eq!(settings.server_name, "Melyxar");
-        assert!(!settings.maintenance_enabled);
+        assert!(!database.maintenance().await.expect("read").enabled);
         assert!(
             !settings.write_companion_files,
             "nothing is ever written next to media unless asked"
@@ -1308,29 +1322,38 @@ mod tests {
             .await
             .expect("settings saved");
 
-        database
-            .set_maintenance(true, Some("Back in ten minutes"), None)
-            .await
-            .expect("maintenance set");
+        let starts_at = time::macros::datetime!(2026-03-01 20:00 UTC);
+        let until = time::macros::datetime!(2026-03-01 21:30 UTC);
+        let on = Maintenance {
+            enabled: true,
+            starts_at: Some(starts_at),
+            until: Some(until),
+            message: Some("Back in ten minutes".into()),
+        };
+        database.set_maintenance(&on).await.expect("maintenance set");
 
+        assert_eq!(database.maintenance().await.expect("read"), on);
         let reloaded = database.server_settings().await.expect("settings readable");
-        assert!(reloaded.maintenance_enabled);
-        assert_eq!(
-            reloaded.maintenance_message.as_deref(),
-            Some("Back in ten minutes")
-        );
         assert_eq!(
             reloaded.server_name, "Salon",
             "switching maintenance must not carry stale neighbours"
         );
 
+        // A full save of the other settings leaves maintenance as it is.
         database
-            .set_maintenance(false, None, None)
+            .save_server_settings(&reloaded)
+            .await
+            .expect("settings saved");
+        assert_eq!(database.maintenance().await.expect("read"), on);
+
+        database
+            .set_maintenance(&Maintenance::default())
             .await
             .expect("maintenance cleared");
-        let cleared = database.server_settings().await.expect("settings readable");
-        assert!(!cleared.maintenance_enabled);
-        assert!(cleared.maintenance_message.is_none());
+        assert_eq!(
+            database.maintenance().await.expect("read"),
+            Maintenance::default()
+        );
     }
 
     #[tokio::test]

@@ -1,6 +1,7 @@
 //! The live line of every page: what changes in the account's
 //! notifications, told the moment it changes; that the title requests, what
-//! the libraries hold or how the page looks moved; and for an administrator, what is written in the
+//! the libraries hold or how the page looks moved; where maintenance stands
+//! as it moves; and for an administrator, what is written in the
 //! activity journal and what is being watched, sent again the moment it
 //! changes when the page shows it.
 //!
@@ -62,6 +63,7 @@ struct Following {
     requests: watch::Receiver<u64>,
     libraries: watch::Receiver<u64>,
     looks: broadcast::Receiver<Moved>,
+    maintenance: watch::Receiver<melyxar_app::maintenance::Kept>,
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
     administration: Option<Administration>,
@@ -136,6 +138,7 @@ async fn line(
         requests: melyxar_app::requests::live::follow(&state),
         libraries: state.database().library_moves(),
         looks: melyxar_app::looks::follow(&state),
+        maintenance: melyxar_app::maintenance::follow(&state),
         administration,
         closing: melyxar_app::watching::closing(&state),
         state,
@@ -162,6 +165,8 @@ enum Word {
     /// The page fell behind and some changes were lost: it reads its
     /// notifications again.
     Missed,
+    /// Maintenance was switched, changed or took hold.
+    Maintenance,
 }
 
 /// The next thing the line has to say, once there is one; nothing once the
@@ -190,6 +195,10 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                 moved = following.libraries.changed() => {
                     moved.ok()?;
                     Word::Libraries
+                }
+                moved = following.maintenance.changed() => {
+                    moved.ok()?;
+                    Word::Maintenance
                 }
                 moved = following.looks.recv() => match moved {
                     Ok(Moved::Account(user)) if user == following.who => Word::Looks("account"),
@@ -230,6 +239,9 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
             Word::Requests => Ok(Event::default().event("requests").data("moved")),
             Word::Libraries => Ok(Event::default().event("libraries").data("moved")),
             Word::Looks(what) => Ok(Event::default().event("looks").data(what)),
+            Word::Maintenance => Event::default()
+                .event("maintenance")
+                .json_data(melyxar_app::maintenance::seen(&following.state)),
             Word::Missed => Event::default()
                 .event("notifications_missed")
                 .json_data(serde_json::Value::Null),

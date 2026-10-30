@@ -69,6 +69,8 @@ struct Inner {
     requests: crate::requests::live::Moved,
     /// Where every page is told how it looks moved.
     looks: crate::looks::Outbox,
+    /// Maintenance as it stands, which the gate asks about for every request.
+    maintenance: crate::maintenance::Held,
 }
 
 impl AppState {
@@ -136,6 +138,7 @@ impl AppState {
                 notifications: crate::notifications::live::Outbox::default(),
                 requests: crate::requests::live::Moved::default(),
                 looks: crate::looks::Outbox::default(),
+                maintenance: crate::maintenance::Held::default(),
             }),
         }
     }
@@ -166,6 +169,10 @@ impl AppState {
 
     pub(crate) fn looks(&self) -> &crate::looks::Outbox {
         &self.inner.looks
+    }
+
+    pub(crate) fn maintenance(&self) -> &crate::maintenance::Held {
+        &self.inner.maintenance
     }
 
     pub(crate) fn journal(&self) -> &crate::activity::Journal {

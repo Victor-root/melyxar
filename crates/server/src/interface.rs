@@ -23,6 +23,7 @@ use axum::extract::State;
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::Router;
+use melyxar_app::accounts::SignedIn;
 use melyxar_app::AppState;
 
 use crate::images::safe_relative_path;
@@ -50,12 +51,38 @@ pub fn router() -> Router<AppState> {
     Router::new().fallback(serve)
 }
 
-async fn serve(State(state): State<AppState>, asked: HeaderMap, uri: Uri) -> Response {
-    from_the_folder(&state.config().directories.interface, uri.path(), &asked)
+/// The address of the page a door is drawn at, which a maintenance never
+/// answers with its code: a proxy that puts its own page in place of that
+/// code still lets an administrator through to sign in.
+const THE_DOOR: &str = "/door";
+
+async fn serve(
+    State(state): State<AppState>,
+    signed_in: Option<axum::Extension<SignedIn>>,
+    asked: HeaderMap,
+    uri: Uri,
+) -> Response {
+    let closed = uri.path() != THE_DOOR
+        && melyxar_app::maintenance::shuts_out(&state, signed_in.as_ref().map(|holder| &holder.user));
+    let mut answer =
+        from_the_folder(&state.config().directories.interface, uri.path(), &asked, closed);
+    if closed && answer.status() == StatusCode::SERVICE_UNAVAILABLE
+        && let Some(seconds) = melyxar_app::maintenance::retry_after_seconds(&state)
+    {
+        answer
+            .headers_mut()
+            .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+    }
+    answer
 }
 
 /// What one address is answered with, out of the folder the interface is in.
-fn from_the_folder(folder: &Path, address: &str, asked: &HeaderMap) -> Response {
+///
+/// The page is answered with the code of a maintenance when it is closed to
+/// whoever asks, and always whole: the interface it holds draws the
+/// screen of the maintenance, and the code is what a proxy in front reads.
+/// Its files are answered as ever, or that screen could not be drawn.
+fn from_the_folder(folder: &Path, address: &str, asked: &HeaderMap, closed: bool) -> Response {
     // An address of the surface that no route answered is one that does not
     // exist. Handed the page, a client calling a mistyped address would be
     // told it had worked, and read a page of the interface as the answer.
@@ -70,6 +97,19 @@ fn from_the_folder(folder: &Path, address: &str, asked: &HeaderMap) -> Response 
         && let Some(file) = file_response(folder, &relative, asked)
     {
         return file;
+    }
+    if closed {
+        return match file_response(folder, Path::new(PAGE), &HeaderMap::new()) {
+            Some(page) => {
+                let (mut parts, body) = page.into_parts();
+                parts.status = StatusCode::SERVICE_UNAVAILABLE;
+                parts
+                    .headers
+                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                Response::from_parts(parts, body)
+            }
+            None => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+        };
     }
     match file_response(folder, Path::new(PAGE), asked) {
         Some(page) => page,
@@ -266,7 +306,16 @@ mod tests {
         address: &str,
         asked: &HeaderMap,
     ) -> (StatusCode, HeaderMap, String) {
-        let response = from_the_folder(&folder.join("web"), address, asked);
+        answer_closed(folder, address, asked, false).await
+    }
+
+    async fn answer_closed(
+        folder: &Path,
+        address: &str,
+        asked: &HeaderMap,
+        closed: bool,
+    ) -> (StatusCode, HeaderMap, String) {
+        let response = from_the_folder(&folder.join("web"), address, asked, closed);
         let status = response.status();
         let headers = response.headers().clone();
         let body = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -310,6 +359,25 @@ mod tests {
             assert_eq!(body, "the page", "{address}");
             assert_eq!(headers[header::CACHE_CONTROL], ALWAYS_ASK, "{address}");
         }
+    }
+
+    #[tokio::test]
+    async fn during_a_maintenance_the_page_says_so_and_its_files_are_served() {
+        let folder = an_installed_interface();
+        let mut held = HeaderMap::new();
+        held.insert(header::IF_NONE_MATCH, HeaderValue::from_static("*"));
+
+        // Whole, even to a browser that holds it: a proxy reads the code, and
+        // the page drawn is the one that says the server is closed.
+        let (status, headers, body) = answer_closed(folder.path(), "/library/01ab", &held, true).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body, "the page");
+        assert_eq!(headers[header::CACHE_CONTROL], "no-store");
+
+        let (status, _, body) =
+            answer_closed(folder.path(), "/assets/index-abc123.js", &HeaderMap::new(), true).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "the code");
     }
 
     #[tokio::test]
