@@ -251,7 +251,6 @@ export const FINDABLE: FindableSection[] = [
     named: [
       ["admin.libraries", "admin.libraries_lead"],
       ["admin.tasks", "admin.tasks_lead"],
-      ["admin.watch", "admin.watch_lead"],
       ["admin.people", "admin.people_lead"],
       ["admin.system", "admin.system_lead"],
     ],
