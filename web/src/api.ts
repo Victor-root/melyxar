@@ -708,7 +708,7 @@ export interface Filters {
 }
 
 /** Why a work opens the page, which is what its button says. */
-export type Because = "started" | "pinned" | "new" | "suggested";
+export type Because = "started" | "next" | "pinned" | "new" | "suggested";
 
 /** One work the page opens on, shown large rather than as a card. */
 export type HeroItem = Card & {
