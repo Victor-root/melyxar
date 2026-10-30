@@ -168,6 +168,12 @@ fun MaintenanceScreen(branding: Branding, standing: Standing, onChangeProfile: (
             color = palette.text,
             modifier = Modifier.padding(top = 10.dp),
         )
+        Text(
+            stringResource(R.string.tv_maintenance_closed, branding.serverName),
+            fontSize = 17.sp,
+            color = palette.textSoft,
+            textAlign = TextAlign.Center,
+        )
         standing.message?.let {
             Text(it, fontSize = 18.sp, color = palette.text, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 640.dp))
         }
