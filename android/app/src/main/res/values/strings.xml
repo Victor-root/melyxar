@@ -350,6 +350,7 @@
     <string name="tv_notes_maintenance_at">On %1$s</string>
     <string name="tv_maintenance_title">Maintenance in progress</string>
     <string name="tv_maintenance_closed">The %1$s server will be unavailable during maintenance.</string>
+    <string name="tv_maintenance_administrator">Administrator sign-in</string>
     <string name="tv_maintenance_back_at">Expected back at %1$s</string>
     <string name="tv_maintenance_back_soon">Back as soon as possible</string>
     <string name="tv_maintenance_comes_back">This screen will return to normal on its own when maintenance ends.</string>

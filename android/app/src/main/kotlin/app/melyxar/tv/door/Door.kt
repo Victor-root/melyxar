@@ -58,6 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Account
+import app.melyxar.tv.inside.FollowMaintenance
+import app.melyxar.tv.inside.Maintenance
+import app.melyxar.tv.inside.MaintenanceScreen
 import app.melyxar.server.Api
 import app.melyxar.server.Branding
 import app.melyxar.server.DoorName
@@ -124,6 +127,13 @@ fun Door(
     /** The profile signed in here asking for its code before it opens. */
     var locked by remember { mutableStateOf<Locked?>(null) }
     val scope = rememberCoroutineScope()
+    // A maintenance in force stands in for the profiles, which are kept for
+    // an administrator who asks for them.
+    val maintenance = remember(api) { Maintenance(api, scope) }
+    var administrator by remember { mutableStateOf(false) }
+    val closed = maintenance.standing.state == "on" && !administrator
+    LaunchedEffect(api, tries) { maintenance.ask() }
+    FollowMaintenance(maintenance, closed)
 
     LaunchedEffect(tries) {
         answer = try {
@@ -200,15 +210,21 @@ fun Door(
                 when (val now = answer) {
                     Answer.Waiting -> Unit
                     Answer.Unreachable -> Unreachable(server.name, onRetry = { tries += 1 }, onChangeServer)
-                    is Answer.Open -> Profiles(
-                        branding = now.branding,
-                        profiles = now.profiles,
-                        server = server,
-                        onPick = { open(it, now.branding) },
-                        onByHand = { knocking = "" },
-                        onChangeServer = onChangeServer,
-                        quiet = knocking != null || locked != null,
-                    )
+                    is Answer.Open -> if (closed) {
+                        MaintenanceScreen(now.branding, maintenance.standing, stringResource(R.string.tv_maintenance_administrator)) {
+                            administrator = true
+                        }
+                    } else {
+                        Profiles(
+                            branding = now.branding,
+                            profiles = now.profiles,
+                            server = server,
+                            onPick = { open(it, now.branding) },
+                            onByHand = { knocking = "" },
+                            onChangeServer = onChangeServer,
+                            quiet = knocking != null || locked != null,
+                        )
+                    }
                 }
                 val asking = knocking
                 if (asking != null && open != null) {

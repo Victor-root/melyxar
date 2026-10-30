@@ -146,12 +146,13 @@ private fun backAt(standing: Standing): String? {
 }
 
 /**
- * The screen of a maintenance in force, standing in for every screen of an
- * account that is not an administrator's. The remote starts on the way to
- * another profile, so an administrator can come in on this television.
+ * The screen of a maintenance in force, standing in for the door and for
+ * every screen of an account that is not an administrator's. The remote
+ * starts on its one button, the way to [action], so an administrator can
+ * come in on this television.
  */
 @Composable
-fun MaintenanceScreen(branding: Branding, standing: Standing, onChangeProfile: () -> Unit) {
+fun MaintenanceScreen(branding: Branding, standing: Standing, action: String, onAction: () -> Unit) {
     val palette = LocalPalette.current
     val change = remember { FocusRequester() }
     val back = backAt(standing)
@@ -190,7 +191,7 @@ fun MaintenanceScreen(branding: Branding, standing: Standing, onChangeProfile: (
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 14.dp),
         )
-        PlainButton(stringResource(R.string.tv_change_profile), onChangeProfile, Modifier.focusRequester(change))
+        PlainButton(action, onAction, Modifier.focusRequester(change))
     }
     LaunchedEffect(Unit) { change.requestFocus() }
 }
