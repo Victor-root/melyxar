@@ -14,7 +14,7 @@
     <string name="unreachable_lead">%1$s ne répond pas. Vérifiez qu’il est allumé et que cet appareil est sur le bon réseau.</string>
     <string name="unreachable_retry">Réessayer</string>
     <string name="unreachable_change">Changer de serveur</string>
-    <string name="tv_welcome_before">Bienvenue sur </string>
+    <string name="tv_welcome_before">"Bienvenue sur "</string>
     <string name="tv_pick">Choisissez votre profil pour continuer</string>
     <string name="tv_by_hand">Saisir un nom d’utilisateur</string>
     <string name="tv_name">Nom d’utilisateur</string>

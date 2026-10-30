@@ -15,7 +15,7 @@
     <string name="unreachable_lead">%1$s does not answer. Check that it is running and that this device is on the right network.</string>
     <string name="unreachable_retry">Try again</string>
     <string name="unreachable_change">Change server</string>
-    <string name="tv_welcome_before">Welcome to </string>
+    <string name="tv_welcome_before">"Welcome to "</string>
     <string name="tv_pick">Choose your profile to continue</string>
     <string name="tv_by_hand">Enter a username</string>
     <string name="tv_name">Username</string>
