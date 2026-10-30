@@ -1,4 +1,24 @@
 /* Taking up an Emby or Jellyfin server. */
+
+/* What an import brings over and what it does not, side by side when the
+   panel is wide enough. */
+.import-scope {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--gap) var(--gap-wide);
+  margin-bottom: var(--gap);
+}
+
+.import-scope ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+  font-size: 13.5px;
+}
+
 .import-from {
   display: flex;
   flex-wrap: wrap;

@@ -44,7 +44,7 @@ export function PageHead({
         </span>
         <div className="page-head-words">
           <h1>{t(section.label)}</h1>
-          <p>{lead}</p>
+          <p title={lead}>{lead}</p>
         </div>
         {actions && <div className="page-head-actions">{actions}</div>}
       </div>
