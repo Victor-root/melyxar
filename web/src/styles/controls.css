@@ -312,6 +312,19 @@ input[type="radio"]:disabled {
   cursor: not-allowed;
 }
 
+/* An hour of the day: a short list of hours, then one of minutes. */
+.hour-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-tight);
+  color: var(--text-soft);
+}
+
+.hour-field .picker {
+  min-width: 0;
+  width: 5.5rem;
+}
+
 /* A field that opens a list. */
 .picker {
   display: inline-flex;

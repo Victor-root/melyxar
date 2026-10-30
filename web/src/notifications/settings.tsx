@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { HourField } from "../components/hour-field";
 import { PageHead, Panel, Setting, Toggle } from "../components/panel";
 import { BellIcon, ClockIcon, DeviceIcon, FolderIcon } from "../icons";
 import { useRequests } from "../requests/store";
@@ -129,20 +130,16 @@ export function MyNotifications() {
         {quiet && (
           <Setting label={t("notes.quiet_hours")}>
             <span className="note-clocks">
-              <input
-                type="time"
-                className="field-line"
-                aria-label={t("notes.quiet_from")}
+              <HourField
+                label={t("notes.quiet_from")}
                 value={clockOf(settings.quiet_from ?? 0)}
-                onChange={(event) => atClock("quiet_from", event.target.value)}
+                onPick={(hour) => atClock("quiet_from", hour)}
               />
               <span>{t("notes.quiet_to")}</span>
-              <input
-                type="time"
-                className="field-line"
-                aria-label={t("notes.quiet_until")}
+              <HourField
+                label={t("notes.quiet_until")}
                 value={clockOf(settings.quiet_until ?? 0)}
-                onChange={(event) => atClock("quiet_until", event.target.value)}
+                onPick={(hour) => atClock("quiet_until", hour)}
               />
             </span>
           </Setting>
