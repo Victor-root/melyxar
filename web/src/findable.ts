@@ -271,6 +271,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.watch_in_real_time"],
       ["settings.keeps_resume_points", "admin.resume_points_why"],
       ["settings.keeps_watched_marks", "admin.watched_marks_why"],
+      ["settings.in_the_hero", "admin.in_the_hero_why"],
       ["music.lyrics_online", "music.lyrics_online_why"],
       ["music.covers_online", "music.covers_online_why"],
       ["music.artist_photos_online", "music.artist_photos_online_why"],

@@ -17,6 +17,7 @@ import { api } from "../api";
 import type { Library, LibraryChoices, LibraryKind, WouldGo } from "../api";
 import { refusalAbout, useAsked, useTold } from "../asking";
 import { holdsFiles } from "../libraries";
+import { useMarkActions } from "../marks";
 import { NO_MUSIC_OPTIONS, music } from "../music/api";
 import type { MusicLibraryOptions } from "../music/api";
 
@@ -60,6 +61,7 @@ export interface LibraryEditing {
 export function useLibraryEditing(onChanged: () => void): LibraryEditing {
   const [refused, setRefused] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const { rowsHaveMoved } = useMarkActions();
 
   const settle = (library: Library, changes: Partial<Library>) => {
     const wanted = { ...library, ...changes };
@@ -74,6 +76,7 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
         watch_in_real_time: wanted.watch_in_real_time,
         keeps_resume_points: wanted.keeps_resume_points,
         keeps_watched_marks: wanted.keeps_watched_marks,
+        in_the_hero: wanted.in_the_hero,
         metadata_language: wanted.metadata_language,
       })
       .then((kept) => {
@@ -82,6 +85,10 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
             ? null
             : { kind: "asked_about_again", count: kept.asked_about_again },
         );
+        // The banner of the home page is drawn by the server from this.
+        if ("in_the_hero" in changes) {
+          rowsHaveMoved();
+        }
         onChanged();
       })
       .catch((error) => {
@@ -192,6 +199,7 @@ const USUAL_CHOICES: LibraryChoices = {
   watch_in_real_time: false,
   keeps_resume_points: true,
   keeps_watched_marks: true,
+  in_the_hero: true,
 };
 
 /** A library being declared, and what it is made of so far. */

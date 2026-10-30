@@ -330,6 +330,7 @@ export type LibraryChoices = Pick<
   | "watch_in_real_time"
   | "keeps_resume_points"
   | "keeps_watched_marks"
+  | "in_the_hero"
 >;
 
 /** A camera of a library of cameras. Where it is and its account only for
@@ -376,6 +377,8 @@ export interface Library {
   keeps_resume_points: boolean;
   /** Whether it keeps which works each account has watched. */
   keeps_watched_marks: boolean;
+  /** Whether its works may stand in the banner at the top of the home page. */
+  in_the_hero: boolean;
   /** Where that watching stands, for a library that asked for it. */
   watch_state: "watching" | "starting" | "refused" | null;
   /** Why it was refused, as a word turned into a sentence here. */
@@ -2176,6 +2179,7 @@ export const api = {
     watch_in_real_time: boolean;
     keeps_resume_points: boolean;
     keeps_watched_marks: boolean;
+    in_the_hero: boolean;
     metadata_language: string;
   }) =>
     put<{
@@ -2187,6 +2191,7 @@ export const api = {
       watch_in_real_time: boolean;
       keeps_resume_points: boolean;
       keeps_watched_marks: boolean;
+      in_the_hero: boolean;
       metadata_language: string;
       changed: boolean;
       /** How many films went back in the queue, when the language changed. */
