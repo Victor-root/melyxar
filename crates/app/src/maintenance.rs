@@ -44,9 +44,10 @@ pub enum Phase {
     On,
 }
 
-/// Where maintenance stands at this instant.
+/// Where maintenance stands at this instant: over once its end has come,
+/// whether or not it has been switched off yet.
 pub fn phase_of(kept: &Kept, at: Timestamp) -> Phase {
-    if !kept.enabled {
+    if !kept.enabled || kept.until.is_some_and(|until| at >= until) {
         Phase::Off
     } else if kept.starts_at.is_some_and(|starts| at < starts) {
         Phase::Announced
@@ -63,8 +64,7 @@ pub struct Seen {
     /// rather than handed over as an hour, so a device whose clock is wrong
     /// still counts down right.
     pub starts_in_seconds: Option<i64>,
-    /// When the administrator expects it to end. Only shown: it ends when
-    /// they switch it off.
+    /// When it ends by itself, when the administrator gave an end.
     #[serde(with = "time::serde::rfc3339::option")]
     pub until: Option<Timestamp>,
     pub message: Option<String>,
@@ -113,16 +113,21 @@ pub fn follow(state: &AppState) -> watch::Receiver<Kept> {
 }
 
 /// Puts back what the database holds as the server comes up, and waits again
-/// for the start of a maintenance that was only announced.
+/// for the start of a maintenance that was only announced and for its end.
+/// One whose end came while the server was down is switched off at once.
 pub async fn bring_back(state: &AppState) -> Result<()> {
     let kept = state.database().maintenance().await?;
     if kept.enabled {
-        tracing::info!(starts_at = ?kept.starts_at, "the server comes up in maintenance");
+        tracing::info!(starts_at = ?kept.starts_at, until = ?kept.until, "the server comes up in maintenance");
     }
     let starts_at = kept.starts_at.filter(|_| kept.enabled);
+    let until = kept.until.filter(|_| kept.enabled);
     state.maintenance().0.send_replace(kept);
     if let Some(starts_at) = starts_at {
         wait_for_the_start(state, starts_at);
+    }
+    if let Some(until) = until {
+        wait_for_the_end(state, until);
     }
     Ok(())
 }
@@ -134,6 +139,7 @@ pub struct Wanted {
     /// Minutes before it takes hold, one of [`DELAYS`]. Only read as it is
     /// switched on: a change of message or end leaves the start where it is.
     pub delay_minutes: i64,
+    /// When it switches itself off; never, without one.
     pub until: Option<Timestamp>,
     pub message: Option<String>,
 }
@@ -150,9 +156,6 @@ fn kept_for(wanted: &Wanted, before: &Kept, at: Timestamp) -> Result<Kept> {
     if !DELAYS.contains(&wanted.delay_minutes) {
         return Err(refused("a maintenance is announced with one of the delays offered"));
     }
-    if wanted.until.is_some_and(|until| until <= at) {
-        return Err(refused("a maintenance is expected to end in the future"));
-    }
     let message = wanted
         .message
         .as_deref()
@@ -165,6 +168,9 @@ fn kept_for(wanted: &Wanted, before: &Kept, at: Timestamp) -> Result<Kept> {
         Some(starts_at) => starts_at,
         None => at + time::Duration::minutes(wanted.delay_minutes),
     };
+    if wanted.until.is_some_and(|until| until <= starts_at.max(at)) {
+        return Err(refused("a maintenance ends after it starts"));
+    }
     Ok(Kept {
         enabled: true,
         starts_at: Some(starts_at),
@@ -190,11 +196,41 @@ pub async fn set(state: &AppState, by: &User, wanted: Wanted) -> Result<Seen> {
             .await;
     }
     let starts_at = kept.starts_at.filter(|_| kept.enabled && !before.enabled);
+    let until = kept.until.filter(|_| kept.enabled && kept.until != before.until.filter(|_| before.enabled));
     state.maintenance().0.send_replace(kept);
     if let Some(starts_at) = starts_at {
         wait_for_the_start(state, starts_at);
     }
+    if let Some(until) = until {
+        wait_for_the_end(state, until);
+    }
     Ok(seen(state))
+}
+
+/// Waits for the end the administrator gave, then switches maintenance off
+/// and tells every page. Does nothing if it was switched off, or given
+/// another end, meanwhile.
+fn wait_for_the_end(state: &AppState, until: Timestamp) {
+    let state = state.clone();
+    tokio::spawn(async move {
+        let left = (until - now()).max(time::Duration::ZERO);
+        tokio::time::sleep(left.unsigned_abs()).await;
+        let still = {
+            let kept = state.maintenance().0.borrow();
+            kept.enabled && kept.until == Some(until)
+        };
+        if !still {
+            return;
+        }
+        if let Err(error) = state.database().set_maintenance(&Kept::default()).await {
+            // Over all the same: the gate reads the end, and the next start
+            // of the server switches it off.
+            tracing::warn!(%error, "a maintenance over could not be switched off in the database");
+        }
+        tracing::info!("maintenance ended at the time it was given");
+        state.journal().write(Event::MaintenanceEnded).await;
+        state.maintenance().0.send_replace(Kept::default());
+    });
 }
 
 /// Waits for an announced maintenance to take hold, then tells every page
@@ -300,6 +336,18 @@ mod tests {
     }
 
     #[test]
+    fn over_once_its_end_has_come() {
+        let ending = Wanted {
+            until: Some(NOON + time::Duration::hours(1)),
+            ..asked(true, 5)
+        };
+        let kept = kept_for(&ending, &Kept::default(), NOON).expect("kept");
+        assert_eq!(phase_of(&kept, NOON + time::Duration::minutes(59)), Phase::On);
+        assert_eq!(phase_of(&kept, NOON + time::Duration::hours(1)), Phase::Off);
+        assert_eq!(seen_at(&kept, NOON + time::Duration::hours(2)).until, None);
+    }
+
+    #[test]
     fn what_cannot_be_kept_is_refused() {
         assert!(kept_for(&asked(true, 7), &Kept::default(), NOON).is_err());
         let past = Wanted {
@@ -307,6 +355,11 @@ mod tests {
             ..asked(true, 0)
         };
         assert!(kept_for(&past, &Kept::default(), NOON).is_err());
+        let before_it_starts = Wanted {
+            until: Some(NOON + time::Duration::minutes(3)),
+            ..asked(true, 5)
+        };
+        assert!(kept_for(&before_it_starts, &Kept::default(), NOON).is_err());
         let long = Wanted {
             message: Some("x".repeat(LONGEST_MESSAGE + 1)),
             ..asked(true, 0)
@@ -391,5 +444,26 @@ mod tests {
             .expect("journal read");
         assert!(lines.iter().any(|line| line.kind == "server_maintenance_on"));
         assert!(lines.iter().any(|line| line.kind == "server_maintenance_off"));
+    }
+
+    #[tokio::test]
+    async fn it_switches_itself_off_at_the_end_it_was_given() {
+        let (_directory, state, administrator, viewer) = a_server().await;
+        let mut told = follow(&state);
+        set(&state, &administrator, Wanted {
+            until: Some(now() + time::Duration::milliseconds(300)),
+            ..asked(true, 0)
+        })
+        .await
+        .expect("switched on");
+        assert!(shuts_out(&state, Some(&viewer)));
+        told.borrow_and_update();
+
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert!(!shuts_out(&state, Some(&viewer)));
+        assert!(told.has_changed().expect("still followed"), "every line is told");
+        assert!(!state.database().maintenance().await.expect("read").enabled);
+        let lines = state.database().activity_page(&[], None, 10).await.expect("journal read");
+        assert!(lines.iter().any(|line| line.kind == "server_maintenance_ended"));
     }
 }
