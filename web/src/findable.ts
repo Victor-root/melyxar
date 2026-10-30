@@ -395,7 +395,6 @@ export const FINDABLE: FindableSection[] = [
     name: "admin.tasks",
     files: ["pages/admin/tasks.tsx"],
     named: [
-      ["jobs.running", "admin.running_lead"],
       ["admin.start_work", "admin.start_work_lead"],
       ["refresh.mode"],
       ["tasks.title", "tasks.why"],
