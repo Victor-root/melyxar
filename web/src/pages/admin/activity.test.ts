@@ -95,6 +95,13 @@ describe("sayLine", () => {
     );
   });
 
+  it("says who switched maintenance on, as a line about the server", () => {
+    expect(familyOf("server_maintenance_on")).toBe("server");
+    const said = sayLine(line("server_maintenance_on", { by: "keeper" }), t);
+    expect(said.title).toBe("activity.server_maintenance_on");
+    expect(said.note).toBe("activity.by(keeper)");
+  });
+
   it("says a failed task with its reason, and a finished one with how long it took", () => {
     const failed = sayLine(
       line("task_failed", { task: "scan_library", on: { library: "Films" }, reason: "a folder could not be read" }),

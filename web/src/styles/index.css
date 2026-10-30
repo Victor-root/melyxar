@@ -47,5 +47,6 @@
 @import "./narrow.css";
 @import "./upload.css";
 @import "../door.css";
+@import "./maintenance.css";
 @import "../admin.css";
 @import "../player/player.css";

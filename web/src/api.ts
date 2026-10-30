@@ -1462,6 +1462,29 @@ export interface MeasuredDisk {
 /** How far back the curves reach. */
 export type MeasuredOver = "hour" | "day" | "week" | "month" | "year";
 
+/** Where maintenance stands: off, announced and counting down, or in force
+ *  and closing the server to all but its administrators. */
+export type MaintenanceState = "off" | "announced" | "on";
+
+export interface Maintenance {
+  state: MaintenanceState;
+  /** How long before it takes hold, while announced, counted by the server
+   *  so a device whose clock is wrong still counts down right. */
+  starts_in_seconds: number | null;
+  /** When the administrator expects it to end. */
+  until: string | null;
+  message: string | null;
+}
+
+/** What an administrator asks of maintenance. */
+export interface MaintenanceSwitched {
+  on: boolean;
+  /** Minutes before it takes hold, read only as it is switched on. */
+  delay_minutes: number;
+  until: string | null;
+  message: string | null;
+}
+
 export interface SystemInfo {
   server_name: string;
   version: string;
@@ -1586,6 +1609,18 @@ export function whenTheDoorCloses(listener: () => void) {
   noticeOfTheDoorClosing = listener;
 }
 
+/** Told when the server turns a request away for maintenance. */
+let noticeOfMaintenance: (() => void) | null = null;
+
+/**
+ * Asks to be told when the server turns a request away for maintenance,
+ * wherever it happens: a maintenance takes hold between two clicks, and a
+ * page that missed the word on its live line learns it from the next one.
+ */
+export function whenMaintenanceTurnsAway(listener: () => void) {
+  noticeOfMaintenance = listener;
+}
+
 /**
  * The one exchange with the server. Everything below is what is asked for.
  *
@@ -1633,6 +1668,9 @@ async function exchange(
     const said = await response.json().catch(() => null);
     if (response.status === 401 && !THE_DOOR.includes(path.split("?")[0])) {
       noticeOfTheDoorClosing?.();
+    }
+    if (said?.code === "maintenance") {
+      noticeOfMaintenance?.();
     }
     throw new ApiError(
       said?.code ?? "generic",
@@ -2495,6 +2533,12 @@ export const api = {
   setDoorSlogan: (door_slogan: string) =>
     put<ServerSettings>("/api/v1/settings/server/door/slogan", { door_slogan }),
   removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),
+  /** Where maintenance stands, answered to anybody, the door included. */
+  maintenance: (signal?: AbortSignal) => get<Maintenance>("/api/v1/public/maintenance", signal),
+  /** Switches maintenance, or changes its message and expected end while it
+   *  is on; answers where it stands now. */
+  setMaintenance: (switched: MaintenanceSwitched) =>
+    put<Maintenance>("/api/v1/system/maintenance", switched),
   /* The live line of every page: what changes in this account's
      notifications and, for an administrator, "activity" whenever a line of
      the journal is written and, when asked for, "playing" with what is being
