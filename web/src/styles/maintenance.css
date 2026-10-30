@@ -34,12 +34,6 @@
   text-wrap: balance;
 }
 
-.maintenance-closed {
-  margin: 0;
-  color: var(--text-soft);
-  font-size: 16px;
-}
-
 .maintenance-message {
   margin: 0;
   font-size: 17px;
