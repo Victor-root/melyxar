@@ -41,6 +41,27 @@ export function standingOf(seen: Maintenance, heardAt: number): Standing {
   };
 }
 
+/**
+ * The next time this hour of the day comes, on this device's clock, after
+ * the given instant: today if it is still to come, tomorrow otherwise. What
+ * an hour typed for the end of a maintenance means.
+ */
+export function nextAt(hourOfDay: string, after: number): Date {
+  const [hours, minutes] = hourOfDay.split(":").map(Number);
+  const at = new Date(after);
+  at.setHours(hours, minutes, 0, 0);
+  if (at.getTime() <= after) {
+    at.setDate(at.getDate() + 1);
+  }
+  return at;
+}
+
+/** An instant as the hour of the day a time field holds, on this device. */
+export function hourOfDayOf(instant: string): string {
+  const at = new Date(instant);
+  return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Where it stands at this instant: an announcement whose time has come is in
  *  force, whether or not the server has said so yet. */
 export function stateAt(standing: Standing, now: number): MaintenanceState {

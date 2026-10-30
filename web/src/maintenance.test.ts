@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stateAt, standingOf } from "./maintenance";
+import { hourOfDayOf, nextAt, stateAt, standingOf } from "./maintenance";
 
 describe("maintenance as a page holds it", () => {
   it("counts down from the seconds the server gave, not from its clock", () => {
@@ -18,5 +18,13 @@ describe("maintenance as a page holds it", () => {
     expect(stateAt(on, 10)).toBe("on");
     const off = standingOf({ state: "off", starts_in_seconds: null, until: null, message: null }, 5);
     expect(stateAt(off, 10)).toBe("off");
+  });
+
+  it("ends at the next time the hour typed comes, today or tomorrow", () => {
+    const now = new Date(2026, 9, 30, 14, 0).getTime();
+    expect(nextAt("16:30", now)).toEqual(new Date(2026, 9, 30, 16, 30));
+    expect(nextAt("09:15", now)).toEqual(new Date(2026, 9, 31, 9, 15));
+    expect(nextAt("14:00", now)).toEqual(new Date(2026, 9, 31, 14, 0));
+    expect(hourOfDayOf(new Date(2026, 9, 30, 7, 5).toISOString())).toBe("07:05");
   });
 });

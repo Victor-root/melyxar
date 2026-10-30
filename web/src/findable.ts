@@ -424,7 +424,7 @@ export const FINDABLE: FindableSection[] = [
       ["admin.maintenance_on"],
       ["admin.maintenance_message", "admin.maintenance_message_why"],
       ["admin.maintenance_delay", "admin.maintenance_delay_why"],
-      ["admin.maintenance_lasting", "admin.maintenance_lasting_why"],
+      ["admin.maintenance_until", "admin.maintenance_until_why"],
       ["admin.maintenance_proxy", "admin.maintenance_proxy_why"],
       ["admin.updates", "admin.updates_lead"],
       ["admin.updates_check"],

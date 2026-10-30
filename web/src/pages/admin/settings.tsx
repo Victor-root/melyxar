@@ -35,9 +35,9 @@ import {
 } from "../../icons";
 import { putOnTheClipboard } from "../../clipboard";
 import { UNNAMED } from "../../components/maintenance";
-import { maintenanceHeard, useMaintenance } from "../../maintenance";
+import { hourOfDayOf, maintenanceHeard, nextAt, useMaintenance } from "../../maintenance";
 import { serverChanged, useBranding } from "../../player/logo";
-import { howLong, howMany, writtenMoment } from "../../readable";
+import { howMany, writtenMoment } from "../../readable";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
@@ -96,9 +96,6 @@ export function AdminSettings() {
  *  holds it to. */
 const MAINTENANCE_DELAYS = [0, 1, 5, 10, 15];
 
-/** How long a maintenance may be said to last, in minutes; none for unsaid. */
-const MAINTENANCE_LASTING = [0, 15, 30, 60, 120, 240];
-
 /** The longest maintenance message, as the server holds it to. */
 const LONGEST_MAINTENANCE_MESSAGE = 500;
 
@@ -128,12 +125,16 @@ function MaintenancePanel() {
   const [typed, setTyped] = useState<string | null>(null);
   const message = typed ?? standing.message ?? "";
   const [delay, setDelay] = useState(5);
-  const [lasting, setLasting] = useState(0);
+  /* The hour it ends by itself, typed while it is off; while it is on, the
+     one it holds. Empty, it ends when somebody switches it off. */
+  const [ending, setEnding] = useState("");
+  const endsAt = on ? (standing.until ? hourOfDayOf(standing.until) : "") : ending;
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const untilAfter = (minutes: number) =>
-    minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
+  /* After the start: an hour already gone today is tomorrow's. */
+  const untilAt = (hourOfDay: string, starts: number) =>
+    hourOfDay ? nextAt(hourOfDay, starts).toISOString() : null;
   const hour = (instant: string | number) =>
     writtenMoment(new Date(instant), language, { hour: "2-digit", minute: "2-digit" });
 
@@ -180,7 +181,7 @@ function MaintenancePanel() {
             send({
               on: wanted,
               delay_minutes: delay,
-              until: wanted ? untilAfter(lasting) : null,
+              until: wanted ? untilAt(ending, Date.now() + delay * 60_000) : null,
               message: wanted ? kept() : null,
             })
           }
@@ -231,22 +232,20 @@ function MaintenancePanel() {
           onPick={(minutes) => setDelay(Number(minutes))}
         />
       </Setting>
-      <Setting label={t("admin.maintenance_lasting")} why={t("admin.maintenance_lasting_why")}>
-        <Picker
-          label={t("admin.maintenance_lasting")}
-          value={String(lasting)}
+      <Setting label={t("admin.maintenance_until")} why={t("admin.maintenance_until_why")}>
+        <input
+          type="time"
+          className="field-line field-time"
+          aria-label={t("admin.maintenance_until")}
+          value={endsAt}
           disabled={sending}
-          options={MAINTENANCE_LASTING.map(
-            (minutes) =>
-              [
-                String(minutes),
-                minutes === 0 ? t("admin.maintenance_unsaid") : howLong(minutes, t),
-              ] as const,
-          )}
-          onPick={(picked) => {
-            const minutes = Number(picked);
-            setLasting(minutes);
-            if (on) change(untilAfter(minutes), standing.message);
+          onChange={(event) => {
+            const typed = event.target.value;
+            if (on) {
+              change(untilAt(typed, standing.startsAt ?? Date.now()), standing.message);
+            } else {
+              setEnding(typed);
+            }
           }}
         />
       </Setting>
