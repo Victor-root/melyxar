@@ -57,34 +57,50 @@ function refusalWording(error: unknown, t: ReturnType<typeof useSettings>["t"]):
   }
 }
 
+type Server = ImportPreview["server"];
+
+/** Where each server keeps its data, as an example in its field. */
+const USUAL_FOLDER: Record<Server, string> = {
+  emby: "/var/lib/emby",
+  jellyfin: "/var/lib/jellyfin",
+};
+
 export function AdminImport() {
   const { t } = useSettings();
-  const [path, setPath] = useState("");
   const [read, setRead] = useState<{ path: string; preview: ImportPreview } | null>(null);
   const [plans, setPlans] = useState<Record<string, AccountPlan>>({});
   const [collections, setCollections] = useState<Set<string>>(new Set());
   const [parts, setParts] = useState<ImportParts>(ALL_PARTS);
   const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
+  // What the last read or take-up came to, said in the panel it started from.
+  const [said, setSaid] = useState<{ from: Server; refused: string | null; report: ImportReport | null } | null>(
+    null,
+  );
   const [asking, setAsking] = useState(false);
-  const [report, setReport] = useState<ImportReport | null>(null);
-  const here = useAsked((signal) => api.accounts(signal), [report]);
+  const here = useAsked((signal) => api.accounts(signal), [said?.report]);
   const { rowsHaveMoved } = useMarkActions();
   const { playlistsHaveMoved } = useMusicMarks();
 
-  const readIt = async () => {
+  const readIt = async (from: Server, path: string) => {
     setBusy(true);
-    setRefused(null);
-    setReport(null);
+    setSaid(null);
+    setRead(null);
     try {
-      const preview = await api.importPreview(path.trim());
-      setRead({ path: path.trim(), preview });
+      const preview = await api.importPreview(path);
+      if (preview.server !== from) {
+        setSaid({
+          from,
+          refused: t("import.refused.other_server", { found: t(`import.server.${preview.server}`) }),
+          report: null,
+        });
+        return;
+      }
+      setRead({ path, preview });
       setPlans(firstPlans(preview));
       setCollections(firstCollections(preview));
       setParts(ALL_PARTS);
     } catch (error) {
-      setRead(null);
-      setRefused(refusalWording(error, t));
+      setSaid({ from, refused: refusalWording(error, t), report: null });
     } finally {
       setBusy(false);
     }
@@ -94,18 +110,20 @@ export function AdminImport() {
     if (!read) {
       return;
     }
+    const from = read.preview.server;
     setAsking(false);
     setBusy(true);
-    setRefused(null);
+    setSaid(null);
     try {
-      setReport(await api.importTakeUp(read.path, choicesOf(plans, collections, parts)));
+      const report = await api.importTakeUp(read.path, choicesOf(plans, collections, parts));
+      setSaid({ from, refused: null, report });
       setRead(null);
       // Every screen showing what was watched, liked or listened to reads it
       // again: it changed for whole accounts at once.
       rowsHaveMoved();
       playlistsHaveMoved();
     } catch (error) {
-      setRefused(refusalWording(error, t));
+      setSaid({ from, refused: refusalWording(error, t), report: null });
     } finally {
       setBusy(false);
     }
@@ -115,49 +133,16 @@ export function AdminImport() {
     <>
       <PageHead lead={t("import.lead")} />
       <div className="panels">
-        <Panel icon={DownloadIcon} title={t("import.title")}>
-          <ul className="import-takes">
-            <li>{t("import.takes.accounts")}</li>
-            <li>{t("import.takes.watched")}</li>
-            <li>{t("import.takes.favourites")}</li>
-            <li>{t("import.takes.music")}</li>
-            <li>{t("import.takes.lists")}</li>
-          </ul>
-          <p className="panel-notice">{t("import.no_passwords")}</p>
-          <Setting label={t("import.versions")} why={t("import.versions_why")}>
-            <span className="import-versions">
-              <StatePill state="ok">Emby 4.8</StatePill>
-              <StatePill state="ok">Jellyfin 10.9.11</StatePill>
-            </span>
-          </Setting>
-          <form
-            className="import-from"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void readIt();
-            }}
-          >
-            <label className="import-from-label" htmlFor="import-path">
-              {t("import.path")}
-            </label>
-            <input
-              id="import-path"
-              type="text"
-              className="field-line"
-              placeholder="/var/lib/emby"
-              spellCheck={false}
-              autoComplete="off"
-              value={path}
-              onChange={(event) => setPath(event.target.value)}
-            />
-            <button type="submit" className="button button-small button-accent" disabled={busy || path.trim() === ""}>
-              {t("import.read")}
-            </button>
-            <span className="setting-why">{t("import.path_why")}</span>
-          </form>
-          {refused && <p className="panel-notice panel-notice-trouble">{refused}</p>}
-          {report && <Taken report={report} />}
-        </Panel>
+        {(["emby", "jellyfin"] as const).map((server) => (
+          <Source
+            key={server}
+            server={server}
+            busy={busy}
+            onRead={(path) => void readIt(server, path)}
+            refused={said?.from === server ? said.refused : null}
+            report={said?.from === server ? said.report : null}
+          />
+        ))}
 
         {read && (
           <Preview
@@ -194,6 +179,61 @@ export function AdminImport() {
         </Modal>
       )}
     </>
+  );
+}
+
+/** One server to import from: the oldest version read, and where its data is. */
+function Source({
+  server,
+  busy,
+  onRead,
+  refused,
+  report,
+}: {
+  server: Server;
+  busy: boolean;
+  onRead: (path: string) => void;
+  refused: string | null;
+  report: ImportReport | null;
+}) {
+  const { t } = useSettings();
+  const [path, setPath] = useState("");
+  const field = `import-path-${server}`;
+  return (
+    <Panel
+      icon={DownloadIcon}
+      title={t(`import.server.${server}`)}
+      lead={t(`import.${server}_lead`)}
+      action={<StatePill state="ok">{t(`import.${server}_oldest`)}</StatePill>}
+    >
+      <form
+        className="import-from"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onRead(path.trim());
+        }}
+      >
+        <label className="import-from-label" htmlFor={field}>
+          {t("import.path")}
+        </label>
+        <input
+          id={field}
+          type="text"
+          className="field-line"
+          placeholder={USUAL_FOLDER[server]}
+          spellCheck={false}
+          autoComplete="off"
+          value={path}
+          onChange={(event) => setPath(event.target.value)}
+        />
+        <button type="submit" className="button button-small button-accent" disabled={busy || path.trim() === ""}>
+          {t("import.read")}
+        </button>
+        <span className="setting-why">{t("import.path_why")}</span>
+      </form>
+      {refused && <p className="panel-notice panel-notice-trouble">{refused}</p>}
+      {report && <Taken report={report} />}
+    </Panel>
   );
 }
 
@@ -312,6 +352,7 @@ function Preview({
       </Panel>
 
       <Panel icon={AccountIcon} title={t("import.accounts")} lead={t("import.accounts_lead")}>
+        <p className="panel-notice">{t("import.no_passwords")}</p>
         {preview.accounts.map((account) => {
           const one = plans[account.key];
           return (

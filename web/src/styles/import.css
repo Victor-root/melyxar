@@ -1,27 +1,9 @@
 /* Taking up an Emby or Jellyfin server. */
-.import-takes {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 var(--gap);
-  padding-left: 20px;
-  color: var(--text-soft);
-  font-size: 14px;
-}
-
-.import-versions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--gap-tight);
-}
-
 .import-from {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--gap-tight) var(--gap);
-  padding: 14px 0;
-  border-top: 1px solid var(--border);
 }
 
 .import-from-label {
