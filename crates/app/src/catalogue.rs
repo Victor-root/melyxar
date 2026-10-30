@@ -148,6 +148,9 @@ pub struct EpisodePlace {
 pub enum Because {
     /// Left halfway. Its button says carry on, and it comes first.
     Started,
+    /// The episode a series being watched is waiting on, the one before it
+    /// seen through. Right after what was left halfway.
+    Next,
     /// An administrator put it there.
     Pinned,
     /// Newly arrived.
@@ -160,6 +163,7 @@ impl Because {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Started => "started",
+            Self::Next => "next",
             Self::Pinned => "pinned",
             Self::New => "new",
             Self::Suggested => "suggested",
@@ -373,7 +377,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         hero: match who.preferences.banner_shown {
             true => {
                 let reach = Reach { granted, banner: banner_within.as_deref(), kept_out: &kept_out };
-                the_hero(state, who, reach, &carry_on, &recently_added).await?
+                the_hero(state, who, reach, &carry_on, &up_next, &recently_added).await?
             }
             false => Vec::new(),
         },
@@ -421,6 +425,7 @@ async fn the_hero(
     who: &User,
     reach: Reach<'_>,
     carry_on: &[WorkToCarryOn],
+    up_next: &[UpNext],
     recently_added: &WorkPage,
 ) -> Result<Vec<HeroItem>> {
     let database = state.database();
@@ -458,6 +463,19 @@ async fn the_hero(
             (&entry.card, place)
         })
         .collect();
+    let next: Vec<(&WorkCard, Option<EpisodePlace>)> = up_next
+        .iter()
+        .filter(|_| !random)
+        .map(|entry| {
+            let place = EpisodePlace {
+                series_id: entry.series_id,
+                series_title: entry.series_title.clone(),
+                season_number: entry.season_number,
+                episode_number: entry.episode_number,
+            };
+            (&entry.card, Some(place))
+        })
+        .collect();
     let new: &[WorkCard] = match random {
         true => &[],
         false => &recently_added.cards,
@@ -469,6 +487,7 @@ async fn the_hero(
     // episode's wide picture and drawn title come from.
     let named: Vec<WorkId> = started
         .iter()
+        .chain(&next)
         .flat_map(|(card, place)| {
             std::iter::once(card.id).chain(place.as_ref().map(|place| place.series_id))
         })
@@ -486,12 +505,18 @@ async fn the_hero(
         .await?;
 
     let mut already: HashSet<WorkId> = HashSet::new();
+    // One episode of a series at a time: the one left halfway, else the one
+    // after the last seen through.
+    let mut series_shown: HashSet<WorkId> = HashSet::new();
     let mut take = |card: &WorkCard,
                     because: Because,
                     episode_of: Option<EpisodePlace>,
                     room: usize,
                     hero: &mut Vec<HeroItem>| {
         if hero.len() >= room || card.kind.is_home_media() || already.contains(&card.id) {
+            return;
+        }
+        if episode_of.as_ref().is_some_and(|place| series_shown.contains(&place.series_id)) {
             return;
         }
         if because != Because::Pinned && reach.kept_out.contains(&card.library_id) {
@@ -528,6 +553,9 @@ async fn the_hero(
             return;
         }
         already.insert(card.id);
+        if let Some(place) = &episode_of {
+            series_shown.insert(place.series_id);
+        }
         hero.push(HeroItem {
             card: card.clone(),
             because,
@@ -545,6 +573,9 @@ async fn the_hero(
     let room_for_the_rest = whole - kept_for_the_pinned.len();
     for (card, place) in started {
         take(card, Because::Started, place, room_for_the_rest, &mut hero);
+    }
+    for (card, place) in next {
+        take(card, Because::Next, place, room_for_the_rest, &mut hero);
     }
     hero.append(&mut kept_for_the_pinned);
     for card in drawn.iter().chain(new) {
@@ -960,6 +991,72 @@ mod tests {
         every.sort();
         every.dedup();
         assert_eq!(every.len(), page.hero.len(), "nothing appears twice");
+    }
+
+    #[tokio::test]
+    async fn the_hero_offers_the_next_episode_once_one_is_seen_through() {
+        let (_directory, state, library_id, viewer) = state_with_films(&[]).await;
+        let database = state.database();
+        let series = database
+            .create_work(library_id, WorkKind::Series, "Amber Field", "amber field", Some(2021))
+            .await
+            .expect("series created");
+        dress_in_full(database, series.id).await;
+        let season = database
+            .create_child_work(library_id, series.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        let root = database.library_roots(library_id).await.expect("roots").remove(0);
+        let mut episodes = Vec::new();
+        for number in 1..=3 {
+            let episode = database
+                .create_child_work(
+                    library_id,
+                    season.id,
+                    number,
+                    WorkKind::Episode,
+                    &format!("Episode {number}"),
+                    &format!("episode {number}"),
+                )
+                .await
+                .expect("episode created")
+                .id;
+            database
+                .insert_source(
+                    episode,
+                    root.id,
+                    std::path::Path::new(&format!("{episode}.mkv")),
+                    1_000,
+                    melyxar_core::time::now(),
+                )
+                .await
+                .expect("file recorded");
+            episodes.push(episode);
+        }
+
+        database.mark_watched(viewer.id, episodes[0], true).await.expect("marked");
+        let page = home(&state, None, &viewer).await.expect("read");
+        let shown: Vec<_> = page.hero.iter().filter(|entry| entry.episode_of.is_some()).collect();
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].card.id, episodes[1]);
+        assert_eq!(shown[0].because, Because::Next);
+
+        // Started halfway, the next one is the one carried on, and the series
+        // stands in the banner once.
+        database
+            .record_playback_progress(
+                viewer.id,
+                episodes[1],
+                melyxar_core::time::Millis::new(600_000),
+                PlaybackState::InProgress,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("recorded");
+        let page = home(&state, None, &viewer).await.expect("read");
+        let shown: Vec<_> = page.hero.iter().filter(|entry| entry.episode_of.is_some()).collect();
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].because, Because::Started);
     }
 
     #[tokio::test]
