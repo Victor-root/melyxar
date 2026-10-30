@@ -172,92 +172,98 @@ function MaintenancePanel() {
         : t("admin.maintenance_on_why");
 
   return (
-    <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")}>
-      <Setting label={t("admin.maintenance_on")} why={where}>
-        <Toggle
-          label={t("admin.maintenance_on")}
-          checked={on}
-          disabled={sending}
-          onChange={(wanted) =>
-            send({
-              on: wanted,
-              delay_minutes: delay,
-              until: wanted ? untilAt(ending, Date.now() + delay * 60_000) : null,
-              message: wanted ? kept() : null,
-            })
-          }
-        />
-      </Setting>
-      <Setting label={t("admin.maintenance_message")} why={t("admin.maintenance_message_why")}>
-        <form
-          className="name-choice"
-          onSubmit={(event) => {
-            event.preventDefault();
-            change(standing.until, kept());
-          }}
-        >
-          <span className="name-field">
-            <input
-              type="text"
-              className="field-line"
-              aria-label={t("admin.maintenance_message")}
-              placeholder={t("maintenance.closed", { name: branding?.server_name ?? UNNAMED })}
-              value={message}
-              maxLength={LONGEST_MAINTENANCE_MESSAGE}
-              onChange={(event) => setTyped(event.target.value)}
-            />
-          </span>
-          {on && (
-            <button
-              type="submit"
-              className="button button-small button-accent"
-              disabled={sending || (kept() ?? "") === (standing.message ?? "")}
-            >
-              {t("admin.server_name_save")}
-            </button>
-          )}
-        </form>
-      </Setting>
-      <Setting label={t("admin.maintenance_delay")} why={t("admin.maintenance_delay_why")}>
-        <Picker
-          label={t("admin.maintenance_delay")}
-          value={String(delay)}
-          disabled={on}
-          options={MAINTENANCE_DELAYS.map(
-            (minutes) =>
-              [
-                String(minutes),
-                minutes === 0 ? t("admin.maintenance_now") : t("work.minutes", { count: minutes }),
-              ] as const,
-          )}
-          onPick={(minutes) => setDelay(Number(minutes))}
-        />
-      </Setting>
-      <Setting label={t("admin.maintenance_until")} why={t("admin.maintenance_until_why")}>
-        <HourField
-          label={t("admin.maintenance_until")}
-          value={endsAt}
-          disabled={sending}
-          unset={t("admin.maintenance_no_end")}
-          onPick={(typed) => {
-            if (on) {
-              change(untilAt(typed, standing.startsAt ?? Date.now()), standing.message);
-            } else {
-              setEnding(typed);
+    <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")} wide>
+      {/* A tile each across the panel: four short choices, then what a
+          proxy in front needs, across the whole width. */}
+      <div className="setting-tiles">
+        <Setting stacked label={t("admin.maintenance_on")} why={where}>
+          <Toggle
+            label={t("admin.maintenance_on")}
+            checked={on}
+            disabled={sending}
+            onChange={(wanted) =>
+              send({
+                on: wanted,
+                delay_minutes: delay,
+                until: wanted ? untilAt(ending, Date.now() + delay * 60_000) : null,
+                message: wanted ? kept() : null,
+              })
             }
-          }}
-        />
-      </Setting>
-      <Setting label={t("admin.maintenance_proxy")} why={t("admin.maintenance_proxy_why")}>
-        <button
-          type="button"
-          className="button button-small"
-          onClick={() => void putOnTheClipboard(NGINX_EXAMPLE).then(setCopied)}
-        >
-          {t(copied ? "admin.maintenance_proxy_copied" : "admin.maintenance_proxy_copy")}
-        </button>
-      </Setting>
-      <pre className="log maintenance-proxy">{NGINX_EXAMPLE}</pre>
+          />
+        </Setting>
+        <Setting stacked label={t("admin.maintenance_message")} why={t("admin.maintenance_message_why")}>
+          <form
+            className="name-choice"
+            onSubmit={(event) => {
+              event.preventDefault();
+              change(standing.until, kept());
+            }}
+          >
+            <span className="name-field">
+              <input
+                type="text"
+                className="field-line"
+                aria-label={t("admin.maintenance_message")}
+                placeholder={t("maintenance.closed", { name: branding?.server_name ?? UNNAMED })}
+                value={message}
+                maxLength={LONGEST_MAINTENANCE_MESSAGE}
+                onChange={(event) => setTyped(event.target.value)}
+              />
+            </span>
+            {on && (
+              <button
+                type="submit"
+                className="button button-small button-accent"
+                disabled={sending || (kept() ?? "") === (standing.message ?? "")}
+              >
+                {t("admin.server_name_save")}
+              </button>
+            )}
+          </form>
+        </Setting>
+        <Setting stacked label={t("admin.maintenance_delay")} why={t("admin.maintenance_delay_why")}>
+          <Picker
+            label={t("admin.maintenance_delay")}
+            value={String(delay)}
+            disabled={on}
+            options={MAINTENANCE_DELAYS.map(
+              (minutes) =>
+                [
+                  String(minutes),
+                  minutes === 0 ? t("admin.maintenance_now") : t("work.minutes", { count: minutes }),
+                ] as const,
+            )}
+            onPick={(minutes) => setDelay(Number(minutes))}
+          />
+        </Setting>
+        <Setting stacked label={t("admin.maintenance_until")} why={t("admin.maintenance_until_why")}>
+          <HourField
+            label={t("admin.maintenance_until")}
+            value={endsAt}
+            disabled={sending}
+            unset={t("admin.maintenance_no_end")}
+            onPick={(typed) => {
+              if (on) {
+                change(untilAt(typed, standing.startsAt ?? Date.now()), standing.message);
+              } else {
+                setEnding(typed);
+              }
+            }}
+          />
+        </Setting>
+        <div className="setting-tile-wide">
+          <Setting label={t("admin.maintenance_proxy")} why={t("admin.maintenance_proxy_why")}>
+            <button
+              type="button"
+              className="button button-small"
+              onClick={() => void putOnTheClipboard(NGINX_EXAMPLE).then(setCopied)}
+            >
+              {t(copied ? "admin.maintenance_proxy_copied" : "admin.maintenance_proxy_copy")}
+            </button>
+          </Setting>
+          <pre className="log maintenance-proxy">{NGINX_EXAMPLE}</pre>
+        </div>
+      </div>
     </Panel>
   );
 }
