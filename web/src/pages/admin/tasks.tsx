@@ -17,6 +17,7 @@ import {
   Setting,
   Toggle,
 } from "../../components/panel";
+import { HourField } from "../../components/hour-field";
 import { refusalKey } from "../../i18n";
 import {
   ClockIcon,
@@ -327,16 +328,11 @@ function TaskLine({
             onChange={(runs) => onSchedule(runs, task.at_utc_minutes)}
           />
           <span>{t("tasks.daily")}</span>
-          <input
-            type="time"
-            className="field-line field-time"
-            aria-label={`${name} · ${t("tasks.daily")}`}
+          <HourField
+            label={`${name} · ${t("tasks.daily")}`}
             value={asLocalTime(task.at_utc_minutes)}
             disabled={!task.runs_on_schedule}
-            onChange={(event) =>
-              event.target.value &&
-              onSchedule(true, asUtcMinutes(event.target.value))
-            }
+            onPick={(hour) => onSchedule(true, asUtcMinutes(hour))}
           />
         </div>
         <div className="task-line-now">

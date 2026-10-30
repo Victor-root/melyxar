@@ -34,6 +34,7 @@ import {
   WarningIcon,
 } from "../../icons";
 import { putOnTheClipboard } from "../../clipboard";
+import { HourField } from "../../components/hour-field";
 import { UNNAMED } from "../../components/maintenance";
 import { hourOfDayOf, maintenanceHeard, nextAt, useMaintenance } from "../../maintenance";
 import { serverChanged, useBranding } from "../../player/logo";
@@ -233,14 +234,12 @@ function MaintenancePanel() {
         />
       </Setting>
       <Setting label={t("admin.maintenance_until")} why={t("admin.maintenance_until_why")}>
-        <input
-          type="time"
-          className="field-line field-time"
-          aria-label={t("admin.maintenance_until")}
+        <HourField
+          label={t("admin.maintenance_until")}
           value={endsAt}
           disabled={sending}
-          onChange={(event) => {
-            const typed = event.target.value;
+          unset={t("admin.maintenance_no_end")}
+          onPick={(typed) => {
             if (on) {
               change(untilAt(typed, standing.startsAt ?? Date.now()), standing.message);
             } else {

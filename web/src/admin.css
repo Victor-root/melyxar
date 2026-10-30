@@ -212,10 +212,6 @@
   font-size: 13px;
 }
 
-.field-time {
-  width: 140px;
-}
-
 /* --------------------------------------------------------------------------
  * The scheduled tasks
  * ----------------------------------------------------------------------- */
@@ -271,11 +267,6 @@
   gap: var(--gap-tight);
   color: var(--text-soft);
   font-size: 13px;
-}
-
-.task-line-when .field-time {
-  width: 7.5rem;
-  height: 34px;
 }
 
 .task-line-waiting {
