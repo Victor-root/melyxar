@@ -182,7 +182,14 @@ export function AdminImport() {
   );
 }
 
-/** One server to import from: the oldest version read, and where its data is. */
+/** What an import brings over, the collections said apart for each server. */
+const IMPORTED = ["users", "history", "favourites", "music", "lists"] as const;
+
+/** What it leaves on the other server. */
+const LEFT_BEHIND = ["passwords", "metadata", "images", "ratings", "settings"] as const;
+
+/** One server to import from: the oldest version read, and where its data is,
+ *  with what is brought over and what is not. */
 function Source({
   server,
   busy,
@@ -206,6 +213,24 @@ function Source({
       lead={t(`import.${server}_lead`)}
       action={<StatePill state="ok">{t(`import.${server}_oldest`)}</StatePill>}
     >
+      <div className="import-scope">
+        <div>
+          <h3 className="settings-heading">{t("import.yes")}</h3>
+          <ul>
+            {IMPORTED.map((what) => (
+              <li key={what}>{t(`import.yes.${what === "lists" ? `lists_${server}` : what}`)}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 className="settings-heading">{t("import.no")}</h3>
+          <ul>
+            {LEFT_BEHIND.map((what) => (
+              <li key={what}>{t(`import.no.${what}`)}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
       <form
         className="import-from"
         onSubmit={(event) => {

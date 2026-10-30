@@ -535,8 +535,11 @@
   color: var(--text-soft);
 }
 
-/* The report, whole, in the journal's face. */
+/* The report, whole, in the journal's face, and read by scrolling the page
+   rather than a box of its own inside it. */
 .report-view {
+  max-height: none;
+  overflow: visible;
   margin: 0;
   padding: 14px 16px;
   white-space: pre-wrap;
