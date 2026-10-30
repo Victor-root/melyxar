@@ -2,22 +2,23 @@
  * The page's live line, held once for the page.
  *
  * The server says on it what changes in this account's notifications, the
- * moment it changes, and that the title requests or what the libraries hold
- * moved. To an administrator it also says the moment a line of
- * the activity journal is written, and sends what is being watched whenever
- * it changes while something on the page shows it. One line for the whole
- * page, whatever it shows: each one held open is one of the few connections
- * a browser opens to a server. Closed while the page is hidden, unless this
- * device asked for the system's notifications, and opened again when it
- * comes back, which is also when whatever follows it looks again, since
- * nothing was said to it meanwhile.
+ * moment it changes, that the title requests or what the libraries hold
+ * moved, and where maintenance stands as it moves. To an administrator it
+ * also says the moment a line of the activity journal is written, and sends
+ * what is being watched whenever it changes while something on the page
+ * shows it. One line for the whole page, whatever it shows: each one held
+ * open is one of the few connections a browser opens to a server. Closed
+ * while the page is hidden, unless this device asked for the system's
+ * notifications, and opened again when it comes back, which is also when
+ * whatever follows it looks again, since nothing was said to it meanwhile.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "./account";
 import { api } from "./api";
-import type { Watched } from "./api";
+import type { Maintenance, Watched } from "./api";
+import { askAboutMaintenance, maintenanceHeard } from "./maintenance";
 
 /** What the line says about what is being watched: the list, or that it
  *  could not be had. */
@@ -114,6 +115,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
         toNotifications({ name: "open" });
         toRequests();
         toLibraries();
+        askAboutMaintenance();
         if (administrator) toJournal();
       });
       for (const name of NOTIFICATION_WORDS) {
@@ -124,6 +126,9 @@ export function LiveLine({ children }: { children: ReactNode }) {
       line.addEventListener("requests", toRequests);
       line.addEventListener("libraries", toLibraries);
       line.addEventListener("activity", toJournal);
+      line.addEventListener("maintenance", (event) =>
+        maintenanceHeard(JSON.parse((event as MessageEvent<string>).data) as Maintenance),
+      );
       line.addEventListener("playing", (event) =>
         toPlaying({ watched: JSON.parse((event as MessageEvent<string>).data) as Watched[] }),
       );

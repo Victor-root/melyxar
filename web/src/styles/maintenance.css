@@ -1,0 +1,97 @@
+/*
+ * A maintenance: the screen that stands in for the interface while it is in
+ * force, drawn on the door's own ground, and the band over every screen that
+ * counts down to it.
+ */
+
+.maintenance {
+  grid-template-rows: 1fr;
+}
+
+.maintenance-hall {
+  grid-row: 1;
+  align-self: center;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  max-width: 560px;
+  text-align: center;
+}
+
+.maintenance-hall > * {
+  animation: door-arrive 420ms var(--ease) backwards;
+}
+
+.maintenance-title {
+  margin: 0;
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: clamp(28px, min(3vw, 5.4vh), 46px);
+  font-weight: 700;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.maintenance-message {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.maintenance-when {
+  margin: 0;
+  color: var(--attention);
+  font-weight: 600;
+}
+
+.maintenance-note {
+  margin: 0 0 var(--gap);
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+/* Over every screen and every film: a solid ground rather than glass, since
+   it can stand over a playing film for minutes and a blur would be drawn
+   again with every image. */
+.maintenance-band {
+  position: fixed;
+  top: calc(var(--safe-top) + var(--gap));
+  left: 50%;
+  z-index: 112;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--gutter));
+  padding: 10px 14px;
+  border-radius: var(--radius-panel);
+  border: 1px solid var(--attention);
+  background: linear-gradient(var(--attention-wash), var(--attention-wash)), var(--surface-raised);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+}
+
+.maintenance-band > svg {
+  flex: none;
+  color: var(--attention);
+}
+
+.maintenance-band-words {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--gap);
+  row-gap: 2px;
+  font-size: 14px;
+}
+
+.maintenance-band-words strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.maintenance-band-words span {
+  color: var(--text-soft);
+}

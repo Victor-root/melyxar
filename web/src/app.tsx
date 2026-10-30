@@ -7,11 +7,11 @@
  * one.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBranding } from "./player/logo";
 import { wearTheLogo } from "./installing";
 import { nameTheTab } from "./tab";
-import { Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import type { Library } from "./api";
 import { api } from "./api";
 import { AttentionProvider } from "./notifications/attention";
@@ -25,6 +25,8 @@ import { RequestsProvider } from "./requests/store";
 import { RequestTitlePage } from "./requests/title";
 import { NotesProvider } from "./notifications/store";
 import { LiveLine } from "./live";
+import { MaintenanceBand, MaintenanceScreen } from "./components/maintenance";
+import { useFollowedMaintenance, useMaintenance } from "./maintenance";
 import { Header } from "./components/header";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
@@ -85,6 +87,14 @@ export function App() {
   useEffect(() => nameTheTab(branding?.server_name ?? null), [branding]);
   useEffect(() => wearTheLogo(branding?.logo_icon ?? null), [branding]);
 
+  // A maintenance in force stands in for everything but the door, for
+  // whoever is not an administrator. The door is kept for administrators,
+  // asked for from the screen of the maintenance or by its own address.
+  const administrator = who.account?.is_administrator === true;
+  const turnedAway = useMaintenance().state === "on" && !administrator;
+  useFollowedMaintenance(turnedAway);
+  const [toTheDoor, setToTheDoor] = useState(() => window.location.pathname === "/door");
+
   // A door that flashes up for a moment in front of somebody who is signed in
   // is worse than a moment of nothing, so nothing is drawn until the server
   // has answered.
@@ -92,19 +102,34 @@ export function App() {
     return <main className="page" aria-busy="true" />;
   }
 
-  if (!who.account) {
-    return <Door branding={who.branding!} cameIn={who.cameIn} />;
+  if (turnedAway && (who.account || !toTheDoor)) {
+    return (
+      <MaintenanceScreen
+        branding={who.branding}
+        signedIn={who.account !== null}
+        onDoor={() => setToTheDoor(true)}
+        onLeave={() => void who.leave()}
+      />
+    );
   }
 
   return (
-    <WhoProvider who={who}>
-      {/* What this viewer has said about a work, held above every screen: one
-          press of a tick has to change every card showing that work, not the
-          one that was pressed. */}
-      <MarksProvider>
-        <TheLibrary />
-      </MarksProvider>
-    </WhoProvider>
+    <>
+      {/* The countdown before a maintenance, over every screen. */}
+      <MaintenanceBand administrator={administrator} />
+      {who.account ? (
+        <WhoProvider who={who}>
+          {/* What this viewer has said about a work, held above every screen:
+              one press of a tick has to change every card showing that work,
+              not the one that was pressed. */}
+          <MarksProvider>
+            <TheLibrary />
+          </MarksProvider>
+        </WhoProvider>
+      ) : (
+        <Door branding={who.branding!} cameIn={who.cameIn} />
+      )}
+    </>
   );
 }
 
@@ -220,6 +245,9 @@ function BehindTheDoor() {
             <div className="shell-scroll" ref={scrolling}>
               <Routes>
                 <Route path="/" element={<Opening libraries={libraries.all} />} />
+                {/* The door's own address, kept for a maintenance: once in,
+                    it leads home. */}
+                <Route path="/door" element={<Navigate to="/" replace />} />
                 <Route path="/library/:id" element={<LibraryOrMusic libraries={libraries.all} />} />
                 <Route path="/music/album/:id" element={<MusicAlbumPage />} />
                 <Route path="/music/playlist/:id" element={<MusicPlaylistPage />} />

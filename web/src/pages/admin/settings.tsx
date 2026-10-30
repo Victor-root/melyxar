@@ -1,13 +1,14 @@
 /*
  * What the server is, for everybody who comes to it: its name, its face, the
- * screen at the door, and the few switches that change it as a whole. Drawn
- * whole; what has no engine yet says so.
+ * screen at the door, and the few switches that change it as a whole, the
+ * maintenance among them. Drawn whole; what has no engine yet says so.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../../api";
 import type {
   LoginBackgroundStyle,
+  MaintenanceSwitched,
   ServerSettings,
   ServerTheme,
 } from "../../api";
@@ -32,8 +33,10 @@ import {
   ServerIcon,
   WarningIcon,
 } from "../../icons";
+import { putOnTheClipboard } from "../../clipboard";
+import { maintenanceHeard, useMaintenance } from "../../maintenance";
 import { serverChanged } from "../../player/logo";
-import { howMany } from "../../readable";
+import { howLong, howMany, writtenMoment } from "../../readable";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
 
@@ -48,24 +51,7 @@ export function AdminSettings() {
 
         <DoorPanel />
 
-        <Panel
-          icon={WarningIcon}
-          title={t("admin.maintenance")}
-          lead={t("admin.maintenance_lead")}
-          soon
-        >
-          <Setting label={t("admin.maintenance_on")} soon>
-            <Toggle
-              label={t("admin.maintenance_on")}
-              checked={false}
-              onChange={() => {}}
-              disabled
-            />
-          </Setting>
-          <Setting label={t("admin.maintenance_message")} soon>
-            <input className="field-line" disabled readOnly value="" />
-          </Setting>
-        </Panel>
+        <MaintenancePanel />
 
         <Panel
           icon={RefreshIcon}
@@ -102,6 +88,177 @@ export function AdminSettings() {
         </Panel>
       </div>
     </>
+  );
+}
+
+/** The delays a maintenance may be announced with, in minutes, as the server
+ *  holds it to. */
+const MAINTENANCE_DELAYS = [0, 1, 5, 10, 15];
+
+/** How long a maintenance may be said to last, in minutes; none for unsaid. */
+const MAINTENANCE_LASTING = [0, 15, 30, 60, 120, 240];
+
+/** The longest maintenance message, as the server holds it to. */
+const LONGEST_MAINTENANCE_MESSAGE = 500;
+
+/** What a reverse proxy in front adds to show a page of its own during a
+ *  maintenance: it reads the code the server answers, and the door, which
+ *  never answers that code, still lets an administrator sign in. */
+const NGINX_EXAMPLE = `# Inside the location block that passes requests to Melyxar:
+proxy_intercept_errors on;
+error_page 503 /maintenance.html;
+
+# Beside it, in the same server block:
+location = /maintenance.html {
+    root /var/www/melyxar;
+    internal;
+}`;
+
+/** The server closed to all but its administrators for a while, announced
+ *  first with a countdown on every screen. */
+function MaintenancePanel() {
+  const { t, language } = useSettings();
+  const toast = useToast();
+  const standing = useMaintenance();
+  const on = standing.state !== "off";
+  /* What is being typed, and nothing while the field shows the message as it
+     is held, so a message kept from here is the one the field goes back to. */
+  const [typed, setTyped] = useState<string | null>(null);
+  const message = typed ?? standing.message ?? "";
+  const [delay, setDelay] = useState(5);
+  const [lasting, setLasting] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const untilAfter = (minutes: number) =>
+    minutes > 0 ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
+  const hour = (instant: string | number) =>
+    writtenMoment(new Date(instant), language, { hour: "2-digit", minute: "2-digit" });
+
+  const send = (switched: MaintenanceSwitched) => {
+    setSending(true);
+    api
+      .setMaintenance(switched)
+      .then((seen) => {
+        maintenanceHeard(seen);
+        setTyped(null);
+      })
+      .catch((error) => {
+        toast({
+          state: "trouble",
+          title: t("admin.maintenance_failed"),
+          detail: t(refusalKey(refusalOf(error))),
+        });
+      })
+      .finally(() => setSending(false));
+  };
+  const kept = () => message.trim() || null;
+  /* While it is on, a change of message or end leaves its start where it
+     is: only switching it on reads the delay. */
+  const change = (until: string | null, said: string | null) =>
+    send({ on: true, delay_minutes: 0, until, message: said });
+
+  const where =
+    standing.state === "announced" && standing.startsAt !== null
+      ? t("admin.maintenance_announced", { time: hour(standing.startsAt) })
+      : standing.state === "on"
+        ? standing.until
+          ? t("admin.maintenance_in_force_until", { time: hour(standing.until) })
+          : t("admin.maintenance_in_force")
+        : t("admin.maintenance_on_why");
+
+  return (
+    <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")}>
+      <Setting label={t("admin.maintenance_on")} why={where}>
+        <Toggle
+          label={t("admin.maintenance_on")}
+          checked={on}
+          disabled={sending}
+          onChange={(wanted) =>
+            send({
+              on: wanted,
+              delay_minutes: delay,
+              until: wanted ? untilAfter(lasting) : null,
+              message: wanted ? kept() : null,
+            })
+          }
+        />
+      </Setting>
+      <Setting label={t("admin.maintenance_message")} why={t("admin.maintenance_message_why")}>
+        <form
+          className="name-choice"
+          onSubmit={(event) => {
+            event.preventDefault();
+            change(standing.until, kept());
+          }}
+        >
+          <span className="name-field">
+            <input
+              type="text"
+              className="field-line"
+              aria-label={t("admin.maintenance_message")}
+              placeholder={t("maintenance.announced_detail")}
+              value={message}
+              maxLength={LONGEST_MAINTENANCE_MESSAGE}
+              onChange={(event) => setTyped(event.target.value)}
+            />
+          </span>
+          {on && (
+            <button
+              type="submit"
+              className="button button-small button-accent"
+              disabled={sending || (kept() ?? "") === (standing.message ?? "")}
+            >
+              {t("admin.server_name_save")}
+            </button>
+          )}
+        </form>
+      </Setting>
+      <Setting label={t("admin.maintenance_delay")} why={t("admin.maintenance_delay_why")}>
+        <Picker
+          label={t("admin.maintenance_delay")}
+          value={String(delay)}
+          disabled={on}
+          options={MAINTENANCE_DELAYS.map(
+            (minutes) =>
+              [
+                String(minutes),
+                minutes === 0 ? t("admin.maintenance_now") : t("work.minutes", { count: minutes }),
+              ] as const,
+          )}
+          onPick={(minutes) => setDelay(Number(minutes))}
+        />
+      </Setting>
+      <Setting label={t("admin.maintenance_lasting")} why={t("admin.maintenance_lasting_why")}>
+        <Picker
+          label={t("admin.maintenance_lasting")}
+          value={String(lasting)}
+          disabled={sending}
+          options={MAINTENANCE_LASTING.map(
+            (minutes) =>
+              [
+                String(minutes),
+                minutes === 0 ? t("admin.maintenance_unsaid") : howLong(minutes, t),
+              ] as const,
+          )}
+          onPick={(picked) => {
+            const minutes = Number(picked);
+            setLasting(minutes);
+            if (on) change(untilAfter(minutes), standing.message);
+          }}
+        />
+      </Setting>
+      <Setting label={t("admin.maintenance_proxy")} why={t("admin.maintenance_proxy_why")}>
+        <button
+          type="button"
+          className="button button-small"
+          onClick={() => void putOnTheClipboard(NGINX_EXAMPLE).then(setCopied)}
+        >
+          {t(copied ? "admin.maintenance_proxy_copied" : "admin.maintenance_proxy_copy")}
+        </button>
+      </Setting>
+      <pre className="log maintenance-proxy">{NGINX_EXAMPLE}</pre>
+    </Panel>
   );
 }
 
