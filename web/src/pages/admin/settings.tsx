@@ -174,25 +174,32 @@ function MaintenancePanel() {
         : t("admin.maintenance_on_why");
 
   return (
-    <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")} wide>
-      {/* A tile each across the panel for the four short choices, then what
+    <Panel
+      icon={WarningIcon}
+      title={t("admin.maintenance")}
+      lead={t("admin.maintenance_lead")}
+      wide
+      action={
+        <Toggle
+          label={t("admin.maintenance_on")}
+          checked={on}
+          disabled={sending}
+          onChange={(wanted) =>
+            send({
+              on: wanted,
+              delay_minutes: delay,
+              until: wanted ? untilAt(ending, Date.now() + delay * 60_000) : null,
+              message: wanted ? kept() : null,
+            })
+          }
+        />
+      }
+    >
+      {/* Where it stands, under the switch that changes it. */}
+      <p className="panel-say">{where}</p>
+      {/* A tile each across the panel for the three short choices, then what
           a proxy in front needs, under them across the whole width. */}
       <div className="setting-tiles">
-        <Setting stacked label={t("admin.maintenance_on")} why={where}>
-          <Toggle
-            label={t("admin.maintenance_on")}
-            checked={on}
-            disabled={sending}
-            onChange={(wanted) =>
-              send({
-                on: wanted,
-                delay_minutes: delay,
-                until: wanted ? untilAt(ending, Date.now() + delay * 60_000) : null,
-                message: wanted ? kept() : null,
-              })
-            }
-          />
-        </Setting>
         <Setting stacked label={t("admin.maintenance_message")} why={t("admin.maintenance_message_why")}>
           <form
             className="name-choice"

@@ -421,7 +421,6 @@ export const FINDABLE: FindableSection[] = [
     files: ["pages/admin/settings.tsx"],
     named: [
       ["admin.maintenance", "admin.maintenance_lead"],
-      ["admin.maintenance_on"],
       ["admin.maintenance_message", "admin.maintenance_message_why"],
       ["admin.maintenance_delay", "admin.maintenance_delay_why"],
       ["admin.maintenance_until", "admin.maintenance_until_why"],
