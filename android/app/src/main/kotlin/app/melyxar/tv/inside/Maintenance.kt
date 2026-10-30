@@ -72,7 +72,7 @@ fun standingOf(seen: MaintenanceSeen, heardAtMs: Long) = Standing(
     message = seen.message,
 )
 
-/** How often it is asked again while this television is turned away. */
+/** How often it is asked again when nothing else would tell. */
 private const val ASKED_AGAIN_EVERY_MS = 10_000L
 
 /**
@@ -119,18 +119,19 @@ class Maintenance(private val api: Api, private val scope: CoroutineScope) {
     }
 }
 
-/** Counts down to an announced maintenance, and asks again while it turns
- *  this television away. */
+/** Counts down to an announced maintenance, and asks again every little
+ *  while for as long as nothing else would tell: this television turned
+ *  away, or at the door, where no live line is held yet. */
 @Composable
-fun FollowMaintenance(maintenance: Maintenance, turnedAway: Boolean) {
+fun FollowMaintenance(maintenance: Maintenance, asking: Boolean) {
     val startsAt = maintenance.standing.startsAtMs
     LaunchedEffect(startsAt) {
         startsAt ?: return@LaunchedEffect
         delay((startsAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
         maintenance.takesHold()
     }
-    LaunchedEffect(turnedAway) {
-        while (turnedAway) {
+    LaunchedEffect(asking) {
+        while (asking) {
             delay(ASKED_AGAIN_EVERY_MS)
             maintenance.ask()
         }

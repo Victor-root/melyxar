@@ -2,9 +2,9 @@
  * Where maintenance stands, held once for the page.
  *
  * Asked as the page opens, told on the live line whenever it moves, and
- * learnt from any request the server turns away for it. While it is in force
- * and this page is turned away, there is no live line to tell when it ends,
- * so it is asked again every little while instead.
+ * learnt from any request the server turns away for it. At the door, and
+ * while this page is turned away, there is no live line to tell, so it is
+ * asked again every little while instead.
  *
  * The countdown is counted here from the seconds the server gave, never from
  * an hour: a device whose clock is wrong still flips at the right moment.
@@ -23,7 +23,7 @@ export interface Standing {
   message: string | null;
 }
 
-/** How often it is asked again while it is in force. */
+/** How often it is asked again when nothing else would tell. */
 const ASKED_AGAIN_EVERY_MS = 10_000;
 
 const OFF: Standing = { state: "off", startsAt: null, until: null, message: null };
@@ -122,9 +122,10 @@ export function useMaintenance(): Standing {
 /**
  * Follows maintenance for the whole page: asked as it opens, again when it
  * comes back into view, whenever a request is turned away for it, and every
- * little while for as long as this page is turned away.
+ * little while for as long as nothing else would tell: the page turned away,
+ * or at the door, where no live line is held.
  */
-export function useFollowedMaintenance(turnedAway: boolean): void {
+export function useFollowedMaintenance(asking: boolean): void {
   useEffect(() => {
     askAboutMaintenance();
     whenMaintenanceTurnsAway(askAboutMaintenance);
@@ -139,10 +140,10 @@ export function useFollowedMaintenance(turnedAway: boolean): void {
   }, []);
 
   useEffect(() => {
-    if (!turnedAway) {
+    if (!asking) {
       return;
     }
-    const asking = window.setInterval(askAboutMaintenance, ASKED_AGAIN_EVERY_MS);
-    return () => window.clearInterval(asking);
-  }, [turnedAway]);
+    const again = window.setInterval(askAboutMaintenance, ASKED_AGAIN_EVERY_MS);
+    return () => window.clearInterval(again);
+  }, [asking]);
 }
