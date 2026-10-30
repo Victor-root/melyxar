@@ -483,7 +483,7 @@
    down its whole width. */
 .setting-tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: var(--gap);
 }
 
@@ -496,7 +496,7 @@
 }
 
 .setting-tile-wide {
-  grid-column: 1 / -1;
+  margin-top: var(--gap);
   display: flex;
   flex-direction: column;
   gap: var(--gap);
@@ -506,10 +506,25 @@
   padding: 0;
 }
 
-/* The lines a reverse proxy needs during a maintenance, ready to copy. */
+/* The lines a reverse proxy needs during a maintenance, with the button
+   that copies them in the frame's corner. */
 .maintenance-proxy {
+  position: relative;
+}
+
+.maintenance-proxy .log {
   margin: 0;
   padding: 12px 14px;
+}
+
+.maintenance-proxy-copy {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.maintenance-proxy-open {
+  transform: rotate(180deg);
 }
 
 .log-line {

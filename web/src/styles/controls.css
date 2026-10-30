@@ -321,8 +321,8 @@ input[type="radio"]:disabled {
 }
 
 .hour-field .picker {
-  min-width: 0;
-  width: 5.5rem;
+  min-width: 5.5rem;
+  width: auto;
 }
 
 /* A field that opens a list. */
