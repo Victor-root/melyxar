@@ -313,9 +313,10 @@ fn status_for(code: ErrorCode) -> StatusCode {
         // installed or a film being converted ends, which is what tells a
         // client to say so rather than to announce a failure of the server
         // itself.
-        ErrorCode::RootUnavailable | ErrorCode::DependencyMissing | ErrorCode::NoRoomLeft => {
-            StatusCode::SERVICE_UNAVAILABLE
-        }
+        ErrorCode::RootUnavailable
+        | ErrorCode::DependencyMissing
+        | ErrorCode::NoRoomLeft
+        | ErrorCode::Maintenance => StatusCode::SERVICE_UNAVAILABLE,
         // The file is there and is the problem: nothing about the server will
         // change that, and no amount of waiting will either.
         ErrorCode::NotDescribed => StatusCode::UNPROCESSABLE_ENTITY,

@@ -447,6 +447,19 @@ impl Watching {
             .count()
     }
 
+    /// The accounts watching something right now, each once.
+    fn watchers(&self) -> Vec<UserId> {
+        let mut watchers: Vec<UserId> = self
+            .held()
+            .playing
+            .values()
+            .map(|watch| watch.viewer.user)
+            .collect();
+        watchers.sort_unstable();
+        watchers.dedup();
+        watchers
+    }
+
     /// The devices this account is watching something on.
     fn devices_of(&self, user: UserId) -> Vec<DeviceId> {
         self.held()
@@ -779,6 +792,11 @@ pub fn stop(state: &AppState, device: DeviceId) -> bool {
         tracing::info!(device = %device, "a film asked to stop never did, and was closed");
     });
     true
+}
+
+/// The accounts watching something right now.
+pub(crate) fn watchers(state: &AppState) -> Vec<UserId> {
+    state.watching().watchers()
 }
 
 /// Asks every film this account is watching to stop, as an administrator's

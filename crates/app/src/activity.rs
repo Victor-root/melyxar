@@ -79,6 +79,9 @@ pub enum Event {
         works: i64,
         from_the_disk: bool,
     },
+    /// An administrator closed the server for maintenance, or opened it again.
+    MaintenanceOn { by: String },
+    MaintenanceOff { by: String },
 }
 
 /// One film watched on one device, from its start to its end.
@@ -162,6 +165,8 @@ impl Category {
 
 const SERVER_STARTED: &str = "server_started";
 const SERVER_STOPPED: &str = "server_stopped";
+const MAINTENANCE_ON: &str = "server_maintenance_on";
+const MAINTENANCE_OFF: &str = "server_maintenance_off";
 const SIGNED_IN: &str = "signed_in";
 pub(crate) const SIGN_IN_REFUSED: &str = "sign_in_refused";
 pub(crate) const SIGN_IN_HELD_BACK: &str = "sign_in_held_back";
@@ -199,7 +204,7 @@ impl Level {
 
     fn of(kind: &str) -> Self {
         match kind {
-            SIGN_IN_REFUSED => Self::Attention,
+            SIGN_IN_REFUSED | MAINTENANCE_ON => Self::Attention,
             SIGN_IN_HELD_BACK | TASK_FAILED => Self::Trouble,
             _ => Self::Information,
         }
@@ -429,6 +434,8 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
                 "from_the_disk": from_the_disk,
             }),
         ),
+        Event::MaintenanceOn { by } => line(MAINTENANCE_ON, None, None, json!({ "by": by })),
+        Event::MaintenanceOff { by } => line(MAINTENANCE_OFF, None, None, json!({ "by": by })),
     })
 }
 
