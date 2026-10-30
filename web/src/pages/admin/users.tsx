@@ -27,7 +27,7 @@ import {
   Toggle,
 } from "../../components/panel";
 import { lastSeen } from "../../devices";
-import { AccountAddIcon, KindIcon, LockIcon, PeopleIcon } from "../../icons";
+import { AccountAddIcon, ChevronDownIcon, KindIcon, LockIcon, PeopleIcon } from "../../icons";
 import type { IconProps } from "../../icons";
 import { useLibraries } from "../../libraries";
 import { useJournalNews } from "../../live";
@@ -169,9 +169,9 @@ function AccountPanel({
   const { cameIn } = useAccount();
   const [asking, setAsking] = useState<"sign_out" | "remove" | null>(null);
   const [choosingPassword, setChoosingPassword] = useState(false);
-  /* Folded to its head at first: a server with many accounts was a page of
-     rights to scroll through to reach one. A question, a refusal or a
-     password being put opens it. */
+  /* Its rights folded away at first: a server with many accounts was a page
+     of rights to scroll through to reach one. A refusal or a password being
+     put opens them. */
   const [open, setOpen] = useState(false);
 
   const change = useTold(async (rights: Rights) => {
@@ -221,6 +221,8 @@ function AccountPanel({
   }, [refusal]);
 
   return (
+    /* A tile among the others while folded, across the page once its rights
+       are open: they are two columns of switches. */
     <Panel
       icon={faceOf(account)}
       title={
@@ -230,52 +232,53 @@ function AccountPanel({
       }
       lead={leadOf(account, libraries, t)}
       className="account-panel"
-      wide
-      folding={{ open, toggle: () => setOpen((was) => !was) }}
+      wide={open}
       rename={{
         label: t("users.name"),
         name: account.name,
         onSettled: (name) => void rename.tell(name),
       }}
-      action={
-        <>
-          <PictureButtons account={account} told={picture} />
-          {!account.is_you && (
-            <>
-              <button
-                className="button button-small"
-                onClick={() => {
-                  setChoosingPassword(true);
-                  setOpen(true);
-                }}
-              >
-                <LockIcon size={15} />
-                {t("users.password")}
-              </button>
-              <button
-                className="button button-small"
-                disabled={account.devices === 0}
-                onClick={() => {
-                  setAsking(asking === "sign_out" ? null : "sign_out");
-                  setOpen(true);
-                }}
-              >
-                {t("users.sign_out")}
-              </button>
-              <button
-                className="button button-small button-danger"
-                onClick={() => {
-                  setAsking(asking === "remove" ? null : "remove");
-                  setOpen(true);
-                }}
-              >
-                {t("users.remove")}
-              </button>
-            </>
-          )}
-        </>
-      }
     >
+      <div className="account-actions">
+        <PictureButtons account={account} told={picture} />
+        {!account.is_you && (
+          <>
+            <button
+              className="button button-small"
+              onClick={() => {
+                setChoosingPassword(true);
+                setOpen(true);
+              }}
+            >
+              <LockIcon size={15} />
+              {t("users.password")}
+            </button>
+            <button
+              className="button button-small"
+              disabled={account.devices === 0}
+              onClick={() => setAsking(asking === "sign_out" ? null : "sign_out")}
+            >
+              {t("users.sign_out")}
+            </button>
+            <button
+              className="button button-small button-danger"
+              onClick={() => setAsking(asking === "remove" ? null : "remove")}
+            >
+              {t("users.remove")}
+            </button>
+          </>
+        )}
+      </div>
+      <button
+        type="button"
+        className="account-rights-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((was) => !was)}
+      >
+        {t("users.rights")}
+        <ChevronDownIcon size={16} className={open ? "account-rights-open" : undefined} />
+      </button>
+
       {refusal && (
         <p className="panel-notice panel-notice-trouble">{refusal}</p>
       )}
@@ -310,19 +313,22 @@ function AccountPanel({
         </div>
       )}
 
-      <div className="panel-split">
-        <RightsLines
-          rights={account.rights}
-          libraries={libraries}
-          you={account.is_you}
-          onChange={(rights) => void change.tell(rights)}
-          columns={2}
-          divided
-        />
-      </div>
-
-      {account.is_you && (
-        <span className="panel-say">{t("users.not_yourself")}</span>
+      {open && (
+        <>
+          <div className="panel-split">
+            <RightsLines
+              rights={account.rights}
+              libraries={libraries}
+              you={account.is_you}
+              onChange={(rights) => void change.tell(rights)}
+              columns={2}
+              divided
+            />
+          </div>
+          {account.is_you && (
+            <span className="panel-say">{t("users.not_yourself")}</span>
+          )}
+        </>
       )}
 
       {choosingPassword && (
