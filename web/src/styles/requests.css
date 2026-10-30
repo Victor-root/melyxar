@@ -319,3 +319,51 @@
   margin-top: 0;
   padding-top: 0;
 }
+
+/* Who may ask: an account a line, its face, its name and its switch close
+   together. */
+.askers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asker {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: 8px 10px;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.asker-face {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.asker-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.asker-words {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.asker-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

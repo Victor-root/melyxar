@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { refusalAbout, useAsked } from "../asking";
+import { Face } from "../components/face";
 import { PageHead, Panel, Setting, Toggle } from "../components/panel";
 import { PeopleIcon, RequestIcon } from "../icons";
 import { useRequestsNews } from "../live";
@@ -151,28 +152,36 @@ export function AdminRequests() {
         </Panel>
         {shown.enabled && (
           <Panel icon={PeopleIcon} title={t("requests.who")} lead={t("requests.who_why")}>
-            {shown.askers.map((asker) => (
-              <Setting
-                key={asker.id}
-                label={asker.name}
-                why={asker.administrator ? t("requests.always_administrator") : undefined}
-              >
-                <Toggle
-                  label={asker.name}
-                  checked={asker.may_ask}
-                  disabled={asker.administrator}
-                  onChange={(may_ask) =>
-                    change(
-                      {
-                        ...shown,
-                        askers: shown.askers.map((one) => (one.id === asker.id ? { ...one, may_ask } : one)),
-                      },
-                      () => requestsApi.allow(asker.id, may_ask),
-                    )
-                  }
-                />
-              </Setting>
-            ))}
+            {/* An account a line, its switch right beside its name: a list of
+                a few names reads at a glance, and a switch at the far end of
+                a long line is a switch the eye has to go and find. */}
+            <ul className="askers">
+              {shown.askers.map((asker) => (
+                <li key={asker.id} className="asker">
+                  <Face name={asker.name} avatar={asker.avatar} className="asker-face" />
+                  <span className="asker-words">
+                    <span className="asker-name">{asker.name}</span>
+                    {asker.administrator && (
+                      <span className="line-note">{t("requests.always_administrator")}</span>
+                    )}
+                  </span>
+                  <Toggle
+                    label={asker.name}
+                    checked={asker.may_ask}
+                    disabled={asker.administrator}
+                    onChange={(may_ask) =>
+                      change(
+                        {
+                          ...shown,
+                          askers: shown.askers.map((one) => (one.id === asker.id ? { ...one, may_ask } : one)),
+                        },
+                        () => requestsApi.allow(asker.id, may_ask),
+                      )
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
           </Panel>
         )}
       </div>

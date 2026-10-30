@@ -24,6 +24,8 @@ pub struct Access {
 pub struct Asker {
     pub id: UserId,
     pub name: String,
+    /// Its profile picture, when it chose one.
+    pub avatar_path: Option<String>,
     pub administrator: bool,
     pub may_ask: bool,
 }
@@ -99,6 +101,7 @@ pub async fn askers(state: &AppState) -> Result<Vec<Asker>> {
             administrator: user.permissions.is_administrator,
             id: user.id,
             name: user.name,
+            avatar_path: user.avatar_path,
         })
         .collect())
 }

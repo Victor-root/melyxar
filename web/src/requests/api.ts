@@ -116,6 +116,8 @@ export interface Asking {
 export interface Asker {
   id: string;
   name: string;
+  /** Where its profile picture is, when it chose one. */
+  avatar: string | null;
   administrator: boolean;
   may_ask: boolean;
 }
