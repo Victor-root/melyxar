@@ -358,7 +358,7 @@
     <string name="tv_maintenance_title">Maintenance en cours</string>
     <string name="tv_maintenance_closed">Le serveur %1$s restera inaccessible le temps de la maintenance.</string>
     <string name="tv_maintenance_administrator">Connexion administrateur</string>
-    <string name="tv_maintenance_back_at">Retour prévu vers %1$s</string>
+    <string name="tv_maintenance_back_at">Retour prévu à %1$s</string>
     <string name="tv_maintenance_back_soon">Retour dès que possible</string>
     <string name="tv_maintenance_comes_back">Cet écran reviendra de lui-même à la normale à la fin de la maintenance.</string>
     <string name="tv_maintenance_announced">Maintenance dans %1$s</string>

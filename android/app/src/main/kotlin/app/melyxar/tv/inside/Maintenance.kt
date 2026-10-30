@@ -161,7 +161,7 @@ fun MaintenanceScreen(branding: Branding, standing: Standing, action: String, on
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
     ) {
-        ServerMark(branding, 96.dp)
+        ServerMark(branding, 96.dp, lit = false)
         Text(
             stringResource(R.string.tv_maintenance_title),
             fontSize = 34.sp,
