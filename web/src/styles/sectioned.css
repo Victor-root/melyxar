@@ -465,13 +465,16 @@
     font-size: 24px;
   }
 
-  /* One line, so the name stands at the same height on every page: a
-     second line pushed it up the band. What does not fit is in its title. */
+  /* Room for two lines kept on every page, filled or not, so the name
+     stands at the same height whatever is said under it: a second line used
+     to push it up the band. */
   .page-head-words p {
+    display: -webkit-box;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     line-height: 1.35;
+    min-height: calc(2 * 1.35em);
   }
 
   .page-head-actions {
