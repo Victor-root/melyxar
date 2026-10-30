@@ -32,8 +32,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import app.melyxar.R
 import app.melyxar.server.Account
 import app.melyxar.server.Api
 import app.melyxar.server.Branding
@@ -523,7 +525,7 @@ fun Inside(
                         Probe.screenShown(here.key)
                     }
                     if (turnedAway) {
-                        MaintenanceScreen(branding, maintenance.standing, onChangeProfile)
+                        MaintenanceScreen(branding, maintenance.standing, stringResource(R.string.tv_change_profile), onChangeProfile)
                     } else {
                         // The screen as one piece the remote comes back into where it
                         // left it, which the bar pinned over it leads down to.
