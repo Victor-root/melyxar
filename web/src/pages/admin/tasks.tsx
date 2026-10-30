@@ -20,7 +20,6 @@ import {
 import { refusalKey } from "../../i18n";
 import {
   ClockIcon,
-  FolderIcon,
   HistoryIcon,
   KindIcon,
   PlayIcon,
@@ -77,65 +76,61 @@ export function AdminTasks() {
         </p>
       )}
 
-      <div className="panels">
-        <Panel
-          icon={TasksIcon}
-          title={t("jobs.running")}
-          lead={t("admin.running_lead")}
-        >
-          {running.length === 0 ? (
-            <p className="empty-line">{t("jobs.none")}</p>
-          ) : (
-            running.map((job) => (
-              <JobCard key={job.id} job={job} onCancel={() => cancel(job.id)} />
-            ))
-          )}
-        </Panel>
-
-        <Panel
-          icon={FolderIcon}
-          title={t("admin.start_work")}
-          lead={t("admin.start_work_lead")}
-        >
-          <Setting label={t("refresh.mode")} why={t(`refresh.${mode}_why`)}>
-            <Picker<RefreshMode>
-              label={t("refresh.mode")}
-              value={mode}
-              options={REFRESH_MODES.map(
-                (one) => [one, t(`refresh.${one}`)] as const,
-              )}
-              onPick={setMode}
-            />
-          </Setting>
-          <div className="lines">
-            {libraries.map((library) => (
-              <div className="line" key={library.id}>
+      {/* What is running and what can be set going, in one panel: the work
+          started from it shows up in it at once. */}
+      <Panel
+        icon={TasksIcon}
+        title={t("admin.start_work")}
+        lead={t("admin.start_work_lead")}
+        wide
+      >
+        <h3 className="settings-heading">{t("jobs.running")}</h3>
+        {running.length === 0 ? (
+          <p className="empty-line">{t("jobs.none")}</p>
+        ) : (
+          running.map((job) => (
+            <JobCard key={job.id} job={job} onCancel={() => cancel(job.id)} />
+          ))
+        )}
+        <h3 className="settings-heading">{t("admin.libraries")}</h3>
+        <Setting label={t("refresh.mode")} why={t(`refresh.${mode}_why`)}>
+          <Picker<RefreshMode>
+            label={t("refresh.mode")}
+            value={mode}
+            options={REFRESH_MODES.map(
+              (one) => [one, t(`refresh.${one}`)] as const,
+            )}
+            onPick={setMode}
+          />
+        </Setting>
+        <div className="library-tasks">
+          {libraries.map((library) => (
+            <div className="library-task" key={library.id}>
+              <span className="library-task-name">
                 <span className="line-mark" aria-hidden="true">
                   <KindIcon kind={library.kind} size={18} />
                 </span>
-                <span className="line-words">
-                  <span className="line-name">{library.name}</span>
-                </span>
-                <span className="line-end">
-                  <button
-                    className="button button-small"
-                    onClick={() => startOn(api.scan(library.id, mode))}
-                  >
-                    <RefreshIcon size={15} />
-                    {t("home.scan")}
-                  </button>
-                  <button
-                    className="button button-small"
-                    onClick={() => startOn(api.identify(library.id, mode))}
-                  >
-                    {t("home.identify")}
-                  </button>
-                </span>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
+                {library.name}
+              </span>
+              <span className="library-task-buttons">
+                <button
+                  className="button button-small"
+                  onClick={() => startOn(api.scan(library.id, mode))}
+                >
+                  <RefreshIcon size={15} />
+                  {t("home.scan")}
+                </button>
+                <button
+                  className="button button-small"
+                  onClick={() => startOn(api.identify(library.id, mode))}
+                >
+                  {t("home.identify")}
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </Panel>
 
       <ScheduledTasksPanel
         tasks={tasks}
