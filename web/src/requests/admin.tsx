@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { refusalAbout, useAsked } from "../asking";
 import { Face } from "../components/face";
-import { PageHead, Panel, Setting, Toggle } from "../components/panel";
+import { PageHead, Panel, Toggle } from "../components/panel";
 import { PeopleIcon, RequestIcon } from "../icons";
 import { useRequestsNews } from "../live";
 import { useToast } from "../notifications/toasts";
@@ -141,15 +141,19 @@ export function AdminRequests() {
       <PageHead lead={t("admin.requests_lead")} />
       {/* Side by side: each holds a few lines at most. */}
       <div className="panels">
-        <Panel icon={RequestIcon} title={t("requests.switch")} lead={t("requests.switch_why")}>
-          <Setting label={t("requests.switch_on")}>
+        {/* Its one switch in its head, beside what it does. */}
+        <Panel
+          icon={RequestIcon}
+          title={t("requests.switch")}
+          lead={t("requests.switch_why")}
+          action={
             <Toggle
               label={t("requests.switch_on")}
               checked={shown.enabled}
               onChange={(enabled) => change({ ...shown, enabled }, () => requestsApi.switch(enabled))}
             />
-          </Setting>
-        </Panel>
+          }
+        />
         {shown.enabled && (
           <Panel icon={PeopleIcon} title={t("requests.who")} lead={t("requests.who_why")}>
             {/* An account a line, its switch right beside its name: a list of

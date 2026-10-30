@@ -761,6 +761,40 @@
   border: none;
 }
 
+/* What can be done to an account: buttons of one width, in as many columns
+   as the tile takes. */
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--gap-tight);
+}
+
+.account-actions .button {
+  justify-content: center;
+}
+
+.account-rights-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.account-rights-toggle:hover {
+  color: var(--text);
+}
+
+.account-rights-open {
+  transform: rotate(180deg);
+}
+
 /* A device's line wears the face of its account where others wear a mark. */
 .line-mark-face {
   overflow: hidden;
