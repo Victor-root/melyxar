@@ -92,7 +92,8 @@ export function App() {
   // asked for from the screen of the maintenance or by its own address.
   const administrator = who.account?.is_administrator === true;
   const turnedAway = useMaintenance().state === "on" && !administrator;
-  useFollowedMaintenance(turnedAway);
+  // Nothing else tells the door, which holds no live line.
+  useFollowedMaintenance(turnedAway || !who.account);
   const [toTheDoor, setToTheDoor] = useState(() => window.location.pathname === "/door");
 
   // A door that flashes up for a moment in front of somebody who is signed in

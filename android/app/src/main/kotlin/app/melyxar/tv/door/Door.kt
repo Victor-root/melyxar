@@ -133,7 +133,12 @@ fun Door(
     var administrator by remember { mutableStateOf(false) }
     val closed = maintenance.standing.state == "on" && !administrator
     LaunchedEffect(api, tries) { maintenance.ask() }
-    FollowMaintenance(maintenance, closed)
+    FollowMaintenance(maintenance, asking = true)
+    // Shown the profiles once, an administrator sees the next maintenance
+    // like anybody else.
+    LaunchedEffect(maintenance.standing.state) {
+        if (maintenance.standing.state == "off") administrator = false
+    }
 
     LaunchedEffect(tries) {
         answer = try {
