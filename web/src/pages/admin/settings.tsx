@@ -34,6 +34,7 @@ import {
   WarningIcon,
 } from "../../icons";
 import { putOnTheClipboard } from "../../clipboard";
+import { UNNAMED } from "../../components/maintenance";
 import { maintenanceHeard, useMaintenance } from "../../maintenance";
 import { serverChanged, useBranding } from "../../player/logo";
 import { howLong, howMany, writtenMoment } from "../../readable";
@@ -198,7 +199,7 @@ function MaintenancePanel() {
               type="text"
               className="field-line"
               aria-label={t("admin.maintenance_message")}
-              placeholder={t("maintenance.closed", { name: branding?.server_name ?? "" })}
+              placeholder={t("maintenance.closed", { name: branding?.server_name ?? UNNAMED })}
               value={message}
               maxLength={LONGEST_MAINTENANCE_MESSAGE}
               onChange={(event) => setTyped(event.target.value)}
