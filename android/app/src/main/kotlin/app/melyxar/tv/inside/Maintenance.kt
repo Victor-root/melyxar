@@ -234,8 +234,8 @@ private fun Band(title: String, detail: String?, modifier: Modifier) {
     val shape = RoundedCornerShape(14.dp)
     Row(
         modifier = modifier
-            // Under the bar, beside the notifications.
-            .padding(top = 84.dp)
+            // At the top of the screen, as the web's band.
+            .padding(top = 18.dp)
             .widthIn(max = 760.dp)
             .glassPiece(shape)
             .rim(shape, palette.attention, 1.5.dp)
