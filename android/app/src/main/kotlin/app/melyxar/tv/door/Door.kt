@@ -436,21 +436,14 @@ fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifie
     }
 }
 
-/** The server's own logo when it has one, Melyxar's in the accent when not,
- *  in a glow of the accent where it is [lit]. */
+/** The server's own logo when it has one, Melyxar's in the accent when not. */
 @Composable
-fun ServerMark(branding: Branding, size: Dp, lit: Boolean = true) {
-    val palette = LocalPalette.current
+fun ServerMark(branding: Branding, size: Dp) {
     val logo = branding.logo
-    val glow = if (lit) {
-        Modifier.boxShadow(RoundedCornerShape(size / 2), BoxShadow(palette.accentGlow, blur = 24.dp, y = 8.dp))
-    } else {
-        Modifier
-    }
     if (logo != null) {
-        ServerPicture(listOf(Picture(logo)), size, glow.size(size), contentScale = ContentScale.Fit)
+        ServerPicture(listOf(Picture(logo)), size, Modifier.size(size), contentScale = ContentScale.Fit)
     } else {
-        MelyxarMark(size, glow)
+        MelyxarMark(size)
     }
 }
 
