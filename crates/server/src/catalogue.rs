@@ -166,6 +166,8 @@ struct LibraryView {
     keeps_resume_points: bool,
     /// Whether it keeps which works each account has watched.
     keeps_watched_marks: bool,
+    /// Whether its works may stand in the banner at the top of the home page.
+    in_the_hero: bool,
     /// Where that watching stands, for a library that asked for it:
     /// watching, starting while it is being set up, or refused.
     watch_state: Option<&'static str>,
@@ -225,6 +227,7 @@ async fn libraries(
                 watch_in_real_time: library.options.watch_in_real_time,
                 keeps_resume_points: library.options.keeps_resume_points,
                 keeps_watched_marks: library.options.keeps_watched_marks,
+                in_the_hero: library.options.in_the_hero,
                 watch_state,
                 watch_refusal,
                 metadata_language: library.metadata_language,

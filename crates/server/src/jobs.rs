@@ -452,6 +452,8 @@ struct OptionsAsked {
     /// account has watched.
     keeps_resume_points: bool,
     keeps_watched_marks: bool,
+    /// Whether its works may stand in the banner at the top of the home page.
+    in_the_hero: bool,
     /// The language this library's films are described in, as a two letter
     /// code. Changing it asks the provider about every film again.
     metadata_language: String,
@@ -467,6 +469,7 @@ struct OptionsView {
     watch_in_real_time: bool,
     keeps_resume_points: bool,
     keeps_watched_marks: bool,
+    in_the_hero: bool,
     metadata_language: String,
     /// Whether anything really moved. A screen that sent what was already
     /// there gets a plain no rather than a second copy of the same answer.
@@ -515,6 +518,7 @@ async fn set_library_options(
         watch_in_real_time: asked.watch_in_real_time,
         keeps_resume_points: asked.keeps_resume_points,
         keeps_watched_marks: asked.keeps_watched_marks,
+        in_the_hero: asked.in_the_hero,
     };
     let changed = state
         .database()
@@ -546,6 +550,7 @@ async fn set_library_options(
         watch_in_real_time = options.watch_in_real_time,
         keeps_resume_points = options.keeps_resume_points,
         keeps_watched_marks = options.keeps_watched_marks,
+        in_the_hero = options.in_the_hero,
         metadata_language = language,
         changed,
         asked_about_again,
@@ -561,6 +566,7 @@ async fn set_library_options(
         watch_in_real_time: options.watch_in_real_time,
         keeps_resume_points: options.keeps_resume_points,
         keeps_watched_marks: options.keeps_watched_marks,
+        in_the_hero: options.in_the_hero,
         metadata_language: language,
         changed: changed || asked_about_again.is_some(),
         asked_about_again,

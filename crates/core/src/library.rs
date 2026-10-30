@@ -218,6 +218,8 @@ pub struct LibraryOptions {
     /// Keep which works each account has watched, by hand or by playing them
     /// through.
     pub keeps_watched_marks: bool,
+    /// Let its works stand in the banner at the top of the home page.
+    pub in_the_hero: bool,
 }
 
 impl Default for LibraryOptions {
@@ -233,6 +235,7 @@ impl Default for LibraryOptions {
             watch_in_real_time: false,
             keeps_resume_points: true,
             keeps_watched_marks: true,
+            in_the_hero: true,
         }
     }
 }

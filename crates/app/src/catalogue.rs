@@ -5,6 +5,8 @@
 //! a second entry point, a command line or a television client, behave exactly
 //! like the browser without any rule being written twice.
 
+use std::collections::HashSet;
+
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::user::{HomeSection, Preferences, User};
 use melyxar_core::work::PlaybackState;
@@ -354,12 +356,25 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
 
     let seen = libraries(state, who).await?;
     let library_order = in_their_order(&seen, &who.preferences);
+    // The banner of the whole server leaves out a library kept out of it; a
+    // library's own page still opens on its own works.
+    let kept_out: HashSet<LibraryId> = match library_id {
+        Some(_) => HashSet::new(),
+        None => seen.iter().filter(|library| !library.options.in_the_hero).map(|library| library.id).collect(),
+    };
+    let banner_within: Option<Vec<LibraryId>> = match kept_out.is_empty() {
+        true => within.clone(),
+        false => Some(seen.iter().map(|library| library.id).filter(|id| !kept_out.contains(id)).collect()),
+    };
 
     Ok(Home {
         // Not drawn and so not worked out: dressing its candidates is the
         // dearest part of the page, and nobody would see the result.
         hero: match who.preferences.banner_shown {
-            true => the_hero(state, who, granted, &carry_on, &recently_added).await?,
+            true => {
+                let reach = Reach { granted, banner: banner_within.as_deref(), kept_out: &kept_out };
+                the_hero(state, who, reach, &carry_on, &recently_added).await?
+            }
             false => Vec::new(),
         },
         hero_at_random: who.preferences.banner_at_random,
@@ -374,6 +389,18 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
             .home_sections_shown(&with_a_row(&seen, &library_order)),
         library_order,
     })
+}
+
+/// Where the banner may look.
+#[derive(Clone, Copy)]
+struct Reach<'a> {
+    /// The libraries this account may open at all, where what an
+    /// administrator put forward is read.
+    granted: Option<&'a [LibraryId]>,
+    /// Those of them whose works may stand in the banner.
+    banner: Option<&'a [LibraryId]>,
+    /// Those kept out of it, for what is read from everywhere at once.
+    kept_out: &'a HashSet<LibraryId>,
 }
 
 /// The few works the page opens on.
@@ -392,11 +419,12 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
 async fn the_hero(
     state: &AppState,
     who: &User,
-    granted: Option<&[LibraryId]>,
+    reach: Reach<'_>,
     carry_on: &[WorkToCarryOn],
     recently_added: &WorkPage,
 ) -> Result<Vec<HeroItem>> {
     let database = state.database();
+    let granted = reach.granted;
     // Read before anything is let in, because what it holds is kept for it.
     // Filling the banner with what was left halfway and only then looking at
     // this is how "put on the front page" came to do nothing at all: somebody
@@ -410,10 +438,10 @@ async fn the_hero(
     // deliberately is not something a shuffle undoes.
     let random = who.preferences.banner_at_random;
     let drawn = match random {
-        true => database.works_at_random(who.id, granted, IN_THE_HERO).await?,
+        true => database.works_at_random(who.id, reach.banner, IN_THE_HERO).await?,
         false => Vec::new(),
     };
-    let suggested = database.suggestions(who.id, granted, IN_THE_HERO).await?;
+    let suggested = database.suggestions(who.id, reach.banner, IN_THE_HERO).await?;
 
     let started: Vec<(&WorkCard, Option<EpisodePlace>)> = carry_on
         .iter()
@@ -457,13 +485,16 @@ async fn the_hero(
         .dressed_large(&named, &who.preferences.interface_language)
         .await?;
 
-    let mut already: std::collections::HashSet<WorkId> = std::collections::HashSet::new();
+    let mut already: HashSet<WorkId> = HashSet::new();
     let mut take = |card: &WorkCard,
                     because: Because,
                     episode_of: Option<EpisodePlace>,
                     room: usize,
                     hero: &mut Vec<HeroItem>| {
         if hero.len() >= room || card.kind.is_home_media() || already.contains(&card.id) {
+            return;
+        }
+        if because != Because::Pinned && reach.kept_out.contains(&card.library_id) {
             return;
         }
         // What has just arrived is not offered again once seen through. What
@@ -951,6 +982,27 @@ mod tests {
         let page = home(&state, Some(library_id), &viewer).await.expect("read");
         assert_eq!(page.hero.len(), 2);
         assert!(page.hero.iter().all(|entry| entry.card.id != seen));
+    }
+
+    #[tokio::test]
+    async fn a_library_kept_out_of_the_banner_leaves_it_to_the_others() {
+        let (_directory, state, library_id, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        assert!(!home(&state, None, &viewer).await.expect("read").hero.is_empty());
+
+        state
+            .database()
+            .set_library_options(library_id, LibraryOptions { in_the_hero: false, ..LibraryOptions::default() })
+            .await
+            .expect("written");
+        assert!(
+            home(&state, None, &viewer).await.expect("read").hero.is_empty(),
+            "nothing of it stands in the banner of the whole server"
+        );
+        assert!(
+            !home(&state, Some(library_id), &viewer).await.expect("read").hero.is_empty(),
+            "its own page still opens on its own works"
+        );
     }
 
     #[tokio::test]

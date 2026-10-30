@@ -681,6 +681,20 @@ function LibraryChoicesFields({
           onChange={(keeps_watched_marks) => onChange({ keeps_watched_marks })}
         />
       </Setting>
+      {/* The banner is a poster wall of films and series: what people filmed
+          themselves, music and cameras never stand there. */}
+      {kind !== "music" && kind !== "home_media" && kind !== "cameras" && (
+        <>
+          <h3 className="settings-heading">{t("admin.library_home")}</h3>
+          <Setting label={t("settings.in_the_hero")} why={t("admin.in_the_hero_why")}>
+            <Toggle
+              label={t("settings.in_the_hero")}
+              checked={choices.in_the_hero}
+              onChange={(in_the_hero) => onChange({ in_the_hero })}
+            />
+          </Setting>
+        </>
+      )}
     </>
   );
 }
