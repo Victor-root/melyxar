@@ -7,6 +7,7 @@
 
 use melyxar_core::id::{LibraryId, WorkId};
 use melyxar_core::user::{HomeSection, Preferences, User};
+use melyxar_core::work::PlaybackState;
 use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
@@ -463,6 +464,12 @@ async fn the_hero(
                     room: usize,
                     hero: &mut Vec<HeroItem>| {
         if hero.len() >= room || card.kind.is_home_media() || already.contains(&card.id) {
+            return;
+        }
+        // What has just arrived is not offered again once seen through. What
+        // was started or put there on purpose stays, and so does a draw,
+        // which is asked to be anything at all.
+        if because == Because::New && card.state.as_ref().is_some_and(|state| state.seen == PlaybackState::Watched) {
             return;
         }
         let mut worn = dressed.get(&card.id).cloned().unwrap_or_default();
@@ -922,6 +929,28 @@ mod tests {
         every.sort();
         every.dedup();
         assert_eq!(every.len(), page.hero.len(), "nothing appears twice");
+    }
+
+    #[tokio::test]
+    async fn the_hero_does_not_offer_what_was_already_watched() {
+        let (_directory, state, library_id, viewer) =
+            state_with_films(&["Quiet Harbour", "Amber Field", "Winter Signal"]).await;
+        let seen = state.database().recent_works(library_id, 10).await.expect("read")[0].id;
+        state
+            .database()
+            .record_playback_progress(
+                viewer.id,
+                seen,
+                melyxar_core::time::Millis::new(0),
+                PlaybackState::Watched,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("recorded");
+
+        let page = home(&state, Some(library_id), &viewer).await.expect("read");
+        assert_eq!(page.hero.len(), 2);
+        assert!(page.hero.iter().all(|entry| entry.card.id != seen));
     }
 
     #[tokio::test]
