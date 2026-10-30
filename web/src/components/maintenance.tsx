@@ -7,12 +7,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { Branding } from "../api";
 import { asClock } from "../clock";
 import { WarningIcon } from "../icons";
-import { useMaintenance } from "../maintenance";
+import { maintenanceHeard, useMaintenance } from "../maintenance";
 import type { Standing } from "../maintenance";
 import { writtenMoment } from "../readable";
 import { useSettings } from "../settings";
@@ -136,16 +135,31 @@ function Countdown({ standing, startsAt }: { standing: Standing; startsAt: numbe
 function InForce({ standing }: { standing: Standing }) {
   const { t } = useSettings();
   const backAt = useBackAt(standing);
+  const [ending, setEnding] = useState(false);
+  const [failed, setFailed] = useState(false);
+  /* Switched off from here, wherever the administrator is: every page,
+     this one included, hears it at once. */
+  const end = () => {
+    setEnding(true);
+    setFailed(false);
+    api
+      .setMaintenance({ on: false, delay_minutes: 0, until: null, message: null })
+      .then(maintenanceHeard)
+      .catch(() => {
+        setFailed(true);
+        setEnding(false);
+      });
+  };
   return (
     <div className="maintenance-band" role="status">
       <WarningIcon size={18} />
       <span className="maintenance-band-words">
-        <strong>{t("maintenance.in_force")}</strong>
+        <strong>{t(failed ? "admin.maintenance_failed" : "maintenance.in_force")}</strong>
         {backAt && <span>{t("maintenance.back_at", { time: backAt })}</span>}
       </span>
-      <Link className="button button-small" to="/admin/settings">
+      <button type="button" className="button button-small" disabled={ending} onClick={end}>
         {t("maintenance.end")}
-      </Link>
+      </button>
     </div>
   );
 }
