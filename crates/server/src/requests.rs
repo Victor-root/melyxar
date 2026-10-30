@@ -417,6 +417,8 @@ async fn withdraw(
 struct AskerView {
     id: String,
     name: String,
+    /// Where its profile picture is served, when it has one.
+    avatar: Option<String>,
     administrator: bool,
     may_ask: bool,
 }
@@ -451,6 +453,7 @@ async fn for_the_administrator(
             .map(|asker: Asker| AskerView {
                 id: asker.id.to_string(),
                 name: asker.name,
+                avatar: asker.avatar_path.as_deref().map(crate::images::face_url),
                 administrator: asker.administrator,
                 may_ask: asker.may_ask,
             })
