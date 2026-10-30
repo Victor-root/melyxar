@@ -138,41 +138,44 @@ export function AdminRequests() {
   return (
     <>
       <PageHead lead={t("admin.requests_lead")} />
-      <Panel icon={RequestIcon} title={t("requests.switch")} lead={t("requests.switch_why")}>
-        <Setting label={t("requests.switch_on")}>
-          <Toggle
-            label={t("requests.switch_on")}
-            checked={shown.enabled}
-            onChange={(enabled) => change({ ...shown, enabled }, () => requestsApi.switch(enabled))}
-          />
-        </Setting>
-      </Panel>
-      {shown.enabled && (
-        <Panel icon={PeopleIcon} title={t("requests.who")} lead={t("requests.who_why")}>
-          {shown.askers.map((asker) => (
-            <Setting
-              key={asker.id}
-              label={asker.name}
-              why={asker.administrator ? t("requests.always_administrator") : undefined}
-            >
-              <Toggle
-                label={asker.name}
-                checked={asker.may_ask}
-                disabled={asker.administrator}
-                onChange={(may_ask) =>
-                  change(
-                    {
-                      ...shown,
-                      askers: shown.askers.map((one) => (one.id === asker.id ? { ...one, may_ask } : one)),
-                    },
-                    () => requestsApi.allow(asker.id, may_ask),
-                  )
-                }
-              />
-            </Setting>
-          ))}
+      {/* Side by side: each holds a few lines at most. */}
+      <div className="panels">
+        <Panel icon={RequestIcon} title={t("requests.switch")} lead={t("requests.switch_why")}>
+          <Setting label={t("requests.switch_on")}>
+            <Toggle
+              label={t("requests.switch_on")}
+              checked={shown.enabled}
+              onChange={(enabled) => change({ ...shown, enabled }, () => requestsApi.switch(enabled))}
+            />
+          </Setting>
         </Panel>
-      )}
+        {shown.enabled && (
+          <Panel icon={PeopleIcon} title={t("requests.who")} lead={t("requests.who_why")}>
+            {shown.askers.map((asker) => (
+              <Setting
+                key={asker.id}
+                label={asker.name}
+                why={asker.administrator ? t("requests.always_administrator") : undefined}
+              >
+                <Toggle
+                  label={asker.name}
+                  checked={asker.may_ask}
+                  disabled={asker.administrator}
+                  onChange={(may_ask) =>
+                    change(
+                      {
+                        ...shown,
+                        askers: shown.askers.map((one) => (one.id === asker.id ? { ...one, may_ask } : one)),
+                      },
+                      () => requestsApi.allow(asker.id, may_ask),
+                    )
+                  }
+                />
+              </Setting>
+            ))}
+          </Panel>
+        )}
+      </div>
       <div className="section-head">
         <h2>{t("requests.waiting")}</h2>
       </div>
