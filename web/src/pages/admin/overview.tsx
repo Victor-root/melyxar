@@ -303,7 +303,7 @@ function Fact({
       <span className="fact-words">
         <span className="fact-label">{label}</span>
         <span className="fact-value">
-          {value ?? "–"}
+          <span className="fact-text">{value ?? "–"}</span>
           {state && (
             <span className={`state-dot state-${state}`} aria-hidden="true" />
           )}
