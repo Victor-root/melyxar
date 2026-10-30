@@ -12,7 +12,7 @@
  * The summary
  * ----------------------------------------------------------------------- */
 
-/* The server: who it is, then its facts two by two under it. */
+/* The server: who it is, its facts under it, then what needs a hand. */
 .server-panel {
   gap: 18px;
 }
@@ -72,15 +72,11 @@
   font-size: 13.5px;
 }
 
+/* Across the page, as many to a line as fit. */
 .server-facts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
   gap: var(--gap);
-}
-
-/* A fact left alone on the last line takes the whole of it. */
-.server-facts > .fact:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
 }
 
 .fact {

@@ -89,7 +89,6 @@ export function AdminOverview() {
         />
         <LibrariesPanel />
         <TasksPanel />
-        <WatchPanel />
         <PeoplePanel overview={overview.answer} />
       </div>
     </>
@@ -120,6 +119,8 @@ function ServerPanel({
   const { t, language } = useSettings();
   const branding = useBranding();
   const now = useMinute();
+  const { points, markSeen } = useAttention();
+  const shown = points ?? [];
 
   const worries = overview?.worries ?? [];
   const state: State = unreachable
@@ -129,7 +130,7 @@ function ServerPanel({
       : "ok";
 
   return (
-    <section className="panel server-panel">
+    <section className="panel panel-wide server-panel">
       <div className="server-who">
         <span className="server-mark" aria-hidden="true">
           <ServerMark
@@ -231,7 +232,43 @@ function ServerPanel({
         />
       </div>
 
+      {/* What needs a hand, under what the server is: both answer how it
+          is doing, and the second is what to do about the first. */}
+      <h3 className="settings-heading">{t("admin.watch")}</h3>
+      {points !== null && shown.length === 0 && (
+        <p className="empty-line">{t("attention.none")}</p>
+      )}
+      <div className="lines">
+        {shown.map((point, index) => {
+          const said = sayPoint(point, t, language);
+          return (
+            <Link className="line line-link" to={said.to} key={index}>
+              <span
+                className={`line-mark state-${point.state}`}
+                aria-hidden="true"
+              >
+                <WarningIcon size={18} />
+              </span>
+              <span className="line-words">
+                <span className="line-name">{said.title}</span>
+              </span>
+              <span className="line-end">
+                <ArrowRightIcon size={15} />
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+
       <div className="panel-foot">
+        {shown.some((point) => point.may_be_seen) && (
+          <button
+            className="button button-small"
+            onClick={() => void markSeen()}
+          >
+            {t("attention.mark_seen")}
+          </button>
+        )}
         <Link
           className="button button-small button-accent"
           to="/admin/diagnostics"
@@ -435,55 +472,6 @@ function TasksPanel() {
 
 /** What deserves a look, gathered from everywhere, each leading to where it
  *  is put right. The same points as the bell, and quieted with it. */
-function WatchPanel() {
-  const { t, language } = useSettings();
-  const { points, markSeen } = useAttention();
-  const shown = points ?? [];
-
-  return (
-    <Panel
-      icon={WarningIcon}
-      title={t("admin.watch")}
-      lead={t("admin.watch_lead")}
-    >
-      {points !== null && shown.length === 0 && (
-        <p className="empty-line">{t("attention.none")}</p>
-      )}
-      <div className="lines">
-        {shown.map((point, index) => {
-          const said = sayPoint(point, t, language);
-          return (
-            <Link className="line line-link" to={said.to} key={index}>
-              <span
-                className={`line-mark state-${point.state}`}
-                aria-hidden="true"
-              >
-                <WarningIcon size={18} />
-              </span>
-              <span className="line-words">
-                <span className="line-name">{said.title}</span>
-              </span>
-              <span className="line-end">
-                <ArrowRightIcon size={15} />
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-      {shown.some((point) => point.may_be_seen) && (
-        <div className="panel-foot">
-          <button
-            className="button button-small"
-            onClick={() => void markSeen()}
-          >
-            {t("attention.mark_seen")}
-          </button>
-        </div>
-      )}
-    </Panel>
-  );
-}
-
 /** How many people use this server, and from how many things. */
 function PeoplePanel({ overview }: { overview: Overview | null }) {
   const { t, language } = useSettings();
