@@ -314,14 +314,21 @@ fun Inside(
         // them included, reads again what it shows.
         val notes = LocalNotes.current
         val requests = LocalRequests.current
+        val maintenance = remember(api) { Maintenance(api, scope) }
         FollowTheLiveLine(
             onLibrariesMoved = marks::rowsHaveMoved,
             onLooksMoved = { looksMoved += 1 },
             onWord = { word ->
                 notes.heard(word)
                 requests.heard(word)
+                maintenance.heard(word)
             },
         )
+        LaunchedEffect(api, comebacks) { maintenance.ask() }
+        // A maintenance in force stands in for every screen of an account
+        // that is not an administrator's.
+        val turnedAway = maintenance.standing.state == "on" && !account.isAdministrator
+        FollowMaintenance(maintenance, turnedAway)
         LaunchedEffect(api, comebacks) { requests.read() }
         val hearts = LocalHearts.current
         LaunchedEffect(api, comebacks, marks.rowsMoved, looksMoved) {
@@ -388,6 +395,20 @@ fun Inside(
             }
         }
         val back: () -> Unit = remember { { if (trail.size > 1) backTo(trail.size - 1) } }
+        // Turned away, the film and the music stop and the screens are put
+        // down; once it ends, the television is back at home and every
+        // screen reads again what it shows.
+        var shutOut by remember { mutableStateOf(false) }
+        LaunchedEffect(turnedAway) {
+            if (turnedAway) {
+                backTo(1)
+                listening.stop()
+                shutOut = true
+            } else if (shutOut) {
+                shutOut = false
+                comebacks += 1
+            }
+        }
         val buttons = barButtons(
             chosen?.headerButtons.orEmpty(),
             chosen?.buttonsInTheBar ?: Preferences().buttonsInTheBar,
@@ -501,53 +522,58 @@ fun Inside(
                         focusSaid { "screen shown: ${here.key}" }
                         Probe.screenShown(here.key)
                     }
-                    // The screen as one piece the remote comes back into where it
-                    // left it, which the bar pinned over it leads down to.
-                    Box(Modifier.fillMaxSize().focusRequester(screen).focusRestorer()) {
-                        kept.SaveableStateProvider(here.key) {
-                            when (here) {
-                                Place.Home -> HomeScreen(comebacks)
-                                is Place.Shelf -> when (here.library.kind) {
-                                    "music" -> MusicLibraryScreen(here.library, comebacks)
-                                    "cameras" -> CamerasScreen(here.library, comebacks)
-                                    else -> LibraryScreen(here.library, comebacks)
-                                }
-                                is Place.Opened -> KeepingSheets { WorkScreen(here.work, comebacks) }
-                                is Place.Person -> PersonScreen(here.id, comebacks)
-                                is Place.Search -> SearchScreen(here.library, comebacks)
-                                is Place.Listed -> ShortlistScreen(here.list, comebacks)
-                                is Place.Album -> AlbumScreen(here.id, comebacks)
-                                is Place.Artist -> ArtistScreen(here.id, comebacks)
-                                is Place.Playlist -> PlaylistScreen(here.id, comebacks)
-                                is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
-                                Place.TitleRequests -> RequestsScreen()
-                                is Place.RequestedTitle -> RequestedTitleScreen(here.catalogue, here.tmdbId)
-                                is Place.MoreTitles -> MoreTitlesScreen(here.catalogue, here.genreId, here.genre)
-                                is Place.Trailer -> TrailerScreen(here.title, here.url)
-                                is Place.Live -> LiveScreen(here.camera)
-                                Place.NowPlaying -> NowPlayingScreen()
-                                Place.Settings -> SettingsScreen(sessions)
-                                Place.Notifications -> NotesScreen()
-                                // The film is always shown dark, as the web's player is.
-                                is Place.Playing -> key(here.play) {
-                                    TvLook(paletteOf(chosenAccent, light = false)) {
-                                        KeepingSheets {
-                                            PlayerScreen(
-                                                here.play,
-                                                onDone = { backTo(trail.size - 1) },
-                                                onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
-                                            )
+                    if (turnedAway) {
+                        MaintenanceScreen(branding, maintenance.standing, onChangeProfile)
+                    } else {
+                        // The screen as one piece the remote comes back into where it
+                        // left it, which the bar pinned over it leads down to.
+                        Box(Modifier.fillMaxSize().focusRequester(screen).focusRestorer()) {
+                            kept.SaveableStateProvider(here.key) {
+                                when (here) {
+                                    Place.Home -> HomeScreen(comebacks)
+                                    is Place.Shelf -> when (here.library.kind) {
+                                        "music" -> MusicLibraryScreen(here.library, comebacks)
+                                        "cameras" -> CamerasScreen(here.library, comebacks)
+                                        else -> LibraryScreen(here.library, comebacks)
+                                    }
+                                    is Place.Opened -> KeepingSheets { WorkScreen(here.work, comebacks) }
+                                    is Place.Person -> PersonScreen(here.id, comebacks)
+                                    is Place.Search -> SearchScreen(here.library, comebacks)
+                                    is Place.Listed -> ShortlistScreen(here.list, comebacks)
+                                    is Place.Album -> AlbumScreen(here.id, comebacks)
+                                    is Place.Artist -> ArtistScreen(here.id, comebacks)
+                                    is Place.Playlist -> PlaylistScreen(here.id, comebacks)
+                                    is Place.Genre -> GenreScreen(here.library, here.name, comebacks)
+                                    Place.TitleRequests -> RequestsScreen()
+                                    is Place.RequestedTitle -> RequestedTitleScreen(here.catalogue, here.tmdbId)
+                                    is Place.MoreTitles -> MoreTitlesScreen(here.catalogue, here.genreId, here.genre)
+                                    is Place.Trailer -> TrailerScreen(here.title, here.url)
+                                    is Place.Live -> LiveScreen(here.camera)
+                                    Place.NowPlaying -> NowPlayingScreen()
+                                    Place.Settings -> SettingsScreen(sessions)
+                                    Place.Notifications -> NotesScreen()
+                                    // The film is always shown dark, as the web's player is.
+                                    is Place.Playing -> key(here.play) {
+                                        TvLook(paletteOf(chosenAccent, light = false)) {
+                                            KeepingSheets {
+                                                PlayerScreen(
+                                                    here.play,
+                                                    onDone = { backTo(trail.size - 1) },
+                                                    onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                        PinnedTopBar(screen, Modifier.align(Alignment.TopCenter).probed(Part.Bar))
+                        cardMenus.open?.let { card -> CardMenu(card, onClose = { cardMenus.open = null }) }
                     }
-                    PinnedTopBar(screen, Modifier.align(Alignment.TopCenter).probed(Part.Bar))
-                    cardMenus.open?.let { card -> CardMenu(card, onClose = { cardMenus.open = null }) }
                     // Over every screen, the film's included, which only
                     // what is urgent is said over.
                     NotesCorner(Modifier.align(Alignment.TopEnd))
+                    MaintenanceBand(maintenance.standing, account.isAdministrator, Modifier.align(Alignment.TopCenter))
                 }
             }
         }
