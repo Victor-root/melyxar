@@ -24,6 +24,7 @@ import { useToast } from "../../notifications/toasts";
 import { refusalKey } from "../../i18n";
 import { refusalAbout, refusalOf, useAsked } from "../../asking";
 import {
+  ChevronDownIcon,
   DatabaseIcon,
   EnterIcon,
   HistoryIcon,
@@ -52,8 +53,6 @@ export function AdminSettings() {
         <ServerPanel />
 
         <DoorPanel />
-
-        <MaintenancePanel />
 
         <Panel
           icon={RefreshIcon}
@@ -88,6 +87,9 @@ export function AdminSettings() {
             />
           </Setting>
         </Panel>
+
+        {/* Wide, so last: the narrow panels above pair up beside each other. */}
+        <MaintenancePanel />
       </div>
     </>
   );
@@ -132,6 +134,7 @@ function MaintenancePanel() {
   const endsAt = on ? (standing.until ? hourOfDayOf(standing.until) : "") : ending;
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [proxyShown, setProxyShown] = useState(false);
 
   /* After the start: an hour already gone today is tomorrow's. */
   const untilAt = (hourOfDay: string, starts: number) =>
@@ -173,8 +176,8 @@ function MaintenancePanel() {
 
   return (
     <Panel icon={WarningIcon} title={t("admin.maintenance")} lead={t("admin.maintenance_lead")} wide>
-      {/* A tile each across the panel: four short choices, then what a
-          proxy in front needs, across the whole width. */}
+      {/* A tile each across the panel for the four short choices, then what
+          a proxy in front needs, under them across the whole width. */}
       <div className="setting-tiles">
         <Setting stacked label={t("admin.maintenance_on")} why={where}>
           <Toggle
@@ -251,18 +254,31 @@ function MaintenancePanel() {
             }}
           />
         </Setting>
-        <div className="setting-tile-wide">
-          <Setting label={t("admin.maintenance_proxy")} why={t("admin.maintenance_proxy_why")}>
+      </div>
+      <div className="setting-tile-wide">
+        <Setting label={t("admin.maintenance_proxy")} why={t("admin.maintenance_proxy_why")}>
+          <button
+            type="button"
+            className="button button-small"
+            aria-expanded={proxyShown}
+            onClick={() => setProxyShown((shown) => !shown)}
+          >
+            <ChevronDownIcon size={15} className={proxyShown ? "maintenance-proxy-open" : undefined} />
+            {t(proxyShown ? "admin.maintenance_proxy_hide" : "admin.maintenance_proxy_show")}
+          </button>
+        </Setting>
+        {proxyShown && (
+          <div className="maintenance-proxy">
+            <pre className="log">{NGINX_EXAMPLE}</pre>
             <button
               type="button"
-              className="button button-small"
+              className="button button-small maintenance-proxy-copy"
               onClick={() => void putOnTheClipboard(NGINX_EXAMPLE).then(setCopied)}
             >
               {t(copied ? "admin.maintenance_proxy_copied" : "admin.maintenance_proxy_copy")}
             </button>
-          </Setting>
-          <pre className="log maintenance-proxy">{NGINX_EXAMPLE}</pre>
-        </div>
+          </div>
+        )}
       </div>
     </Panel>
   );
