@@ -169,15 +169,14 @@ fun MaintenanceScreen(branding: Branding, standing: Standing, action: String, on
             color = palette.text,
             modifier = Modifier.padding(top = 10.dp),
         )
+        // What the administrator wrote, or that this server is closed.
         Text(
-            stringResource(R.string.tv_maintenance_closed, branding.serverName),
-            fontSize = 17.sp,
-            color = palette.textSoft,
+            standing.message ?: stringResource(R.string.tv_maintenance_closed, branding.serverName),
+            fontSize = 18.sp,
+            color = palette.text,
             textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 640.dp),
         )
-        standing.message?.let {
-            Text(it, fontSize = 18.sp, color = palette.text, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 640.dp))
-        }
         Text(
             back?.let { stringResource(R.string.tv_maintenance_back_at, it) } ?: stringResource(R.string.tv_maintenance_back_soon),
             fontSize = 17.sp,

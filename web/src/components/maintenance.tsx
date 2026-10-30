@@ -71,10 +71,10 @@ export function MaintenanceScreen({
       <div className="maintenance-hall">
         <ServerMark branding={wearing} size={120} className="door-greeting-mark" />
         <h1 className="maintenance-title">{t("maintenance.title")}</h1>
-        {wearing && (
-          <p className="maintenance-closed">{t("maintenance.closed", { name: wearing.server_name })}</p>
-        )}
-        {standing.message && <p className="maintenance-message">{standing.message}</p>}
+        {/* What the administrator wrote, or that this server is closed. */}
+        <p className="maintenance-message">
+          {standing.message ?? t("maintenance.closed", { name: wearing?.server_name ?? "" })}
+        </p>
         <p className="maintenance-when">
           {backAt ? t("maintenance.back_at", { time: backAt }) : t("maintenance.back_soon")}
         </p>

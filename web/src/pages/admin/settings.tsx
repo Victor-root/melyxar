@@ -35,7 +35,7 @@ import {
 } from "../../icons";
 import { putOnTheClipboard } from "../../clipboard";
 import { maintenanceHeard, useMaintenance } from "../../maintenance";
-import { serverChanged } from "../../player/logo";
+import { serverChanged, useBranding } from "../../player/logo";
 import { howLong, howMany, writtenMoment } from "../../readable";
 import { useSettings } from "../../settings";
 import { useOverview } from "./layout";
@@ -120,6 +120,7 @@ function MaintenancePanel() {
   const { t, language } = useSettings();
   const toast = useToast();
   const standing = useMaintenance();
+  const branding = useBranding();
   const on = standing.state !== "off";
   /* What is being typed, and nothing while the field shows the message as it
      is held, so a message kept from here is the one the field goes back to. */
@@ -197,7 +198,7 @@ function MaintenancePanel() {
               type="text"
               className="field-line"
               aria-label={t("admin.maintenance_message")}
-              placeholder={t("maintenance.announced_detail")}
+              placeholder={t("maintenance.closed", { name: branding?.server_name ?? "" })}
               value={message}
               maxLength={LONGEST_MAINTENANCE_MESSAGE}
               onChange={(event) => setTyped(event.target.value)}
