@@ -132,8 +132,10 @@ fun Hero(
         shown = (at + by + items.size) % items.size
         turns += 1
     }
-    LaunchedEffect(items.size, turns) {
-        if (items.size > 1) {
+    // Drawn lighter, it stays on a work until the remote turns it: each turn
+    // is a whole new picture to fetch and draw, while the remote is busy.
+    LaunchedEffect(items.size, turns, Lighter.on) {
+        if (items.size > 1 && !Lighter.on) {
             delay(EACH_STANDS_FOR_MS)
             step(1)
         }

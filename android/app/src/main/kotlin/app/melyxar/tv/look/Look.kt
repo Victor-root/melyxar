@@ -1,8 +1,14 @@
 package app.melyxar.tv.look
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.TweenSpec
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
@@ -35,8 +41,17 @@ val Ease = CubicBezierEasing(0.22f, 0.61f, 0.36f, 1f)
 /** `--quick`, for colours and rims. */
 fun <T> quick(): TweenSpec<T> = tween(120, easing = Ease)
 
-/** `--calm`, for sizes and fades. */
-fun <T> calm(): TweenSpec<T> = tween(240, easing = Ease)
+/** `--calm`, for sizes and fades. Drawn [Lighter], at once: the remote
+ *  coming to a piece then costs one frame rather than every frame of the
+ *  easing, on the piece it leaves as on the one it comes to. */
+fun <T> calm(): FiniteAnimationSpec<T> = if (Lighter.on) snap() else tween(240, easing = Ease)
+
+/** How what stands over a film or a photo comes and goes: fading, or at
+ *  once when drawn [Lighter], since each frame of the fade draws all of it
+ *  again over the picture. */
+fun comesIn(): EnterTransition = if (Lighter.on) EnterTransition.None else fadeIn()
+
+fun goesOut(): ExitTransition = if (Lighter.on) ExitTransition.None else fadeOut()
 
 /** The margin a television keeps clear of its edges, where some screens
  *  cut: close to them, so the screen is used to its sides. */
