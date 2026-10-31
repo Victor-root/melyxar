@@ -74,6 +74,7 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::installing::router())
         .merge(crate::jobs::router())
         .merge(crate::libraries::router())
+        .merge(crate::linking::router())
         .merge(crate::live::router())
         .merge(crate::maintenance::router())
         .merge(crate::music::router())

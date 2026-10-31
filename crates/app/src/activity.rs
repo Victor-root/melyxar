@@ -84,6 +84,13 @@ pub enum Event {
     MaintenanceOff { by: String },
     /// Maintenance switched itself off at the end it was given.
     MaintenanceEnded,
+    /// A device was let in by a code, on this account, by whoever typed it.
+    DeviceLinked {
+        user: UserId,
+        user_name: String,
+        device: String,
+        by: String,
+    },
 }
 
 /// One film watched on one device, from its start to its end.
@@ -170,6 +177,7 @@ const SERVER_STOPPED: &str = "server_stopped";
 const MAINTENANCE_ON: &str = "server_maintenance_on";
 const MAINTENANCE_OFF: &str = "server_maintenance_off";
 const MAINTENANCE_ENDED: &str = "server_maintenance_ended";
+const DEVICE_LINKED: &str = "device_linked";
 const SIGNED_IN: &str = "signed_in";
 pub(crate) const SIGN_IN_REFUSED: &str = "sign_in_refused";
 pub(crate) const SIGN_IN_HELD_BACK: &str = "sign_in_held_back";
@@ -440,6 +448,17 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
         Event::MaintenanceOn { by } => line(MAINTENANCE_ON, None, None, json!({ "by": by })),
         Event::MaintenanceOff { by } => line(MAINTENANCE_OFF, None, None, json!({ "by": by })),
         Event::MaintenanceEnded => line(MAINTENANCE_ENDED, None, None, json!({})),
+        Event::DeviceLinked {
+            user,
+            user_name,
+            device,
+            by,
+        } => line(
+            DEVICE_LINKED,
+            Some(user),
+            Some(device),
+            json!({ "user_name": user_name, "by": by }),
+        ),
     })
 }
 

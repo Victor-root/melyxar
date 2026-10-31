@@ -92,7 +92,7 @@ pub fn router() -> Router<AppState> {
 
 /// The addresses that answer without anybody signed in.
 ///
-/// Six of them, each for a reason that cannot be got round.
+/// Seven of them, each for a reason that cannot be got round.
 ///
 /// A watchdog or a reverse proxy has to be able to ask whether this server is
 /// alive without holding an account. The sign in screen has to draw the name
@@ -100,8 +100,9 @@ pub fn router() -> Router<AppState> {
 /// branding address is for and why it says nothing else, and it offers the
 /// names on this server, which is the one deliberate disclosure here and is
 /// turned off from two places. Signing in cannot itself require being signed
-/// in, and a door says whether the server is closed for maintenance before
-/// anybody has. And a server nobody has set up yet has no account to sign in
+/// in, nor can a device waiting at the door to be let in from elsewhere, and
+/// a door says whether the server is closed for maintenance before anybody
+/// has. And a server nobody has set up yet has no account to sign in
 /// as, so the one that makes the first account answers to whoever reaches a
 /// brand new server first, and shuts behind itself.
 ///
@@ -119,6 +120,7 @@ fn answers_to_anybody(path: &str) -> bool {
     path.starts_with("/api/v1/public/faces/")
         || path.starts_with("/api/v1/public/logo/")
         || path.starts_with("/api/v1/public/app/")
+        || path.starts_with("/api/v1/public/link")
         || matches!(
             path,
             "/api/v1/system/health"
@@ -343,7 +345,7 @@ fn cookie_taken_back() -> HeaderValue {
 ///
 /// What the browser says about itself, cut to a length a list can show. It is
 /// only ever shown, never decided from.
-fn what_asked(headers: &HeaderMap) -> String {
+pub(crate) fn what_asked(headers: &HeaderMap) -> String {
     let said = headers
         .get(header::USER_AGENT)
         .and_then(|value| value.to_str().ok())
@@ -695,7 +697,7 @@ async fn finish_first_steps(
 }
 
 /// The answer to every door that opens a session: the cookie, and who it is.
-fn answered_with_a_session(opened: OpenedSession, remembered: Remembered, encrypted: bool) -> Response {
+pub(crate) fn answered_with_a_session(opened: OpenedSession, remembered: Remembered, encrypted: bool) -> Response {
     (
         [(
             header::SET_COOKIE,

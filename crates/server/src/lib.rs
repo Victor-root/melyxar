@@ -31,6 +31,7 @@ pub mod installing;
 pub mod interface;
 pub mod jobs;
 pub mod libraries;
+pub mod linking;
 pub mod live;
 pub mod maintenance;
 pub mod music;

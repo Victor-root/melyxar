@@ -136,6 +136,27 @@ impl SessionToken {
     }
 }
 
+/// How many digits a code that links a device holds.
+pub const LINK_CODE_DIGITS: usize = 6;
+
+/// Draws the code a device waiting at the door shows, six digits each as
+/// likely as the others: drawn again rather than folded, since folding a
+/// number too large onto the million would make the small codes likelier.
+pub fn draw_link_code() -> Result<String> {
+    const CODES: u32 = 1_000_000;
+    // The largest multiple of a million a u32 holds: past it, a draw would
+    // land on the small codes once more than on the others.
+    const FAIR_BELOW: u32 = u32::MAX - u32::MAX % CODES;
+    loop {
+        let mut drawn = [0u8; 4];
+        getrandom::fill(&mut drawn).map_err(|error| AuthError::NoRandomness(error.to_string()))?;
+        let number = u32::from_le_bytes(drawn);
+        if number < FAIR_BELOW {
+            return Ok(format!("{:0width$}", number % CODES, width = LINK_CODE_DIGITS));
+        }
+    }
+}
+
 /// The fingerprint of a token somebody presented, for looking its session up.
 ///
 /// The server keeps fingerprints and never tokens, so a copy of the database
@@ -177,6 +198,16 @@ mod tests {
     use super::*;
 
     const A_PASSWORD: &str = "quiet harbour";
+
+    #[test]
+    fn a_link_code_is_six_digits_and_drawn_afresh_each_time() {
+        let codes: Vec<String> = (0..20).map(|_| draw_link_code().expect("drawn")).collect();
+        assert!(codes.iter().all(|code| code.len() == LINK_CODE_DIGITS && code.bytes().all(|b| b.is_ascii_digit())));
+        let mut different = codes.clone();
+        different.sort();
+        different.dedup();
+        assert!(different.len() > 1, "twenty draws are not all the same code");
+    }
 
     #[test]
     fn a_television_code_is_four_digits_and_kept_as_a_password_is() {

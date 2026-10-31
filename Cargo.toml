@@ -112,6 +112,9 @@ argon2 = "0.6"
 # single request, segment of video included.
 sha2 = "0.11"
 getrandom = "0.4"
+# Draws the QR code a device waiting at the door shows, as a grid of squares
+# the interface and the television draw themselves: no picture is made here.
+qrcode = { version = "0.14", default-features = false }
 # The sealing of secrets the server must hand back, by the same library
 # rustls already builds on: nothing more is compiled for it.
 aws-lc-rs = { version = "1.18", default-features = false, features = ["aws-lc-sys", "prebuilt-nasm"] }
