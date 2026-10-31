@@ -463,8 +463,6 @@
     <string name="camera_cannot_play">Impossible de joindre cette caméra. Vérifiez qu’elle est allumée et sur le même réseau que cet appareil.</string>
     <string name="scan_aim">Visez le QR code affiché par la télévision ou l’ordinateur</string>
     <string name="scan_no_camera">Melyxar a besoin de l’appareil photo pour lire le QR code. Vous pouvez aussi taper le code à la main.</string>
-    <string name="shortcut_link">Connecter TV</string>
-    <string name="shortcut_link_long">Connecter un appareil par son QR code</string>
     <string name="camera_move">Déplacer l’image</string>
     <string name="camera_recentre">Recentrer l’image</string>
     <string name="camera_reconnect">Reconnecter</string>

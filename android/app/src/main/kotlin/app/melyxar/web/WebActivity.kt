@@ -48,9 +48,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
 import androidx.core.view.WindowCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -151,6 +148,7 @@ class WebActivity : ComponentActivity() {
         icons.settle()
         page.addJavascriptInterface(icons, "MelyxarIcon")
         page.addJavascriptInterface(Scanner(), "MelyxarScanner")
+        page.addJavascriptInterface(Shortcuts(applicationContext), "MelyxarShortcuts")
         page.addJavascriptInterface(LiveActivity.Bridge(this, { server.origin }, page.settings.userAgentString), "MelyxarCamera")
         music = MusicEngine.of(this) { serverFetching(page.settings.userAgentString) }
         val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms, ::askToShowTheMusic)
@@ -199,21 +197,8 @@ class WebActivity : ComponentActivity() {
         })
 
         if (savedInstanceState == null || page.restoreState(savedInstanceState) == null) {
-            page.loadUrl(if (intent.getBooleanExtra(LINKING, false)) server.origin + LINK_PAGE else server.origin)
+            page.loadUrl(server.origin + intent.getStringExtra(PATH).orEmpty())
         }
-        offerTheShortcuts()
-    }
-
-    /** What a long press on the application's icon offers: letting in a
-     *  television by its QR code, the camera open at once. */
-    private fun offerTheShortcuts() {
-        val link = ShortcutInfoCompat.Builder(this, LINK_A_DEVICE)
-            .setShortLabel(getString(R.string.shortcut_link))
-            .setLongLabel(getString(R.string.shortcut_link_long))
-            .setIcon(IconCompat.createWithResource(this, R.drawable.shortcut_scan))
-            .setIntent(Intent(this, ConnectActivity::class.java).setAction(LINK_A_DEVICE))
-            .build()
-        ShortcutManagerCompat.setDynamicShortcuts(this, listOf(link))
     }
 
     /** Opened again while open: the page stays as it is, and its music,
@@ -225,8 +210,8 @@ class WebActivity : ComponentActivity() {
         if (origin == server.origin) {
             // The page open is led where the shortcut goes, without being
             // loaded again.
-            if (intent.getBooleanExtra(LINKING, false)) {
-                page.evaluateJavascript("window.melyxarOpen?.(${JSONObject.quote(LINK_PAGE)})", null)
+            intent.getStringExtra(PATH)?.let { path ->
+                page.evaluateJavascript("window.melyxarOpen?.(${JSONObject.quote(path)})", null)
             }
             return
         }
@@ -386,20 +371,15 @@ class WebActivity : ComponentActivity() {
     companion object {
         private const val ORIGIN = "origin"
         private const val NAME = "name"
-        private const val LINKING = "linking"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 
-        /** The shortcut's own action and name: letting in a device by its
-         *  QR code. */
-        const val LINK_A_DEVICE = "app.melyxar.LINK_A_DEVICE"
+        /** The page of the server a shortcut opens, from its root. */
+        const val PATH = "path"
 
-        /** The page that lets a device in, its camera opened at once. */
-        private const val LINK_PAGE = "/link?scan"
-
-        fun opening(context: Context, server: KnownServer, linking: Boolean = false) = Intent(context, WebActivity::class.java)
+        fun opening(context: Context, server: KnownServer, path: String? = null) = Intent(context, WebActivity::class.java)
             .putExtra(ORIGIN, server.origin)
             .putExtra(NAME, server.name)
-            .putExtra(LINKING, linking)
+            .putExtra(PATH, path)
     }
 }
 

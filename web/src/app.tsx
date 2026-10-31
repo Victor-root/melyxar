@@ -27,6 +27,7 @@ import { NotesProvider } from "./notifications/store";
 import { LiveLine } from "./live";
 import { MaintenanceBand, MaintenanceScreen } from "./components/maintenance";
 import { useFollowedMaintenance, useMaintenance } from "./maintenance";
+import { offerShortcuts, shortcutsFor } from "./app-shortcuts";
 import { Header } from "./components/header";
 import { ScrollBar } from "./components/scrollbar";
 import { Toasts } from "./notifications/toasts";
@@ -205,9 +206,15 @@ function BehindTheDoor() {
   // The libraries are what the whole navigation is built from, so they are
   // held above every page rather than by every page that mentions them.
   const libraries = useLibraries();
+  // The shortcuts of the application's icon, said again whenever what they
+  // depend on moves: the libraries, the account's rights, its language.
+  const administrator = useAccount().account?.is_administrator ?? false;
+  useEffect(() => {
+    offerShortcuts(shortcutsFor(libraries.all, administrator, t));
+  }, [libraries.all, administrator, t]);
   // A brand new server takes its administrator through its first steps
   // before anything else, and nothing is drawn until it has said whether.
-  const firstSteps = useFirstSteps(useAccount().account?.is_administrator ?? false);
+  const firstSteps = useFirstSteps(administrator);
 
   if (firstSteps.pending === null) {
     return <main className="page" aria-busy="true" />;
