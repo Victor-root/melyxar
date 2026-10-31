@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The shortcut to the administration's summary: three bars of a chart,
+     in Melyxar's own red. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,0a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path
+        android:strokeColor="#C81E1E"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M16,33V25M24,33V15M32,33V20" />
+</vector>
