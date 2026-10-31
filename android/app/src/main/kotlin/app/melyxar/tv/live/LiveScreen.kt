@@ -6,8 +6,6 @@ import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -75,6 +73,8 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.comesIn
+import app.melyxar.tv.look.goesOut
 import app.melyxar.tv.play.PlayerButton
 import app.melyxar.tv.play.Who
 import java.io.IOException
@@ -250,7 +250,7 @@ fun LiveScreen(camera: Camera) {
                 modifier = Modifier.align(Alignment.Center).padding(horizontal = Gutter),
             )
         }
-        AnimatedVisibility(shown && !moving, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(shown && !moving, enter = comesIn(), exit = goesOut()) {
             Box(Modifier.fillMaxSize()) {
                 Heading(camera)
                 Row(

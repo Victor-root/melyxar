@@ -4,8 +4,6 @@ import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +57,8 @@ import app.melyxar.server.NextEpisode
 import app.melyxar.server.Preferences
 import app.melyxar.server.Segment
 import app.melyxar.tv.inside.LocalAccountPreferences
+import app.melyxar.tv.look.comesIn
+import app.melyxar.tv.look.goesOut
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import app.melyxar.tv.inside.LocalMarks
@@ -385,7 +385,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
             }
             // The chapters and the sheets take the foot of the film the controls
             // stand in.
-            AnimatedVisibility(shown && menu !in FOOT_TAKERS, enter = fadeIn(), exit = fadeOut()) {
+            AnimatedVisibility(shown && menu !in FOOT_TAKERS, enter = comesIn(), exit = goesOut()) {
                 Controls(
                     playback = playback,
                     work = work,

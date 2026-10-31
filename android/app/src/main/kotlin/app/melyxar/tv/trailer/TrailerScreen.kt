@@ -4,8 +4,6 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +69,8 @@ import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalServer
+import app.melyxar.tv.look.comesIn
+import app.melyxar.tv.look.goesOut
 import app.melyxar.tv.look.rail
 import kotlinx.coroutines.delay
 
@@ -220,7 +220,7 @@ fun TrailerScreen(title: String, url: String) {
                 modifier = Modifier.align(Alignment.Center),
             )
         }
-        AnimatedVisibility(shown || !playing, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(shown || !playing, enter = comesIn(), exit = goesOut(), modifier = Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize()) {
                 Text(
                     stringResource(R.string.tv_trailer_of, title),

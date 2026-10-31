@@ -3,9 +3,8 @@ package app.melyxar.tv.inside
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,10 +48,13 @@ import app.melyxar.R
 import app.melyxar.server.Work
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.LocalPictures
 import app.melyxar.tv.look.LocalServer
 import app.melyxar.tv.look.RoundMark
+import app.melyxar.tv.look.comesIn
+import app.melyxar.tv.look.goesOut
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import kotlinx.coroutines.delay
@@ -186,7 +188,7 @@ fun PhotoViewer(startAt: String) {
                 }
             },
     ) {
-        Crossfade(showing, animationSpec = tween(CROSSFADE_MS), label = "photo") { id ->
+        Crossfade(showing, animationSpec = if (Lighter.on) snap() else tween(CROSSFADE_MS), label = "photo") { id ->
             AsyncImage(
                 model = request(id),
                 imageLoader = pictures,
@@ -199,7 +201,7 @@ fun PhotoViewer(startAt: String) {
             Text(stringResource(R.string.tv_not_on_disk), fontSize = 16.sp, color = palette.textSoft, modifier = Modifier.align(Alignment.Center))
         }
         Box(Modifier.fillMaxSize().focusRequester(quiet).focusable())
-        AnimatedVisibility(shown, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(shown, enter = comesIn(), exit = goesOut()) {
             PhotoControls(photo, running, controls, onStep = ::step, onSlideshow = { running = !running })
         }
     }

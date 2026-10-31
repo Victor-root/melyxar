@@ -2,6 +2,7 @@ package app.melyxar.tv.look
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.runtime.Composable
@@ -15,6 +16,12 @@ import androidx.compose.ui.platform.LocalDensity
  * which a spring does and a timed curve does not.
  */
 private val Glide: AnimationSpec<Float> = spring(stiffness = Spring.StiffnessMediumLow)
+
+/** How it goes there drawn [Lighter]: in one frame, rather than through
+ *  every frame of a glide, each one laying out and drawing the screen. */
+private val Jump: AnimationSpec<Float> = snap()
+
+private val going: AnimationSpec<Float> get() = if (Lighter.on) Jump else Glide
 
 /**
  * Where a row or a page scrolls the piece the remote comes to, once it has
@@ -30,7 +37,7 @@ class Pivot(
     private val stays: () -> Boolean = { false },
 ) : BringIntoViewSpec {
     @Suppress("OVERRIDE_DEPRECATION")
-    override val scrollAnimationSpec: AnimationSpec<Float> get() = Glide
+    override val scrollAnimationSpec: AnimationSpec<Float> get() = going
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = when {
         stays() -> 0f
@@ -47,7 +54,7 @@ class Pivot(
  */
 class Nearest(private val margin: Float) : BringIntoViewSpec {
     @Suppress("OVERRIDE_DEPRECATION")
-    override val scrollAnimationSpec: AnimationSpec<Float> get() = Glide
+    override val scrollAnimationSpec: AnimationSpec<Float> get() = going
 
     override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
         val before = offset - margin
