@@ -367,7 +367,6 @@ export const FINDABLE: FindableSection[] = [
     files: ["pages/admin/devices.tsx"],
     named: [
       ["admin.devices_signed_in", "admin.devices_signed_in_lead"],
-      ["admin.tv_code", "admin.tv_code_lead"],
     ],
   },
   {

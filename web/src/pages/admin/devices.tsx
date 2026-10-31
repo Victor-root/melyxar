@@ -10,7 +10,7 @@ import { api } from "../../api";
 import { useAsked } from "../../asking";
 import { DeviceLines } from "../../components/device-lines";
 import { PageHead, Panel } from "../../components/panel";
-import { DeviceIcon, LockIcon } from "../../icons";
+import { DeviceIcon } from "../../icons";
 import { useJournalNews } from "../../live";
 import { useSettings } from "../../settings";
 
@@ -41,12 +41,6 @@ export function AdminDevices() {
           />
         )}
       </Panel>
-      <Panel
-        icon={LockIcon}
-        title={t("admin.tv_code")}
-        lead={t("admin.tv_code_lead")}
-        soon
-      />
     </>
   );
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +74,7 @@ import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.probe.Tour
 import java.util.Locale
 import kotlinx.coroutines.launch
+import java.io.IOException
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -146,6 +148,30 @@ fun SettingsScreen(sessions: Sessions) {
         .plus(sessions.of(api.origin).map { it.name })
         .distinct()
     val list = rememberLazyListState()
+    // Whether this account gave itself a code for its televisions: read here,
+    // since it is the account's and every television asks it.
+    var tvCode by remember { mutableStateOf<Boolean?>(null) }
+    var tvCodeTrouble by remember { mutableStateOf(false) }
+    var choosingTvCode by remember { mutableStateOf(false) }
+    LaunchedEffect(api) {
+        tvCode = try {
+            api.hasTvCode()
+        } catch (_: IOException) {
+            null
+        }
+    }
+
+    fun setTvCode(code: String?) {
+        scope.launch {
+            try {
+                api.setTvCode(code)
+                tvCode = code != null
+                tvCodeTrouble = false
+            } catch (_: IOException) {
+                tvCodeTrouble = true
+            }
+        }
+    }
 
     fun close() {
         asked = null
@@ -380,6 +406,26 @@ fun SettingsScreen(sessions: Sessions) {
                         }
                     }
                 }
+                group("tv-code", null, null) {
+                    val title = stringResource(R.string.tv_setting_tv_code)
+                    val now = when {
+                        tvCodeTrouble -> stringResource(R.string.tv_refused_generic)
+                        tvCode == true -> stringResource(R.string.tv_tv_code_set)
+                        tvCode == false -> stringResource(R.string.tv_tv_code_none)
+                        else -> null
+                    }
+                    val change = stringResource(R.string.tv_tv_code_change)
+                    val remove = stringResource(R.string.tv_tv_code_remove)
+                    Line("tv-code", title, now, memory) {
+                        if (tvCode == true) {
+                            ask(title, listOf<Boolean?>(true, false), listOf(change, remove), null) { changing ->
+                                if (changing == true) choosingTvCode = true else setTvCode(null)
+                            }
+                        } else {
+                            choosingTvCode = true
+                        }
+                    }
+                }
                 group("banner", null, null) {
                     val banners = remember { Banners(context) }
                     var follows by remember { mutableStateOf(banners.follows()) }
@@ -452,6 +498,19 @@ fun SettingsScreen(sessions: Sessions) {
                     ) { activity?.let(Tour::start) }
                 }
             }
+        }
+        if (choosingTvCode) {
+            NewTvCode(
+                onChosen = { code ->
+                    choosingTvCode = false
+                    setTvCode(code)
+                    close()
+                },
+                onClose = {
+                    choosingTvCode = false
+                    close()
+                },
+            )
         }
         asked?.let {
             ChoiceList(
