@@ -3,10 +3,14 @@
  * it names and the button that lets it in.
  */
 
+/* One column, everything on its middle: a phone is where this is mostly
+   done, and a code, a device and one button read down its middle. */
 .link-card {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--gap);
+  text-align: center;
   max-width: 560px;
   padding: 22px;
   border: 1px solid var(--border);
@@ -21,7 +25,8 @@
 }
 
 .link-code {
-  max-width: 240px;
+  width: 100%;
+  max-width: 280px;
   font-size: 26px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -29,16 +34,36 @@
   text-align: center;
 }
 
+.link-scan,
+.link-device {
+  width: 100%;
+  max-width: 280px;
+}
+
+.link-scan {
+  justify-content: center;
+}
+
 .link-device {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--gap);
+}
+
+.link-device .picker {
+  width: 100%;
+}
+
+.link-device .button {
+  width: 100%;
+  justify-content: center;
 }
 
 .link-device-name {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   font-weight: 600;
 }
@@ -47,4 +72,17 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* The tick beside its words, on their line. */
+.link-done {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.link-done svg {
+  flex: none;
 }

@@ -113,7 +113,7 @@ export function LinkPage() {
         <section className="link-card">
           <p className="link-lead">{t("link.lead")}</p>
           {done && (
-            <p className="panel-notice panel-notice-ok">
+            <p className="panel-notice panel-notice-ok link-done">
               <TickIcon size={16} />
               {t("link.done", { device: done })}
             </p>
@@ -133,11 +133,7 @@ export function LinkPage() {
           {/* The phone's own camera, in the application: no reader of QR codes
               of its own to find, and no browser opened beside it. */}
           {appScanner && (
-            <button
-              type="button"
-              className="button"
-              onClick={scan}
-            >
+            <button type="button" className="button link-scan" onClick={scan}>
               <CameraIcon size={17} />
               {t("link.scan")}
             </button>
