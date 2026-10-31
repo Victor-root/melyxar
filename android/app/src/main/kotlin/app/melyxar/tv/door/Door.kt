@@ -126,6 +126,9 @@ fun Door(
     var knocking by remember { mutableStateOf<String?>(null) }
     /** The profile signed in here asking for its code before it opens. */
     var locked by remember { mutableStateOf<Locked?>(null) }
+    /** Whether a code is shown, for an account signed in elsewhere to let
+     *  this television in. */
+    var lettingIn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     // A maintenance in force stands in for the profiles, which are kept for
     // an administrator who asks for them.
@@ -226,8 +229,9 @@ fun Door(
                             server = server,
                             onPick = { open(it, now.branding) },
                             onByHand = { knocking = "" },
+                            onTelephone = { lettingIn = true },
                             onChangeServer = onChangeServer,
-                            quiet = knocking != null || locked != null,
+                            quiet = knocking != null || locked != null || lettingIn,
                         )
                     }
                 }
@@ -239,7 +243,19 @@ fun Door(
                         avatar = open.profiles.firstOrNull { it.name == asking }?.avatar,
                         client = sessions.client,
                         onIn = { session, account -> signedIn(session, account, open.branding) },
+                        onTelephone = {
+                            knocking = null
+                            lettingIn = true
+                        },
                         onClose = { knocking = null },
+                    )
+                }
+                if (lettingIn && open != null) {
+                    LetInFromATelephone(
+                        api = api,
+                        client = sessions.client,
+                        onIn = { session, account -> signedIn(session, account, open.branding) },
+                        onClose = { lettingIn = false },
                     )
                 }
                 val asked = locked
@@ -255,7 +271,7 @@ fun Door(
             }
         }
     }
-    BackHandler(enabled = knocking == null && locked == null, onBack = onBack)
+    BackHandler(enabled = knocking == null && locked == null && !lettingIn, onBack = onBack)
 }
 
 /** A profile signed in here, waiting on its code. */
@@ -268,6 +284,7 @@ private fun Profiles(
     server: KnownServer,
     onPick: (String) -> Unit,
     onByHand: () -> Unit,
+    onTelephone: () -> Unit,
     onChangeServer: () -> Unit,
     quiet: Boolean,
 ) {
@@ -334,8 +351,13 @@ private fun Profiles(
                 color = palette.textFaint,
                 modifier = Modifier.padding(start = 10.dp).weight(1f),
             )
+            PlainButton(
+                stringResource(R.string.tv_link_go),
+                onTelephone,
+                Modifier.padding(end = 12.dp).then(if (profiles.isEmpty()) Modifier else Modifier.focusRequester(foot)),
+            )
             if (profiles.isNotEmpty()) {
-                PlainButton(stringResource(R.string.tv_by_hand), onByHand, Modifier.padding(end = 12.dp).focusRequester(foot))
+                PlainButton(stringResource(R.string.tv_by_hand), onByHand, Modifier.padding(end = 12.dp))
             }
             PlainButton(
                 stringResource(R.string.tv_change_server),

@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
@@ -45,6 +46,7 @@ import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.LocalPalette
+import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.TvField
 import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.shadowCard
@@ -62,6 +64,8 @@ fun Knock(
     avatar: String?,
     client: String,
     onIn: (KeptSession, Account) -> Unit,
+    /** Turns to signing in from a telephone instead of typing. */
+    onTelephone: () -> Unit,
     onClose: () -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -147,6 +151,7 @@ fun Knock(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 4.dp),
         )
+        PlainButton(stringResource(R.string.tv_link_go), onTelephone)
     }
     LaunchedEffect(Unit) { first.requestFocus() }
 }
@@ -156,13 +161,17 @@ fun Knock(
  * closed, and it shakes its head at a refusal by [shake].
  */
 @Composable
-fun DoorPanel(shake: Animatable<Float, AnimationVector1D>, content: @Composable ColumnScope.() -> Unit) {
+fun DoorPanel(
+    shake: Animatable<Float, AnimationVector1D>,
+    width: Dp = 440.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val palette = LocalPalette.current
     AboveKeyboard(Modifier.background(palette.ground.copy(alpha = 0.72f))) {
         val shape = RoundedCornerShape(18.dp)
         Column(
             modifier = Modifier
-                .width(440.dp)
+                .width(width)
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
