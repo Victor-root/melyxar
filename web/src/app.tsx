@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { useBranding } from "./player/logo";
 import { wearTheLogo } from "./installing";
 import { nameTheTab } from "./tab";
-import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import type { Library } from "./api";
 import { api } from "./api";
 import { AttentionProvider } from "./notifications/attention";
@@ -174,6 +174,15 @@ function WatchingLibraries({ children }: { children: React.ReactNode }) {
 function BehindTheDoor() {
   const { t, adopt } = useSettings();
   useOpeningPassesOnLeaving();
+  // A shortcut of the application's icon leads the page already open where
+  // it goes, rather than loading it again.
+  const navigate = useNavigate();
+  useEffect(() => {
+    window.melyxarOpen = (path) => navigate(path);
+    return () => {
+      window.melyxarOpen = undefined;
+    };
+  }, [navigate]);
   // What this account chose, once there is an account to ask about. The
   // browser's own copy drew the door a moment ago; this is what carries a
   // choice from one machine to the next.

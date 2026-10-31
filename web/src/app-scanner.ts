@@ -14,6 +14,9 @@ declare global {
     MelyxarScanner?: AppScanner;
     /** Told by the application what the camera read. */
     melyxarScanned?: (read: string | null) => void;
+    /** Asked by the application to lead the page open to one of its
+     *  addresses, as a shortcut of its icon does. */
+    melyxarOpen?: (path: string) => void;
   }
 }
 
