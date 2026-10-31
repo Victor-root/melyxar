@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -37,11 +38,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** The tallest a list of choices grows before it scrolls. */
-private val TALLEST = 360.dp
+/** How large a list of choices is drawn: small over a film, where it must
+ *  leave the picture seen, large as a window of its own over a screen of
+ *  settings, read from across a room. */
+private class Scale(
+    val narrow: Dp,
+    val wide: Dp,
+    val tallest: Dp,
+    val corner: Dp,
+    val rim: Dp,
+    val title: TextUnit,
+    val name: TextUnit,
+    val value: TextUnit,
+    val note: TextUnit,
+    val glyph: Dp,
+    val across: Dp,
+    val down: Dp,
+)
+
+private val SMALL = Scale(320.dp, 420.dp, 360.dp, 10.dp, 6.dp, 14.sp, 14.sp, 13.sp, 13.sp, 18.dp, 10.dp, 9.dp)
+private val LARGE = Scale(620.dp, 760.dp, 560.dp, 16.dp, 10.dp, 22.sp, 19.sp, 17.sp, 16.sp, 24.dp, 20.dp, 16.dp)
 
 /**
  * A list of [choices] over the screen, under its [title], the one in force
@@ -70,15 +91,17 @@ fun ChoiceList(
     leadsOn: Boolean = false,
     swatches: List<Color> = emptyList(),
     icons: List<ImageVector?> = emptyList(),
+    large: Boolean = false,
 ) {
     val palette = LocalPalette.current
+    val scale = if (large) LARGE else SMALL
     val start = remember { FocusRequester() }
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(scale.corner)
     val first = startAt.coerceIn(0, (choices.size - 1).coerceAtLeast(0))
     BackHandler(onBack = onClose)
     Column(
         modifier = modifier
-            .width(if (values.all { it == null }) 320.dp else 420.dp)
+            .width(if (values.all { it == null }) scale.narrow else scale.wide)
             .focusProperties { onExit = { cancelFocusChange() } }
             .then(if (choices.isEmpty()) Modifier.focusRequester(start).focusable() else Modifier.focusGroup())
             .boxShadow(shape, palette.shadowRaised)
@@ -86,28 +109,28 @@ fun ChoiceList(
             .background(palette.surfaceRaised)
             .background(palette.accent.copy(alpha = 0.14f))
             .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
-            .padding(6.dp),
+            .padding(scale.rim),
     ) {
         Text(
             title,
-            fontSize = 14.sp,
+            fontSize = scale.title,
             fontWeight = FontWeight.SemiBold,
             color = palette.text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = scale.across, vertical = scale.down * 0.9f),
         )
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
         note?.let {
             Text(
                 it,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
+                fontSize = scale.note,
+                lineHeight = scale.note * 1.45f,
                 color = palette.textSoft,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = scale.across, vertical = scale.down),
             )
         }
         LazyColumn(
             state = rememberLazyListState(initialFirstVisibleItemIndex = first),
-            modifier = Modifier.heightIn(max = TALLEST),
+            modifier = Modifier.heightIn(max = scale.tallest),
         ) {
             itemsIndexed(choices) { at, name ->
                 Choice(
@@ -116,6 +139,7 @@ fun ChoiceList(
                     swatch = swatches.getOrNull(at),
                     icon = icons.getOrNull(at),
                     chosen = at == chosen,
+                    scale = scale,
                     onClick = {
                         onChoose(at)
                         if (!leadsOn) onClose()
@@ -129,7 +153,16 @@ fun ChoiceList(
 }
 
 @Composable
-private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVector?, chosen: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun Choice(
+    name: String,
+    value: String?,
+    swatch: Color?,
+    icon: ImageVector?,
+    chosen: Boolean,
+    scale: Scale,
+    onClick: () -> Unit,
+    modifier: Modifier,
+) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
@@ -143,15 +176,15 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
             .drawBehind { drawRect(palette.accent.copy(alpha = 0.26f * lit)) }
             .border(1.dp, palette.accent.copy(alpha = 0.45f * lit), shape)
             .clickable(interaction, indication = null, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(horizontal = scale.across, vertical = scale.down),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // A setting says what it is on rather than being ticked.
         if (value == null) {
-            Box(Modifier.width(26.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(scale.glyph + 8.dp), contentAlignment = Alignment.CenterStart) {
                 when {
-                    chosen -> Glyph(Icons.Tick, palette.accentBright, 18.dp)
-                    icon != null -> Glyph(icon, if (bright) palette.text else palette.textSoft, 18.dp)
+                    chosen -> Glyph(Icons.Tick, palette.accentBright, scale.glyph)
+                    icon != null -> Glyph(icon, if (bright) palette.text else palette.textSoft, scale.glyph)
                 }
             }
         }
@@ -159,7 +192,7 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
             Box(
                 Modifier
                     .padding(end = 10.dp)
-                    .size(16.dp)
+                    .size(scale.glyph - 2.dp)
                     .clip(CircleShape)
                     .background(it)
                     .border(1.dp, palette.text.copy(alpha = 0.3f), CircleShape),
@@ -167,7 +200,7 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
         }
         Text(
             name,
-            fontSize = 14.sp,
+            fontSize = scale.name,
             color = palette.text,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -176,12 +209,31 @@ private fun Choice(name: String, value: String?, swatch: Color?, icon: ImageVect
         value?.let {
             Text(
                 it,
-                fontSize = 13.sp,
+                fontSize = scale.value,
                 color = palette.textFaint,
                 maxLines = 1,
                 modifier = Modifier.padding(start = 12.dp),
             )
-            Glyph(Icons.ChevronRight, palette.textFaint, 16.dp, Modifier.padding(start = 4.dp))
+            Glyph(Icons.ChevronRight, palette.textFaint, scale.glyph - 2.dp, Modifier.padding(start = 4.dp))
         }
+    }
+}
+
+/**
+ * A list of choices as a window of its own, for a screen of settings: the
+ * screen behind it darkened, the list large in its middle.
+ */
+@Composable
+fun ChoiceWindow(
+    title: String,
+    choices: List<String>,
+    chosen: Int?,
+    onChoose: (Int) -> Unit,
+    onClose: () -> Unit,
+    swatches: List<Color> = emptyList(),
+) {
+    val palette = LocalPalette.current
+    Box(Modifier.fillMaxSize().background(palette.ground.copy(alpha = 0.72f)), contentAlignment = Alignment.Center) {
+        ChoiceList(title, choices, chosen, onChoose, onClose, swatches = swatches, large = true)
     }
 }
