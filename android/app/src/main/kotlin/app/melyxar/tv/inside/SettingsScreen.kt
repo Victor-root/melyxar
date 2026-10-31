@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -247,6 +248,8 @@ fun SettingsScreen(sessions: Sessions) {
                 if (chosen == null) {
                     return@LazyColumn
                 }
+                // The room a head of the lines used to leave under the bar.
+                item("under-the-bar") { Spacer(Modifier.height(30.dp)) }
                 val open = section
                 if (open == null) {
                     // The sections, as the web's pages of settings: each
