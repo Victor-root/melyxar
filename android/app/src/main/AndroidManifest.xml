@@ -17,6 +17,9 @@
          through the television's own recogniser, rather than opening the
          recogniser's window over Melyxar's. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Reading the QR code a television shows at its door, on the phone. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Whether the device has something to listen with: since Android 11 an
          application sees only what it names. -->
@@ -355,6 +358,11 @@
             android:exported="false"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true" />
+
+        <!-- The phone's camera, reading the QR code a device shows at its door. -->
+        <activity
+            android:name=".web.ScanActivity"
+            android:exported="false" />
 
         <!-- A camera watched live from the phone's page, over it. -->
         <activity

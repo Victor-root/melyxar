@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -65,6 +66,7 @@ import app.melyxar.server.KnownServer
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
 import app.melyxar.theme.drawUnderTheBars
+import org.json.JSONObject
 
 /**
  * The interface of a server, as its own web pages draw it.
@@ -90,6 +92,21 @@ class WebActivity : ComponentActivity() {
     private val picker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         picking?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
         picking = null
+    }
+
+    /** The camera reading a QR code for the page, and what it read handed
+     *  back to it; nothing when it was closed without one. */
+    private val scanning = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val read = result.data?.getStringExtra(ScanActivity.READ)
+        page.evaluateJavascript("window.melyxarScanned?.(${read?.let(JSONObject::quote) ?: "null"})", null)
+    }
+
+    /** What the page calls to read a QR code with the phone's camera. */
+    private inner class Scanner {
+        @JavascriptInterface
+        fun scan() {
+            runOnUiThread { scanning.launch(Intent(this@WebActivity, ScanActivity::class.java)) }
+        }
     }
 
     /** Asked once a sitting, and only of a phone that asks for it: a phone
@@ -130,6 +147,7 @@ class WebActivity : ComponentActivity() {
         val icons = LauncherIcons(applicationContext)
         icons.settle()
         page.addJavascriptInterface(icons, "MelyxarIcon")
+        page.addJavascriptInterface(Scanner(), "MelyxarScanner")
         page.addJavascriptInterface(LiveActivity.Bridge(this, { server.origin }, page.settings.userAgentString), "MelyxarCamera")
         music = MusicEngine.of(this) { serverFetching(page.settings.userAgentString) }
         val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms, ::askToShowTheMusic)
