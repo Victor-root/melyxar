@@ -218,6 +218,16 @@ private fun Top(work: Work, memory: FocusMemory, first: FocusRequester) {
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
+            wayBackUp(work)?.let {
+                Text(
+                    it,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.accentBright,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 headingOf(work),
                 fontSize = 30.sp,
@@ -453,11 +463,13 @@ private fun Episodes(
     title: String?,
     episodes: List<Child>,
     memory: FocusMemory,
+    /** The episode the row opens on, at its left edge. */
+    startsOn: Int = 0,
     onChoose: ((Card) -> Unit)? = null,
 ) {
     val chrome = LocalChrome.current
     val marks = LocalMarks.current
-    CardRow(title, null, episodes, key = { it.card.id }) { episode ->
+    CardRow(title, null, episodes, key = { it.card.id }, startsOn = startsOn) { episode ->
         val card = episode.card
         WorkCard(
             card = card,
@@ -468,6 +480,22 @@ private fun Episodes(
             modifier = Modifier.remembered(memory, "episode/${card.id}"),
         )
     }
+}
+
+/** Where a work sits in its series, as the web's line over the title says
+ *  it: the series, the season and, for an episode, its number. Nothing for
+ *  a work that hangs under nothing. */
+@Composable
+private fun wayBackUp(work: Work): String? {
+    val above = work.ancestry.reversed().mapNotNull { up ->
+        when {
+            up.kind == "season" && up.number == 0 -> stringResource(R.string.tv_specials)
+            up.kind == "season" && up.title == null -> up.number?.let { stringResource(R.string.tv_season, it) }
+            else -> up.title
+        }
+    }
+    val episode = work.number?.takeIf { work.kind == "episode" }?.let { stringResource(R.string.tv_episode_number, it) }
+    return (above + listOfNotNull(episode)).takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
 /** A season announced by its number in the language read, as the web does,
@@ -494,7 +522,12 @@ private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
         item("season-episodes") {
             val chrome = LocalChrome.current
             val name = season?.title ?: season?.number?.let { stringResource(R.string.tv_season, it) }
-            Episodes(name ?: stringResource(R.string.tv_episodes), work.siblings, memory) { card -> chrome.go(Place.Opened(card.id)) }
+            // Opened on the episode this page is about, the ones before it a
+            // press to the left.
+            val here = work.siblings.indexOfFirst { it.card.id == work.id }.coerceAtLeast(0)
+            Episodes(name ?: stringResource(R.string.tv_episodes), work.siblings, memory, startsOn = here) { card ->
+                chrome.go(Place.Opened(card.id))
+            }
         }
     }
     if (season != null || series != null) {

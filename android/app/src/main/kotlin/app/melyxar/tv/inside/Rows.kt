@@ -69,6 +69,9 @@ fun <T> CardRow(
     items: List<T>,
     key: (T) -> String,
     modifier: Modifier = Modifier,
+    /** The card the row opens on at its left edge, and the remote comes
+     *  into first: the episode a page is about among its season's. */
+    startsOn: Int = 0,
     card: @Composable (T) -> Unit,
 ) {
     val scrolling = rememberRowScrolling()
@@ -80,10 +83,13 @@ fun <T> CardRow(
         title?.let { RowHead(it, icon) }
         CompositionLocalProvider(LocalBringIntoViewSpec provides scrolling) {
             LazyRow(
-                state = rememberLazyListState(prefetchStrategy = remember(ahead) { LazyListPrefetchStrategy(nestedPrefetchItemCount = ahead) }),
+                state = rememberLazyListState(
+                    initialFirstVisibleItemIndex = startsOn.coerceIn(0, (items.size - 1).coerceAtLeast(0)),
+                    prefetchStrategy = remember(ahead) { LazyListPrefetchStrategy(nestedPrefetchItemCount = ahead) },
+                ),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                modifier = Modifier.landsAsLeft(row, items.firstOrNull()?.let(key)),
+                modifier = Modifier.landsAsLeft(row, (items.getOrNull(startsOn) ?: items.firstOrNull())?.let(key)),
             ) {
                 items(items.size, key = { key(items[it]) }) { at ->
                     Box(Modifier.inRow(row, key(items[at]))) { card(items[at]) }
