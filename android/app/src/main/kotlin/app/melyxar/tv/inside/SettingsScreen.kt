@@ -1,6 +1,7 @@
 package app.melyxar.tv.inside
 
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -106,6 +108,18 @@ private val PROBE_PARTS = listOf(
 
 /** The lengths offered for a step of the player, or the way back on
  *  resuming, as long as the server lets them be. */
+/** A page of the settings, as the web's are laid out. */
+private class Section(val key: String, val name: Int, val icon: ImageVector)
+
+private val SECTIONS = listOf(
+    Section("look", R.string.tv_settings_look, Icons.Eye),
+    Section("playing", R.string.tv_settings_playing, Icons.Play),
+    Section("tracks", R.string.tv_settings_tracks, Icons.Subtitles),
+    Section("music", R.string.tv_settings_music, Icons.Music),
+    Section("television", R.string.tv_settings_television, Icons.Television),
+    Section("probe", R.string.tv_settings_probe, Icons.Gear),
+)
+
 private val STEPS = listOf(5, 10, 15, 20, 30, 45, 60, 90)
 private val REWINDS = listOf(0, 3, 5, 10, 15, 30)
 
@@ -148,6 +162,26 @@ fun SettingsScreen(sessions: Sessions) {
         .plus(sessions.of(api.origin).map { it.name })
         .distinct()
     val list = rememberLazyListState()
+    /** The section open, or the list of them. */
+    var section by rememberSaveable { mutableStateOf<String?>(null) }
+    /** The way back onto the section left. */
+    val entries = remember { SECTIONS.associate { it.key to FocusRequester() } }
+    var left by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = section != null) {
+        left = section
+        section = null
+    }
+    // Opened, a section starts at its top on its first line; left, the list
+    // comes back with the remote on the one it was opened from.
+    LaunchedEffect(section) {
+        list.scrollToItem(0)
+        withFrameNanos {}
+        try {
+            (if (section == null) left?.let(entries::get) ?: first else first).requestFocus()
+        } catch (_: IllegalStateException) {
+            // Not drawn yet: the screen's own first focus sees to it.
+        }
+    }
     // Whether this account gave itself a code for its televisions: read here,
     // since it is the account's and every television asks it.
     var tvCode by remember { mutableStateOf<Boolean?>(null) }
@@ -200,302 +234,342 @@ fun SettingsScreen(sessions: Sessions) {
             LazyColumn(state = list, contentPadding = PaddingValues(bottom = 40.dp), modifier = Modifier.fillMaxSize()) {
                 item("top") {
                     Box(Modifier.head(head, "top")) {
-                        TopBar { BarTitle(Icons.Gear, stringResource(R.string.tv_settings)) }
+                        val inside = SECTIONS.firstOrNull { it.key == section }
+                        TopBar {
+                            BarTitle(
+                                inside?.icon ?: Icons.Gear,
+                                inside?.let { "${stringResource(R.string.tv_settings)} · ${stringResource(it.name)}" }
+                                    ?: stringResource(R.string.tv_settings),
+                            )
+                        }
                     }
                 }
                 if (chosen == null) {
                     return@LazyColumn
                 }
-                group("look", R.string.tv_settings_look, Icons.Eye, Modifier.head(head, "look")) {
-                    val themes = listOf("system", "dark", "light")
-                    val themeNames = listOf(R.string.tv_theme_system, R.string.tv_theme_dark, R.string.tv_theme_light).map { stringResource(it) }
-                    val title = stringResource(R.string.tv_setting_theme)
-                    Line("theme", title, themeNames.getOrNull(themes.indexOf(chosen.themeMode)), memory, first) {
-                        ask(title, themes, themeNames, chosen.themeMode) { mode ->
-                            preferences.change({ it.copy(themeMode = mode) }, buildJsonObject { put("theme_mode", mode) })
+                val open = section
+                if (open == null) {
+                    // The sections, as the web's pages of settings: each
+                    // opens its own lines, and the back key comes back here.
+                    SECTIONS.forEachIndexed { at, one ->
+                        group("section-${one.key}", null, null) {
+                            Line(
+                                "section-${one.key}",
+                                stringResource(one.name),
+                                null,
+                                memory,
+                                first.takeIf { at == 0 },
+                                icon = one.icon,
+                                modifier = Modifier.focusRequester(entries.getValue(one.key)),
+                            ) {
+                                section = one.key
+                            }
                         }
                     }
+                    return@LazyColumn
                 }
-                group("accent", null, null, Modifier.head(head, "accent")) {
-                    val names = ACCENT_NAMES.map { stringResource(it) }
-                    val title = stringResource(R.string.tv_setting_accent)
-                    val now = chosen.accentColor.lowercase()
-                    Line("accent", title, names.getOrNull(OFFERED_ACCENTS.indexOf(now)) ?: stringResource(R.string.tv_accent_own), memory, swatch = parseHex(now)?.let(::Color)) {
-                        ask(title, OFFERED_ACCENTS, names, now, OFFERED_ACCENTS.mapNotNull { hex -> parseHex(hex)?.let(::Color) }) { colour ->
-                            preferences.change({ it.copy(accentColor = colour) }, buildJsonObject { put("accent_color", colour) })
+                if (open == "look") {
+                    group("look", null, null, Modifier.head(head, "look")) {
+                        val themes = listOf("system", "dark", "light")
+                        val themeNames = listOf(R.string.tv_theme_system, R.string.tv_theme_dark, R.string.tv_theme_light).map { stringResource(it) }
+                        val title = stringResource(R.string.tv_setting_theme)
+                        Line("theme", title, themeNames.getOrNull(themes.indexOf(chosen.themeMode)), memory, first) {
+                            ask(title, themes, themeNames, chosen.themeMode) { mode ->
+                                preferences.change({ it.copy(themeMode = mode) }, buildJsonObject { put("theme_mode", mode) })
+                            }
                         }
                     }
-                }
-                group("backdrop", null, null, Modifier.head(head, "backdrop")) {
-                    val backdrops = listOf("light", "library", "none")
-                    val names = listOf(R.string.tv_backdrop_light, R.string.tv_backdrop_library, R.string.tv_backdrop_none).map { stringResource(it) }
-                    val title = stringResource(R.string.tv_setting_backdrop)
-                    Line("backdrop", title, names.getOrNull(backdrops.indexOf(chosen.backdrop)), memory) {
-                        ask(title, backdrops, names, chosen.backdrop) { backdrop ->
-                            preferences.change({ it.copy(backdrop = backdrop) }, buildJsonObject { put("backdrop", backdrop) })
+                    group("accent", null, null, Modifier.head(head, "accent")) {
+                        val names = ACCENT_NAMES.map { stringResource(it) }
+                        val title = stringResource(R.string.tv_setting_accent)
+                        val now = chosen.accentColor.lowercase()
+                        Line("accent", title, names.getOrNull(OFFERED_ACCENTS.indexOf(now)) ?: stringResource(R.string.tv_accent_own), memory, swatch = parseHex(now)?.let(::Color)) {
+                            ask(title, OFFERED_ACCENTS, names, now, OFFERED_ACCENTS.mapNotNull { hex -> parseHex(hex)?.let(::Color) }) { colour ->
+                                preferences.change({ it.copy(accentColor = colour) }, buildJsonObject { put("accent_color", colour) })
+                            }
                         }
                     }
-                }
-                if (chosen.backdrop == "light") {
-                    group("light", null, null, Modifier.head(head, "light")) {
-                        val lights = (1..LIGHT_NAMES.size).toList()
-                        val names = LIGHT_NAMES.map { stringResource(it) }
-                        val title = stringResource(R.string.tv_setting_backdrop_light)
-                        Line("light", title, names.getOrNull(chosen.backdropLight - 1), memory) {
-                            ask(title, lights, names, chosen.backdropLight) { light ->
-                                preferences.change({ it.copy(backdropLight = light) }, buildJsonObject { put("backdrop_light", light) })
+                    group("backdrop", null, null, Modifier.head(head, "backdrop")) {
+                        val backdrops = listOf("light", "library", "none")
+                        val names = listOf(R.string.tv_backdrop_light, R.string.tv_backdrop_library, R.string.tv_backdrop_none).map { stringResource(it) }
+                        val title = stringResource(R.string.tv_setting_backdrop)
+                        Line("backdrop", title, names.getOrNull(backdrops.indexOf(chosen.backdrop)), memory) {
+                            ask(title, backdrops, names, chosen.backdrop) { backdrop ->
+                                preferences.change({ it.copy(backdrop = backdrop) }, buildJsonObject { put("backdrop", backdrop) })
+                            }
+                        }
+                    }
+                    if (chosen.backdrop == "light") {
+                        group("light", null, null, Modifier.head(head, "light")) {
+                            val lights = (1..LIGHT_NAMES.size).toList()
+                            val names = LIGHT_NAMES.map { stringResource(it) }
+                            val title = stringResource(R.string.tv_setting_backdrop_light)
+                            Line("light", title, names.getOrNull(chosen.backdropLight - 1), memory) {
+                                ask(title, lights, names, chosen.backdropLight) { light ->
+                                    preferences.change({ it.copy(backdropLight = light) }, buildJsonObject { put("backdrop_light", light) })
+                                }
                             }
                         }
                     }
                 }
-                group("playing", R.string.tv_settings_playing, Icons.Play) {
-                    val title = stringResource(R.string.tv_setting_step_back)
-                    val steps = lengths(STEPS, chosen.stepBackSeconds, chosen.longestStep)
-                    Line("step-back", title, seconds(chosen.stepBackSeconds), memory) {
-                        ask(title, steps, steps.map(::seconds), chosen.stepBackSeconds) { step ->
-                            preferences.change({ it.copy(stepBackSeconds = step) }, buildJsonObject { put("step_back_seconds", step) })
-                        }
-                    }
-                }
-                group("step-on", null, null) {
-                    val title = stringResource(R.string.tv_setting_step_on)
-                    val steps = lengths(STEPS, chosen.stepOnSeconds, chosen.longestStep)
-                    Line("step-on", title, seconds(chosen.stepOnSeconds), memory) {
-                        ask(title, steps, steps.map(::seconds), chosen.stepOnSeconds) { step ->
-                            preferences.change({ it.copy(stepOnSeconds = step) }, buildJsonObject { put("step_on_seconds", step) })
-                        }
-                    }
-                }
-                group("rewind", null, null) {
-                    val title = stringResource(R.string.tv_setting_resume_rewind)
-                    val off = stringResource(R.string.tv_resume_rewind_off)
-                    val rewinds = lengths(REWINDS, chosen.resumeRewindSeconds, chosen.longestStep)
-                    val names = rewinds.map { if (it == 0) off else seconds(it) }
-                    Line("rewind", title, names[rewinds.indexOf(chosen.resumeRewindSeconds)], memory) {
-                        ask(title, rewinds, names, chosen.resumeRewindSeconds) { rewind ->
-                            preferences.change({ it.copy(resumeRewindSeconds = rewind) }, buildJsonObject { put("resume_rewind_seconds", rewind) })
-                        }
-                    }
-                }
-                group("hdr", null, null) {
-                    val title = stringResource(R.string.tv_setting_hdr)
-                    val names = chosen.wideGamutChoices.map { stringResource(hdrName(it)) }
-                    Line("hdr", title, stringResource(hdrName(chosen.wideGamut)), memory) {
-                        ask(title, chosen.wideGamutChoices, names, chosen.wideGamut) { gamut ->
-                            preferences.change({ it.copy(wideGamut = gamut) }, buildJsonObject { put("wide_gamut", gamut) })
-                        }
-                    }
-                }
-                group("audio-language", R.string.tv_settings_tracks, Icons.Subtitles) {
-                    val title = stringResource(R.string.tv_setting_audio_language)
-                    val codes = listOf(null) + chosen.audioLanguages
-                    Line("audio-language", title, language(chosen.preferredAudioLanguage), memory) {
-                        ask(title, codes, codes.map(::language), chosen.preferredAudioLanguage) { code ->
-                            preferences.change(
-                                { it.copy(preferredAudioLanguage = code) },
-                                buildJsonObject { put("preferred_audio_language", JsonPrimitive(code.orEmpty())) },
-                            )
-                        }
-                    }
-                }
-                group("subtitle-language", null, null) {
-                    val title = stringResource(R.string.tv_setting_subtitle_language)
-                    val codes = listOf(null) + chosen.subtitleLanguages
-                    Line("subtitle-language", title, language(chosen.preferredSubtitleLanguage), memory) {
-                        ask(title, codes, codes.map(::language), chosen.preferredSubtitleLanguage) { code ->
-                            preferences.change(
-                                { it.copy(preferredSubtitleLanguage = code) },
-                                buildJsonObject { put("preferred_subtitle_language", JsonPrimitive(code.orEmpty())) },
-                            )
-                        }
-                    }
-                }
-                group("subtitle-mode", null, null) {
-                    val title = stringResource(R.string.tv_setting_subtitle_mode)
-                    val names = chosen.subtitleModes.map { stringResource(subtitleModeName(it)) }
-                    Line("subtitle-mode", title, stringResource(subtitleModeName(chosen.subtitleMode)), memory) {
-                        ask(title, chosen.subtitleModes, names, chosen.subtitleMode) { mode ->
-                            preferences.change({ it.copy(subtitleMode = mode) }, buildJsonObject { put("subtitle_mode", mode) })
-                        }
-                    }
-                }
-                // How the words look, kept on this television alone, as a
-                // browser keeps its own.
-                group("subtitle-look", R.string.tv_settings_subtitle_look, Icons.Subtitles) {
-                    Text(
-                        stringResource(R.string.tv_settings_subtitle_look_why),
-                        fontSize = 14.sp,
-                        color = palette.textSoft,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                    WordsSample(KeptWordsLook.look, stringResource(R.string.tv_subtitle_sample), Modifier.fillMaxWidth().height(SAMPLE_HEIGHT))
-                }
-                lookLine("subtitle-size", R.string.tv_subtitle_size, WordsSize.entries, { it.named }, { it.size }, memory, { asked = it }) { look, size ->
-                    look.copy(size = size)
-                }
-                lookLine("subtitle-colour", R.string.tv_subtitle_colour, WordsColour.entries, { it.named }, { it.colour }, memory, { asked = it }) { look, colour ->
-                    look.copy(colour = colour)
-                }
-                lookLine("subtitle-edge", R.string.tv_subtitle_edge, WordsEdge.entries, { it.named }, { it.edge }, memory, { asked = it }) { look, edge ->
-                    look.copy(edge = edge)
-                }
-                lookLine("subtitle-background", R.string.tv_subtitle_background, WordsBackground.entries, { it.named }, { it.background }, memory, { asked = it }) { look, background ->
-                    look.copy(background = background)
-                }
-                // The heights a viewer sets by hand are the player's alone,
-                // where the film behind shows where the words would stand.
-                lookLine(
-                    "subtitle-height",
-                    R.string.tv_subtitle_height,
-                    WordsHeight.entries.filter { it != WordsHeight.Custom },
-                    { it.named },
-                    { it.height },
-                    memory,
-                    { asked = it },
-                ) { look, height ->
-                    look.copy(height = height)
-                }
-                group("crossfade", R.string.tv_settings_music, Icons.Music) {
-                    val title = stringResource(R.string.tv_setting_crossfade)
-                    val none = stringResource(R.string.tv_crossfade_none)
-                    val fades = (CROSSFADES + music.crossfadeSeconds).distinct().sorted()
-                    val names = fades.map { if (it == 0) none else seconds(it) }
-                    Line("crossfade", title, names[fades.indexOf(music.crossfadeSeconds)], memory) {
-                        ask(title, fades, names, music.crossfadeSeconds) { fade ->
-                            listening.changePreferences(music.copy(crossfadeSeconds = fade), buildJsonObject { put("crossfade_seconds", fade) })
-                        }
-                    }
-                }
-                group("volume", null, null) {
-                    val title = stringResource(R.string.tv_setting_volume)
-                    val modes = listOf("track", "album", "off")
-                    val names = listOf(R.string.tv_volume_track, R.string.tv_volume_album, R.string.tv_volume_off).map { stringResource(it) }
-                    Line("volume", title, names.getOrNull(modes.indexOf(music.volumeMode)), memory) {
-                        ask(title, modes, names, music.volumeMode) { mode ->
-                            listening.changePreferences(music.copy(volumeMode = mode), buildJsonObject { put("volume_mode", mode) })
-                        }
-                    }
-                }
-                group("music-step-back", null, null) {
-                    val title = stringResource(R.string.tv_setting_step_back)
-                    val steps = (MUSIC_STEPS + music.skipBackSeconds).distinct().sorted()
-                    Line("music-step-back", title, seconds(music.skipBackSeconds), memory) {
-                        ask(title, steps, steps.map(::seconds), music.skipBackSeconds) { step ->
-                            listening.changePreferences(music.copy(skipBackSeconds = step), buildJsonObject { put("skip_back_seconds", step) })
-                        }
-                    }
-                }
-                group("music-step-on", null, null) {
-                    val title = stringResource(R.string.tv_setting_step_on)
-                    val steps = (MUSIC_STEPS + music.skipOnSeconds).distinct().sorted()
-                    Line("music-step-on", title, seconds(music.skipOnSeconds), memory) {
-                        ask(title, steps, steps.map(::seconds), music.skipOnSeconds) { step ->
-                            listening.changePreferences(music.copy(skipOnSeconds = step), buildJsonObject { put("skip_on_seconds", step) })
-                        }
-                    }
-                }
-                group("opening", R.string.tv_settings_television, Icons.Television) {
-                    val title = stringResource(R.string.tv_setting_opening)
-                    val openings = listOf(Opening.Ask, Opening.Last) + profiles.map { Opening.Always(it) }
-                    val names = listOf(stringResource(R.string.tv_opening_ask), stringResource(R.string.tv_opening_last)) + profiles
-                    val now = names.getOrNull(openings.indexOf(opening)) ?: (opening as? Opening.Always)?.name
-                    Line("opening", title, now, memory) {
-                        ask(title, openings, names, opening) { chosenOpening ->
-                            sessions.openOn(api.origin, chosenOpening)
-                            opening = chosenOpening
-                        }
-                    }
-                }
-                group("tv-code", null, null) {
-                    val title = stringResource(R.string.tv_setting_tv_code)
-                    val now = when {
-                        tvCodeTrouble -> stringResource(R.string.tv_refused_generic)
-                        tvCode == true -> stringResource(R.string.tv_tv_code_set)
-                        tvCode == false -> stringResource(R.string.tv_tv_code_none)
-                        else -> null
-                    }
-                    val change = stringResource(R.string.tv_tv_code_change)
-                    val remove = stringResource(R.string.tv_tv_code_remove)
-                    Line("tv-code", title, now, memory) {
-                        if (tvCode == true) {
-                            ask(title, listOf<Boolean?>(true, false), listOf(change, remove), null) { changing ->
-                                if (changing == true) choosingTvCode = true else setTvCode(null)
+                if (open == "playing") {
+                    group("playing", null, null) {
+                        val title = stringResource(R.string.tv_setting_step_back)
+                        val steps = lengths(STEPS, chosen.stepBackSeconds, chosen.longestStep)
+                        Line("step-back", title, seconds(chosen.stepBackSeconds), memory, first) {
+                            ask(title, steps, steps.map(::seconds), chosen.stepBackSeconds) { step ->
+                                preferences.change({ it.copy(stepBackSeconds = step) }, buildJsonObject { put("step_back_seconds", step) })
                             }
-                        } else {
-                            choosingTvCode = true
+                        }
+                    }
+                    group("step-on", null, null) {
+                        val title = stringResource(R.string.tv_setting_step_on)
+                        val steps = lengths(STEPS, chosen.stepOnSeconds, chosen.longestStep)
+                        Line("step-on", title, seconds(chosen.stepOnSeconds), memory) {
+                            ask(title, steps, steps.map(::seconds), chosen.stepOnSeconds) { step ->
+                                preferences.change({ it.copy(stepOnSeconds = step) }, buildJsonObject { put("step_on_seconds", step) })
+                            }
+                        }
+                    }
+                    group("rewind", null, null) {
+                        val title = stringResource(R.string.tv_setting_resume_rewind)
+                        val off = stringResource(R.string.tv_resume_rewind_off)
+                        val rewinds = lengths(REWINDS, chosen.resumeRewindSeconds, chosen.longestStep)
+                        val names = rewinds.map { if (it == 0) off else seconds(it) }
+                        Line("rewind", title, names[rewinds.indexOf(chosen.resumeRewindSeconds)], memory) {
+                            ask(title, rewinds, names, chosen.resumeRewindSeconds) { rewind ->
+                                preferences.change({ it.copy(resumeRewindSeconds = rewind) }, buildJsonObject { put("resume_rewind_seconds", rewind) })
+                            }
+                        }
+                    }
+                    group("hdr", null, null) {
+                        val title = stringResource(R.string.tv_setting_hdr)
+                        val names = chosen.wideGamutChoices.map { stringResource(hdrName(it)) }
+                        Line("hdr", title, stringResource(hdrName(chosen.wideGamut)), memory) {
+                            ask(title, chosen.wideGamutChoices, names, chosen.wideGamut) { gamut ->
+                                preferences.change({ it.copy(wideGamut = gamut) }, buildJsonObject { put("wide_gamut", gamut) })
+                            }
                         }
                     }
                 }
-                group("banner", null, null) {
-                    val banners = remember { Banners(context) }
-                    var follows by remember { mutableStateOf(banners.follows()) }
-                    val ways = listOf(false, true)
-                    val names = listOf(stringResource(R.string.tv_banner_red), stringResource(R.string.tv_banner_accent))
-                    val now = names[ways.indexOf(follows)]
-                    // An accent changed since keeps the banner as it was until
-                    // it is chosen again, since changing it can close Melyxar.
-                    val shown = if (banners.differs(follows, chosen.accentColor)) stringResource(R.string.tv_banner_to_apply, now) else now
-                    Line("banner", stringResource(R.string.tv_setting_banner), shown, memory) {
-                        ask(resources.getString(R.string.tv_banner_closes), ways, names, follows) { wanted ->
-                            follows = wanted
-                            banners.choose(wanted, chosen.accentColor)
+                if (open == "tracks") {
+                    group("audio-language", null, null) {
+                        val title = stringResource(R.string.tv_setting_audio_language)
+                        val codes = listOf(null) + chosen.audioLanguages
+                        Line("audio-language", title, language(chosen.preferredAudioLanguage), memory, first) {
+                            ask(title, codes, codes.map(::language), chosen.preferredAudioLanguage) { code ->
+                                preferences.change(
+                                    { it.copy(preferredAudioLanguage = code) },
+                                    buildJsonObject { put("preferred_audio_language", JsonPrimitive(code.orEmpty())) },
+                                )
+                            }
                         }
                     }
-                }
-                group("sound-out", null, null) {
-                    val title = stringResource(R.string.tv_setting_sound_out)
-                    val ways = listOf(false, true)
-                    val names = listOf(stringResource(R.string.tv_sound_decoded), stringResource(R.string.tv_sound_passed_on))
-                    Line("sound-out", title, names[ways.indexOf(passedOn)], memory) {
-                        ask(title, ways, names, passedOn) { passed ->
-                            passSoundOn(context, passed)
-                            passedOn = passed
+                    group("subtitle-language", null, null) {
+                        val title = stringResource(R.string.tv_setting_subtitle_language)
+                        val codes = listOf(null) + chosen.subtitleLanguages
+                        Line("subtitle-language", title, language(chosen.preferredSubtitleLanguage), memory) {
+                            ask(title, codes, codes.map(::language), chosen.preferredSubtitleLanguage) { code ->
+                                preferences.change(
+                                    { it.copy(preferredSubtitleLanguage = code) },
+                                    buildJsonObject { put("preferred_subtitle_language", JsonPrimitive(code.orEmpty())) },
+                                )
+                            }
                         }
                     }
-                }
-                group("lighter", null, null) {
-                    val title = stringResource(R.string.tv_setting_lighter)
-                    val ways = listOf(false, true)
-                    val names = listOf(stringResource(R.string.tv_lighter_full), stringResource(R.string.tv_lighter_on))
-                    Line("lighter", title, names[ways.indexOf(Lighter.on)], memory) {
-                        ask(title, ways, names, Lighter.on, choose = Lighter::choose)
-                    }
-                }
-                group("frame-rate", null, null) {
-                    val title = stringResource(R.string.tv_setting_frame_rate)
-                    val ways = listOf(false, true)
-                    val names = listOf(stringResource(R.string.tv_frame_rate_hidden), stringResource(R.string.tv_frame_rate_shown))
-                    Line("frame-rate", title, names[ways.indexOf(FrameRate.on)], memory) {
-                        ask(title, ways, names, FrameRate.on, choose = FrameRate::choose)
-                    }
-                }
-                PROBE_PARTS.forEachIndexed { index, (part, name) ->
-                    group("probe-${part.name}", R.string.tv_settings_probe.takeIf { index == 0 }, Icons.Eye.takeIf { index == 0 }) {
-                        val title = stringResource(name)
-                        val ways = listOf(true, false)
-                        val names = listOf(stringResource(R.string.tv_probe_shown), stringResource(R.string.tv_probe_left_out))
-                        val now = Probe.shows(part)
-                        Line("probe-${part.name}", title, names[ways.indexOf(now)], memory) {
-                            ask(title, ways, names, now) { Probe.show(part, it) }
+                    group("subtitle-mode", null, null) {
+                        val title = stringResource(R.string.tv_setting_subtitle_mode)
+                        val names = chosen.subtitleModes.map { stringResource(subtitleModeName(it)) }
+                        Line("subtitle-mode", title, stringResource(subtitleModeName(chosen.subtitleMode)), memory) {
+                            ask(title, chosen.subtitleModes, names, chosen.subtitleMode) { mode ->
+                                preferences.change({ it.copy(subtitleMode = mode) }, buildJsonObject { put("subtitle_mode", mode) })
+                            }
                         }
                     }
-                }
-                group("probe-bench", null, null) {
-                    Line(
-                        "probe-bench",
-                        stringResource(R.string.tv_setting_probe_bench),
-                        stringResource(R.string.tv_probe_bench_waiting).takeIf { Probe.armed },
+                    // How the words look, kept on this television alone, as a
+                    // browser keeps its own.
+                    group("subtitle-look", R.string.tv_settings_subtitle_look, Icons.Subtitles) {
+                        Text(
+                            stringResource(R.string.tv_settings_subtitle_look_why),
+                            fontSize = 14.sp,
+                            color = palette.textSoft,
+                            modifier = Modifier.padding(bottom = 10.dp),
+                        )
+                        WordsSample(KeptWordsLook.look, stringResource(R.string.tv_subtitle_sample), Modifier.fillMaxWidth().height(SAMPLE_HEIGHT))
+                    }
+                    lookLine("subtitle-size", R.string.tv_subtitle_size, WordsSize.entries, { it.named }, { it.size }, memory, { asked = it }) { look, size ->
+                        look.copy(size = size)
+                    }
+                    lookLine("subtitle-colour", R.string.tv_subtitle_colour, WordsColour.entries, { it.named }, { it.colour }, memory, { asked = it }) { look, colour ->
+                        look.copy(colour = colour)
+                    }
+                    lookLine("subtitle-edge", R.string.tv_subtitle_edge, WordsEdge.entries, { it.named }, { it.edge }, memory, { asked = it }) { look, edge ->
+                        look.copy(edge = edge)
+                    }
+                    lookLine("subtitle-background", R.string.tv_subtitle_background, WordsBackground.entries, { it.named }, { it.background }, memory, { asked = it }) { look, background ->
+                        look.copy(background = background)
+                    }
+                    // The heights a viewer sets by hand are the player's alone,
+                    // where the film behind shows where the words would stand.
+                    lookLine(
+                        "subtitle-height",
+                        R.string.tv_subtitle_height,
+                        WordsHeight.entries.filter { it != WordsHeight.Custom },
+                        { it.named },
+                        { it.height },
                         memory,
-                    ) { Probe.armBench() }
+                        { asked = it },
+                    ) { look, height ->
+                        look.copy(height = height)
+                    }
                 }
-                group("probe-tour", null, null) {
-                    val activity = LocalActivity.current as? ComponentActivity
-                    Line(
-                        "probe-tour",
-                        stringResource(R.string.tv_setting_probe_tour),
-                        stringResource(R.string.tv_probe_tour_running).takeIf { Tour.running },
-                        memory,
-                    ) { activity?.let(Tour::start) }
+                if (open == "music") {
+                    group("crossfade", null, null) {
+                        val title = stringResource(R.string.tv_setting_crossfade)
+                        val none = stringResource(R.string.tv_crossfade_none)
+                        val fades = (CROSSFADES + music.crossfadeSeconds).distinct().sorted()
+                        val names = fades.map { if (it == 0) none else seconds(it) }
+                        Line("crossfade", title, names[fades.indexOf(music.crossfadeSeconds)], memory, first) {
+                            ask(title, fades, names, music.crossfadeSeconds) { fade ->
+                                listening.changePreferences(music.copy(crossfadeSeconds = fade), buildJsonObject { put("crossfade_seconds", fade) })
+                            }
+                        }
+                    }
+                    group("volume", null, null) {
+                        val title = stringResource(R.string.tv_setting_volume)
+                        val modes = listOf("track", "album", "off")
+                        val names = listOf(R.string.tv_volume_track, R.string.tv_volume_album, R.string.tv_volume_off).map { stringResource(it) }
+                        Line("volume", title, names.getOrNull(modes.indexOf(music.volumeMode)), memory) {
+                            ask(title, modes, names, music.volumeMode) { mode ->
+                                listening.changePreferences(music.copy(volumeMode = mode), buildJsonObject { put("volume_mode", mode) })
+                            }
+                        }
+                    }
+                    group("music-step-back", null, null) {
+                        val title = stringResource(R.string.tv_setting_step_back)
+                        val steps = (MUSIC_STEPS + music.skipBackSeconds).distinct().sorted()
+                        Line("music-step-back", title, seconds(music.skipBackSeconds), memory) {
+                            ask(title, steps, steps.map(::seconds), music.skipBackSeconds) { step ->
+                                listening.changePreferences(music.copy(skipBackSeconds = step), buildJsonObject { put("skip_back_seconds", step) })
+                            }
+                        }
+                    }
+                    group("music-step-on", null, null) {
+                        val title = stringResource(R.string.tv_setting_step_on)
+                        val steps = (MUSIC_STEPS + music.skipOnSeconds).distinct().sorted()
+                        Line("music-step-on", title, seconds(music.skipOnSeconds), memory) {
+                            ask(title, steps, steps.map(::seconds), music.skipOnSeconds) { step ->
+                                listening.changePreferences(music.copy(skipOnSeconds = step), buildJsonObject { put("skip_on_seconds", step) })
+                            }
+                        }
+                    }
+                }
+                if (open == "television") {
+                    group("opening", null, null) {
+                        val title = stringResource(R.string.tv_setting_opening)
+                        val openings = listOf(Opening.Ask, Opening.Last) + profiles.map { Opening.Always(it) }
+                        val names = listOf(stringResource(R.string.tv_opening_ask), stringResource(R.string.tv_opening_last)) + profiles
+                        val now = names.getOrNull(openings.indexOf(opening)) ?: (opening as? Opening.Always)?.name
+                        Line("opening", title, now, memory, first) {
+                            ask(title, openings, names, opening) { chosenOpening ->
+                                sessions.openOn(api.origin, chosenOpening)
+                                opening = chosenOpening
+                            }
+                        }
+                    }
+                    group("tv-code", null, null) {
+                        val title = stringResource(R.string.tv_setting_tv_code)
+                        val now = when {
+                            tvCodeTrouble -> stringResource(R.string.tv_refused_generic)
+                            tvCode == true -> stringResource(R.string.tv_tv_code_set)
+                            tvCode == false -> stringResource(R.string.tv_tv_code_none)
+                            else -> null
+                        }
+                        val change = stringResource(R.string.tv_tv_code_change)
+                        val remove = stringResource(R.string.tv_tv_code_remove)
+                        Line("tv-code", title, now, memory) {
+                            if (tvCode == true) {
+                                ask(title, listOf<Boolean?>(true, false), listOf(change, remove), null) { changing ->
+                                    if (changing == true) choosingTvCode = true else setTvCode(null)
+                                }
+                            } else {
+                                choosingTvCode = true
+                            }
+                        }
+                    }
+                    group("banner", null, null) {
+                        val banners = remember { Banners(context) }
+                        var follows by remember { mutableStateOf(banners.follows()) }
+                        val ways = listOf(false, true)
+                        val names = listOf(stringResource(R.string.tv_banner_red), stringResource(R.string.tv_banner_accent))
+                        val now = names[ways.indexOf(follows)]
+                        // An accent changed since keeps the banner as it was until
+                        // it is chosen again, since changing it can close Melyxar.
+                        val shown = if (banners.differs(follows, chosen.accentColor)) stringResource(R.string.tv_banner_to_apply, now) else now
+                        Line("banner", stringResource(R.string.tv_setting_banner), shown, memory) {
+                            ask(resources.getString(R.string.tv_banner_closes), ways, names, follows) { wanted ->
+                                follows = wanted
+                                banners.choose(wanted, chosen.accentColor)
+                            }
+                        }
+                    }
+                    group("sound-out", null, null) {
+                        val title = stringResource(R.string.tv_setting_sound_out)
+                        val ways = listOf(false, true)
+                        val names = listOf(stringResource(R.string.tv_sound_decoded), stringResource(R.string.tv_sound_passed_on))
+                        Line("sound-out", title, names[ways.indexOf(passedOn)], memory) {
+                            ask(title, ways, names, passedOn) { passed ->
+                                passSoundOn(context, passed)
+                                passedOn = passed
+                            }
+                        }
+                    }
+                    group("lighter", null, null) {
+                        val title = stringResource(R.string.tv_setting_lighter)
+                        val ways = listOf(false, true)
+                        val names = listOf(stringResource(R.string.tv_lighter_full), stringResource(R.string.tv_lighter_on))
+                        Line("lighter", title, names[ways.indexOf(Lighter.on)], memory) {
+                            ask(title, ways, names, Lighter.on, choose = Lighter::choose)
+                        }
+                    }
+                    group("frame-rate", null, null) {
+                        val title = stringResource(R.string.tv_setting_frame_rate)
+                        val ways = listOf(false, true)
+                        val names = listOf(stringResource(R.string.tv_frame_rate_hidden), stringResource(R.string.tv_frame_rate_shown))
+                        Line("frame-rate", title, names[ways.indexOf(FrameRate.on)], memory) {
+                            ask(title, ways, names, FrameRate.on, choose = FrameRate::choose)
+                        }
+                    }
+                }
+                if (open == "probe") {
+                    PROBE_PARTS.forEachIndexed { index, (part, name) ->
+                        group("probe-${part.name}", null, null) {
+                            val title = stringResource(name)
+                            val ways = listOf(true, false)
+                            val names = listOf(stringResource(R.string.tv_probe_shown), stringResource(R.string.tv_probe_left_out))
+                            val now = Probe.shows(part)
+                            Line("probe-${part.name}", title, names[ways.indexOf(now)], memory, first.takeIf { index == 0 }) {
+                                ask(title, ways, names, now) { Probe.show(part, it) }
+                            }
+                        }
+                    }
+                    group("probe-bench", null, null) {
+                        Line(
+                            "probe-bench",
+                            stringResource(R.string.tv_setting_probe_bench),
+                            stringResource(R.string.tv_probe_bench_waiting).takeIf { Probe.armed },
+                            memory,
+                        ) { Probe.armBench() }
+                    }
+                    group("probe-tour", null, null) {
+                        val activity = LocalActivity.current as? ComponentActivity
+                        Line(
+                            "probe-tour",
+                            stringResource(R.string.tv_setting_probe_tour),
+                            stringResource(R.string.tv_probe_tour_running).takeIf { Tour.running },
+                            memory,
+                        ) { activity?.let(Tour::start) }
+                    }
                 }
             }
         }
@@ -600,13 +674,16 @@ private fun Line(
     memory: FocusMemory,
     first: FocusRequester? = null,
     swatch: Color? = null,
+    /** Drawn before the name, for a line that opens a section. */
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
     val interaction = remember { MutableInteractionSource() }
     val lit by litBy(interaction)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .padding(top = 8.dp)
             .fillMaxWidth()
             .remembered(memory, key)
@@ -616,6 +693,7 @@ private fun Line(
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        icon?.let { Glyph(it, palette.accentBright, 20.dp, Modifier.padding(end = 14.dp)) }
         Text(
             name,
             fontSize = 16.sp,
