@@ -3,22 +3,30 @@ package app.melyxar.web
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
 import app.melyxar.R
+import app.melyxar.theme.Melyxar
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.DecodeHintType
@@ -38,6 +46,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ScanActivity : ComponentActivity() {
     private lateinit var picture: PreviewView
     private lateinit var said: TextView
+    /** How close the camera is brought, for a television across a room. */
+    private lateinit var zoom: SeekBar
+    private var camera: Camera? = null
     private val reading = Executors.newSingleThreadExecutor()
     private val done = AtomicBoolean(false)
 
@@ -55,13 +66,45 @@ class ScanActivity : ComponentActivity() {
             setShadowLayer(6f, 0f, 1f, Color.BLACK)
             gravity = Gravity.CENTER
         }
+        zoom = SeekBar(this).apply {
+            max = ZOOM_STEPS
+            val accent = ColorStateList.valueOf(Melyxar.accent.toArgb())
+            progressTintList = accent
+            thumbTintList = accent
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar, at: Int, byHand: Boolean) {
+                    if (byHand) camera?.cameraControl?.setLinearZoom(at / ZOOM_STEPS.toFloat())
+                }
+
+                override fun onStartTrackingTouch(bar: SeekBar) = Unit
+
+                override fun onStopTrackingTouch(bar: SeekBar) = Unit
+            })
+        }
+        // Two fingers bring it closer too, as every camera does.
+        val pinch = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val now = camera?.cameraInfo?.zoomState?.value ?: return false
+                camera?.cameraControl?.setZoomRatio(now.zoomRatio * detector.scaleFactor)
+                return true
+            }
+        })
+        picture.setOnTouchListener { view, event ->
+            pinch.onTouchEvent(event)
+            if (event.action == MotionEvent.ACTION_UP) view.performClick()
+            true
+        }
         val padding = (28 * resources.displayMetrics.density).toInt()
         setContentView(
             FrameLayout(this).apply {
                 setBackgroundColor(Color.BLACK)
                 addView(picture, FrameLayout.LayoutParams(MATCH, MATCH))
                 addView(
-                    said,
+                    LinearLayout(this@ScanActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(said, LinearLayout.LayoutParams(MATCH, WRAP))
+                        addView(zoom, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = padding })
+                    },
                     FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM).apply {
                         setMargins(padding, padding, padding, padding * 2)
                     },
@@ -85,7 +128,12 @@ class ScanActivity : ComponentActivity() {
                 .build()
                 .also { it.setAnalyzer(reading, ::read) }
             cameras.unbindAll()
-            cameras.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis)
+            camera = cameras.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis).also { bound ->
+                // The bar follows the fingers' zoom as well as its own.
+                bound.cameraInfo.zoomState.observe(this) { state ->
+                    zoom.progress = (state.linearZoom * ZOOM_STEPS).toInt()
+                }
+            }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -125,6 +173,7 @@ class ScanActivity : ComponentActivity() {
     companion object {
         /** What the QR code held, handed back to whoever opened this. */
         const val READ = "read"
+        private const val ZOOM_STEPS = 100
         private const val MATCH = FrameLayout.LayoutParams.MATCH_PARENT
         private const val WRAP = FrameLayout.LayoutParams.WRAP_CONTENT
     }
