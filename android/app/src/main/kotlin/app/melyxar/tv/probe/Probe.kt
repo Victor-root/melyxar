@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import app.melyxar.tv.look.Lighter
 import coil3.memory.MemoryCache
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
@@ -406,7 +407,9 @@ object Probe {
         val gap = if (lastKey == 0L) 0 else now - lastKey
         lastKey = now
         lastKeyNs = event.eventTime * 1_000_000
-        if (!Tour.running) {
+        // Reading the main thread's stack stops it every few milliseconds: a
+        // box drawn lighter is one that cannot spare them.
+        if (!Tour.running && !Lighter.on) {
             MainSampler.pressed()
         }
         Log.d(TAG_KEY, "${KeyEvent.keyCodeToString(event.keyCode)} repeat=${event.repeatCount} waited=${now - event.eventTime} ms gap=$gap ms")

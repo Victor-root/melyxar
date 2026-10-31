@@ -57,6 +57,7 @@ import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Gutter
 import app.melyxar.tv.look.Icons
+import app.melyxar.tv.look.Lighter
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.SectionGap
 import app.melyxar.tv.look.ServerPicture
@@ -249,7 +250,10 @@ private fun BandTile(kind: String, name: String, fan: List<Leafed>, square: Bool
                 val halo = glowAt(Offset(size.width * 0.5f, size.height * 0.5f), size.width * 0.5f, palette.accent.copy(alpha = 0.30f))
                 onDrawBehind {
                     drawRect(ground)
-                    pools.forEach { drawRect(it) }
+                    // Drawn lighter, the ground keeps no pool of light.
+                    if (!Lighter.on) {
+                        pools.forEach { drawRect(it) }
+                    }
                     if (lit > 0f) {
                         drawRect(halo, alpha = lit)
                     }
@@ -273,7 +277,8 @@ private fun BandTile(kind: String, name: String, fan: List<Leafed>, square: Bool
                 Modifier.align(Alignment.TopCenter).padding(top = TileHeight * 0.14f),
             )
         } else {
-            if (Probe.shows(Part.BandFloor)) {
+            // Drawn lighter, the fan stands on no floor of its own reflection.
+            if (Probe.shows(Part.BandFloor) && !Lighter.on) {
                 Fan(fan, square, records = false, open = { lit }, mirror = true)
             }
             Fan(fan, square, woken, { lit })
@@ -400,7 +405,7 @@ private fun Fan(fan: List<Leafed>, square: Boolean, records: Boolean, open: () -
                         .clip(shape),
                 ) {
                     ServerPicture(shown.pictures, across, Modifier.fillMaxSize())
-                    if (!mirror) Box(
+                    if (!mirror && !Lighter.on) Box(
                         Modifier.fillMaxSize().drawWithCache {
                             // The sheen across each poster.
                             val sheen = Brush.linearGradient(

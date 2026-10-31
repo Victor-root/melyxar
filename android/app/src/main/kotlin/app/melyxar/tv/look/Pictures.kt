@@ -25,6 +25,7 @@ import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -54,6 +55,15 @@ fun rememberPictures(api: Api): ImageLoader {
 /** A work's pictures, and how wide they are drawn. */
 data class Drawn(val pictures: List<Picture>, val across: Dp)
 
+/** The share of the screen's pixels a picture is fetched for, drawn
+ *  [Lighter]: often the server's next size down, on a 1080p screen a poster
+ *  200 pixels across rather than 400, a quarter of the pixels to fetch,
+ *  decode and hand to the graphics card, and softer under the eye. */
+private const val LIGHTER_PIXELS = 2f / 3f
+
+/** How many pixels across a picture drawn [across] wide is fetched for. */
+private fun Density.pixelsFor(across: Dp): Int = (across.toPx() * if (Lighter.on) LIGHTER_PIXELS else 1f).roundToInt()
+
 /** Where the picture of [pictures] drawn [pixels] wide is fetched from: the
  *  smallest the server made that has a pixel for every pixel of the screen
  *  it covers. */
@@ -77,7 +87,7 @@ fun rememberFetchAhead(): suspend (List<Drawn>) -> Unit {
 
 private suspend fun ImageLoader.fetchAhead(context: Context, api: Api, density: Density, drawn: List<Drawn>) {
     val began = SystemClock.uptimeMillis()
-    val addresses = drawn.mapNotNull { api.addressOf(it.pictures, with(density) { it.across.roundToPx() }) }.distinct()
+    val addresses = drawn.mapNotNull { api.addressOf(it.pictures, with(density) { pixelsFor(it.across) }) }.distinct()
     coroutineScope {
         addresses.map { async { execute(ImageRequest.Builder(context).data(it).build()) } }.awaitAll()
     }
@@ -98,7 +108,7 @@ fun ServerPicture(
 ) {
     val api = LocalServer.current
     val context = LocalContext.current
-    val pixels = with(LocalDensity.current) { across.roundToPx() }
+    val pixels = with(LocalDensity.current) { pixelsFor(across) }
     val address = remember(api, pictures, pixels) { api.addressOf(pictures, pixels) } ?: return
     val fades = Probe.shows(Part.PictureFade) && !Lighter.on
     AsyncImage(
