@@ -51,7 +51,7 @@ import app.melyxar.theme.OFFERED_ACCENTS
 import app.melyxar.theme.parseHex
 import app.melyxar.tv.door.Banners
 import app.melyxar.tv.languageName
-import app.melyxar.tv.look.ChoiceList
+import app.melyxar.tv.look.ChoiceWindow
 import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.FrameRate
@@ -590,13 +590,12 @@ fun SettingsScreen(sessions: Sessions) {
             )
         }
         asked?.let {
-            ChoiceList(
+            ChoiceWindow(
                 title = it.title,
                 choices = it.names,
                 chosen = it.chosen,
                 onChoose = it.onChoose,
                 onClose = ::close,
-                modifier = Modifier.align(Alignment.Center),
                 swatches = it.swatches,
             )
         }
