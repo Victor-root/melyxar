@@ -33,6 +33,14 @@
     <string name="tv_code_of">%1$s, entrez votre code</string>
     <string name="tv_code_wrong">Code incorrect.</string>
     <string name="tv_code_erase">Effacer</string>
+    <string name="tv_setting_tv_code">Code de mon profil</string>
+    <string name="tv_tv_code_none">Aucun</string>
+    <string name="tv_tv_code_set">Activé</string>
+    <string name="tv_tv_code_change">Changer le code</string>
+    <string name="tv_tv_code_remove">Retirer le code</string>
+    <string name="tv_tv_code_new">Choisissez quatre chiffres</string>
+    <string name="tv_tv_code_again">Tapez-les une deuxième fois</string>
+    <string name="tv_tv_code_mismatch">Les deux codes sont différents. Recommencez.</string>
     <string name="tv_change_server">Changer de serveur</string>
     <string name="tv_back">Retour</string>
     <string name="tv_carry_on">Continuer la lecture</string>

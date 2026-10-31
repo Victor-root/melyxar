@@ -405,6 +405,11 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         send("POST", "/api/v1/me/tv-code/check", buildJsonObject { put("code", code) })
     }
 
+    /** Gives this account a code for its televisions, or takes it away. */
+    suspend fun setTvCode(code: String?) {
+        send("PUT", "/api/v1/me/tv-code", buildJsonObject { put("code", code) })
+    }
+
     /** A file the server hands over as it is, the words of a subtitle. */
     suspend fun file(path: String): ByteArray = withContext(Dispatchers.IO) {
         http.newCall(Request.Builder().url(address(path)).get().build()).execute().use { answer ->

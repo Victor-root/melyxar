@@ -73,7 +73,6 @@ fun CodeLock(api: Api, name: String, avatar: String?, onOpen: () -> Unit, onClos
     var refusal by remember { mutableStateOf<String?>(null) }
     val shake = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val first = remember { FocusRequester() }
     val wrong = stringResource(R.string.tv_code_wrong)
     val generic = stringResource(R.string.tv_refused_generic)
     BackHandler(onBack = onClose)
@@ -104,8 +103,8 @@ fun CodeLock(api: Api, name: String, avatar: String?, onOpen: () -> Unit, onClos
             return
         }
         refusal = null
-        typed = if (key == ERASE) typed.dropLast(1) else (typed + key).take(DIGITS)
-        if (typed.length == DIGITS) {
+        typed = pressed(typed, key)
+        if (whole(typed)) {
             check(typed)
         }
     }
@@ -119,38 +118,58 @@ fun CodeLock(api: Api, name: String, avatar: String?, onOpen: () -> Unit, onClos
             color = palette.text,
             textAlign = TextAlign.Center,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            repeat(DIGITS) { at ->
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(if (at < typed.length) palette.accentBright else palette.text.copy(alpha = 0.18f)),
-                )
-            }
+        CodePad(typed, refusal, ::press)
+    }
+}
+
+/** What a key of the pad makes of the digits typed so far: one more, up to
+ *  the four of a code, or one fewer. */
+fun pressed(typed: String, key: String): String =
+    if (key == ERASE) typed.dropLast(1) else (typed + key).take(DIGITS)
+
+/** Whether the digits typed make a whole code. */
+fun whole(typed: String) = typed.length == DIGITS
+
+/**
+ * The four dots of a code, what was refused under them, and the pad that
+ * types it with the arrows; the remote's own digits type on it too. The
+ * remote starts on its first key.
+ */
+@Composable
+fun CodePad(typed: String, refusal: String?, onPress: (String) -> Unit) {
+    val palette = LocalPalette.current
+    val first = remember { FocusRequester() }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        repeat(DIGITS) { at ->
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(if (at < typed.length) palette.accentBright else palette.text.copy(alpha = 0.18f)),
+            )
         }
-        refusal?.let { Text(it, color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
-        Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.onPreviewKeyEvent { event ->
-                val digit = REMOTE_DIGITS[event.key] ?: return@onPreviewKeyEvent false
-                if (event.type == KeyEventType.KeyDown) press(digit.toString())
-                true
-            },
-        ) {
-            PAD.chunked(3).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { key ->
-                        if (key == null) {
-                            Box(Modifier.size(PAD_KEY))
-                        } else {
-                            PadKey(
-                                key,
-                                label = if (key == ERASE) stringResource(R.string.tv_code_erase) else key,
-                                onClick = { press(key) },
-                                modifier = if (key == "1") Modifier.focusRequester(first) else Modifier,
-                            )
-                        }
+    }
+    refusal?.let { Text(it, color = palette.trouble, fontSize = 15.sp, textAlign = TextAlign.Center) }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            val digit = REMOTE_DIGITS[event.key] ?: return@onPreviewKeyEvent false
+            if (event.type == KeyEventType.KeyDown) onPress(digit.toString())
+            true
+        },
+    ) {
+        PAD.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                row.forEach { key ->
+                    if (key == null) {
+                        Box(Modifier.size(PAD_KEY))
+                    } else {
+                        PadKey(
+                            key,
+                            label = if (key == ERASE) stringResource(R.string.tv_code_erase) else key,
+                            onClick = { onPress(key) },
+                            modifier = if (key == "1") Modifier.focusRequester(first) else Modifier,
+                        )
                     }
                 }
             }
