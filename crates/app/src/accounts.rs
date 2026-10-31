@@ -343,6 +343,21 @@ pub async fn sign_in(
     };
     state.wrong_answers().forget(from);
 
+    let opened = open_a_session(state, user, device_name, remembered, client).await?;
+    Ok(SignedInOrNot::Opened(Box::new(opened)))
+}
+
+/// Opens a session for this account on the device asking, writes its line
+/// in the journal, and forgets the devices it has not used for longest past
+/// the most it keeps. What a right password leads to, and a device let in
+/// from another.
+pub(crate) async fn open_a_session(
+    state: &AppState,
+    user: User,
+    device_name: &str,
+    remembered: Remembered,
+    client: Option<&str>,
+) -> Result<OpenedSession> {
     let token = SessionToken::new()?;
     let device_id = state
         .database()
@@ -370,8 +385,7 @@ pub async fn sign_in(
         },
     )
     .await;
-
-    Ok(SignedInOrNot::Opened(Box::new(OpenedSession { token, user })))
+    Ok(OpenedSession { token, user })
 }
 
 /// The longest identifier a browser may give itself. The ones this

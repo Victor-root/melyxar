@@ -29,6 +29,7 @@ pub mod import;
 pub mod identify;
 pub mod images;
 pub mod libraries;
+pub mod linking;
 pub mod looks;
 pub mod maintenance;
 pub mod mark;

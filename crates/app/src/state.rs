@@ -71,6 +71,8 @@ struct Inner {
     looks: crate::looks::Outbox,
     /// Maintenance as it stands, which the gate asks about for every request.
     maintenance: crate::maintenance::Held,
+    /// The devices waiting at the door to be let in from elsewhere.
+    links: crate::linking::Links,
 }
 
 impl AppState {
@@ -139,6 +141,7 @@ impl AppState {
                 requests: crate::requests::live::Moved::default(),
                 looks: crate::looks::Outbox::default(),
                 maintenance: crate::maintenance::Held::default(),
+                links: crate::linking::Links::default(),
             }),
         }
     }
@@ -169,6 +172,10 @@ impl AppState {
 
     pub(crate) fn looks(&self) -> &crate::looks::Outbox {
         &self.inner.looks
+    }
+
+    pub(crate) fn links(&self) -> &crate::linking::Links {
+        &self.inner.links
     }
 
     pub(crate) fn maintenance(&self) -> &crate::maintenance::Held {
