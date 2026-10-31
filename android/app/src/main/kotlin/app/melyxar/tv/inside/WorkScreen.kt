@@ -134,6 +134,9 @@ private fun Page(work: Work, memory: FocusMemory, first: FocusRequester) {
             if (work.kind == "season") {
                 section("episodes", work.children) { Episodes(stringResource(R.string.tv_episodes), work.children, memory) }
             }
+            if (work.kind == "episode" || work.kind == "season") {
+                theWayUp(work, memory)
+            }
             if (work.cast.isNotEmpty() || work.guestStars.isNotEmpty()) {
                 item("cast") { CastAndGuests(work, memory) }
             }
@@ -510,14 +513,10 @@ private fun headingOf(work: Work): String {
     return if (work.hasOwnName) "$numbered · ${work.title}" else numbered
 }
 
-/**
- * Under an episode or a season, the way about its series as the web gives
- * it: the other episodes of an episode's season, each opening its own page,
- * then the season and the series themselves.
- */
+/** Under an episode, the other episodes of its season, each opening its
+ *  own page, as the web gives them. */
 private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
     val season = work.ancestry.firstOrNull { it.kind == "season" }
-    val series = work.ancestry.firstOrNull { it.kind == "series" }
     if (work.siblings.size > 1) {
         item("season-episodes") {
             val chrome = LocalChrome.current
@@ -530,29 +529,37 @@ private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
             }
         }
     }
-    if (season != null || series != null) {
-        item("way-up") {
-            val chrome = LocalChrome.current
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(start = Gutter, end = Gutter, bottom = 30.dp),
-            ) {
-                season?.let {
-                    PlainButton(
-                        it.title ?: it.number?.let { number -> stringResource(R.string.tv_season, number) } ?: stringResource(R.string.tv_episodes),
-                        onClick = { chrome.go(Place.Opened(it.id)) },
-                        modifier = Modifier.remembered(memory, "season-page"),
-                        icon = Icons.Series,
-                    )
-                }
-                series?.title?.let { title ->
-                    PlainButton(
-                        title,
-                        onClick = { chrome.go(Place.Opened(series.id)) },
-                        modifier = Modifier.remembered(memory, "series-page"),
-                        icon = Icons.Series,
-                    )
-                }
+}
+
+/** The way up to an episode's or a season's series and season, the series
+ *  first, standing over the cast. */
+private fun LazyListScope.theWayUp(work: Work, memory: FocusMemory) {
+    val season = work.ancestry.firstOrNull { it.kind == "season" }
+    val series = work.ancestry.firstOrNull { it.kind == "series" }
+    if (season == null && series == null) {
+        return
+    }
+    item("way-up") {
+        val chrome = LocalChrome.current
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(start = Gutter, end = Gutter, bottom = 30.dp),
+        ) {
+            series?.title?.let { title ->
+                PlainButton(
+                    title,
+                    onClick = { chrome.go(Place.Opened(series.id)) },
+                    modifier = Modifier.remembered(memory, "series-page"),
+                    icon = Icons.Series,
+                )
+            }
+            season?.let {
+                PlainButton(
+                    it.title ?: it.number?.let { number -> stringResource(R.string.tv_season, number) } ?: stringResource(R.string.tv_episodes),
+                    onClick = { chrome.go(Place.Opened(it.id)) },
+                    modifier = Modifier.remembered(memory, "season-page"),
+                    icon = Icons.Series,
+                )
             }
         }
     }
