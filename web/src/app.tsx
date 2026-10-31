@@ -44,6 +44,7 @@ import { MusicNowPlaying } from "./music/player/page";
 import { MusicProvider } from "./music/player/player";
 import { SearchPage } from "./pages/search";
 import { CollectionPage, CollectionsPage } from "./pages/collections";
+import { LinkPage } from "./pages/link";
 import { PersonPage } from "./pages/person";
 import { PlaylistPage, PlaylistsPage } from "./pages/playlists";
 import { KeptPlaces } from "./scrolling";
@@ -265,6 +266,7 @@ function BehindTheDoor() {
                 <Route path="/playlists" element={<PlaylistsPage />} />
                 <Route path="/playlist/:id" element={<PlaylistPage />} />
                 <Route path="/notifications" element={<NotesPage />} />
+                <Route path="/link" element={<LinkPage />} />
                 <Route path="/requests" element={<RequestsPage view="ask" />} />
                 <Route path="/requests/mine" element={<RequestsPage view="mine" />} />
                 <Route path="/requests/more/:catalogue" element={<RequestsPage view="more" />} />

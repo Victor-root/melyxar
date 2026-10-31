@@ -60,6 +60,7 @@ import {
   ChevronRightIcon,
   ClockIcon,
   CollectionIcon,
+  DeviceIcon,
   PlaylistIcon,
   GearIcon,
   HeartIcon,
@@ -872,6 +873,12 @@ export function Header({
               ),
             )}
 
+            {/* Letting in a television or a browser waiting at its door, by
+                the code it shows. */}
+            <NavLink to="/link" className="header-menu-line">
+              <DeviceIcon size={16} />
+              {t("nav.link")}
+            </NavLink>
             <button type="button" className="header-menu-line" onClick={() => void leave()}>
               <LeaveIcon size={16} />
               {t("nav.sign_out")}

@@ -1462,6 +1462,21 @@ export interface MeasuredDisk {
 /** How far back the curves reach. */
 export type MeasuredOver = "hour" | "day" | "week" | "month" | "year";
 
+/** A device at the door waiting to be let in from elsewhere: its code, the
+ *  secret it alone asks with, and the QR code leading to the page that lets
+ *  it in, a row of squares at a time, "1" for a dark one. */
+export interface LinkAsked {
+  code: string;
+  secret: string;
+  lasts_seconds: number;
+  squares: string[];
+}
+
+/** Nobody has let it in yet. */
+export interface LinkWaiting {
+  seconds_left: number;
+}
+
 /** Where maintenance stands: off, announced and counting down, or in force
  *  and closing the server to all but its administrators. */
 export type MaintenanceState = "off" | "announced" | "on";
@@ -2580,6 +2595,19 @@ export const api = {
     post<Account>("/api/v1/session", { name, password, remember, client }),
   signOut: () => remove<{ signed_out: boolean }>("/api/v1/session"),
   me: (signal?: AbortSignal) => get<Account>("/api/v1/me", signal),
+  /** Asks, from the door, to be let in by an account signed in elsewhere. */
+  askToBeLetIn: (address: string, name: string, client: string) =>
+    post<LinkAsked>("/api/v1/public/link", { address, name, client }),
+  /** Whether somebody let this device in: still waiting, or the account it
+   *  now holds a session of. Refused as not found once there is nothing
+   *  left to wait on. */
+  letInYet: (secret: string) => post<LinkWaiting | Account>("/api/v1/public/link/standing", { secret }),
+  /** The device a code names, to say which before letting it in. */
+  deviceWaiting: (code: string) => get<{ device: string }>(`/api/v1/link/${encodeURIComponent(code)}`),
+  /** Lets in the device a code names, on one's own account or, for an
+   *  administrator, on the one chosen. */
+  letIn: (code: string, account: string | null) =>
+    post<{ let_in: boolean }>(`/api/v1/link/${encodeURIComponent(code)}`, { account }),
   /* The first account of a brand new server, which is an administrator and is
      signed in straight away. Refused once there is one. */
   setUp: (name: string, password: string, remember: boolean, client: string, language: string) =>

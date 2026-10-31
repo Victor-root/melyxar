@@ -1,0 +1,50 @@
+/*
+ * Letting in a device waiting at its door: the code typed, then the device
+ * it names and the button that lets it in.
+ */
+
+.link-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  max-width: 560px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-glass);
+}
+
+.link-lead {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.link-code {
+  max-width: 240px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.link-device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--gap);
+}
+
+.link-device-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.link-on {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

@@ -564,6 +564,63 @@ img.door-greeting-mark {
  * screen offers, and this is the door next to them for an account that asked
  * to be left off and for anybody who would rather type.
  */
+/* A code to be let in by, shown large enough to read across a desk, and the
+   QR code it can also be read from. */
+.door-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap);
+  max-width: 460px;
+  text-align: center;
+}
+
+.door-link-how {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.door-link-code {
+  font-family: "Melyxar Display", "Inter", sans-serif;
+  font-size: clamp(38px, 6vh, 56px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.door-link-left {
+  color: var(--text-faint);
+  font-size: 13.5px;
+}
+
+.door-link-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.door-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--gap-tight);
+}
+
+/* Dark on light whatever the theme: a camera reads contrast. */
+.qr-squares {
+  border-radius: var(--radius-card);
+}
+
+.qr-ground {
+  fill: var(--qr-light);
+}
+
+.qr-dark {
+  fill: var(--qr-dark);
+}
+
 .door-by-hand {
   display: inline-flex;
   align-items: center;
