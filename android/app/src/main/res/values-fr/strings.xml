@@ -35,7 +35,7 @@
     <string name="tv_code_erase">Effacer</string>
     <string name="tv_link_go">Se connecter avec un téléphone</string>
     <string name="tv_link_title">Se connecter avec un téléphone</string>
-    <string name="tv_link_how">Scannez le QR code avec un téléphone connecté à Melyxar. Ou, sur un téléphone ou un ordinateur, ouvrez le menu de votre compte, choisissez Connecter un appareil et tapez ce code :</string>
+    <string name="tv_link_how">Dans l’application Melyxar du téléphone, ouvrez le menu de votre compte et choisissez Connecter un appareil : scannez-y ce QR code, ou tapez le code ci-dessous. Sur un ordinateur, tapez le code.</string>
     <string name="tv_link_left">Valable encore %1$s</string>
     <string name="tv_link_back">Retour</string>
     <string name="tv_setting_tv_code">Code de mon profil</string>
@@ -461,6 +461,8 @@
     <string name="camera_live">En direct</string>
     <string name="camera_live_name">%1$s · En direct</string>
     <string name="camera_cannot_play">Impossible de joindre cette caméra. Vérifiez qu’elle est allumée et sur le même réseau que cet appareil.</string>
+    <string name="scan_aim">Visez le QR code affiché par la télévision ou l’ordinateur</string>
+    <string name="scan_no_camera">Melyxar a besoin de l’appareil photo pour lire le QR code. Vous pouvez aussi taper le code à la main.</string>
     <string name="camera_move">Déplacer l’image</string>
     <string name="camera_recentre">Recentrer l’image</string>
     <string name="camera_reconnect">Reconnecter</string>

@@ -179,6 +179,11 @@ dependencies {
     implementation(libs.okhttp.sse)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    // The phone reading the QR code a television shows at its door.
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

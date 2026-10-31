@@ -12,8 +12,9 @@ import type { ManagedAccount } from "../api";
 import { useAccount } from "../account";
 import { PageBackdrop } from "../components/backdrop";
 import { Picker } from "../components/panel";
-import { DeviceIcon, TickIcon } from "../icons";
+import { CameraIcon, DeviceIcon, TickIcon } from "../icons";
 import { spacedCode } from "./door-link";
+import { appScanner, codeRead, scanWithTheApp } from "../app-scanner";
 import { useSettings } from "../settings";
 
 /** How many digits a code holds, as the server draws it. */
@@ -108,6 +109,29 @@ export function LinkPage() {
               setTyped(event.target.value.replace(/\D/g, "").slice(0, DIGITS));
             }}
           />
+          {/* The phone's own camera, in the application: no reader of QR codes
+              of its own to find, and no browser opened beside it. */}
+          {appScanner && (
+            <button
+              type="button"
+              className="button"
+              onClick={() =>
+                void scanWithTheApp().then((read) => {
+                  if (read === null) return;
+                  const code = codeRead(read);
+                  setDone(null);
+                  if (code) {
+                    setTyped(code);
+                  } else {
+                    setRefusal("link.refused.not_a_code");
+                  }
+                })
+              }
+            >
+              <CameraIcon size={17} />
+              {t("link.scan")}
+            </button>
+          )}
           {refusal && (
             <p className="panel-notice panel-notice-trouble" role="alert">
               {t(refusal)}
