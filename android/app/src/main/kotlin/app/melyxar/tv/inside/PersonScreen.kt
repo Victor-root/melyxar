@@ -1,6 +1,7 @@
 package app.melyxar.tv.inside
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -61,53 +60,32 @@ fun PersonScreen(id: String, comebacks: Int) {
     val person = loaded.ready
     val memory = rememberFocusMemory()
     val biography = remember { FocusRequester() }
-    val firstWork = remember { FocusRequester() }
+    val top = remember { FocusRequester() }
     Box(Modifier.fillMaxSize()) {
         when {
-            person != null -> Page(person, memory, biography, firstWork)
+            person != null -> Page(person, memory, biography, top)
             loaded is Loaded.Failed -> Trouble(onRetry = { tries += 1 })
             else -> TopBar()
         }
     }
     // A biography short enough to be read whole has nothing to open: the
-    // remote starts on their first work instead.
-    RestoreFocus(memory, biography, ready = person != null, orElse = firstWork)
+    // remote starts on the top of the page, the person shown whole, and goes
+    // down to their works when asked.
+    RestoreFocus(memory, biography, ready = person != null, orElse = top)
 }
 
 @Composable
-private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester, firstWork: FocusRequester) {
+private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester, top: FocusRequester) {
     val chrome = LocalChrome.current
     val list = rememberLazyListState()
     val films = person.works.filter { it.kind == "movie" }
     val series = person.works.filter { it.kind != "movie" }
-    val opening = (films.firstOrNull() ?: series.firstOrNull())?.id
-    // The first work the remote lands on as the page opens leaves the page at
-    // its top, the person shown whole; it scrolls once the remote moves on.
-    var landing by remember { mutableStateOf(true) }
-    var landed by remember { mutableStateOf(false) }
 
     @Composable
-    fun Work(card: Card, under: String, head: PageHead) = WorkCard(
+    fun Work(card: Card, under: String) = WorkCard(
         card,
         onClick = { chrome.go(Place.Opened(card.id)) },
-        modifier = Modifier
-            .remembered(memory, "$under/${card.id}")
-            .then(
-                if (card.id == opening) {
-                    Modifier.focusRequester(firstWork).onFocusChanged {
-                        if (it.hasFocus && landing) {
-                            landed = true
-                            head.hold("landing", true)
-                        } else if (!it.hasFocus && landed) {
-                            landing = false
-                            landed = false
-                            head.hold("landing", false)
-                        }
-                    }
-                } else {
-                    Modifier
-                },
-            ),
+        modifier = Modifier.remembered(memory, "$under/${card.id}"),
     )
 
     ScrollingPage(toTop = { list.animateScrollToItem(0) }) { head ->
@@ -115,14 +93,14 @@ private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester,
             item("top") {
                 Column(Modifier.head(head, "top")) {
                     TopBar()
-                    AboutThem(person, memory, biography)
+                    AboutThem(person, memory, biography, top)
                 }
             }
             section("films", films) {
-                CardRow(stringResource(R.string.tv_person_films), Icons.Film, films, key = { it.id }) { Work(it, "film", head) }
+                CardRow(stringResource(R.string.tv_person_films), Icons.Film, films, key = { it.id }) { Work(it, "film") }
             }
             section("series", series) {
-                CardRow(stringResource(R.string.tv_person_series), Icons.Series, series, key = { it.id }) { Work(it, "series", head) }
+                CardRow(stringResource(R.string.tv_person_series), Icons.Series, series, key = { it.id }) { Work(it, "series") }
             }
         }
     }
@@ -131,7 +109,7 @@ private fun Page(person: Person, memory: FocusMemory, biography: FocusRequester,
 /** Their photo, their name, their days and their biography, which the
  *  remote starts on when it is long enough to be opened whole. */
 @Composable
-private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusRequester) {
+private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusRequester, top: FocusRequester) {
     val palette = LocalPalette.current
     val locale = LocalConfiguration.current.locales[0]
     val until = person.diedOn ?: todayOf(Calendar.getInstance())
@@ -139,7 +117,12 @@ private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusReque
     val born = person.bornOn?.let { readableDay(it, locale) }
     val died = person.diedOn?.let { readableDay(it, locale) }
     Row(
-        modifier = Modifier.padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 34.dp),
+        // Where the remote rests as the page opens when nothing in it can be
+        // opened: nothing lights, and the page stays at its top.
+        modifier = Modifier
+            .focusRequester(top)
+            .focusable()
+            .padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 34.dp),
         horizontalArrangement = Arrangement.spacedBy(36.dp),
     ) {
         Box(
