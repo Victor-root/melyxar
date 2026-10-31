@@ -67,6 +67,7 @@
     <string name="tv_saga">Saga</string>
     <string name="tv_alike">Based on the genre %1$s</string>
     <string name="tv_season">Season %1$d</string>
+    <string name="tv_episode_number">Episode %1$d</string>
     <string name="tv_specials">Specials</string>
     <string name="tv_carry_on_at">Resume at S%1$d E%2$d</string>
     <string name="tv_start_series">Start with S%1$d E%2$d</string>
