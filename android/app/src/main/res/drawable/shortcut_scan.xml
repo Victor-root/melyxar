@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The shortcut that reads a door's QR code: four corners of a frame
+     around the squares of a code, in Melyxar's own red. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,0a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+    <path
+        android:strokeColor="#C81E1E"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:pathData="M13,19V15a2,2 0,0 1,2 -2h4M29,13h4a2,2 0,0 1,2 2v4M35,29v4a2,2 0,0 1,-2 2h-4M19,35h-4a2,2 0,0 1,-2 -2v-4" />
+    <path
+        android:fillColor="#C81E1E"
+        android:pathData="M18,18h5v5h-5zM25,18h5v5h-5zM18,25h5v5h-5zM26.5,26.5h2v2h-2z" />
+</vector>

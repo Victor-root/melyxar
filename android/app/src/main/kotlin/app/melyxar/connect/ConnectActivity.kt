@@ -84,7 +84,7 @@ class ConnectActivity : ComponentActivity() {
         val servers = KnownServers(this)
         val current = servers.current()
         if (current != null && !intent.getBooleanExtra(CHOOSING, false)) {
-            open(current)
+            open(current, linking = intent.action == WebActivity.LINK_A_DEVICE)
             return
         }
         drawUnderTheBars()
@@ -101,9 +101,9 @@ class ConnectActivity : ComponentActivity() {
     /** The interface already open is brought back as it was rather than
      *  opened a second time, which would set a second page leading the one
      *  player of music. */
-    private fun open(server: KnownServer) {
+    private fun open(server: KnownServer, linking: Boolean = false) {
         startActivity(
-            WebActivity.opening(this, server)
+            WebActivity.opening(this, server, linking)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         )
         finish()

@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import type { ManagedAccount } from "../api";
 import { useAccount } from "../account";
@@ -70,6 +70,27 @@ export function LinkPage() {
     return () => controller.abort();
   }, [administrator]);
 
+  const scan = () =>
+    void scanWithTheApp().then((read) => {
+      if (read === null) return;
+      const code = codeRead(read);
+      setDone(null);
+      if (code) {
+        setTyped(code);
+      } else {
+        setRefusal("link.refused.not_a_code");
+      }
+    });
+
+  // Come by the shortcut of the application's icon: the camera at once.
+  const location = useLocation();
+  useEffect(() => {
+    if (appScanner && new URLSearchParams(location.search).has("scan")) {
+      scan();
+    }
+    // Once per arrival, the shortcut taken again included.
+  }, [location.key]);
+
   const letIn = () => {
     setSending(true);
     api
@@ -115,18 +136,7 @@ export function LinkPage() {
             <button
               type="button"
               className="button"
-              onClick={() =>
-                void scanWithTheApp().then((read) => {
-                  if (read === null) return;
-                  const code = codeRead(read);
-                  setDone(null);
-                  if (code) {
-                    setTyped(code);
-                  } else {
-                    setRefusal("link.refused.not_a_code");
-                  }
-                })
-              }
+              onClick={scan}
             >
               <CameraIcon size={17} />
               {t("link.scan")}
