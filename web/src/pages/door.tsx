@@ -30,6 +30,7 @@ import {
   AccountAddIcon,
   AccountIcon,
   BackIcon,
+  DeviceIcon,
   EnterIcon,
   EyeIcon,
   EyeOffIcon,
@@ -42,14 +43,19 @@ import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
 import { useBackClosesIt } from "../components/back-closes";
+import { LinkAtTheDoor } from "./door-link";
 
 /**
  * What the screen is showing.
  *
- * The accounts on this server, or the form. On the form, the name is either
+ * The accounts on this server, the form, or a code to be let in by. On the form, the name is either
  * already settled, because a tile was pressed, or still to be typed.
  */
-type Showing = { the: "accounts" } | { the: "form"; forWhom: string | null };
+type Showing =
+  | { the: "accounts" }
+  | { the: "form"; forWhom: string | null }
+  /* A code shown, for an account signed in elsewhere to let this browser in. */
+  | { the: "telephone" };
 
 export function Door({
   branding,
@@ -135,6 +141,14 @@ export function Door({
      of a phone takes it back to them rather than out of the interface. */
   const backToTheAccounts = () => turnTo({ the: "accounts" });
   const leaveTheForm = useBackClosesIt(backToTheAccounts, onTheForm && door.names.length > 0);
+  /* Where a code is shown, the back key goes back to where it was asked from. */
+  const onTheTelephone = showing.the === "telephone";
+  const [cameFrom, setCameFrom] = useState<Showing>({ the: "accounts" });
+  const leaveTheTelephone = useBackClosesIt(() => turnTo(cameFrom), onTheTelephone);
+  const toTheTelephone = () => {
+    setCameFrom(showing);
+    turnTo({ the: "telephone" });
+  };
 
   return (
     <main className="door">
@@ -180,7 +194,9 @@ export function Door({
               <p className="door-invitation">
                 {showing.the === "accounts"
                   ? t("door.pick")
-                  : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
+                  : showing.the === "telephone"
+                    ? t("door.link.invitation")
+                    : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
               </p>
             </div>
           )}
@@ -224,8 +240,14 @@ export function Door({
                 <AccountIcon size={18} />
                 {t("door.by_hand")}
               </button>
+              <button type="button" className="door-by-hand" onClick={toTheTelephone}>
+                <DeviceIcon size={18} />
+                {t("door.link.go")}
+              </button>
             </>
           )}
+
+          {onTheTelephone && <LinkAtTheDoor cameIn={cameIn} onBack={() => leaveTheTelephone(() => turnTo(cameFrom))} />}
 
           {/* Whose password is being asked for, once a tile has settled it. The
               name itself is held rather than drawn as a field, so the one thing
@@ -406,6 +428,10 @@ export function Door({
                   <div className="door-or">
                     <span>{t("door.or")}</span>
                   </div>
+                  <button type="button" className="button button-large door-make" onClick={toTheTelephone}>
+                    <DeviceIcon size={20} />
+                    {t("door.link.go")}
+                  </button>
                   {/* Nothing behind this one either: accounts on this server are
                       made by whoever runs it. Turned off rather than left out,
                       so the day the screen for it exists there is a place for

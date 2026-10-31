@@ -93,6 +93,11 @@
   /* The pale border of a photo print, the same paper whatever the theme. */
   --print-edge: #f2eee6;
 
+  /* A QR code, dark on light in every theme: a camera reads contrast, and
+     one drawn light on dark is refused by many readers. */
+  --qr-dark: #000000;
+  --qr-light: #ffffff;
+
   /* What a state is, apart from the accent: the accent says "active, press
      here" and each account picks its own, so a failure must never borrow it.
      Three words, each with the wash it is laid on, and a fourth for what is
