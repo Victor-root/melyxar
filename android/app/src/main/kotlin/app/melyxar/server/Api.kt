@@ -112,6 +112,25 @@ private data class Details(val seconds: Int? = null)
 internal fun Api.asking(path: String, also: HttpUrl.Builder.() -> Unit = {}): String =
     address(path).toHttpUrl().newBuilder().apply(also).build().toString()
 
+/** A device at the door waiting to be let in from elsewhere: its code, the
+ *  secret it alone asks with, and the QR code a row at a time, '1' dark. */
+@Serializable
+data class LinkAsked(val code: String, val secret: String, val lastsSeconds: Int, val squares: List<String>)
+
+@Serializable
+private data class LinkWaiting(val secondsLeft: Int)
+
+/** Where a device's request to be let in stands. */
+sealed interface LetInYet {
+    data class Waiting(val secondsLeft: Int) : LetInYet
+
+    /** Let in: the account, and the session it now holds. */
+    data class In(val account: Account, val session: String) : LetInYet
+
+    /** Over, or forgotten by a server that restarted: a new code is asked. */
+    data object Gone : LetInYet
+}
+
 /** A word of the server's live line, and what it carries, as written. */
 data class LiveWord(val name: String, val data: String)
 
@@ -147,15 +166,54 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         withContext(Dispatchers.IO) {
             val body = serverJson.encodeToString(SignIn.serializer(), SignIn(name, password, remember = true, client))
             http.newCall(request("/api/v1/session").post(body.asJson()).build()).execute().use { answer ->
-                val account = read(answer, Account.serializer())
-                val session = answer.headers("Set-Cookie")
-                    .firstNotNullOfOrNull { cookie ->
-                        cookie.substringBefore(';').takeIf { it.startsWith("$SESSION_COOKIE=") }?.substringAfter('=')
-                    }
-                    ?: throw Refusal(answer.code, "no_session")
-                account to session
+                read(answer, Account.serializer()) to sessionOf(answer)
             }
         }
+
+    /** The session a sign in answered with, from the cookie it set. */
+    private fun sessionOf(answer: Response): String =
+        answer.headers("Set-Cookie")
+            .firstNotNullOfOrNull { cookie ->
+                cookie.substringBefore(';').takeIf { it.startsWith("$SESSION_COOKIE=") }?.substringAfter('=')
+            }
+            ?: throw Refusal(answer.code, "no_session")
+
+    /** Asks, from the door, to be let in by an account signed in elsewhere:
+     *  [address] is the server as this device reaches it, which the QR code
+     *  leads to, and [name] what the page letting it in calls it. */
+    suspend fun askToBeLetIn(address: String, name: String, client: String): LinkAsked =
+        post(
+            "/api/v1/public/link",
+            buildJsonObject {
+                put("address", address)
+                put("name", name)
+                put("client", client)
+            },
+            LinkAsked.serializer(),
+        )
+
+    /** Whether somebody let this device in, asked with its [secret]. */
+    suspend fun letInYet(secret: String): LetInYet = withContext(Dispatchers.IO) {
+        val body = buildJsonObject { put("secret", secret) }.toString().asJson()
+        http.newCall(request("/api/v1/public/link/standing").post(body).build()).execute().use { answer ->
+            if (answer.code == HttpURLConnection.HTTP_NOT_FOUND) {
+                return@use LetInYet.Gone
+            }
+            if (!answer.isSuccessful) {
+                throw Refusal(answer.code, null)
+            }
+            val text = answer.body.string()
+            try {
+                if ("seconds_left" in text) {
+                    LetInYet.Waiting(serverJson.decodeFromString(LinkWaiting.serializer(), text).secondsLeft)
+                } else {
+                    LetInYet.In(serverJson.decodeFromString(Account.serializer(), text), sessionOf(answer))
+                }
+            } catch (failure: SerializationException) {
+                throw Refusal(answer.code, "unreadable: ${failure.message}")
+            }
+        }
+    }
 
     suspend fun me(): Account = get("/api/v1/me", Account.serializer())
 

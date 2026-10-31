@@ -33,6 +33,11 @@
     <string name="tv_code_of">%1$s, enter your code</string>
     <string name="tv_code_wrong">Incorrect code.</string>
     <string name="tv_code_erase">Erase</string>
+    <string name="tv_link_go">Sign in with a phone</string>
+    <string name="tv_link_title">Sign in with a phone</string>
+    <string name="tv_link_how">Scan the QR code with a phone signed in to Melyxar. Or, on a phone or computer, open your account menu, choose Connect a device and type this code:</string>
+    <string name="tv_link_left">Valid for %1$s</string>
+    <string name="tv_link_back">Back</string>
     <string name="tv_setting_tv_code">Code of my profile</string>
     <string name="tv_tv_code_none">None</string>
     <string name="tv_tv_code_set">On</string>
