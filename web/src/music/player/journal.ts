@@ -16,21 +16,3 @@ export function tellTheJournal(saw: MusicSaw): void {
 export function songOfAddress(address: string | null): string | null {
   return address?.match(/\/music\/songs\/([^/?]+)\/sound/)?.[1] ?? null;
 }
-
-let onTheCard = false;
-
-/** Does what a press on the card of the lock screen, a headset or a watch
- *  asks, said to come from there. */
-export function pressedOnTheCard(press: () => void): void {
-  onTheCard = true;
-  try {
-    press();
-  } finally {
-    onTheCard = false;
-  }
-}
-
-/** Where the press being done comes from. */
-export function pressedFrom(): "interface" | "card" {
-  return onTheCard ? "card" : "interface";
-}

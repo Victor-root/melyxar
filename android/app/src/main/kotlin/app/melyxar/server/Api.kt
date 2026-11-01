@@ -59,7 +59,7 @@ val serverJson = Json {
 }
 
 /** The cookie the server keeps a session in. */
-private const val SESSION_COOKIE = "melyxar_session"
+internal const val SESSION_COOKIE = "melyxar_session"
 
 private val JSON = "application/json".toMediaType()
 
@@ -383,6 +383,21 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         return post(path, body, Heard.serializer())
     }
 
+    /** Says a song is open on this device, [fresh] for the first word of a
+     *  song just loaded: where it is once it has played at all, whether it
+     *  stands still, and [leaving] as it is left. The answer says whether an
+     *  administrator asked it to stop. */
+    suspend fun stillPlaying(work: String, seconds: Double?, paused: Boolean, leaving: Boolean, fresh: Boolean): Heard {
+        val body = buildJsonObject {
+            put("work_id", work)
+            put("position_seconds", if (seconds != null && seconds > 0) JsonPrimitive(seconds) else JsonNull)
+            put("paused", paused)
+            put("leaving", leaving)
+            put("fresh", fresh)
+        }
+        return post("/api/v1/playback/watching", body, Heard.serializer())
+    }
+
     /** Remembers the tracks chosen, so the next time starts the same way. */
     suspend fun rememberTracks(work: String, source: String, audio: String?, subtitle: String?) {
         send(
@@ -445,6 +460,27 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         // read as late.
         val line = EventSources.createFactory(http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build())
             .newEventSource(request("/api/v1/system/live").header("Accept", "text/event-stream").build(), listening)
+        awaitClose { line.cancel() }
+    }
+
+    /** The line a player holds open while [work] is open on it: its words
+     *  are the names of what is asked of it, "stop" from an administrator. */
+    fun playerLine(work: String): Flow<String> = callbackFlow {
+        val listening = object : EventSourceListener() {
+            override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                type?.let { trySend(it) }
+            }
+
+            override fun onClosed(eventSource: EventSource) {
+                close()
+            }
+
+            override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                close(response?.code?.takeIf { it >= 400 }?.let { Refusal(it, null) } ?: t ?: IOException("the player's line broke"))
+            }
+        }
+        val line = EventSources.createFactory(http.newBuilder().readTimeout(0, TimeUnit.SECONDS).build())
+            .newEventSource(request("/api/v1/playback/watching/$work/live").header("Accept", "text/event-stream").build(), listening)
         awaitClose { line.cancel() }
     }
 

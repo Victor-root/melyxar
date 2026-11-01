@@ -48,6 +48,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
+import app.melyxar.music.Listening
+import app.melyxar.music.Repeat
 import app.melyxar.tv.clock
 import app.melyxar.tv.inside.LocalChrome
 import app.melyxar.tv.inside.TopBar

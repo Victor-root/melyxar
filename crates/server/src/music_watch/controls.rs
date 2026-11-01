@@ -1,5 +1,4 @@
-//! The presses on the player of music, under the `music-controls` tag: from
-//! the interface, or from the card of the lock screen, a headset or a watch.
+//! The presses on the player of music, under the `music-controls` tag.
 
 use serde::Deserialize;
 
@@ -52,30 +51,9 @@ impl Command {
     }
 }
 
-/// Where the press came from.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum From {
-    /// A button of the page.
-    Interface,
-    /// The card of the lock screen or of the notifications, a headset, a
-    /// watch, a car: whatever the phone hands the application.
-    Card,
-}
-
-impl From {
-    fn as_word(self) -> &'static str {
-        match self {
-            Self::Interface => "interface",
-            Self::Card => "card",
-        }
-    }
-}
-
 #[derive(Debug, Deserialize)]
 pub(super) struct Pressed {
     command: Command,
-    from: From,
     /// Whether this tab holds the sound, or sends the press to the one that
     /// does.
     holds: bool,
@@ -89,7 +67,6 @@ pub(super) fn write(by: &Said, seen: &Pressed) {
     tracing::debug!(
         account = by.account,
         song = by.song.as_ref().map(tracing::field::display),
-        from = seen.from.as_word(),
         holds = seen.holds,
         value = seen.value,
         "pressed: {}",

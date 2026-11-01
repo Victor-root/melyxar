@@ -20,18 +20,17 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import kotlinx.serialization.Serializable
 
 /**
- * The sound of the page's player of music: its two decks, each a player of
- * its own, the one playing and the one the next song is made ready in (see
- * the page's `deck.ts` and `app-music.ts`).
+ * The sound of the player of music ([Listening]): its two decks, each a
+ * player of its own, the one playing and the one the next song is made
+ * ready in.
  *
- * The page decides everything: what each deck plays, when, and what comes
- * next. What is done here on its own is only what cannot wait for a page in
- * the background: the next deck started right at the moment it was asked
- * for, the levels and fades on the sound, and the sound given up when
- * something else needs it, a call, a film, another application.
+ * The player decides everything: what each deck plays, when, and what comes
+ * next. What is done here on its own is only what cannot wait: the next deck
+ * started right at the moment it was asked for, the levels and fades on the
+ * sound, and the sound given up when something else needs it, a call, a
+ * film, another application.
  *
  * One for the whole application, outliving any screen, so the service that
  * keeps it playing can hold it too.
@@ -42,11 +41,14 @@ class MusicEngine private constructor(
     /** How the songs, and the covers on the card, are fetched. */
     val fetching: DataSource.Factory,
 ) {
-    /** What the engine says, to whoever leads it: the page, or the
-     *  television's own player. */
+    /** What the engine says, to the player that leads it. */
     interface Listener {
         fun told(told: DeckTold)
-        fun asked(asked: String, seconds: Double)
+        fun asked(pressed: Pressed)
+
+        /** Where the song playing has got to, in milliseconds from its
+         *  start. */
+        fun positionMs(): Long
     }
 
     var listener: Listener? = null
@@ -78,9 +80,9 @@ class MusicEngine private constructor(
     private val tell = object : Runnable {
         override fun run() {
             // A deck that has just taken over is told of first: told after
-            // the end of the one it took over from, it found the page already
-            // gone on to the same song the ordinary way, which let go of it
-            // and asked for the song again from its start.
+            // the end of the one it took over from, it found the player
+            // already gone on to the same song the ordinary way, which let go
+            // of it and asked for the song again from its start.
             decks.sortedByDescending { HANDED_OVER in it.events }.forEach { it.tell() }
             lookAtTheHandOver()
             if (decks.any { it.holds }) {
@@ -164,7 +166,7 @@ class MusicEngine private constructor(
                     }
                     Player.STATE_BUFFERING -> if (player.playWhenReady) events += "waiting"
                     Player.STATE_ENDED -> events += listOf("pause", "ended")
-                    // Only ever stopped by the page, which knows it already.
+                    // Only ever stopped by the player, which knows it already.
                     Player.STATE_IDLE -> Unit
                 }
                 changed()
@@ -265,9 +267,8 @@ class MusicEngine private constructor(
 
     /**
      * The hand over done when its moment has come, or looked at again in
-     * time for it: at every word to the page, and, in its last second, at
-     * the very moment it is due, which the page in the background could not
-     * be counted on for.
+     * time for it: at every word to the player, and, in its last second, at
+     * the very moment it is due.
      */
     private fun lookAtTheHandOver() {
         val due = handOver ?: return
@@ -292,15 +293,14 @@ class MusicEngine private constructor(
             to.gain.aim(0f, 0.0)
         }
         to.gain.aim(due.level, due.fadeSeconds)
-        // Said first, so the page takes this deck for the one playing before
-        // it hears it start.
+        // Said first, so the player takes this deck for the one playing
+        // before it hears it start.
         to.events += HANDED_OVER
         to.player.play()
         started(to)
         changed()
         // The deck handed over from is let go of here once its fade is done,
-        // not left to the page, which may be asleep in the background or
-        // have moved on: unless it was given another song since.
+        // unless it was given another song since.
         val leaving = from.given
         main.postDelayed({
             if (from.given == leaving) {
@@ -316,22 +316,27 @@ class MusicEngine private constructor(
         face.changed()
     }
 
-    /** The song the card shows, as the page describes it. */
-    fun describe(described: Described?) = face.describe(described)
+    /** What the card shows, as the player describes it. */
+    fun describe(card: Card?) = face.describe(card)
 
-    /** Where the deck the card speaks of has got to. */
+    /** Where the deck the card speaks of has got to, on its own clock. */
     fun livePositionMs(): Long = decks[live].player.currentPosition
+
+    /** Where the song the card speaks of has got to, as the player counts
+     *  it: from the song's start even when its deck started further in. */
+    fun positionMs(): Long = listener?.positionMs() ?: livePositionMs()
 
     fun liveIsPlaying(): Boolean = decks[live].player.playWhenReady
 
     fun liveIsWaiting(): Boolean = decks[live].player.playbackState == Player.STATE_BUFFERING
 
-    /** A press on the card, a headset or a watch, for the page to answer. */
-    fun asked(asked: String, seconds: Double = 0.0) {
-        listener?.asked(asked, seconds)
+    /** A press on the card, a headset, a watch or a car, for the player to
+     *  answer. */
+    fun asked(pressed: Pressed) {
+        listener?.asked(pressed)
     }
 
-    /** Everything let go of, the page that led it being gone. */
+    /** Everything let go of, the player that led it being gone. */
     fun stopAll() {
         cancelHandOver()
         decks.forEach { it.clear() }
@@ -430,8 +435,7 @@ class MusicEngine private constructor(
     }
 }
 
-/** What the engine says of one deck, word for word what the page reads. */
-@Serializable
+/** What the engine says of one deck. */
 data class DeckTold(
     val deck: Int,
     /** Which song given to the deck this is about, counted up at each. */
@@ -443,15 +447,4 @@ data class DeckTold(
     val advancing: Boolean,
     val error: String?,
     val events: List<String>,
-)
-
-/** The song the card shows, as the page describes it. */
-@Serializable
-data class Described(
-    val title: String,
-    val artist: String,
-    val album: String,
-    val artwork: String?,
-    val seconds: Double?,
-    val canStepOn: Boolean,
 )

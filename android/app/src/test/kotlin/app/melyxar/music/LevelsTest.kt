@@ -1,4 +1,4 @@
-package app.melyxar.tv.music
+package app.melyxar.music
 
 import app.melyxar.server.Song
 import org.junit.jupiter.api.Assertions.assertEquals

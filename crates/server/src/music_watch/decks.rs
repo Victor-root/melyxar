@@ -1,6 +1,5 @@
 //! The two decks of the player of music, under the `music-decks` tag: what
-//! each one did, what the page asked of it, and both of them at once at a
-//! hand over or when heard sounding together.
+//! each one did, and what the page asked of it.
 
 use serde::Deserialize;
 
@@ -10,64 +9,6 @@ use crate::page::cut_to;
 
 /// How much of why a deck could not play is written down.
 const ENOUGH_OF_AN_ERROR: usize = 160;
-
-/// When the two decks were written down.
-#[derive(Debug, Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum Moment {
-    /// The next song has just taken over from the one before.
-    HandedOver,
-    /// Both decks have been sounding together for longer than any fade.
-    BothSounding,
-}
-
-impl Moment {
-    fn as_word(self) -> &'static str {
-        match self {
-            Self::HandedOver => "handed over",
-            Self::BothSounding => "both sounding",
-        }
-    }
-}
-
-/// Both decks, as the page last heard them.
-#[derive(Debug, Deserialize)]
-pub(super) struct Decks {
-    moment: Moment,
-    /// The deck the page takes for the one playing.
-    live_deck: u8,
-    /// The crossfade asked for, in seconds.
-    fade_seconds: f64,
-    /// Seconds into what each deck plays, and its length when known.
-    deck0_second: f64,
-    #[serde(default)]
-    deck0_length: Option<f64>,
-    deck0_sounding: bool,
-    deck1_second: f64,
-    #[serde(default)]
-    deck1_length: Option<f64>,
-    deck1_sounding: bool,
-    /// How long both have been sounding together, in seconds.
-    together_seconds: f64,
-}
-
-pub(super) fn write_decks(by: &Said, seen: &Decks) {
-    tracing::debug!(
-        account = by.account,
-        song = by.song.as_ref().map(tracing::field::display),
-        moment = seen.moment.as_word(),
-        live_deck = seen.live_deck,
-        fade_seconds = seen.fade_seconds,
-        deck0_second = seen.deck0_second,
-        deck0_length = seen.deck0_length,
-        deck0_sounding = seen.deck0_sounding,
-        deck1_second = seen.deck1_second,
-        deck1_length = seen.deck1_length,
-        deck1_sounding = seen.deck1_sounding,
-        together_seconds = seen.together_seconds,
-        "the two decks of the music"
-    );
-}
 
 /// What a deck said, named as an element of sound names it.
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -81,7 +22,6 @@ pub(super) enum EventName {
     Pause,
     Ended,
     Error,
-    Handedover,
     Emptied,
 }
 
@@ -96,7 +36,6 @@ impl EventName {
             Self::Pause => "paused",
             Self::Ended => "ended",
             Self::Error => "could not play",
-            Self::Handedover => "took over from the other",
             Self::Emptied => "let go of its song",
         }
     }
@@ -155,12 +94,8 @@ pub(super) enum Action {
     HandOverSet,
     /// That called off.
     HandOverCalledOff,
-    /// A deck that took over followed by the page.
+    /// The deck made ready taking over.
     HandOverFollowed,
-    /// A deck that took over, which is not the one the page made ready.
-    HandOverOnAnotherDeck,
-    /// A deck that took over for a queue that has moved on since.
-    HandOverForAnOldQueue,
     /// The deck handed over from let go of once its fade was done.
     LetGoAfterTheFade,
     /// Kept instead, having been given another song meanwhile.
@@ -178,13 +113,7 @@ impl Action {
             Self::LetGo => "let go of its song",
             Self::HandOverSet => "set to take over",
             Self::HandOverCalledOff => "taking over called off",
-            Self::HandOverFollowed => "took over, and the page followed",
-            Self::HandOverOnAnotherDeck => {
-                "took over, but is not the deck the page made ready, so it is let be"
-            }
-            Self::HandOverForAnOldQueue => {
-                "took over for a queue that has moved on, so it is let go of"
-            }
+            Self::HandOverFollowed => "took over",
             Self::LetGoAfterTheFade => "let go of once the fade was done",
             Self::KeptAfterTheFade => "kept after the fade, holding another song since",
         }

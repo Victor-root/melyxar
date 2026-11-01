@@ -3,7 +3,6 @@ package app.melyxar.web
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.Manifest
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -49,20 +48,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
-import androidx.media3.session.MediaController
-import androidx.media3.session.SessionToken
-import com.google.common.util.concurrent.ListenableFuture
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.melyxar.BuildConfig
 import app.melyxar.R
 import app.melyxar.connect.ConnectActivity
-import app.melyxar.music.MusicEngine
-import app.melyxar.music.MusicService
+import app.melyxar.music.Listening
+import app.melyxar.music.PhoneMusic
 import app.melyxar.player.FilmPlayer
-import app.melyxar.player.measuredMusicForms
-import app.melyxar.player.serverFetching
 import app.melyxar.server.KnownServer
+import app.melyxar.server.appUserAgent
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
 import app.melyxar.theme.drawUnderTheBars
@@ -73,8 +68,10 @@ import org.json.JSONObject
  *
  * Everything shown here is the server's: a server brought up to date brings
  * this screen with it. What is native is only what a page cannot do well on
- * a phone, the screen saying the server does not answer, and the film itself,
- * played beneath the page by the device's own player (see FilmPlayer).
+ * a phone, the screen saying the server does not answer, the film itself,
+ * played beneath the page by the device's own player (see FilmPlayer), and
+ * the music, held by the application's player, which the page shows and
+ * steers (see MusicBridge).
  */
 class WebActivity : ComponentActivity() {
     private lateinit var page: WebView
@@ -83,8 +80,7 @@ class WebActivity : ComponentActivity() {
     private lateinit var film: FilmPlayer
     private lateinit var pageWindow: PageWindow
     private lateinit var barShades: BarShades
-    private lateinit var music: MusicEngine
-    private var musicService: ListenableFuture<MediaController>? = null
+    private lateinit var music: Listening
     private val chrome = InterfaceChrome()
 
     /** The page waiting for files somebody picks, while the picker is open. */
@@ -150,14 +146,8 @@ class WebActivity : ComponentActivity() {
         page.addJavascriptInterface(Scanner(), "MelyxarScanner")
         page.addJavascriptInterface(Shortcuts(applicationContext), "MelyxarShortcuts")
         page.addJavascriptInterface(LiveActivity.Bridge(this, { server.origin }, page.settings.userAgentString), "MelyxarCamera")
-        music = MusicEngine.of(this) { serverFetching(page.settings.userAgentString) }
-        val musicBridge = MusicBridge(this, page, music, ::isTheServers, ::measuredMusicForms, ::askToShowTheMusic)
-        music.listener = musicBridge
-        page.addJavascriptInterface(musicBridge, "MelyxarMusic")
-        // The service that keeps the music going, woken now so it is there
-        // the moment a song starts.
-        musicService = MediaController.Builder(this, SessionToken(this, ComponentName(this, MusicService::class.java)))
-            .buildAsync()
+        music = PhoneMusic.of(this)
+        page.addJavascriptInterface(MusicBridge(this, page, music, ::askToShowTheMusic), "MelyxarMusic")
         holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))
         holder.addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
         notice = ComposeView(this).apply {
@@ -201,9 +191,8 @@ class WebActivity : ComponentActivity() {
         }
     }
 
-    /** Opened again while open: the page stays as it is, and its music,
-     *  unless it is another server's, which the page leading the music
-     *  leaves for. */
+    /** Opened again while open: the page stays as it is, and the music,
+     *  unless it is another server's, which the music stops for. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         val origin = intent.getStringExtra(ORIGIN) ?: return
@@ -217,7 +206,7 @@ class WebActivity : ComponentActivity() {
         }
         setIntent(intent)
         server = KnownServer(origin = origin, name = intent.getStringExtra(NAME).orEmpty())
-        music.stopAll()
+        music.stop()
         page.loadUrl(origin)
     }
 
@@ -228,13 +217,7 @@ class WebActivity : ComponentActivity() {
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
-        // How the server and the page tell the application from a browser.
-        settings.userAgentString = "${settings.userAgentString} MelyxarApp/${BuildConfig.VERSION_NAME}"
-        // The page leads the music, so it stays as alive as the application,
-        // which the music keeps in the foreground, when it is out of sight.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
-        }
+        settings.userAgentString = appUserAgent(context)
         CookieManager.getInstance().setAcceptCookie(true)
         webViewClient = InterfaceClient()
         webChromeClient = chrome
@@ -274,13 +257,6 @@ class WebActivity : ComponentActivity() {
 
     override fun onDestroy() {
         film.release()
-        musicService?.let(MediaController::releaseFuture)
-        music.listener = null
-        // Left for good, swept away from the recent ones: the page that led
-        // the music is gone, and the music with it.
-        if (!isChangingConfigurations) {
-            music.stopAll()
-        }
         page.destroy()
         super.onDestroy()
     }
@@ -317,11 +293,9 @@ class WebActivity : ComponentActivity() {
 
         /** The engine drawing the page was stopped, by the system short of
          *  memory or by a fault of its own: the screen starts again with a
-         *  new one rather than taking the application down with it. */
+         *  new one rather than taking the application down with it, the
+         *  music playing on. */
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-            // The music it led goes with it: the page drawn again starts
-            // from where the queue was kept.
-            music.stopAll()
             recreate()
             return true
         }

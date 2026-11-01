@@ -1,4 +1,4 @@
-package app.melyxar.tv.music
+package app.melyxar.music
 
 import app.melyxar.server.Song
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -90,5 +90,31 @@ class QueueTest {
     fun songsAddedToNothingPlayFromTheFirst() {
         assertEquals("Echo", Queue().withNext(more).current?.title)
         assertEquals(listOf("Fjord"), Queue().withLast(more).upNext.map { it.title })
+    }
+
+    @Test
+    fun onlyASongStillToComeIsTakenOut() {
+        val queue = playing(songs, 1, shuffle = false, repeat = Repeat.Off)
+        assertEquals(listOf("Lanterns"), queue.without(3).upNext.map { it.title })
+        assertEquals(queue, queue.without(1))
+        assertEquals(queue, queue.without(0))
+        assertEquals(queue, queue.without(4))
+    }
+
+    @Test
+    fun aMovedSongTakesItsNewPlaceAndTheOnePlayingKeepsPlaying() {
+        val queue = playing(songs, 1, shuffle = false, repeat = Repeat.Off)
+        fun titles(of: Queue) = of.order.map { of.songs[it].title }
+        val toTheFront = queue.moved(3, 0)
+        assertEquals(listOf("Tide", "Dawn", "Harbour", "Lanterns"), titles(toTheFront))
+        assertEquals("Harbour", toTheFront.current?.title)
+        val toTheEnd = queue.moved(0, 3)
+        assertEquals(listOf("Harbour", "Lanterns", "Tide", "Dawn"), titles(toTheEnd))
+        assertEquals("Harbour", toTheEnd.current?.title)
+        val playingOne = queue.moved(1, 3)
+        assertEquals(3, playingOne.at)
+        assertEquals("Harbour", playingOne.current?.title)
+        assertEquals(queue, queue.moved(2, 2))
+        assertEquals(queue, queue.moved(2, 4))
     }
 }

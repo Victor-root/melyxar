@@ -46,8 +46,13 @@ export type Command =
 export interface Beat {
   playing: boolean;
   waiting: boolean;
+  /** Seconds, whole between two tabs, to the fraction of one from the
+      application's player. */
   position: number;
   length: number;
+  /** How far the sound is in hand, in seconds, when the one holding the
+      sound says so. */
+  loaded?: number;
   loudness: Loudness;
 }
 
