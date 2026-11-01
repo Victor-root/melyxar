@@ -311,7 +311,10 @@ function PhonePages({
           </section>
         </div>
       </div>
-      <ScrollBar holder={queue} />
+      {/* The queue's own bar, only while the queue is the page shown: it
+          glides to the new song as each one starts, and its bar lit over
+          the cover for it said nothing about the cover. */}
+      {page === 0 && <ScrollBar holder={queue} />}
     </>
   );
 }
