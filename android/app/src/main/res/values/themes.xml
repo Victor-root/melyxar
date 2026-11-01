@@ -8,4 +8,12 @@
         <item name="android:windowBackground">@color/ground</item>
         <item name="android:colorBackground">@color/ground</item>
     </style>
+
+    <!-- What a car's screen draws the music in: its buttons, its progress
+         and what is chosen, in the accent. -->
+    <style name="Theme.Melyxar.Car" parent="Theme.Melyxar">
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorPrimaryDark">@color/ground</item>
+    </style>
 </resources>

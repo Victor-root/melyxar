@@ -3,4 +3,7 @@
     <!-- The ground of the web interface's dark theme, for what the system draws
          before a screen does: the window. -->
     <color name="ground">#0C0D10</color>
+    <!-- Melyxar's own accent, the web's default accent: a car's screen
+         reads its colours once, from the application, not the account. -->
+    <color name="accent">#C81E1E</color>
 </resources>

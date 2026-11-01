@@ -216,14 +216,14 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
     /** What a tab of [library] shows, as the page shows it there; a page of
      *  it at a time. Playlists are the account's, whatever the library. */
     private suspend fun tab(api: Api, tab: String, library: String, stretch: Slice): List<MediaItem> {
-        val shuffle = { playable("$SHUFFLE_LIBRARY$library", context.getString(R.string.car_shuffle_everything), R.drawable.car_shuffle) }
         val all: List<MediaItem> = when (tab) {
             "albums" -> return api.albums(library, "title", false, stretch).items.map(::albumItem)
             "album_artists", "artists" -> return api.artists(library, albumArtists = tab == "album_artists", slice = stretch).items.map(::artistItem)
             "songs" -> {
                 val found = api.songs(library, "title", false, stretch).items
                 val container = "$SONGS$library:${stretch.offset}:${stretch.limit}"
-                return listOfNotNull(shuffle().takeIf { stretch.offset == 0 }) + found.map { songItem(api, container, it) }
+                val shuffle = playable("$SHUFFLE_LIBRARY$library", context.getString(R.string.car_shuffle_everything), R.drawable.car_shuffle)
+                return listOfNotNull(shuffle.takeIf { stretch.offset == 0 }) + found.map { songItem(api, container, it) }
             }
             "playlists" -> api.playlists().map(::playlistItem)
             "genres" -> api.genres(library).map { genre ->
@@ -239,8 +239,9 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
                 val newest = api.albums(library, "added", false, Slice(0, NEWEST_SHOWN)).items
                 val lately = api.listened(library, "lately")
                 val most = api.listened(library, "most")
-                listOf(shuffle()) +
-                    newest.map(::albumItem).inGroup(context.getString(R.string.tv_music_newest)) +
+                // Nothing above the rows: a car's screen is short, and the
+                // whole library shuffled stands at the head of Songs.
+                newest.map(::albumItem).inGroup(context.getString(R.string.tv_music_newest)) +
                     lately.map { songItem(api, "$RECENT$library", it) }.inGroup(context.getString(R.string.tv_music_listened_lately)) +
                     most.map { songItem(api, "$MOST$library", it) }.inGroup(context.getString(R.string.tv_music_listened_most))
             }
