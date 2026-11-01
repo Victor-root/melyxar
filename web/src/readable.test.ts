@@ -27,6 +27,8 @@ import {
   networkRate,
   outOfAHundred,
   shiftInSeconds,
+  soundName,
+  speakersName,
   outOfTen,
   fullnessOf,
   percentOf,
@@ -373,5 +375,23 @@ describe("toolVersionOf", () => {
 
   it("says nothing of a banner without a version", () => {
     expect(toolVersionOf("ffmpeg")).toBeNull();
+  });
+});
+
+describe("speakersName", () => {
+  it("says the layouts a box shows and nothing for a pair or less", () => {
+    expect(speakersName(null)).toBeNull();
+    expect(speakersName(2)).toBeNull();
+    expect(speakersName(6)).toBe("5.1");
+    expect(speakersName(8)).toBe("7.1");
+    expect(speakersName(3)).toBe("3 ch");
+  });
+});
+
+describe("soundName", () => {
+  it("names a codec as its maker does", () => {
+    expect(soundName("eac3")).toBe("Dolby Digital+");
+    expect(soundName("pcm_s16le")).toBe("PCM");
+    expect(soundName("unknown")).toBe("unknown");
   });
 });
