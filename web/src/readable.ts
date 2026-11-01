@@ -400,7 +400,7 @@ const SOUND_NAMES: Record<string, string> = {
   vorbis: "Vorbis",
 };
 
-function soundName(sound: string | null): string | null {
+export function soundName(sound: string | null): string | null {
   if (sound === null) {
     return null;
   }
@@ -413,6 +413,21 @@ function soundName(sound: string | null): string | null {
     return "PCM";
   }
   return SOUND_NAMES[sound.toLowerCase()] ?? sound;
+}
+
+/** How many speakers a soundtrack is made for, as a box says it, when it is
+ *  more than two: "5.1", "7.1". */
+export function speakersName(channels: number | null): string | null {
+  if (channels === null || channels <= 2) {
+    return null;
+  }
+  if (channels === 6) {
+    return "5.1";
+  }
+  if (channels === 8) {
+    return "7.1";
+  }
+  return `${channels} ch`;
 }
 
 /* The analyser names a container by every format that shares it. What
