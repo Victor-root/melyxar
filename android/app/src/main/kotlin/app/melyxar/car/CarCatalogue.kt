@@ -141,7 +141,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         return when {
             id == ROOT -> root()
             id.startsWith(ALBUM) -> api.album(id.removePrefix(ALBUM)).let {
-                folder(id, it.title, it.artists.joinToString(", ") { artist -> artist.name }, it.cover, MediaMetadata.MEDIA_TYPE_ALBUM)
+                folder(id, it.title, cover = it.cover, type = MediaMetadata.MEDIA_TYPE_ALBUM)
             }
             id.startsWith(ARTIST) -> api.artist(id.removePrefix(ARTIST)).let {
                 folder(id, it.name, cover = it.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST, icon = R.drawable.car_artist)
@@ -294,8 +294,10 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
     private suspend fun musicLibraries(api: Api): List<Pair<String, String>> =
         api.libraries().filter { it.kind == "music" }.map { it.id to it.name }
 
+    /** An album by its title alone: a line more under each cover, which a
+     *  car's short screen cut off the foot of, often said the title again. */
     private fun albumItem(album: Album): MediaItem =
-        folder("$ALBUM${album.id}", album.title, album.artists.joinToString(", ") { it.name }, album.cover, MediaMetadata.MEDIA_TYPE_ALBUM)
+        folder("$ALBUM${album.id}", album.title, cover = album.cover, type = MediaMetadata.MEDIA_TYPE_ALBUM)
 
     private fun artistItem(artist: Artist): MediaItem =
         folder("$ARTIST${artist.id}", artist.name, cover = artist.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST, icon = R.drawable.car_artist)
@@ -319,7 +321,6 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
     private fun folder(
         id: String,
         title: String,
-        subtitle: String? = null,
         cover: List<Picture> = emptyList(),
         type: Int = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
         /** Shown when it has no cover: a car draws a warning sign over an
@@ -330,7 +331,6 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
     ): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
-            .setSubtitle(subtitle)
             .setArtworkUri(asking()?.let { coverOf(it, cover) }?.toUri() ?: icon?.let(::iconOf))
             .setIsBrowsable(true)
             .setIsPlayable(false)
