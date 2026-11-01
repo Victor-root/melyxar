@@ -12,7 +12,8 @@ class PlacementTest {
 
     @Test
     fun leavesBandsAtTheSidesOfATallPicture() {
-        assertEquals(Room(240f, 0f), roomAround(1920, 1080, 1080, 1080, 1f))
+        // Square on 16:9: the picture is 1080 by 1080, leaving 420 on each side.
+        assertEquals(Room(420f, 0f), roomAround(1920, 1080, 1080, 1080, 1f))
     }
 
     @Test
