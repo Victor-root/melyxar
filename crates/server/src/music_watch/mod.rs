@@ -32,7 +32,6 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "saw", rename_all = "snake_case")]
 enum Seen {
-    Decks(decks::Decks),
     DeckEvent(decks::Event),
     DeckAsked(decks::Asked),
     QueueMoved(queue::Moved),
@@ -75,7 +74,6 @@ async fn what_the_page_saw(
         song: song_named(said.song.as_deref())?,
     };
     match said.seen {
-        Seen::Decks(seen) => decks::write_decks(&by, &seen),
         Seen::DeckEvent(seen) => decks::write_event(&by, &seen)?,
         Seen::DeckAsked(seen) => decks::write_asked(&by, &seen)?,
         Seen::QueueMoved(seen) => queue::write(&by, &seen)?,
@@ -104,11 +102,6 @@ mod tests {
     fn each_fact_is_read_by_its_name() {
         let facts = [
             format!(
-                r#"{{"song":"{SONG}","saw":"decks","moment":"both_sounding","live_deck":1,"fade_seconds":0,
-                    "deck0_second":143.2,"deck0_length":null,"deck0_sounding":true,
-                    "deck1_second":61.5,"deck1_length":212.4,"deck1_sounding":true,"together_seconds":2.5}}"#
-            ),
-            format!(
                 r#"{{"song":"{SONG}","saw":"deck_event","deck":0,"live_deck":0,"event":"ended","second":249.8,
                     "length":249.8,"paused":true,"deck_song":"{SONG}","error":null}}"#
             ),
@@ -117,26 +110,25 @@ mod tests {
                 r#"{{"song":"{SONG}","saw":"queue_moved","why":"ended","from_song":"{SONG}","at":3,"length":12,
                     "shuffle":true,"repeat":"all"}}"#
             ),
-            r#"{"saw":"pressed","command":"next","from":"card","holds":true}"#.to_string(),
+            r#"{"saw":"pressed","command":"next","holds":true}"#.to_string(),
             r#"{"saw":"tab","holds":false,"following":true}"#.to_string(),
         ];
         let read: Vec<Seen> = facts
             .iter()
             .map(|json| read(json).unwrap_or_else(|error| panic!("{error}: {json}")).seen)
             .collect();
-        assert!(matches!(read[0], Seen::Decks(_)));
-        assert!(matches!(read[1], Seen::DeckEvent(_)));
-        assert!(matches!(read[2], Seen::DeckAsked(_)));
-        assert!(matches!(read[3], Seen::QueueMoved(_)));
-        assert!(matches!(read[4], Seen::Pressed(_)));
-        assert!(matches!(read[5], Seen::Tab(_)));
+        assert!(matches!(read[0], Seen::DeckEvent(_)));
+        assert!(matches!(read[1], Seen::DeckAsked(_)));
+        assert!(matches!(read[2], Seen::QueueMoved(_)));
+        assert!(matches!(read[3], Seen::Pressed(_)));
+        assert!(matches!(read[4], Seen::Tab(_)));
     }
 
     #[test]
     fn a_name_outside_the_list_is_refused() {
         for refused in [
             r#"{"saw":"anything_else","message":"hi"}"#.to_string(),
-            r#"{"saw":"pressed","command":"dance","from":"card","holds":true}"#.to_string(),
+            r#"{"saw":"pressed","command":"dance","holds":true}"#.to_string(),
             r#"{"saw":"deck_asked","deck":1,"action":"explode"}"#.to_string(),
             r#"{"saw":"deck_event","deck":0,"live_deck":0,"event":"whatever","second":0,"paused":true}"#.to_string(),
         ] {

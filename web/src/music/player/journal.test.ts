@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pressedFrom, pressedOnTheCard, songOfAddress } from "./journal";
+import { songOfAddress } from "./journal";
 
 describe("songOfAddress", () => {
   it("reads the song out of the address of its sound", () => {
@@ -12,25 +12,5 @@ describe("songOfAddress", () => {
     expect(songOfAddress(null)).toBeNull();
     expect(songOfAddress("")).toBeNull();
     expect(songOfAddress("/api/v1/stream/abc/init.mp4")).toBeNull();
-  });
-});
-
-describe("pressedFrom", () => {
-  it("is the card only while a press of the card is done", () => {
-    let during: string | null = null;
-    pressedOnTheCard(() => {
-      during = pressedFrom();
-    });
-    expect(during).toBe("card");
-    expect(pressedFrom()).toBe("interface");
-  });
-
-  it("is the interface again after a press of the card that failed", () => {
-    expect(() =>
-      pressedOnTheCard(() => {
-        throw new Error("refused");
-      }),
-    ).toThrow();
-    expect(pressedFrom()).toBe("interface");
   });
 });

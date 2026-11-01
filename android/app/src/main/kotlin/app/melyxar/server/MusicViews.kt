@@ -48,6 +48,10 @@ data class Song(
     val year: Int? = null,
     /** How long it lasts, to the nearest second. */
     val seconds: Long? = null,
+    /** The same to the millisecond, and the file it plays from: unused
+     *  here, kept for the page, which is handed the songs back whole. */
+    val durationMs: Long? = null,
+    val source: String? = null,
     val cover: List<Picture> = emptyList(),
     /** How loud it was measured to be, for every song to sound as loud. */
     val lufs: Double? = null,
@@ -123,6 +127,12 @@ data class MusicPreferences(
     val crossfadeSeconds: Int = 0,
     val skipBackSeconds: Int = 10,
     val skipOnSeconds: Int = 10,
+    /** Whether the queue left when the application closed is taken up
+     *  again, paused where it was. */
+    val resumeQueue: Boolean = true,
+    /** Whether the queue goes, and the player with it, once it has played
+     *  to its end. */
+    val closeWhenDone: Boolean = true,
     val hiddenTabs: List<String> = emptyList(),
     /** Whether the wave of the song is drawn behind the player, and how
      *  high it reaches, in hundredths of the player's height. */

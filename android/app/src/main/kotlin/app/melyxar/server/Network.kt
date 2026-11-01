@@ -1,6 +1,9 @@
 package app.melyxar.server
 
+import android.content.Context
 import android.os.Build
+import android.webkit.CookieManager
+import android.webkit.WebSettings
 import app.melyxar.BuildConfig
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -23,5 +26,26 @@ val network: OkHttpClient by lazy {
         .connectTimeout(REACH_WITHIN_S, TimeUnit.SECONDS)
         .readTimeout(PATIENCE_S, TimeUnit.SECONDS)
         .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("User-Agent", said).build()) }
+        .build()
+}
+
+/** What the phone application calls itself, its page and its players alike:
+ *  the web view's own name, and Melyxar's after it, which is how the server
+ *  tells the application from a browser. */
+fun appUserAgent(context: Context): String = "${WebSettings.getDefaultUserAgent(context)} MelyxarApp/${BuildConfig.VERSION_NAME}"
+
+/**
+ * The client the phone application asks its server through away from the
+ * page, as the page: under its name, signed in with its cookie, read at each
+ * call, so a session the page opens or closes counts at once.
+ */
+fun pageClient(context: Context): OkHttpClient {
+    val said = appUserAgent(context)
+    return network.newBuilder()
+        .addInterceptor { chain ->
+            val asked = chain.request().newBuilder().header("User-Agent", said)
+            CookieManager.getInstance().getCookie(chain.request().url.toString())?.let { asked.header("Cookie", it) }
+            chain.proceed(asked.build())
+        }
         .build()
 }

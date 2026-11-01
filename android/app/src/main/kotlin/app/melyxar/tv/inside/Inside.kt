@@ -36,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.melyxar.R
+import app.melyxar.music.Listening
 import app.melyxar.server.Account
 import app.melyxar.server.Api
 import app.melyxar.server.Branding
@@ -59,7 +60,6 @@ import app.melyxar.tv.music.ArtistScreen
 import app.melyxar.tv.music.FollowSongLevels
 import app.melyxar.tv.music.GenreScreen
 import app.melyxar.tv.music.Hearts
-import app.melyxar.tv.music.Listening
 import app.melyxar.tv.music.LocalHearts
 import app.melyxar.tv.music.LocalListening
 import app.melyxar.tv.music.LocalSongLevels
@@ -287,7 +287,7 @@ fun Inside(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val listening = remember(api) { Listening(context, api, scope) }
+    val listening = remember(api) { Listening(context, { api }, scope) }
     // The music is this account's: it stops when somebody else comes in, or
     // when the television leaves the application.
     DisposableEffect(listening) { onDispose { listening.leave() } }

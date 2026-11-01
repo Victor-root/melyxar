@@ -225,19 +225,6 @@ export type LyricsSaw = { song: string } & (
   | { saw: "clock_stood_still"; position_ms: number; for_ms: number }
 );
 
-/** The two decks of the player of music, as the page last heard them. */
-export interface DecksHeard {
-  live_deck: number;
-  fade_seconds: number;
-  deck0_second: number;
-  deck0_length: number | null;
-  deck0_sounding: boolean;
-  deck1_second: number;
-  deck1_length: number | null;
-  deck1_sounding: boolean;
-  together_seconds: number;
-}
-
 /** What a deck says, named as an element of sound names it. */
 export type DeckEventName =
   | "loadedmetadata"
@@ -248,7 +235,6 @@ export type DeckEventName =
   | "pause"
   | "ended"
   | "error"
-  | "handedover"
   | "emptied";
 
 /** What the page asks of a deck, or does with it. */
@@ -262,8 +248,6 @@ export type DeckAction =
   | "hand_over_set"
   | "hand_over_called_off"
   | "hand_over_followed"
-  | "hand_over_on_another_deck"
-  | "hand_over_for_an_old_queue"
   | "let_go_after_the_fade"
   | "kept_after_the_fade";
 
@@ -289,7 +273,6 @@ export type QueueWhy =
 /** A fact of the player of music, for the server's journal: the song
  *  playing, as the page holds it, and what was seen. */
 export type MusicSaw = { song?: string } & (
-  | ({ saw: "decks"; moment: "handed_over" | "both_sounding" } & DecksHeard)
   | {
       saw: "deck_event";
       deck: number;
@@ -319,7 +302,7 @@ export type MusicSaw = { song?: string } & (
       shuffle: boolean;
       repeat: "off" | "all" | "one";
     }
-  | { saw: "pressed"; command: string; from: "interface" | "card"; holds: boolean; value?: number }
+  | { saw: "pressed"; command: string; holds: boolean; value?: number }
   | { saw: "tab"; holds: boolean; following: boolean }
 );
 

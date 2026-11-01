@@ -23,6 +23,9 @@ export interface MusicMarks {
       listened to to be read again. */
   listenedAt: number;
   listened: (song: string) => void;
+  /** A listen counted by the application's player, which tells the server
+      itself: only read again here. */
+  listenCounted: () => void;
   /** Moves each time a playlist is made, changed or deleted, for every
       screen showing one to read it again. */
   playlistsAt: number;
@@ -134,12 +137,14 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
       .then(() => setListenedAt(Date.now()))
       .catch(() => {});
   }, []);
+  const listenCounted = useCallback(() => setListenedAt(Date.now()), []);
 
   const marks = useMemo<MusicMarks>(
     () => ({
       liked: (id) => liked.has(id),
       listenedAt,
       listened,
+      listenCounted,
       playlistsAt,
       playlistsHaveMoved,
       lyricsAt,
@@ -147,7 +152,7 @@ export function MusicMarksProvider({ children }: { children: ReactNode }) {
       lyricsShift,
       shiftLyrics,
     }),
-    [liked, listenedAt, listened, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved, lyricsShift, shiftLyrics],
+    [liked, listenedAt, listened, listenCounted, playlistsAt, playlistsHaveMoved, lyricsAt, lyricsHaveMoved, lyricsShift, shiftLyrics],
   );
   return (
     <MarksContext.Provider value={marks}>

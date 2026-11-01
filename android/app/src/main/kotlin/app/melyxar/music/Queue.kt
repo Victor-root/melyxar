@@ -1,4 +1,4 @@
-package app.melyxar.tv.music
+package app.melyxar.music
 
 import app.melyxar.server.Song
 import kotlin.random.Random
@@ -92,6 +92,29 @@ fun Queue.backward(secondsIn: Double): Backward = when {
 }
 
 data class Backward(val queue: Queue, val restart: Boolean)
+
+/** One song taken out of what is still to come, by its place in the order:
+ *  the song playing and those played stay. */
+fun Queue.without(place: Int): Queue =
+    if (place <= at || place >= order.size) this else copy(order = order.filterIndexed { index, _ -> index != place })
+
+/** A song of the queue put at another place in the order, whichever it is:
+ *  to come, played or playing. The song playing keeps playing wherever the
+ *  move leaves it. */
+fun Queue.moved(from: Int, to: Int): Queue {
+    if (from == to || from !in order.indices || to !in order.indices) {
+        return this
+    }
+    val moving = order.toMutableList()
+    moving.add(to, moving.removeAt(from))
+    val playingAt = when {
+        from == at -> to
+        from < at && to >= at -> at - 1
+        from > at && to <= at -> at + 1
+        else -> at
+    }
+    return copy(order = moving, at = playingAt)
+}
 
 /** Shuffle turned on or off, the song playing staying where it is. */
 fun Queue.withShuffle(on: Boolean, draw: Random = Random): Queue {
