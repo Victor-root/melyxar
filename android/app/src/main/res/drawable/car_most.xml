@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Listened most, for the car: a flame. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M8.5,14.5A2.5,2.5 0,0 0,11 12c0,-1.4 -0.5,-2 -1,-3 -1.1,-2.2 -0.3,-4.3 2,-6 0.5,2.5 2,4.9 4,6.5 2,1.6 3,3.5 3,5.5a7,7 0,1 1,-14 0c0,-1.2 0.4,-2.4 1,-3 0,1.4 1,2.5 2.5,2.5z" />
+</vector>
