@@ -82,7 +82,7 @@ class Listening(
         get() = made ?: MusicEngine.of(context) {
             // The songs and the covers fetched signed in as the account
             // listening, whichever it is by then: the engine outlives it.
-            OkHttpDataSource.Factory(Call.Factory { request -> checkNotNull(leading?.asking?.invoke()) { "nobody listening" }.http.newCall(request) })
+            OkHttpDataSource.Factory(Call.Factory { request -> checkNotNull(leading?.invoke()) { "nobody listening" }.http.newCall(request) })
         }.also { engine ->
             engine.listener = this
             made = engine
@@ -184,7 +184,7 @@ class Listening(
     private val reports = MusicReports(asking, scope, { position }, ::stop)
 
     init {
-        leading = this
+        leading = asking
         keeping?.loudness()?.let { kept ->
             volume = kept.volume
             muted = kept.muted
@@ -387,7 +387,7 @@ class Listening(
             }
         }
         service?.let(MediaController::releaseFuture)
-        if (leading === this) {
+        if (leading === asking) {
             leading = null
         }
     }
@@ -595,9 +595,10 @@ class Listening(
         if (!loaded) (resumeAt * 1000).toLong() else (offset * 1000).toLong() + (made?.livePositionMs() ?: 0L)
 
     private companion object {
-        /** The player the engine fetches with, whose account is listening. */
+        /** How the player the engine fetches with asks its server, as the
+         *  account listening. */
         @Volatile
-        var leading: Listening? = null
+        var leading: (() -> Api?)? = null
 
         /** What is kept is written one thing after the other, never two
          *  writes racing to leave the older last. */
