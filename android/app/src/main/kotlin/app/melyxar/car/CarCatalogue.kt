@@ -1,7 +1,10 @@
 package app.melyxar.car
 
+import android.content.ContentResolver
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
+import androidx.annotation.DrawableRes
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
@@ -101,7 +104,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
             parent == ALBUMS || parent == ARTISTS -> {
                 val libraries = musicLibraries(api)
                 val alone = libraries.singleOrNull()?.first
-                    ?: return libraries.map { (id, name) -> folder("$parent:$id", name) }.drop(stretch.offset).take(pageSize)
+                    ?: return libraries.map { (id, name) -> folder("$parent:$id", name, icon = R.drawable.car_music) }.drop(stretch.offset).take(pageSize)
                 return if (parent == ALBUMS) albumsOf(api, alone, stretch) else artistsOf(api, alone, stretch)
             }
             parent == PLAYLISTS -> api.playlists().map(::playlistItem)
@@ -122,7 +125,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
                 folder(id, it.title, it.artists.joinToString(", ") { artist -> artist.name }, it.cover, MediaMetadata.MEDIA_TYPE_ALBUM)
             }
             id.startsWith(ARTIST) -> api.artist(id.removePrefix(ARTIST)).let {
-                folder(id, it.name, cover = it.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST)
+                folder(id, it.name, cover = it.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST, icon = R.drawable.car_artist)
             }
             id.startsWith(PLAYLIST) -> folder(id, api.playlist(id.removePrefix(PLAYLIST)).name, type = MediaMetadata.MEDIA_TYPE_PLAYLIST)
             else -> null
@@ -200,10 +203,11 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
                 playable(
                     "$SHUFFLE_LIBRARY$id",
                     if (alone) context.getString(R.string.car_shuffle_everything) else context.getString(R.string.car_shuffle_library, name),
+                    R.drawable.car_shuffle,
                 ),
-                folder("$FAVOURITES$id", named(R.string.tv_music_favourites)),
-                folder("$RECENT$id", named(R.string.tv_music_listened_lately)),
-                folder("$MOST$id", named(R.string.tv_music_listened_most)),
+                folder("$FAVOURITES$id", named(R.string.tv_music_favourites), icon = R.drawable.car_favourites),
+                folder("$RECENT$id", named(R.string.tv_music_listened_lately), icon = R.drawable.car_recent),
+                folder("$MOST$id", named(R.string.tv_music_listened_most), icon = R.drawable.car_most),
             )
         }
     }
@@ -217,15 +221,15 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
     private suspend fun artistPage(api: Api, id: String): List<MediaItem> {
         val page = api.artist(id)
         return listOf(
-            playable("$ALL$ARTIST$id", context.getString(R.string.tv_music_play_all)),
-            playable("$MIX$ARTIST$id", context.getString(R.string.tv_music_shuffle)),
+            playable("$ALL$ARTIST$id", context.getString(R.string.tv_music_play_all), R.drawable.car_play),
+            playable("$MIX$ARTIST$id", context.getString(R.string.tv_music_shuffle), R.drawable.car_shuffle),
         ) + (page.theirAlbums + page.appearsOn).distinctBy { it.id }.map(::albumItem)
     }
 
     /** A list of songs, played whole or shuffled from its head. */
     private fun songList(api: Api, container: String, songs: List<Song>): List<MediaItem> = listOf(
-        playable("$ALL$container", context.getString(R.string.tv_music_play_all)),
-        playable("$MIX$container", context.getString(R.string.tv_music_shuffle)),
+        playable("$ALL$container", context.getString(R.string.tv_music_play_all), R.drawable.car_play),
+        playable("$MIX$container", context.getString(R.string.tv_music_shuffle), R.drawable.car_shuffle),
     ) + songs.map { songItem(api, container, it) }
 
     /** The songs a list of the catalogue holds, in its order; none for a
@@ -251,7 +255,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         folder("$ALBUM${album.id}", album.title, album.artists.joinToString(", ") { it.name }, album.cover, MediaMetadata.MEDIA_TYPE_ALBUM)
 
     private fun artistItem(artist: Artist): MediaItem =
-        folder("$ARTIST${artist.id}", artist.name, cover = artist.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST)
+        folder("$ARTIST${artist.id}", artist.name, cover = artist.picture, type = MediaMetadata.MEDIA_TYPE_ARTIST, icon = R.drawable.car_artist)
 
     private fun playlistItem(playlist: PlaylistSummary): MediaItem =
         folder("$PLAYLIST${playlist.id}", playlist.name, cover = playlist.cover, type = MediaMetadata.MEDIA_TYPE_PLAYLIST)
@@ -261,7 +265,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
             .setTitle(song.title)
             .setArtist(song.artists.joinToString(", ") { it.name })
             .setAlbumTitle(song.album?.name)
-            .setArtworkUri(coverOf(api, song.cover)?.toUri())
+            .setArtworkUri(coverOf(api, song.cover)?.toUri() ?: iconOf(R.drawable.car_music))
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
@@ -275,11 +279,14 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         subtitle: String? = null,
         cover: List<Picture> = emptyList(),
         type: Int = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
+        /** Shown when it has no cover: a car draws a warning sign over an
+         *  empty tile. */
+        @DrawableRes icon: Int = R.drawable.car_music,
     ): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setArtworkUri(asking()?.let { coverOf(it, cover) }?.toUri())
+            .setArtworkUri(asking()?.let { coverOf(it, cover) }?.toUri() ?: iconOf(icon))
             .setIsBrowsable(true)
             .setIsPlayable(false)
             .setMediaType(type)
@@ -287,15 +294,24 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         return MediaItem.Builder().setMediaId(id).setMediaMetadata(metadata).build()
     }
 
-    private fun playable(id: String, title: String): MediaItem {
+    private fun playable(id: String, title: String, @DrawableRes icon: Int): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
+            .setArtworkUri(iconOf(icon))
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
             .build()
         return MediaItem.Builder().setMediaId(id).setMediaMetadata(metadata).build()
     }
+
+    /** One of the application's own drawings, as a car reads it. */
+    private fun iconOf(@DrawableRes icon: Int): Uri = Uri.Builder()
+        .scheme(ContentResolver.SCHEME_ANDROID_RESOURCE)
+        .authority(context.resources.getResourcePackageName(icon))
+        .appendPath(context.resources.getResourceTypeName(icon))
+        .appendPath(context.resources.getResourceEntryName(icon))
+        .build()
 
     private fun coverOf(api: Api, pictures: List<Picture>): String? =
         pictures.fitting(COVER_ACROSS)?.url?.let { coverAddress(context, api.address(it)) }
