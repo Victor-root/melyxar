@@ -380,9 +380,24 @@
             tools:ignore="ExportedService"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- The covers of the music handed to a car, which cannot ask the
+             server itself: read only by those the service lets read them. -->
+        <provider
+            android:name=".music.CoverProvider"
+            android:authorities="${applicationId}.covers"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Melyxar is an application of music for Android Auto: a text the
+             car reads, nothing of Google's in the application. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
     </application>
 </manifest>

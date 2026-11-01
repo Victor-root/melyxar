@@ -556,4 +556,9 @@
     <string name="tv_brightness">Brightness</string>
     <string name="tv_contrast">Contrast</string>
     <string name="music_card_channel">Now playing</string>
+    <string name="car_home">Home</string>
+    <string name="car_shuffle_everything">Shuffle everything</string>
+    <string name="car_shuffle_library">Shuffle %1$s</string>
+    <string name="car_sign_in">Open Melyxar on the phone and sign in first.</string>
+    <string name="car_unreachable">The server does not answer.</string>
 </resources>
