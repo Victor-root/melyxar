@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.music.Listening
+import app.melyxar.music.musicTabName
+import app.melyxar.music.shownTabs
 import app.melyxar.server.FoundMusic
 import app.melyxar.server.Library
 import app.melyxar.server.Refusal
@@ -87,9 +89,6 @@ import app.melyxar.tv.look.LocalPalette
 import java.io.IOException
 import kotlinx.coroutines.launch
 
-/** The tabs of a library of music, in the web's order. */
-private val TABS = listOf("for_you", "albums", "album_artists", "artists", "songs", "playlists", "favourites", "genres")
-
 /** The orders albums and songs can be read in, as the web offers them. */
 private val ALBUM_ORDERS = listOf("title", "artist", "year", "added")
 private val SONG_ORDERS = listOf("title", "album", "added")
@@ -109,7 +108,7 @@ fun MusicLibraryScreen(library: Library, comebacks: Int) {
     val memory = rememberFocusMemory()
     val firstTab = remember { FocusRequester() }
     val firstTile = remember { FocusRequester() }
-    val tabs = TABS.filter { it !in listening.preferences.hiddenTabs }.ifEmpty { listOf("albums") }
+    val tabs = shownTabs(listening.preferences.hiddenTabs)
     var chosen by rememberSaveable(library.id) { mutableStateOf(tabs.first()) }
     val tab = chosen.takeIf { it in tabs } ?: tabs.first()
     var albumOrder by rememberSaveable(library.id) { mutableStateOf("title") }
@@ -590,18 +589,7 @@ private fun Modifier.toTheEdges(margin: Dp): Modifier = layout { measurable, con
 }
 
 @Composable
-private fun tabName(tab: String): String = stringResource(
-    when (tab) {
-        "for_you" -> R.string.tv_music_for_you
-        "album_artists" -> R.string.tv_music_album_artists
-        "artists" -> R.string.tv_music_artists
-        "songs" -> R.string.tv_music_songs
-        "playlists" -> R.string.tv_music_playlists
-        "favourites" -> R.string.tv_music_favourites
-        "genres" -> R.string.tv_music_genres
-        else -> R.string.tv_music_albums
-    },
-)
+private fun tabName(tab: String): String = stringResource(musicTabName(tab))
 
 @Composable
 private fun sortName(order: String): String = stringResource(

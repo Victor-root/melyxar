@@ -15,6 +15,8 @@ import androidx.media3.session.MediaLibraryService.LibraryParams
 import app.melyxar.R
 import app.melyxar.music.Listening
 import app.melyxar.music.coverAddress
+import app.melyxar.music.musicTabName
+import app.melyxar.music.shownTabs
 import app.melyxar.server.Album
 import app.melyxar.server.Api
 import app.melyxar.server.Artist
@@ -29,14 +31,22 @@ import app.melyxar.server.artist
 import app.melyxar.server.artistSongs
 import app.melyxar.server.artists
 import app.melyxar.server.fitting
+import app.melyxar.server.genres
 import app.melyxar.server.listened
 import app.melyxar.server.musicFavourites
 import app.melyxar.server.playlist
 import app.melyxar.server.playlists
 import app.melyxar.server.searchMusic
+import app.melyxar.server.songs
 
 /** How wide a cover is fetched for the car's screen, in pixels. */
 private const val COVER_ACROSS = 300
+
+/** How many tabs a car shows across its top. */
+private const val TABS_SHOWN = 4
+
+/** How many of the newest albums "For you" shows, as the television's. */
+private const val NEWEST_SHOWN = 24
 
 /*
  * Every place of the catalogue has a name the car hands back as it is: what
@@ -45,16 +55,16 @@ private const val COVER_ACROSS = 300
  * that list around it.
  */
 private const val ROOT = "root"
-private const val HOME = "home"
-private const val ALBUMS = "albums"
-private const val ARTISTS = "artists"
-private const val PLAYLISTS = "playlists"
+private const val TAB = "tab:"
+private const val IN_LIBRARY = "in:"
 private const val ALBUM = "album:"
 private const val ARTIST = "artist:"
 private const val PLAYLIST = "playlist:"
+private const val GENRE = "genre:"
 private const val FAVOURITES = "favourites:"
 private const val RECENT = "recent:"
 private const val MOST = "most:"
+private const val SONGS = "songs:"
 private const val SEARCH = "search:"
 private const val SHUFFLE_LIBRARY = "shuffle:"
 private const val ALL = "all|"
@@ -63,11 +73,11 @@ private const val SONG = "song|"
 
 /**
  * The music as a car shows it, asked of the server the phone's page is
- * signed in on: four tabs, Home (each music library shuffled, its
- * favourites, what was listened to lately and most), Albums, Artists and
- * Playlists, with a folder more for each library when there are several;
- * and what a press on a song, a search or a voice plays. Everything played
- * goes to the phone's player, as if pressed in the page.
+ * signed in on: across the top the tabs the account shows in a library of
+ * music, in their order, and under each what the page shows there, with a
+ * folder more for each library when there are several; and what a press on
+ * a song, a search or a voice plays. Everything played goes to the phone's
+ * player, as if pressed in the page.
  *
  * A server that does not answer, or refuses, throws its IOException;
  * nobody signed in throws [NobodySignedIn].
@@ -75,7 +85,7 @@ private const val SONG = "song|"
 @OptIn(UnstableApi::class)
 class CarCatalogue(private val context: Context, private val listening: Listening, private val asking: () -> Api?) {
     /** The way in. */
-    fun root(): MediaItem = folder(ROOT, context.getString(R.string.app_name))
+    fun root(): MediaItem = folder(ROOT, context.getString(R.string.app_name), icon = null)
 
     /** How the car draws the whole catalogue, said with the way in: what
      *  opens drawn as a grid of covers, what plays as lines. */
@@ -94,22 +104,31 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         val api = signedIn()
         val stretch = Slice(page * pageSize, pageSize)
         val all = when {
-            parent == ROOT -> listOf(
-                folder(HOME, context.getString(R.string.car_home)),
-                folder(ALBUMS, context.getString(R.string.tv_music_albums)),
-                folder(ARTISTS, context.getString(R.string.tv_music_artists)),
-                folder(PLAYLISTS, context.getString(R.string.tv_music_playlists)),
-            )
-            parent == HOME -> home(api)
-            parent == ALBUMS || parent == ARTISTS -> {
+            // The tabs the account shows now, which say only their names, as
+            // the page's do.
+            parent == ROOT -> {
+                listening.readPreferences()
+                shownTabs(listening.preferences.hiddenTabs).take(TABS_SHOWN).map { tab ->
+                    folder("$TAB$tab", context.getString(musicTabName(tab)), icon = null)
+                }
+            }
+            parent.startsWith(TAB) -> {
+                val tab = parent.removePrefix(TAB)
                 val libraries = musicLibraries(api)
                 val alone = libraries.singleOrNull()?.first
-                    ?: return libraries.map { (id, name) -> folder("$parent:$id", name, icon = R.drawable.car_music) }.drop(stretch.offset).take(pageSize)
-                return if (parent == ALBUMS) albumsOf(api, alone, stretch) else artistsOf(api, alone, stretch)
+                if (tab == "playlists" || alone != null) {
+                    return tab(api, tab, alone.orEmpty(), stretch)
+                }
+                libraries.map { (id, name) -> folder("$IN_LIBRARY$tab:$id", name, listed = true) }
             }
-            parent == PLAYLISTS -> api.playlists().map(::playlistItem)
-            parent.startsWith("$ALBUMS:") -> return albumsOf(api, parent.substringAfter(':'), stretch)
-            parent.startsWith("$ARTISTS:") -> return artistsOf(api, parent.substringAfter(':'), stretch)
+            parent.startsWith(IN_LIBRARY) -> {
+                val (tab, library) = parent.removePrefix(IN_LIBRARY).split(':', limit = 2)
+                return tab(api, tab, library, stretch)
+            }
+            parent.startsWith(GENRE) -> {
+                val (library, genre) = parent.removePrefix(GENRE).split(':', limit = 2)
+                return api.albums(library, "title", false, stretch, genre).items.map(::albumItem)
+            }
             parent.startsWith(ARTIST) -> artistPage(api, parent.removePrefix(ARTIST))
             else -> songList(api, parent, songsOf(api, parent))
         }
@@ -194,29 +213,40 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         }
     }
 
-    private suspend fun home(api: Api): List<MediaItem> {
-        val libraries = musicLibraries(api)
-        val alone = libraries.size == 1
-        return libraries.flatMap { (id, name) ->
-            fun named(what: Int) = if (alone) context.getString(what) else "${context.getString(what)} · $name"
-            listOf(
-                playable(
-                    "$SHUFFLE_LIBRARY$id",
-                    if (alone) context.getString(R.string.car_shuffle_everything) else context.getString(R.string.car_shuffle_library, name),
-                    R.drawable.car_shuffle,
-                ),
-                folder("$FAVOURITES$id", named(R.string.tv_music_favourites), icon = R.drawable.car_favourites),
-                folder("$RECENT$id", named(R.string.tv_music_listened_lately), icon = R.drawable.car_recent),
-                folder("$MOST$id", named(R.string.tv_music_listened_most), icon = R.drawable.car_most),
-            )
+    /** What a tab of [library] shows, as the page shows it there; a page of
+     *  it at a time. Playlists are the account's, whatever the library. */
+    private suspend fun tab(api: Api, tab: String, library: String, stretch: Slice): List<MediaItem> {
+        val shuffle = { playable("$SHUFFLE_LIBRARY$library", context.getString(R.string.car_shuffle_everything), R.drawable.car_shuffle) }
+        val all: List<MediaItem> = when (tab) {
+            "albums" -> return api.albums(library, "title", false, stretch).items.map(::albumItem)
+            "album_artists", "artists" -> return api.artists(library, albumArtists = tab == "album_artists", slice = stretch).items.map(::artistItem)
+            "songs" -> {
+                val found = api.songs(library, "title", false, stretch).items
+                val container = "$SONGS$library:${stretch.offset}:${stretch.limit}"
+                return listOfNotNull(shuffle().takeIf { stretch.offset == 0 }) + found.map { songItem(api, container, it) }
+            }
+            "playlists" -> api.playlists().map(::playlistItem)
+            "genres" -> api.genres(library).map { genre ->
+                folder("$GENRE$library:${genre.name}", genre.name, cover = genre.shown.firstOrNull()?.cover.orEmpty(), type = MediaMetadata.MEDIA_TYPE_GENRE)
+            }
+            "favourites" -> {
+                val found = api.musicFavourites(library)
+                songList(api, "$FAVOURITES$library", found.songs, context.getString(R.string.tv_music_songs)) +
+                    found.albums.map(::albumItem).inGroup(context.getString(R.string.tv_music_albums)) +
+                    found.artists.map(::artistItem).inGroup(context.getString(R.string.tv_music_artists))
+            }
+            else -> {
+                val newest = api.albums(library, "added", false, Slice(0, NEWEST_SHOWN)).items
+                val lately = api.listened(library, "lately")
+                val most = api.listened(library, "most")
+                listOf(shuffle()) +
+                    newest.map(::albumItem).inGroup(context.getString(R.string.tv_music_newest)) +
+                    lately.map { songItem(api, "$RECENT$library", it) }.inGroup(context.getString(R.string.tv_music_listened_lately)) +
+                    most.map { songItem(api, "$MOST$library", it) }.inGroup(context.getString(R.string.tv_music_listened_most))
+            }
         }
+        return all.drop(stretch.offset).take(stretch.limit)
     }
-
-    private suspend fun albumsOf(api: Api, library: String, stretch: Slice): List<MediaItem> =
-        api.albums(library, "title", false, stretch).items.map(::albumItem)
-
-    private suspend fun artistsOf(api: Api, library: String, stretch: Slice): List<MediaItem> =
-        api.artists(library, albumArtists = true, slice = stretch).items.map(::artistItem)
 
     private suspend fun artistPage(api: Api, id: String): List<MediaItem> {
         val page = api.artist(id)
@@ -226,11 +256,19 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         ) + (page.theirAlbums + page.appearsOn).distinctBy { it.id }.map(::albumItem)
     }
 
-    /** A list of songs, played whole or shuffled from its head. */
-    private fun songList(api: Api, container: String, songs: List<Song>): List<MediaItem> = listOf(
-        playable("$ALL$container", context.getString(R.string.tv_music_play_all), R.drawable.car_play),
-        playable("$MIX$container", context.getString(R.string.tv_music_shuffle), R.drawable.car_shuffle),
-    ) + songs.map { songItem(api, container, it) }
+    /** A list of songs, played whole or shuffled from its head, its songs
+     *  under [group] when it is one part of a page. */
+    private fun songList(api: Api, container: String, songs: List<Song>, group: String? = null): List<MediaItem> {
+        if (songs.isEmpty()) {
+            return emptyList()
+        }
+        val played = listOf(
+            playable("$ALL$container", context.getString(R.string.tv_music_play_all), R.drawable.car_play),
+            playable("$MIX$container", context.getString(R.string.tv_music_shuffle), R.drawable.car_shuffle),
+        )
+        val lines = songs.map { songItem(api, container, it) }
+        return played + if (group != null) lines.inGroup(group) else lines
+    }
 
     /** The songs a list of the catalogue holds, in its order; none for a
      *  name it never gave. */
@@ -244,6 +282,10 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
             RECENT -> api.listened(named, "lately")
             MOST -> api.listened(named, "most")
             SEARCH -> api.searchMusic(named).songs
+            SONGS -> {
+                val (library, offset, limit) = named.split(':')
+                api.songs(library, "title", false, Slice(offset.toInt(), limit.toInt())).items
+            }
             else -> emptyList()
         }
     }
@@ -280,16 +322,27 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
         cover: List<Picture> = emptyList(),
         type: Int = MediaMetadata.MEDIA_TYPE_FOLDER_MIXED,
         /** Shown when it has no cover: a car draws a warning sign over an
-         *  empty tile. */
-        @DrawableRes icon: Int = R.drawable.car_music,
+         *  empty tile. Nothing for a tab, which says only its name. */
+        @DrawableRes icon: Int? = R.drawable.car_music,
+        /** A line with its small icon, rather than a tile of the grid. */
+        listed: Boolean = false,
     ): MediaItem {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setSubtitle(subtitle)
-            .setArtworkUri(asking()?.let { coverOf(it, cover) }?.toUri() ?: iconOf(icon))
+            .setArtworkUri(asking()?.let { coverOf(it, cover) }?.toUri() ?: icon?.let(::iconOf))
             .setIsBrowsable(true)
             .setIsPlayable(false)
             .setMediaType(type)
+            .apply {
+                if (listed) {
+                    setExtras(
+                        Bundle().apply {
+                            putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_SINGLE_ITEM, MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_CATEGORY_LIST_ITEM)
+                        },
+                    )
+                }
+            }
             .build()
         return MediaItem.Builder().setMediaId(id).setMediaMetadata(metadata).build()
     }
@@ -303,6 +356,14 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
             .setMediaType(MediaMetadata.MEDIA_TYPE_PLAYLIST)
             .build()
         return MediaItem.Builder().setMediaId(id).setMediaMetadata(metadata).build()
+    }
+
+    /** These items under one title, as the page puts a row under its name. */
+    private fun List<MediaItem>.inGroup(title: String): List<MediaItem> = map { item ->
+        val extras = Bundle(item.mediaMetadata.extras ?: Bundle.EMPTY).apply {
+            putString(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_GROUP_TITLE, title)
+        }
+        item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setExtras(extras).build()).build()
     }
 
     /** One of the application's own drawings, as a car reads it. */
