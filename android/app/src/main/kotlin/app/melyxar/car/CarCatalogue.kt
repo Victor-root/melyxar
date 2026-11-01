@@ -64,6 +64,7 @@ private const val GENRE = "genre:"
 private const val FAVOURITES = "favourites:"
 private const val RECENT = "recent:"
 private const val MOST = "most:"
+private const val ADDED = "added:"
 private const val SONGS = "songs:"
 private const val SEARCH = "search:"
 private const val SHUFFLE_LIBRARY = "shuffle:"
@@ -130,6 +131,7 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
                 return api.albums(library, "title", false, stretch, genre).items.map(::albumItem)
             }
             parent.startsWith(ARTIST) -> artistPage(api, parent.removePrefix(ARTIST))
+            parent.startsWith(ADDED) -> api.albums(parent.removePrefix(ADDED), "added", false, Slice(0, NEWEST_SHOWN)).items.map(::albumItem)
             else -> songList(api, parent, songsOf(api, parent))
         }
         return all.drop(stretch.offset).take(pageSize)
@@ -235,16 +237,13 @@ class CarCatalogue(private val context: Context, private val listening: Listenin
                     found.albums.map(::albumItem).inGroup(context.getString(R.string.tv_music_albums)) +
                     found.artists.map(::artistItem).inGroup(context.getString(R.string.tv_music_artists))
             }
-            else -> {
-                val newest = api.albums(library, "added", false, Slice(0, NEWEST_SHOWN)).items
-                val lately = api.listened(library, "lately")
-                val most = api.listened(library, "most")
-                // Nothing above the rows: a car's screen is short, and the
-                // whole library shuffled stands at the head of Songs.
-                newest.map(::albumItem).inGroup(context.getString(R.string.tv_music_newest)) +
-                    lately.map { songItem(api, "$RECENT$library", it) }.inGroup(context.getString(R.string.tv_music_listened_lately)) +
-                    most.map { songItem(api, "$MOST$library", it) }.inGroup(context.getString(R.string.tv_music_listened_most))
-            }
+            // The three pages the phone's For you swipes between, in its
+            // order, each a line that opens it: a car's screen is short.
+            else -> listOf(
+                folder("$RECENT$library", context.getString(R.string.tv_music_listened_lately), icon = R.drawable.car_recent, listed = true),
+                folder("$MOST$library", context.getString(R.string.tv_music_listened_most), icon = R.drawable.car_most, listed = true),
+                folder("$ADDED$library", context.getString(R.string.tv_music_newest), icon = R.drawable.car_newest, listed = true),
+            )
         }
         return all.drop(stretch.offset).take(stretch.limit)
     }
