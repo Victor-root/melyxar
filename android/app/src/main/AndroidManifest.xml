@@ -374,12 +374,9 @@
              a car, which is what a session of music is for: none of them
              holds a permission it could be asked for, and the service lets
              only a car, the application and what the system trusts browse
-             the music. Its icon is the one a car shows: the launcher's own
-             layers put together at their full size, which a car's screen
-             draws sharp where the launcher's adaptive icon came out blurred. -->
+             the music. -->
         <service
             android:name=".music.MusicService"
-            android:icon="@drawable/ic_car_launcher"
             android:exported="true"
             tools:ignore="ExportedService"
             android:foregroundServiceType="mediaPlayback">
