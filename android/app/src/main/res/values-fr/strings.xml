@@ -572,4 +572,9 @@
     <string name="tv_brightness">Luminosité</string>
     <string name="tv_contrast">Contraste</string>
     <string name="music_card_channel">En cours de lecture</string>
+    <string name="car_home">Accueil</string>
+    <string name="car_shuffle_everything">Tout en aléatoire</string>
+    <string name="car_shuffle_library">Aléatoire dans %1$s</string>
+    <string name="car_sign_in">Ouvrez d’abord Melyxar sur le téléphone et connectez-vous.</string>
+    <string name="car_unreachable">Le serveur ne répond pas.</string>
 </resources>
