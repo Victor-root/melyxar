@@ -20,6 +20,9 @@
      wider than it: a phone's narrow margin gives what it has, and the
      screen's edge does the rest. */
   --row-side-air: min(var(--row-air), var(--gutter));
+  /* The same room below, where a card's title stands and keeps its light
+     off the edge; a row of tiles with nothing under them asks for more. */
+  --row-foot-air: var(--gap-tight);
   /* Which ends of the row have more beyond them, and so fade. */
   --more-back: 0;
   --more-on: 0;
@@ -38,7 +41,7 @@
    that scrolls is painted again at every frame, one worn by this still frame
    is not. */
 .row-view {
-  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--gap-tight) * -1);
+  margin: calc(var(--row-air) * -1) calc(var(--row-side-air) * -1) calc(var(--row-foot-air) * -1);
 }
 
 .row-track {
@@ -48,7 +51,7 @@
   /* Scrolled by the graphics card, for the reason given on the box the page
      scrolls in. */
   will-change: scroll-position;
-  padding: var(--row-air) var(--row-side-air) var(--gap-tight);
+  padding: var(--row-air) var(--row-side-air) var(--row-foot-air);
   scrollbar-width: none;
   /* A hand pulling a row of posters is not a hand selecting their titles,
      and the blue wash that appeared under one was the whole reason the drag

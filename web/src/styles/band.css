@@ -56,6 +56,9 @@
 .band > .row {
   flex: 1 1 100%;
   min-width: 0;
+  /* Nothing is written under a way in: its light falls below its edge, and
+     the track would cut it there. */
+  --row-foot-air: var(--row-air);
 }
 
 .band .row-track > .band-slot {
