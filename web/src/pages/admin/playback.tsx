@@ -77,7 +77,7 @@ export function AdminPlayback() {
         title={t("admin.history")}
         lead={t("admin.history_lead")}
       >
-        <ActivityJournal families={WATCHED} />
+        <ActivityJournal families={WATCHED} byAccount />
       </Panel>
     </>
   );

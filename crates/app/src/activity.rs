@@ -12,7 +12,7 @@ use melyxar_core::id::{ActivityId, DeviceId, UserId, WorkId};
 use melyxar_core::job::{JobKind, JobState};
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::WorkKind;
-use melyxar_database::activity::NewActivity;
+use melyxar_database::activity::{ActivityAccount, NewActivity};
 use melyxar_database::Database;
 use serde_json::{json, Value};
 
@@ -577,19 +577,28 @@ pub struct Entry {
     pub details: Value,
 }
 
+/// The kinds of lines of these families, or none for every kind.
+fn kinds_of(categories: &[Category]) -> Vec<&'static str> {
+    categories
+        .iter()
+        .flat_map(|category| category.kinds().iter().copied())
+        .collect()
+}
+
 /// The latest lines of these families, or of all of them when none is
-/// asked for, older than the last line already shown when one is given.
+/// asked for, about these accounts, or about anybody when none is, older
+/// than the last line already shown when one is given.
 pub async fn page(
     state: &AppState,
     categories: &[Category],
+    users: &[UserId],
     before: Option<ActivityId>,
     most: i64,
 ) -> Result<Vec<Entry>> {
-    let kinds: Vec<&str> = categories
-        .iter()
-        .flat_map(|category| category.kinds().iter().copied())
-        .collect();
-    let lines = state.database().activity_page(&kinds, before, most).await?;
+    let lines = state
+        .database()
+        .activity_page(&kinds_of(categories), users, before, most)
+        .await?;
     Ok(lines
         .into_iter()
         .map(|line| Entry {
@@ -608,6 +617,12 @@ pub async fn page(
             device: line.device_name,
         })
         .collect())
+}
+
+/// The accounts the lines of these families are about, with how many each,
+/// the one with the most first: what the administration narrows a journal to.
+pub async fn accounts(state: &AppState, categories: &[Category]) -> Result<Vec<ActivityAccount>> {
+    Ok(state.database().activity_accounts(&kinds_of(categories)).await?)
 }
 
 /// The fewest and the most days the journal may be set to keep.
@@ -740,11 +755,11 @@ mod tests {
             }),
         )
         .await;
-        let library = page(&state, &[Category::Library], None, 10).await.expect("read");
+        let library = page(&state, &[Category::Library], &[], None, 10).await.expect("read");
         assert_eq!(library[0].kind, "task_finished");
         assert_eq!(library[0].details["on"]["library"], "Films", "named as it was then");
 
-        let watched = page(&state, &[Category::Playback], None, 10).await.expect("read");
+        let watched = page(&state, &[Category::Playback], &[], None, 10).await.expect("read");
         assert_eq!(watched.len(), 1, "one family only");
         let line = &watched[0];
         assert_eq!(line.kind, "watched");
@@ -757,7 +772,7 @@ mod tests {
         assert_eq!(line.details["reached_seconds"], 1620.0);
         assert_eq!(line.details["method"], "direct_play");
 
-        assert_eq!(page(&state, &[], None, 10).await.expect("read").len(), 3);
+        assert_eq!(page(&state, &[], &[], None, 10).await.expect("read").len(), 3);
     }
 
     #[tokio::test]
@@ -799,7 +814,7 @@ mod tests {
         )
         .await;
 
-        let lines = page(&state, &[Category::Playback], None, 10).await.expect("read");
+        let lines = page(&state, &[Category::Playback], &[], None, 10).await.expect("read");
         assert_eq!(lines[0].details["kind"], "song");
         assert_eq!(lines[0].details["title"], "Tides");
     }
@@ -837,7 +852,7 @@ mod tests {
         )
         .await;
 
-        let lines = page(&state, &[Category::Access, Category::Library], None, 10)
+        let lines = page(&state, &[Category::Access, Category::Library], &[], None, 10)
             .await
             .expect("read");
         assert_eq!(lines[0].kind, "task_failed");
@@ -848,7 +863,7 @@ mod tests {
         assert_eq!(lines[1].details["user_name"], "nobody");
         assert_eq!(lines[1].details["address"], "192.0.2.7");
 
-        let refused = page(&state, &[Category::Refused], None, 10).await.expect("read");
+        let refused = page(&state, &[Category::Refused], &[], None, 10).await.expect("read");
         assert_eq!(refused.len(), 1, "only the refusal, not the task");
     }
 }

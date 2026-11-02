@@ -1399,7 +1399,7 @@ mod tests {
     }
 
     async fn the_kinds_in_the_journal(state: &AppState) -> Vec<String> {
-        crate::activity::page(state, &[crate::activity::Category::Access], None, 100)
+        crate::activity::page(state, &[crate::activity::Category::Access], &[], None, 100)
             .await
             .expect("journal read")
             .into_iter()
@@ -1629,7 +1629,7 @@ mod tests {
             .await
             .expect("named");
 
-        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], None, 10)
+        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], &[], None, 10)
             .await
             .expect("journal read");
         let line = lines
@@ -1681,7 +1681,7 @@ mod tests {
         assert!(a_session(&state, "victor b", "quiet harbour", "a browser").await.is_some());
         assert!(a_session(&state, "victor", "quiet harbour", "a browser").await.is_none());
 
-        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], None, 10)
+        let lines = crate::activity::page(&state, &[crate::activity::Category::Access], &[], None, 10)
             .await
             .expect("journal read");
         let line = lines
@@ -1919,7 +1919,7 @@ mod tests {
 
         let written = state
             .database()
-            .activity_page(&[], None, 5)
+            .activity_page(&[], &[], None, 5)
             .await
             .expect("read");
         assert_eq!(written[0].kind, "rights_changed");
@@ -2121,7 +2121,7 @@ mod tests {
 
         let written = state
             .database()
-            .activity_page(&[], None, 1)
+            .activity_page(&[], &[], None, 1)
             .await
             .expect("read");
         assert_eq!(written[0].kind, "device_signed_out");
@@ -2132,7 +2132,7 @@ mod tests {
     async fn last_line(state: &AppState) -> String {
         state
             .database()
-            .activity_page(&[], None, 1)
+            .activity_page(&[], &[], None, 1)
             .await
             .expect("read")[0]
             .kind

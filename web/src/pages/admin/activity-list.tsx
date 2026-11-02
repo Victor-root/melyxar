@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ComponentType } from "react";
 import { api } from "../../api";
-import type { ActivityFamily, ActivityLine, ActivityPage } from "../../api";
+import type { ActivityAccount, ActivityFamily, ActivityLine, ActivityPage } from "../../api";
 import { wasAbandoned } from "../../asking";
 import {
   FolderIcon,
@@ -49,32 +49,40 @@ interface Following {
   older: () => void;
 }
 
+/** Counted up each time the server says a line was written. */
+function useWritten(): number {
+  const [written, setWritten] = useState(0);
+  useJournalNews(() => setWritten((count) => count + 1));
+  return written;
+}
+
 /**
- * The lines of these families, newest first: the newest page asked for again
- * whenever a line is written, the older ones kept once fetched.
+ * The lines of these families, about these accounts or about anybody when
+ * none is, newest first: the newest page asked for again whenever a line is
+ * written, the older ones kept once fetched.
  */
 export function useActivity(
   families: ActivityFamily[],
   most?: number,
+  users: string[] = [],
 ): Following {
   const [head, setHead] = useState<ActivityPage | null>(null);
   const [tail, setTail] = useState<ActivityPage | null>(null);
   const [failed, setFailed] = useState(false);
   const asked = families.join(",");
-  /* Bumped each time the server says a line was written. */
-  const [written, setWritten] = useState(0);
-  useJournalNews(() => setWritten((count) => count + 1));
+  const whom = users.join(",");
+  const written = useWritten();
 
   useEffect(() => {
     setHead(null);
     setTail(null);
-  }, [asked, most]);
+  }, [asked, whom, most]);
 
   useEffect(() => {
     const controller = new AbortController();
     const wanted = asked === "" ? [] : (asked.split(",") as ActivityFamily[]);
     api
-      .activity(wanted, null, controller.signal, most)
+      .activity(wanted, null, controller.signal, most, whom === "" ? [] : whom.split(","))
       .then((page) => {
         setHead(page);
         setFailed(false);
@@ -85,7 +93,7 @@ export function useActivity(
         }
       });
     return () => controller.abort();
-  }, [asked, most, written]);
+  }, [asked, whom, most, written]);
 
   // The newest page, then whatever was fetched after it that is older than
   // its last line: a line written meanwhile moves the head, never the tail.
@@ -104,7 +112,7 @@ export function useActivity(
     }
     const wanted = asked === "" ? [] : (asked.split(",") as ActivityFamily[]);
     api
-      .activity(wanted, oldest, undefined, most)
+      .activity(wanted, oldest, undefined, most, whom === "" ? [] : whom.split(","))
       .then((page) =>
         setTail((was) => ({
           lines: [...(was?.lines ?? []), ...page.lines],
@@ -112,7 +120,7 @@ export function useActivity(
         })),
       )
       .catch(() => setFailed(true));
-  }, [asked, oldest, most]);
+  }, [asked, whom, oldest, most]);
 
   return { lines, more, failed, older };
 }
@@ -168,13 +176,85 @@ export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
   );
 }
 
-/** The whole journal of some families, and the button that goes further
- *  back in it. */
-export function ActivityJournal({ families }: { families: ActivityFamily[] }) {
+/** The accounts the lines of these families are about, read again as the
+ *  journal grows. */
+function useAccounts(families: ActivityFamily[]): ActivityAccount[] {
+  const [accounts, setAccounts] = useState<ActivityAccount[]>([]);
+  const asked = families.join(",");
+  const written = useWritten();
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .activityAccounts(asked === "" ? [] : (asked.split(",") as ActivityFamily[]), controller.signal)
+      .then(setAccounts)
+      .catch(() => {
+        // The chips there were stay: the lines still answer.
+      });
+    return () => controller.abort();
+  }, [asked, written]);
+  return accounts;
+}
+
+/** A chip for each account the journal speaks of, as the technical journal
+ *  has one for each of its tags: any number of them ticked narrows it to
+ *  them, none shows everybody. */
+function AccountChips({
+  families,
+  ticked,
+  onTicked,
+}: {
+  families: ActivityFamily[];
+  ticked: string[];
+  onTicked: (ticked: string[]) => void;
+}) {
   const { t } = useSettings();
-  const { lines, more, failed, older } = useActivity(families);
+  const accounts = useAccounts(families);
+  if (accounts.length < 2) {
+    return null;
+  }
+  return (
+    <div className="chips activity-accounts">
+      <button
+        className={`chip${ticked.length === 0 ? " chip-on" : ""}`}
+        aria-pressed={ticked.length === 0}
+        onClick={() => onTicked([])}
+      >
+        {t("activity.everybody")}
+      </button>
+      {accounts.map((account) => {
+        const on = ticked.includes(account.id);
+        return (
+          <button
+            key={account.id}
+            className={`chip${on ? " chip-on" : ""}`}
+            aria-pressed={on}
+            onClick={() => onTicked(on ? ticked.filter((id) => id !== account.id) : [...ticked, account.id])}
+          >
+            <Face name={account.name} avatar={account.avatar} className="chip-face" />
+            {account.name}
+            <span className="chip-count">{account.lines}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The whole journal of some families, and the button that goes further
+ *  back in it; narrowed to some accounts by their chips [byAccount]. */
+export function ActivityJournal({
+  families,
+  byAccount = false,
+}: {
+  families: ActivityFamily[];
+  byAccount?: boolean;
+}) {
+  const { t } = useSettings();
+  const [ticked, setTicked] = useState<string[]>([]);
+  const { lines, more, failed, older } = useActivity(families, undefined, ticked);
   return (
     <>
+      {byAccount && <AccountChips families={families} ticked={ticked} onTicked={setTicked} />}
       {failed && (
         <p className="panel-notice panel-notice-trouble">
           {t("error.unreachable")}

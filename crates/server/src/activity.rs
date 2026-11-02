@@ -17,6 +17,7 @@ const LARGEST_PAGE: i64 = 200;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/system/activity", axum::routing::get(activity))
+        .route("/api/v1/system/activity/accounts", axum::routing::get(accounts))
         .route(
             "/api/v1/system/activity/kept",
             axum::routing::get(kept_days).put(keep_days),
@@ -29,6 +30,9 @@ struct ActivityAsked {
     /// family when absent.
     #[serde(default)]
     families: Option<String>,
+    /// Accounts, comma separated: lines about anybody when absent.
+    #[serde(default)]
+    users: Option<String>,
     /// The last line already shown, for the page after it.
     #[serde(default)]
     before: Option<String>,
@@ -60,20 +64,34 @@ struct ActivityView {
     more: bool,
 }
 
-async fn activity(
-    _: Administrator,
-    State(state): State<AppState>,
-    Query(asked): Query<ActivityAsked>,
-) -> Result<Json<ActivityView>> {
-    let families = asked
-        .families
-        .as_deref()
+/// The families named in a query, every family when none is.
+fn families_named(families: Option<&str>) -> Result<Vec<Category>> {
+    families
         .unwrap_or_default()
         .split(',')
         .filter(|word| !word.is_empty())
         .map(|word| {
             Category::from_word(word)
                 .ok_or_else(|| ServerError::invalid_input("no such family of the journal"))
+        })
+        .collect()
+}
+
+async fn activity(
+    _: Administrator,
+    State(state): State<AppState>,
+    Query(asked): Query<ActivityAsked>,
+) -> Result<Json<ActivityView>> {
+    let families = families_named(asked.families.as_deref())?;
+    let users = asked
+        .users
+        .as_deref()
+        .unwrap_or_default()
+        .split(',')
+        .filter(|id| !id.is_empty())
+        .map(|id| {
+            id.parse()
+                .map_err(|_| ServerError::invalid_input("the account identifier is malformed"))
         })
         .collect::<Result<Vec<_>>>()?;
     let before = asked
@@ -87,7 +105,7 @@ async fn activity(
     let most = asked.most.unwrap_or(50).clamp(1, LARGEST_PAGE);
 
     // One more than asked, to know whether there is a page after.
-    let mut lines = melyxar_app::activity::page(&state, &families, before, most + 1).await?;
+    let mut lines = melyxar_app::activity::page(&state, &families, &users, before, most + 1).await?;
     let more = lines.len() > usize::try_from(most).unwrap_or(usize::MAX);
     lines.truncate(usize::try_from(most).unwrap_or(usize::MAX));
     Ok(Json(ActivityView {
@@ -107,6 +125,43 @@ async fn activity(
             })
             .collect(),
     }))
+}
+
+#[derive(Debug, Deserialize)]
+struct AccountsAsked {
+    #[serde(default)]
+    families: Option<String>,
+}
+
+/// An account the journal speaks of, as a chip that narrows it to them.
+#[derive(Debug, Serialize)]
+struct AccountView {
+    id: String,
+    name: String,
+    avatar: Option<String>,
+    lines: i64,
+}
+
+/// The accounts the lines of these families are about, the one with the most
+/// first.
+async fn accounts(
+    _: Administrator,
+    State(state): State<AppState>,
+    Query(asked): Query<AccountsAsked>,
+) -> Result<Json<Vec<AccountView>>> {
+    let families = families_named(asked.families.as_deref())?;
+    Ok(Json(
+        melyxar_app::activity::accounts(&state, &families)
+            .await?
+            .into_iter()
+            .map(|account| AccountView {
+                id: account.user_id.to_string(),
+                name: account.name,
+                avatar: account.avatar.as_deref().map(crate::images::face_url),
+                lines: account.lines,
+            })
+            .collect(),
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

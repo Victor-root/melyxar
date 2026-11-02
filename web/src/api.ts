@@ -2097,6 +2097,14 @@ export interface ActivityPage {
   more: boolean;
 }
 
+/** An account the journal speaks of, and how many of its lines are about it. */
+export interface ActivityAccount {
+  id: string;
+  name: string;
+  avatar: string | null;
+  lines: number;
+}
+
 /** The families the journal is read by. */
 /** The families the journal is read by; "refused" is only the refused sign
     ins and held back accounts, for the page of security. */
@@ -2502,12 +2510,21 @@ export const api = {
     before: string | null,
     signal?: AbortSignal,
     most?: number,
+    users: string[] = [],
   ) => {
     const asked = new URLSearchParams();
     if (families.length > 0) asked.set("families", families.join(","));
+    if (users.length > 0) asked.set("users", users.join(","));
     if (before) asked.set("before", before);
     if (most) asked.set("most", String(most));
     return get<ActivityPage>(`/api/v1/system/activity?${asked.toString()}`, signal);
+  },
+  /* The accounts the lines of these families are about, the one with the
+     most first. */
+  activityAccounts: (families: ActivityFamily[], signal?: AbortSignal) => {
+    const asked = new URLSearchParams();
+    if (families.length > 0) asked.set("families", families.join(","));
+    return get<ActivityAccount[]>(`/api/v1/system/activity/accounts?${asked.toString()}`, signal);
   },
   access: (signal?: AbortSignal) => get<AccessStatus>("/api/v1/system/security/access", signal),
   chooseAccess: (mode: AccessMode, certificatePath: string | null, privateKeyPath: string | null) =>
