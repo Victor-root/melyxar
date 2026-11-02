@@ -55,6 +55,11 @@ export function SoundControl({
           value={loud}
           aria-label={t("player.loudness")}
           onChange={(event) => onLoudness(Number(event.target.value))}
+          // Set by hand, it lets go of the keyboard's focus as the hand does:
+          // kept, the next key pressed anywhere, the space that pauses, showed
+          // its handle as chosen by the keyboard for good.
+          onPointerUp={(event) => event.currentTarget.blur()}
+          onPointerCancel={(event) => event.currentTarget.blur()}
         />
         {/* How loud, in the round numbers a person thinks in, standing over the
             handle while a hand is on it. */}

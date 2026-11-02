@@ -105,6 +105,9 @@ export function Seek({
       // one thing that usually does, leaving the bar, may already have
       // happened once mid-drag and answered to nothing while it was one.
       setHovered(null);
+      // Nor keeps the keyboard's focus a hand gave it: the next key pressed,
+      // the space that pauses, showed it as chosen by the keyboard for good.
+      rail.current?.blur();
       playback.viewerMoved(wasDragged.current ? "a_drag" : "a_click");
     };
     window.addEventListener("pointermove", moved);
