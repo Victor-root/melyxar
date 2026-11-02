@@ -466,6 +466,19 @@
   color: var(--accent-bright);
 }
 
+/* An account's face at the head of its chip. */
+.chip-face {
+  width: 20px;
+  height: 20px;
+  margin-left: -6px;
+  border-radius: 50%;
+}
+
+/* The accounts above the lines they narrow. */
+.activity-accounts {
+  margin-bottom: var(--gap);
+}
+
 /* The lines themselves, set in a face whose letters all take the same room,
    so that times, levels and words line up down the page. */
 .log {

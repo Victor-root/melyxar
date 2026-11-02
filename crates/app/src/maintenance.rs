@@ -439,7 +439,7 @@ mod tests {
 
         let lines = state
             .database()
-            .activity_page(&[], None, 10)
+            .activity_page(&[], &[], None, 10)
             .await
             .expect("journal read");
         assert!(lines.iter().any(|line| line.kind == "server_maintenance_on"));
@@ -463,7 +463,7 @@ mod tests {
         assert!(!shuts_out(&state, Some(&viewer)));
         assert!(told.has_changed().expect("still followed"), "every line is told");
         assert!(!state.database().maintenance().await.expect("read").enabled);
-        let lines = state.database().activity_page(&[], None, 10).await.expect("journal read");
+        let lines = state.database().activity_page(&[], &[], None, 10).await.expect("journal read");
         assert!(lines.iter().any(|line| line.kind == "server_maintenance_ended"));
     }
 }

@@ -42,6 +42,15 @@ pub struct Activity {
     pub details: Option<String>,
 }
 
+/// An account the lines of some kinds are about, and how many there are.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityAccount {
+    pub user_id: UserId,
+    pub name: String,
+    pub avatar: Option<String>,
+    pub lines: i64,
+}
+
 /// `?, ?, ?` for as many kinds as asked about.
 fn placeholders(count: usize) -> String {
     vec!["?"; count].join(", ")
@@ -88,16 +97,21 @@ impl Database {
     }
 
     /// The latest lines, newest first, of the kinds asked about or of every
-    /// kind when none is, older than a line already shown when one is given.
+    /// kind when none is, about the accounts asked about or about anybody
+    /// when none is, older than a line already shown when one is given.
     pub async fn activity_page(
         &self,
         kinds: &[&str],
+        users: &[UserId],
         before: Option<ActivityId>,
         most: i64,
     ) -> Result<Vec<Activity>> {
         let mut conditions = Vec::new();
         if !kinds.is_empty() {
             conditions.push(format!("a.kind IN ({})", placeholders(kinds.len())));
+        }
+        if !users.is_empty() {
+            conditions.push(format!("a.user_id IN ({})", placeholders(users.len())));
         }
         if before.is_some() {
             conditions.push("a.id < ?".to_string());
@@ -118,6 +132,9 @@ impl Database {
         let mut query = sqlx::query(AssertSqlSafe(sql));
         for kind in kinds {
             query = query.bind(*kind);
+        }
+        for user in users {
+            query = query.bind(user.to_db_string());
         }
         if let Some(before) = before {
             query = query.bind(before.to_db_string());
@@ -143,6 +160,39 @@ impl Database {
                         .transpose()?,
                     device_name: row.try_get("device_name")?,
                     details: row.try_get("details")?,
+                })
+            })
+            .collect()
+    }
+
+    /// The accounts lines of these kinds, or of every kind when none is, are
+    /// about, with how many each, the one with the most first: an account
+    /// since removed is left out, its lines no longer naming it.
+    pub async fn activity_accounts(&self, kinds: &[&str]) -> Result<Vec<ActivityAccount>> {
+        let filter = match kinds.is_empty() {
+            true => String::new(),
+            false => format!("WHERE a.kind IN ({})", placeholders(kinds.len())),
+        };
+        let sql = format!(
+            "SELECT a.user_id, u.name, u.avatar_path, count(*) AS lines
+               FROM activity_log a
+               JOIN users u ON u.id = a.user_id
+               {filter}
+              GROUP BY a.user_id
+              ORDER BY lines DESC, u.name"
+        );
+        let mut query = sqlx::query(AssertSqlSafe(sql));
+        for kind in kinds {
+            query = query.bind(*kind);
+        }
+        let rows = query.fetch_all(self.reader()).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(ActivityAccount {
+                    user_id: parse_id(&row.try_get::<String, _>("user_id")?)?,
+                    name: row.try_get("name")?,
+                    avatar: row.try_get("avatar_path")?,
+                    lines: row.try_get("lines")?,
                 })
             })
             .collect()
@@ -186,6 +236,14 @@ mod tests {
     const NOON: Timestamp = datetime!(2026-01-01 12:00 UTC);
     const EVENING: Timestamp = datetime!(2026-01-01 20:00 UTC);
 
+    async fn account(database: &Database, name: &str) -> UserId {
+        database
+            .create_user(name, Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("account created")
+            .id
+    }
+
     fn line(at: Timestamp, kind: &str) -> NewActivity<'_> {
         NewActivity {
             at,
@@ -220,7 +278,7 @@ mod tests {
                 .expect("named"),
             1
         );
-        let page = database.activity_page(&[], None, 10).await.expect("read");
+        let page = database.activity_page(&[], &[], None, 10).await.expect("read");
         let browser_of = |device: DeviceId| {
             page.iter()
                 .find(|line| {
@@ -254,7 +312,7 @@ mod tests {
         };
         let id = database.record_activity(&written).await.expect("written");
 
-        let page = database.activity_page(&[], None, 10).await.expect("read");
+        let page = database.activity_page(&[], &[], None, 10).await.expect("read");
         assert_eq!(page.len(), 1);
         assert_eq!(page[0].id, id);
         assert_eq!(page[0].at, NOON);
@@ -268,7 +326,7 @@ mod tests {
             .set_avatar(user.id, Some("a-face.webp"))
             .await
             .expect("pictured");
-        let page = database.activity_page(&[], None, 10).await.expect("read");
+        let page = database.activity_page(&[], &[], None, 10).await.expect("read");
         assert_eq!(
             page[0].user_avatar.as_deref(),
             Some("a-face.webp"),
@@ -276,7 +334,7 @@ mod tests {
         );
 
         database.delete_user(user.id).await.expect("removed");
-        let page = database.activity_page(&[], None, 10).await.expect("read");
+        let page = database.activity_page(&[], &[], None, 10).await.expect("read");
         assert_eq!(page[0].user_id, None, "the line outlives the account");
         assert_eq!(page[0].user_avatar, None);
     }
@@ -289,13 +347,13 @@ mod tests {
             written.push(database.record_activity(&line(NOON, kind)).await.expect("written"));
         }
 
-        let first = database.activity_page(&[], None, 2).await.expect("read");
+        let first = database.activity_page(&[], &[], None, 2).await.expect("read");
         assert_eq!(
             first.iter().map(|one| one.id).collect::<Vec<_>>(),
             vec![written[4], written[3]]
         );
         let next = database
-            .activity_page(&[], Some(written[3]), 2)
+            .activity_page(&[], &[], Some(written[3]), 2)
             .await
             .expect("read");
         assert_eq!(
@@ -304,12 +362,73 @@ mod tests {
         );
 
         let sign_ins = database
-            .activity_page(&["signed_in", "task_finished"], Some(written[4]), 10)
+            .activity_page(&["signed_in", "task_finished"], &[], Some(written[4]), 10)
             .await
             .expect("read");
         assert_eq!(
             sign_ins.iter().map(|one| one.id).collect::<Vec<_>>(),
             vec![written[3], written[2], written[0]]
+        );
+    }
+
+    #[tokio::test]
+    async fn a_page_is_narrowed_to_some_accounts_and_the_accounts_are_counted() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let ada = account(&database, "ada").await;
+        let bert = account(&database, "bert").await;
+        let gone = account(&database, "gone").await;
+        let mut written = Vec::new();
+        for (user, kind) in [
+            (Some(ada), "watched"),
+            (Some(bert), "watched"),
+            (Some(ada), "watched"),
+            (Some(gone), "watched"),
+            (Some(bert), "signed_in"),
+            (None, "watched"),
+        ] {
+            written.push(
+                database
+                    .record_activity(&NewActivity { user_id: user, ..line(NOON, kind) })
+                    .await
+                    .expect("written"),
+            );
+        }
+        database.delete_user(gone).await.expect("removed");
+
+        let ada_only = database
+            .activity_page(&["watched"], &[ada], None, 10)
+            .await
+            .expect("read");
+        assert_eq!(
+            ada_only.iter().map(|one| one.id).collect::<Vec<_>>(),
+            vec![written[2], written[0]]
+        );
+        let both = database
+            .activity_page(&["watched"], &[ada, bert], Some(written[2]), 10)
+            .await
+            .expect("read");
+        assert_eq!(
+            both.iter().map(|one| one.id).collect::<Vec<_>>(),
+            vec![written[1], written[0]]
+        );
+
+        let watching = database.activity_accounts(&["watched"]).await.expect("read");
+        assert_eq!(
+            watching
+                .iter()
+                .map(|one| (one.name.as_str(), one.lines))
+                .collect::<Vec<_>>(),
+            vec![("ada", 2), ("bert", 1)],
+            "most first, a removed account left out"
+        );
+        assert_eq!(watching[0].user_id, ada);
+        let anything = database.activity_accounts(&[]).await.expect("read");
+        assert_eq!(
+            anything
+                .iter()
+                .map(|one| (one.name.as_str(), one.lines))
+                .collect::<Vec<_>>(),
+            vec![("ada", 2), ("bert", 2)]
         );
     }
 
@@ -343,7 +462,7 @@ mod tests {
         );
 
         assert_eq!(database.forget_activity_before(NOON).await.expect("forgotten"), 1);
-        assert_eq!(database.activity_page(&[], None, 10).await.expect("read").len(), 4);
+        assert_eq!(database.activity_page(&[], &[], None, 10).await.expect("read").len(), 4);
     }
 
     #[tokio::test]
