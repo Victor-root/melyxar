@@ -3,8 +3,8 @@
 //! A file of this family is a tree of elements, each one an identifier and a
 //! length, both written on as many bytes as they need. What is wanted is the
 //! list of search marks the file carries for itself, which is exactly the list
-//! of places its picture stands on its own, and the marks belong to a track so
-//! the picture's own have to be told from the sound's.
+//! of places its picture stands on its own, and the marks belong to tracks so
+//! the picture's own have to be told from those of its sound and its words.
 //!
 //! The marks are counted in the file's own unit, which it declares once. It is
 //! a thousandth of a second in every file anyone writes, and reading it rather
@@ -159,6 +159,11 @@ fn the_picture_track(reader: &mut Reader, tracks: Span) -> Option<u64> {
 }
 
 /// Reads the marks of one track, in the file's own unit.
+///
+/// One mark can stand for several tracks at once, each with a place of its
+/// own: a line of words that begins on the very picture where the picture
+/// stands on its own is one mark for both. Every place is looked at, since the
+/// picture's own can come after any of the others.
 fn marks_of(reader: &mut Reader, marks: Span, track: u64) -> Option<Vec<u64>> {
     let mut found = Vec::new();
     walk(reader, marks, |reader, identifier, span| {
@@ -166,14 +171,14 @@ fn marks_of(reader: &mut Reader, marks: Span, track: u64) -> Option<Vec<u64>> {
             return Some(());
         }
         let mut when = None;
-        let mut belongs_to = None;
+        let mut for_the_track = false;
         walk(reader, span, |reader, identifier, span| {
             match identifier {
                 MARK_TIME => when = whole_number(reader, span),
-                MARK_PLACES if belongs_to.is_none() => {
+                MARK_PLACES => {
                     walk(reader, span, |reader, identifier, span| {
-                        if identifier == MARK_TRACK {
-                            belongs_to = whole_number(reader, span);
+                        if identifier == MARK_TRACK && whole_number(reader, span) == Some(track) {
+                            for_the_track = true;
                         }
                         Some(())
                     })?;
@@ -182,8 +187,8 @@ fn marks_of(reader: &mut Reader, marks: Span, track: u64) -> Option<Vec<u64>> {
             }
             Some(())
         })?;
-        if let (Some(when), Some(belongs_to)) = (when, belongs_to)
-            && belongs_to == track
+        if let Some(when) = when
+            && for_the_track
         {
             found.push(when);
         }
@@ -298,6 +303,42 @@ mod tests {
     fn a_zero_first_byte_is_no_number_at_all() {
         let (_directory, mut reader) = reader_of(&[0x00, 0x01]);
         assert_eq!(variable(&mut reader, false), None);
+    }
+
+    /// One element, its length written on eight bytes whatever it is.
+    fn written(identifier: &[u8], body: &[u8]) -> Vec<u8> {
+        let mut bytes = identifier.to_vec();
+        bytes.push(0x01);
+        bytes.extend_from_slice(&(body.len() as u64).to_be_bytes()[1..]);
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    /// A mark at `when`, with a place for each of `tracks` in that order.
+    fn mark(when: u16, tracks: &[u8]) -> Vec<u8> {
+        let mut body = written(&[0xB3], &when.to_be_bytes());
+        for track in tracks {
+            body.extend(written(&[0xB7], &written(&[0xF7], &[*track])));
+        }
+        written(&[0xBB], &body)
+    }
+
+    #[test]
+    fn a_mark_the_picture_shares_with_its_words_is_the_picture_s_own() {
+        // The shape of a real series episode: a line of words beginning on a
+        // picture that stands on its own, listed under one mark with the words
+        // first. Missed, the playlist lost that boundary while the tool still
+        // cut there, and every segment after it held the one before it.
+        let picture = written(&[0xAE], &[written(&[0xD7], &[1]), written(&[0x83], &[1])].concat());
+        let marks = [mark(83, &[1]), mark(1669, &[8]), mark(10511, &[8, 1]), mark(20938, &[1])].concat();
+        let segment = [written(&[0x16, 0x54, 0xAE, 0x6B], &picture), written(&[0x1C, 0x53, 0xBB, 0x6B], &marks)].concat();
+        let file = [written(&OPENING, &[]), written(&[0x18, 0x53, 0x80, 0x67], &segment)].concat();
+
+        let (_directory, mut reader) = reader_of(&file);
+        assert_eq!(
+            key_frames(&mut reader),
+            Some(vec![Millis::new(83), Millis::new(10511), Millis::new(20938)])
+        );
     }
 
     #[test]
