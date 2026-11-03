@@ -1145,6 +1145,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn every_matroska_film_is_read_again_for_its_key_frames_and_the_others_keep_theirs() {
+        let (database, library_id, root_id) = library().await;
+        let matroska =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let (_, other) =
+            work_with_source(&database, library_id, root_id, "Paper.Lanterns.2021.mp4").await;
+        database
+            .store_analysis(
+                other,
+                &SourceAnalysis {
+                    container: Some("mov,mp4,m4a,3gp,3g2,mj2".to_string()),
+                    duration: Some(Millis::new(7_200_000)),
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        for source in [matroska, other] {
+            database
+                .store_key_frames(source, &[Millis::ZERO, Millis::new(20_938)])
+                .await
+                .expect("kept");
+        }
+
+        sqlx::query(include_str!("../migrations/0129_read_matroska_marks_again.sql"))
+            .execute(database.writer())
+            .await
+            .expect("run");
+
+        assert_eq!(database.key_frames_of(matroska).await.expect("read"), None);
+        assert_eq!(
+            database.sources_without_key_frames(library_id, 10).await.expect("read"),
+            vec![matroska]
+        );
+        assert_eq!(
+            database.key_frames_of(other).await.expect("read"),
+            Some(vec![Millis::ZERO, Millis::new(20_938)])
+        );
+    }
+
+    #[tokio::test]
     async fn reading_for_key_frames_stays_inside_the_library_being_scanned() {
         // Scanning the films must not set the tool reading through the series,
         // and the count a scan shows its progress against must not be the
