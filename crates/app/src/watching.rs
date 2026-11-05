@@ -897,9 +897,21 @@ pub struct Watched {
 
 /// Every film being watched right now, oldest first.
 pub async fn now_playing(state: &AppState) -> Result<Vec<Watched>> {
+    described(state, state.watching().now_playing(Instant::now())).await
+}
+
+/// What is playing on these devices right now, oldest first.
+pub async fn playing_on(state: &AppState, devices: &[DeviceId]) -> Result<Vec<Watched>> {
+    let mut seen = state.watching().now_playing(Instant::now());
+    seen.retain(|one| devices.contains(&one.viewer.device));
+    described(state, seen).await
+}
+
+/// Each film seen, with what a page shows of it.
+async fn described(state: &AppState, seen: Vec<Seen>) -> Result<Vec<Watched>> {
     let database = state.database();
     let mut watched = Vec::new();
-    for seen in state.watching().now_playing(Instant::now()) {
+    for seen in seen {
         // A work deleted while it played has nothing left to show.
         let Some(work) = database.work(seen.work).await? else {
             continue;

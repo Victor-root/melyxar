@@ -3,7 +3,9 @@
 //! the libraries hold or how the page looks moved; where maintenance stands
 //! as it moves; and for an administrator, what is written in the
 //! activity journal and what is being watched, sent again the moment it
-//! changes when the page shows it.
+//! changes when the page shows it. The orders another device of the account
+//! gives this one travel on it too, and, for a page that steers the others,
+//! which of them can be reached and what plays there.
 //!
 //! One line per page, whatever that page shows: each line held open is one
 //! of the few connections a browser opens to a server.
@@ -21,7 +23,7 @@ use melyxar_app::AppState;
 use serde::Deserialize;
 use tokio::sync::{broadcast, watch};
 
-use crate::account::Viewer;
+use crate::account::{Viewer, Watcher};
 use crate::error::ServerError;
 use crate::notifications::change_word;
 use crate::playback::{live, watched_views};
@@ -39,6 +41,18 @@ struct Asked {
     /// Whether the page shows what is being watched.
     #[serde(default)]
     playing: bool,
+    /// Whether the page steers the account's other devices.
+    #[serde(default)]
+    devices: bool,
+}
+
+/// What a page steering the account's other devices waits on.
+struct Steering {
+    device: melyxar_core::id::DeviceId,
+    reachable: watch::Receiver<u64>,
+    watching: watch::Receiver<u64>,
+    /// The devices are owed at once, before any news.
+    owed: bool,
 }
 
 /// What only an administrator's line waits on.
@@ -67,7 +81,36 @@ struct Following {
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
     administration: Option<Administration>,
+    /// What another device of the account asks of this one.
+    remote: melyxar_app::remote::Line,
+    /// Absent for a page that does not steer the others.
+    steering: Option<Steering>,
     closing: watch::Receiver<bool>,
+}
+
+/// A device reached or no longer reached, or what plays on one moved; never,
+/// for a page that does not steer the others.
+async fn devices_moved(steering: &mut Option<Steering>) -> Option<()> {
+    let Some(steering) = steering else {
+        return std::future::pending().await;
+    };
+    tokio::select! {
+        moved = steering.reachable.changed() => moved.ok(),
+        moved = steering.watching.changed() => moved.ok(),
+    }
+}
+
+/// The account's other devices, as the page steering them shows them.
+async fn the_devices(state: &AppState, who: melyxar_core::id::UserId, from: melyxar_core::id::DeviceId) -> Result<Event, axum::Error> {
+    match melyxar_app::remote::steerable(state, who, from).await {
+        Ok(steerable) => Event::default()
+            .event("devices")
+            .json_data(crate::remote::steerable_views(steerable)),
+        Err(error) => {
+            tracing::warn!(%error, "the devices a remote steers could not be read");
+            Ok(Event::default().event("devices_failed").data("failed"))
+        }
+    }
 }
 
 /// Whatever moves what is being watched, or the beat that sends it anyway;
@@ -116,6 +159,7 @@ async fn what_is_watched(state: &AppState) -> Result<Event, axum::Error> {
 
 async fn line(
     Viewer(who): Viewer,
+    Watcher(watcher): Watcher,
     State(state): State<AppState>,
     Query(asked): Query<Asked>,
     headers: HeaderMap,
@@ -140,6 +184,13 @@ async fn line(
         looks: melyxar_app::looks::follow(&state),
         maintenance: melyxar_app::maintenance::follow(&state),
         administration,
+        remote: melyxar_app::remote::line(&state, &watcher),
+        steering: asked.devices.then(|| Steering {
+            device: watcher.device,
+            reachable: melyxar_app::remote::changes(&state),
+            watching: melyxar_app::watching::changes(&state),
+            owed: true,
+        }),
         closing: melyxar_app::watching::closing(&state),
         state,
     };
@@ -167,6 +218,10 @@ enum Word {
     Missed,
     /// Maintenance was switched, changed or took hold.
     Maintenance,
+    /// Another device of the account asks something of this one.
+    Order(melyxar_app::remote::Order),
+    /// The account's other devices moved, for a page steering them.
+    Devices,
 }
 
 /// The next thing the line has to say, once there is one; nothing once the
@@ -179,9 +234,25 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
             .is_some_and(|watching| std::mem::take(&mut watching.owed))
         {
             Word::Playing
+        } else if following
+            .steering
+            .as_mut()
+            .is_some_and(|steering| std::mem::take(&mut steering.owed))
+        {
+            Word::Devices
         } else {
             tokio::select! {
                 word = administration_moved(&mut following.administration) => word?,
+                // Never closed while the line holds its end of it.
+                Some(order) = following.remote.orders.recv() => Word::Order(order),
+                moved = devices_moved(&mut following.steering) => {
+                    moved?;
+                    if let Some(steering) = following.steering.as_mut() {
+                        steering.reachable.borrow_and_update();
+                        steering.watching.borrow_and_update();
+                    }
+                    Word::Devices
+                }
                 notified = following.notified.recv() => match notified {
                     Ok(news) if news.user == following.who => Word::Notified(Box::new(news)),
                     Ok(_) => continue,
@@ -242,6 +313,13 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
             Word::Maintenance => Event::default()
                 .event("maintenance")
                 .json_data(melyxar_app::maintenance::seen(&following.state)),
+            Word::Order(order) => Event::default().event("remote").json_data(order),
+            Word::Devices => {
+                let Some(steering) = following.steering.as_ref() else {
+                    continue;
+                };
+                the_devices(&following.state, account.id, steering.device).await
+            }
             Word::Missed => Event::default()
                 .event("notifications_missed")
                 .json_data(serde_json::Value::Null),

@@ -374,7 +374,7 @@ struct RebuildView {
 }
 
 #[derive(Debug, Serialize)]
-struct TrackView {
+pub(crate) struct TrackView {
     id: String,
     language: Option<String>,
     /// What the file itself calls this track, when it says.
@@ -416,7 +416,15 @@ async fn plan(
     Ok(Json(plan_view(&plan)))
 }
 
-fn plan_view(plan: &PlayPlan) -> PlanView {
+/// The tracks of a plan as a page lists them, and those it was worked out for.
+pub(crate) struct TracksView {
+    pub audio: Vec<TrackView>,
+    pub subtitles: Vec<TrackView>,
+    pub chosen_audio_id: Option<String>,
+    pub chosen_subtitle_id: Option<String>,
+}
+
+pub(crate) fn tracks_view(plan: &PlayPlan) -> TracksView {
     let mut audio = Vec::new();
     let mut subtitles = Vec::new();
     for track in &plan.tracks {
@@ -461,11 +469,21 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
             .map(|track| track.id.to_string())
     });
 
+    TracksView {
+        audio,
+        subtitles,
+        chosen_audio_id: chosen_audio,
+        chosen_subtitle_id: plan.decision.subtitle_track_id.map(|id| id.to_string()),
+    }
+}
+
+fn plan_view(plan: &PlayPlan) -> PlanView {
+    let TracksView { audio, subtitles, chosen_audio_id, chosen_subtitle_id } = tracks_view(plan);
     let film = film_view(plan);
     PlanView {
         url: format!("/api/v1/playback/{}/stream", plan.source_id),
-        chosen_audio_id: chosen_audio,
-        chosen_subtitle_id: plan.decision.subtitle_track_id.map(|id| id.to_string()),
+        chosen_audio_id,
+        chosen_subtitle_id,
         method: plan.decision.method.as_str(),
         expensive: plan.decision.method.is_expensive(),
         reasons: reasons_of(plan),

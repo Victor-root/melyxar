@@ -57,6 +57,8 @@ struct Inner {
     measuring: crate::measures::Measuring,
     /// What is being watched right now, device by device.
     watching: crate::watching::Watching,
+    /// The devices that can be steered from another, by their open lines.
+    reachable: crate::remote::Reachable,
     /// The folders of the libraries that asked for them to be watched.
     folder_watch: crate::folder_watch::FolderWatch,
     /// Where the activity journal is written.
@@ -135,6 +137,7 @@ impl AppState {
                 started_at: melyxar_core::time::now(),
                 measuring: crate::measures::Measuring::new(),
                 watching: crate::watching::Watching::default(),
+                reachable: crate::remote::Reachable::default(),
                 folder_watch: crate::folder_watch::FolderWatch::default(),
                 schedule: crate::schedule::Running::default(),
                 notifications: crate::notifications::live::Outbox::default(),
@@ -188,6 +191,10 @@ impl AppState {
 
     pub(crate) fn watching(&self) -> &crate::watching::Watching {
         &self.inner.watching
+    }
+
+    pub(crate) fn reachable(&self) -> &crate::remote::Reachable {
+        &self.inner.reachable
     }
 
     pub fn folder_watch(&self) -> &crate::folder_watch::FolderWatch {
