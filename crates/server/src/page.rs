@@ -157,6 +157,20 @@ enum Seen {
     },
     /// The film began moving again after having stopped.
     PlaybackPickedUpAgain { at_second: f64, waited_ms: u32 },
+    /// The sound card was handed nothing in time and fell silent, while the
+    /// picture may well have gone on.
+    ///
+    /// A silence nothing else here sees: the clock does not stop, no picture is
+    /// dropped, and the film played back over the same place has its sound.
+    /// Said by a player that can tell, the television's, with what it was
+    /// still holding for the sound card and how long since it last fed it.
+    SoundRanDry {
+        at_second: f64,
+        /// How much sound the card could hold, in milliseconds.
+        holds_ms: u32,
+        /// How long since the player last handed it any.
+        since_fed_ms: u32,
+    },
     /// The clock went on while the picture stood still.
     ///
     /// The two are told apart by counting pictures rather than by watching,
@@ -996,6 +1010,19 @@ async fn what_the_page_saw(
             ready_state,
             "the clock went on while the picture stood still"
         ),
+        Seen::SoundRanDry {
+            at_second,
+            holds_ms,
+            since_fed_ms,
+        } => tracing::debug!(
+            account,
+            session,
+            source,
+            at_second,
+            holds_ms,
+            since_fed_ms,
+            "the sound card ran dry"
+        ),
         Seen::PicturesWereDropped {
             at_second,
             over_ms,
@@ -1269,6 +1296,18 @@ mod tests {
             }
             other => panic!("read as the wrong fact: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_sound_card_run_dry_is_read() {
+        let said: FromThePage = serde_json::from_str(
+            r#"{"session":"x","saw":"sound_ran_dry","at_second":731.2,"holds_ms":250,"since_fed_ms":412}"#,
+        )
+        .expect("read");
+        assert!(matches!(
+            said.seen,
+            Seen::SoundRanDry { holds_ms: 250, since_fed_ms: 412, .. }
+        ));
     }
 
     #[test]
