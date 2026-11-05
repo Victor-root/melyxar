@@ -14,7 +14,8 @@ import type { ActivityFamily, Watched, WatchedDecision } from "../../api";
 import { refusalOf } from "../../asking";
 import { PageHead, Panel, Stat } from "../../components/panel";
 import { useToast } from "../../notifications/toasts";
-import { deviceName } from "../../devices";
+import { DeviceKindIcon } from "../../components/device-lines";
+import { deviceKind, deviceName } from "../../devices";
 import { refusalKey } from "../../i18n";
 import {
   DeviceIcon,
@@ -194,7 +195,7 @@ function WatchedWords({ watched }: { watched: Watched }) {
       <span className="watch-who">
         <PeopleIcon size={14} />
         <span>{watched.user}</span>
-        <DeviceIcon size={14} />
+        <DeviceKindIcon kind={deviceKind(watched.device_name, watched.browser)} size={14} />
         <span title={watched.device_name}>
           {deviceName(watched.device_name, t, watched.browser)}
         </span>

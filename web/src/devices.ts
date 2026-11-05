@@ -101,6 +101,19 @@ export function deviceName(line: string, t: Wording, found: string | null = null
   return browser ?? system ?? t("device.unknown");
 }
 
+/** What kind of thing a device is, for the picture beside its name. */
+export type DeviceKind = "tv" | "phone" | "computer";
+
+/** The kind of device a line and the browser its page found say it is: a
+ *  television, a telephone or a tablet, or a computer. */
+export function deviceKind(line: string, found: string | null = null): DeviceKind {
+  const { system } = deviceSaid(line);
+  if (found === THE_TELEVISION_APPLICATION || system === "TV") {
+    return "tv";
+  }
+  return system === "Android" || system === "iOS" ? "phone" : "computer";
+}
+
 const A_MINUTE_MS = 60_000;
 
 /** When a device or an account was last about: just now, or how long ago. */

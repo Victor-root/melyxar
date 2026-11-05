@@ -1,10 +1,12 @@
 /*
  * The remote: the account's other devices, then one of them and its
- * buttons; and the choice of a device to play something on.
+ * buttons; and the choice of a device to play something on. Wide enough on a
+ * computer for what plays to be shown as the card of the next episode shows
+ * it; the whole screen on a telephone.
  */
 
 .modal.remote {
-  width: min(460px, 100%);
+  width: min(720px, 100%);
 }
 
 .remote-empty {
@@ -27,7 +29,7 @@
   align-items: center;
   gap: var(--gap);
   width: 100%;
-  padding: var(--gap) var(--gap);
+  padding: var(--gap);
   border-radius: var(--radius-control);
   color: var(--text-soft);
   text-align: left;
@@ -64,41 +66,83 @@
   gap: var(--gap-wide);
 }
 
+/* What plays: its still at the left and what it is about beside it, as the
+   card of the next episode has them. */
 .remote-now {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gap-wide);
+}
+
+.remote-now-song {
+  grid-template-columns: 120px minmax(0, 1fr);
   align-items: center;
-  gap: var(--gap);
 }
 
 .remote-picture {
-  flex: 0 0 auto;
-  width: 96px;
+  width: 100%;
   aspect-ratio: 16 / 9;
   border-radius: var(--radius-control);
   object-fit: cover;
   background: var(--surface-deep);
 }
 
+.remote-now-song .remote-picture {
+  aspect-ratio: 1;
+}
+
 .remote-now-words {
   display: flex;
   flex-direction: column;
+  gap: 4px;
   min-width: 0;
 }
 
 .remote-title {
-  overflow: hidden;
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 
 .remote-caption {
-  overflow: hidden;
   color: var(--text-soft);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.remote-overview {
+  display: -webkit-box;
+  margin: 6px 0 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+/* A slider across the whole width, what it stands for at either end. */
+.remote-line {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.remote-line-end {
+  flex: 0 0 auto;
+  min-width: 52px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.remote-line-end:last-child {
+  text-align: right;
+}
+
+.remote-rail {
+  flex: 1 1 auto;
+  width: auto;
 }
 
 .remote-buttons {
@@ -112,8 +156,8 @@
 .remote-button {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-pill);
   color: var(--text-soft);
   transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
@@ -129,9 +173,14 @@
   color: var(--accent-bright);
 }
 
+.remote-button-small {
+  width: 36px;
+  height: 36px;
+}
+
 .remote-button-main {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   background: var(--accent);
   color: var(--accent-contrast);
 }
@@ -142,22 +191,26 @@
   color: var(--accent-contrast);
 }
 
-.remote-loudness {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-tight);
-}
-
-.remote-loudness .slider {
-  flex: 1 1 auto;
+/* The tracks side by side, each named above its choice. */
+.remote-tracks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--gap);
 }
 
 .remote-track {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
   color: var(--text-soft);
+  font-size: 13px;
+}
+
+.remote-track .picker {
+  width: 100%;
+  min-width: 0;
 }
 
 .remote-queue {
@@ -187,4 +240,64 @@
 .remote-queue-song[aria-current="true"] {
   color: var(--accent-bright);
   font-weight: 600;
+}
+
+/* A telephone has little room: the remote takes all of it, what plays on
+   top, the buttons large under it. */
+@media (max-width: 600px) {
+  .modal-over:has(> .modal.remote) {
+    padding: 0;
+  }
+
+  .modal.remote {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  /* What plays at the top, the buttons at the foot under the thumb. */
+  .remote-steering {
+    min-height: 100%;
+  }
+
+  .remote-now {
+    margin-bottom: auto;
+  }
+
+  .remote-now,
+  .remote-now-song {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .remote-now-song .remote-picture {
+    width: min(70vw, 320px);
+    justify-self: center;
+  }
+
+  .remote-title {
+    font-size: 22px;
+  }
+
+  .remote-buttons {
+    gap: 4px;
+  }
+
+  .remote-button {
+    width: 52px;
+    height: 52px;
+  }
+
+  .remote-button-main {
+    width: 72px;
+    height: 72px;
+  }
+
+  .remote-button-small {
+    width: 40px;
+    height: 40px;
+  }
 }
