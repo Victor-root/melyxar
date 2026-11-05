@@ -20,7 +20,7 @@ import { useBranding } from "../../player/logo";
 import { useSettings } from "../../settings";
 import { Cover } from "./bar";
 import { LyricsShiftButton } from "./lyrics-offset";
-import { HeartButton, Rail, StopButton, Transport, Volume, Ways } from "./controls";
+import { HeartButton, ListenOnButton, Rail, StopButton, Transport, Volume, Ways } from "./controls";
 import { LyricsPanel } from "./lyrics-panel";
 import { setNowPlayingCovers } from "./covering";
 import { useLeaving } from "./leaving";
@@ -164,6 +164,7 @@ export function MusicNowPlaying() {
               <HeartButton id={song.id} />
               <Volume music={music} />
               <Ways music={music} />
+              <ListenOnButton music={music} />
               <StopButton music={music} />
             </div>
           </div>

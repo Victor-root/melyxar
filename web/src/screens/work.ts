@@ -33,6 +33,16 @@ import { tellOfUpNext } from "../player/up-next";
  * over somebody else's episode.
  */
 const START_AT_ONCE = "play";
+/** Which copy to play at once, when one is named. */
+const IN_THIS_COPY = "source";
+
+/** Where a work is opened to be played at once, in this copy of it when one
+ *  is named. */
+export function playingAddress(work: string, source: string | null = null): string {
+  const asked = new URLSearchParams({ [START_AT_ONCE]: "" });
+  if (source) asked.set(IN_THIS_COPY, source);
+  return `/work/${work}?${asked.toString()}`;
+}
 
 /**
  * Where a work lives at the site that named it.
@@ -347,11 +357,13 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
     }
     started.current = true;
     cameToPlay.current = location.key !== "default";
-    setPlaying({ source: version.id, fromTheStart: false });
+    const named = work?.versions.find((one) => one.id === address.get(IN_THIS_COPY) && !one.missing);
+    setPlaying({ source: (named ?? version).id, fromTheStart: false });
     const rest = new URLSearchParams(address);
     rest.delete(START_AT_ONCE);
+    rest.delete(IN_THIS_COPY);
     setAddress(rest, { replace: true });
-  }, [address, setAddress, version, location.key]);
+  }, [address, setAddress, version, work, location.key]);
 
   /* A series or a season is never played itself: the address asking to play
      one hands over, in its place, to the episode it carries on with, the one

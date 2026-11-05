@@ -6,8 +6,11 @@
  * moved, and where maintenance stands as it moves. To an administrator it
  * also says the moment a line of the activity journal is written, and sends
  * what is being watched whenever it changes while something on the page
- * shows it. One line for the whole page, whatever it shows: each one held
- * open is one of the few connections a browser opens to a server. Closed
+ * shows it. It also carries what another device of the account asks of
+ * this one, and, while a remote on the page steers them, which of the
+ * account's other devices can be reached and what plays there. One line for
+ * the whole page, whatever it shows: each one held open is one of the few
+ * connections a browser opens to a server. Closed
  * while the page is hidden, unless this device asked for the system's
  * notifications, and opened again when it comes back, which is also when
  * whatever follows it looks again, since nothing was said to it meanwhile.
@@ -17,12 +20,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { useAccount } from "./account";
 import { api } from "./api";
-import type { Maintenance, Watched } from "./api";
+import type { Maintenance, RemoteOrder, SteerableDevice, Watched } from "./api";
 import { askAboutMaintenance, maintenanceHeard } from "./maintenance";
 
 /** What the line says about what is being watched: the list, or that it
  *  could not be had. */
 export type PlayingNews = { watched: Watched[] } | { cut: true };
+
+/** What the line says about the account's other devices: the list, or that
+ *  it could not be had. */
+export type DevicesNews = { devices: SteerableDevice[] } | { cut: true };
 
 /** The words of the line about this account's notifications. */
 const NOTIFICATION_WORDS = [
@@ -57,6 +64,12 @@ interface Line {
   /** Told every time what a library holds changes, and whenever the line
    *  opens. Answers how to stop being told. */
   followLibraries: (listener: () => void) => () => void;
+  /** Told every order another device of the account gives this one, for as
+   *  long as it follows. */
+  followOrders: (listener: (order: RemoteOrder) => void) => () => void;
+  /** Told the account's other devices whenever they change, for as long as
+   *  it follows. */
+  followDevices: (listener: (news: DevicesNews) => void) => () => void;
   /** Keeps the line open while the page is hidden, for as long as it is
    *  asked: the system's own notifications are said from a hidden page.
    *  Answers how to stop asking. */
@@ -69,6 +82,8 @@ const LineContext = createContext<Line>({
   followNotifications: () => () => {},
   followRequests: () => () => {},
   followLibraries: () => () => {},
+  followOrders: () => () => {},
+  followDevices: () => () => {},
   keepWhileHidden: () => () => {},
 });
 
@@ -81,6 +96,12 @@ export function LiveLine({ children }: { children: ReactNode }) {
   const notificationListeners = useRef(new Set<(word: NotificationWord) => void>());
   const requestListeners = useRef(new Set<() => void>());
   const libraryListeners = useRef(new Set<() => void>());
+  const orderListeners = useRef(new Set<(order: RemoteOrder) => void>());
+  const deviceListeners = useRef(new Set<(news: DevicesNews) => void>());
+  /* How many on the page steer the other devices: the line carries them only
+     while at least one does. */
+  const [deviceFollowers, setDeviceFollowers] = useState(0);
+  const wantsDevices = deviceFollowers > 0;
   /* How many on the page follow what is being watched: the line carries it
      only while at least one does. */
   const [playingFollowers, setPlayingFollowers] = useState(0);
@@ -109,8 +130,14 @@ export function LiveLine({ children }: { children: ReactNode }) {
     const toLibraries = () => {
       for (const listener of libraryListeners.current) listener();
     };
+    const toOrders = (order: RemoteOrder) => {
+      for (const listener of orderListeners.current) listener(order);
+    };
+    const toDevices = (news: DevicesNews) => {
+      for (const listener of deviceListeners.current) listener(news);
+    };
     const open = () => {
-      line = api.liveLine(administrator && wantsPlaying);
+      line = api.liveLine(administrator && wantsPlaying, wantsDevices);
       line.addEventListener("open", () => {
         toNotifications({ name: "open" });
         toRequests();
@@ -133,7 +160,17 @@ export function LiveLine({ children }: { children: ReactNode }) {
         toPlaying({ watched: JSON.parse((event as MessageEvent<string>).data) as Watched[] }),
       );
       line.addEventListener("failed", () => toPlaying({ cut: true }));
-      line.onerror = () => toPlaying({ cut: true });
+      line.addEventListener("remote", (event) =>
+        toOrders(JSON.parse((event as MessageEvent<string>).data) as RemoteOrder),
+      );
+      line.addEventListener("devices", (event) =>
+        toDevices({ devices: JSON.parse((event as MessageEvent<string>).data) as SteerableDevice[] }),
+      );
+      line.addEventListener("devices_failed", () => toDevices({ cut: true }));
+      line.onerror = () => {
+        toPlaying({ cut: true });
+        toDevices({ cut: true });
+      };
     };
     const close = () => {
       line?.close();
@@ -154,7 +191,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", followVisibility);
       close();
     };
-  }, [signedIn, administrator, wantsPlaying, keptWhileHidden]);
+  }, [signedIn, administrator, wantsPlaying, wantsDevices, keptWhileHidden]);
 
   const followJournal = useCallback((listener: () => void) => {
     journalListeners.current.add(listener);
@@ -193,14 +230,48 @@ export function LiveLine({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const followOrders = useCallback((listener: (order: RemoteOrder) => void) => {
+    orderListeners.current.add(listener);
+    return () => {
+      orderListeners.current.delete(listener);
+    };
+  }, []);
+
+  const followDevices = useCallback((listener: (news: DevicesNews) => void) => {
+    deviceListeners.current.add(listener);
+    setDeviceFollowers((count) => count + 1);
+    return () => {
+      deviceListeners.current.delete(listener);
+      setDeviceFollowers((count) => count - 1);
+    };
+  }, []);
+
   const keepWhileHidden = useCallback(() => {
     setHiddenKeepers((count) => count + 1);
     return () => setHiddenKeepers((count) => count - 1);
   }, []);
 
   const line = useMemo(
-    () => ({ followJournal, followPlaying, followNotifications, followRequests, followLibraries, keepWhileHidden }),
-    [followJournal, followPlaying, followNotifications, followRequests, followLibraries, keepWhileHidden],
+    () => ({
+      followJournal,
+      followPlaying,
+      followNotifications,
+      followRequests,
+      followLibraries,
+      followOrders,
+      followDevices,
+      keepWhileHidden,
+    }),
+    [
+      followJournal,
+      followPlaying,
+      followNotifications,
+      followRequests,
+      followLibraries,
+      followOrders,
+      followDevices,
+      keepWhileHidden,
+    ],
   );
 
   return <LineContext.Provider value={line}>{children}</LineContext.Provider>;
@@ -255,4 +326,26 @@ export function useNotificationWords(heard: (word: NotificationWord) => void) {
 export function useLineKeptWhileHidden(keep: boolean) {
   const { keepWhileHidden } = useContext(LineContext);
   useEffect(() => (keep ? keepWhileHidden() : undefined), [keep, keepWhileHidden]);
+}
+
+/** Follows the orders another device of the account gives this one, for as
+ *  long as `obey` is given and the caller is on the page. */
+export function useRemoteOrders(obey: ((order: RemoteOrder) => void) | null) {
+  const { followOrders } = useContext(LineContext);
+  const latest = useRef(obey);
+  latest.current = obey;
+  const listening = obey !== null;
+  useEffect(
+    () => (listening ? followOrders((order) => latest.current?.(order)) : undefined),
+    [listening, followOrders],
+  );
+}
+
+/** Follows the account's other devices for as long as the caller is on the
+ *  page. */
+export function useDevicesNews(heard: (news: DevicesNews) => void) {
+  const { followDevices } = useContext(LineContext);
+  const latest = useRef(heard);
+  latest.current = heard;
+  useEffect(() => followDevices((news) => latest.current(news)), [followDevices]);
 }

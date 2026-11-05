@@ -68,7 +68,6 @@ import {
   LeaveIcon,
   RefreshIcon,
   RequestIcon,
-  ScreenCastIcon,
   SearchIcon,
   DashboardIcon,
 } from "../icons";
@@ -79,6 +78,7 @@ import { music } from "../music/api";
 import { useNowPlayingPage } from "../music/player/opening";
 import { musicScopeOf, quickLinesOf } from "../music/search";
 import type { QuickLine } from "../music/search";
+import { RemoteButton } from "../remote/remote";
 
 /** How long the buttons of the bar stay unfolded once nobody has touched it. */
 const FOLDS_AFTER_MS = 3000;
@@ -758,6 +758,9 @@ export function Header({
             if (button === "scan") {
               return scanEntry(false);
             }
+            if (button === "cast") {
+              return <RemoteButton key={button} inTheMenu={false} />;
+            }
             return <Place key={button} place={button} inTheMenu={false} />;
           })}
             </div>
@@ -868,6 +871,8 @@ export function Header({
                 <BellLine key={button} administrator={administrator} />
               ) : button === "scan" ? (
                 scanEntry(true)
+              ) : button === "cast" ? (
+                <RemoteButton key={button} inTheMenu />
               ) : (
                 <Place key={button} place={button} inTheMenu />
               ),
@@ -1050,7 +1055,6 @@ const PLACES = {
   requests: { to: "/requests", name: "requests.title" },
   administration: { to: "/admin", name: "nav.administration" },
   settings: { to: "/settings", name: "nav.settings" },
-  cast: { to: null, name: "nav.cast" },
 } as const;
 
 function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }) {
@@ -1069,41 +1073,16 @@ function PlaceIcon({ place, size }: { place: keyof typeof PLACES; size: number }
       return <DashboardIcon size={size} />;
     case "settings":
       return <GearIcon size={size} />;
-    case "cast":
-      return <ScreenCastIcon size={size} />;
   }
 }
 
-/**
- * A button of the bar that leads somewhere, as an icon of the bar or as a
- * line of the account's menu.
- *
- * Casting has no engine behind it yet: greyed, and when it is coming is what
- * the mouse is told rather than a second run of words.
- */
+/** A button of the bar that leads somewhere, as an icon of the bar or as a
+ *  line of the account's menu. */
 function Place({ place, inTheMenu }: { place: keyof typeof PLACES; inTheMenu: boolean }) {
   const { t } = useSettings();
   const { to, name } = PLACES[place];
   const said = t(name);
   const icon = <PlaceIcon place={place} size={inTheMenu ? 16 : 24} />;
-  if (to === null) {
-    return inTheMenu ? (
-      <span className="header-menu-line header-menu-later" aria-disabled="true" title={t("nav.later")}>
-        {icon}
-        {said}
-      </span>
-    ) : (
-      <button
-        type="button"
-        className="header-icon"
-        disabled
-        title={t("nav.later")}
-        aria-label={`${said} (${t("nav.later")})`}
-      >
-        {icon}
-      </button>
-    );
-  }
   return (
     <NavLink
       to={to}

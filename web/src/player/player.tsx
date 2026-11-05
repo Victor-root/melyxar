@@ -52,6 +52,9 @@ import { rememberSettings, storedSettings } from "./settings";
 import { Spinner } from "./spinner";
 import type { PlayerSettings } from "./settings";
 import { useFilmOnScreen } from "../on-screen";
+import { useRemoteOrders } from "../live";
+import { obeyFilm } from "./steered";
+import { useToldFilm } from "../remote/told";
 
 interface Watched {
   sourceId: string;
@@ -203,6 +206,16 @@ function Film({
     },
     onStopped: stoppedByAnAdministrator,
   });
+  /* Steered from another device of the account. */
+  useRemoteOrders((order) =>
+    obeyFilm(order, {
+      ...playback,
+      leave: onClose,
+      next: onNextEpisode,
+      previous: onPreviousEpisode,
+    }),
+  );
+  useToldFilm(playback.loudness, playback.muted);
   /* Each step of the card in the journal, with where the film stood. */
   const tellUpNext = (moment: UpNextMoment) =>
     tellOfUpNext(sourceId, moment, { at_second: playback.at, playing: playback.playing, ended });

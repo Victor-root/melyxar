@@ -5,6 +5,8 @@
  * fails at compilation rather than at three in the morning on a screen.
  */
 
+import type { Song } from "./music/api";
+
 /** An account, as the interface is told about it. */
 export interface Account {
   id: string;
@@ -2144,6 +2146,72 @@ export interface Watched {
   decision: WatchedDecision | null;
 }
 
+/** One other device of this account that a remote can steer. */
+export interface SteerableDevice {
+  device: string;
+  /** What the browser said it was when it signed in. */
+  name: string;
+  /** The browser its page found, when it could tell better than the line. */
+  browser: string | null;
+  playing: SteeredPlaying | null;
+  /** How loud it plays and the queue of its music, as it said; nothing
+   *  when it did not. */
+  volume: number | null;
+  muted: boolean | null;
+  queue: ToldQueue | null;
+}
+
+/** What a device says of itself for the remotes steering it. */
+export interface Told {
+  volume: number | null;
+  muted: boolean | null;
+  queue: ToldQueue | null;
+}
+
+/** The queue of a device's music. */
+export interface ToldQueue {
+  songs: Song[];
+  /** The song playing, as a place in `songs`. */
+  at: number;
+  shuffle: boolean;
+  repeat: string;
+}
+
+/** What plays on a device a remote steers. */
+export interface SteeredPlaying {
+  work_id: string;
+  title: string;
+  kind: string;
+  series: string | null;
+  season: number | null;
+  episode: number | null;
+  artist: string | null;
+  album: string | null;
+  picture: string | null;
+  /** Where it had got to when the server sent this. */
+  position_seconds: number;
+  duration_seconds: number | null;
+  paused: boolean;
+  /** A film's tracks and those it plays; empty for a song. */
+  audio: PlaybackTrack[];
+  subtitles: PlaybackTrack[];
+  chosen_audio_id: string | null;
+  chosen_subtitle_id: string | null;
+}
+
+/** What one device asks another to do. */
+export type RemoteOrder =
+  | { do: "toggle" | "pause" | "resume" | "stop" | "next" | "previous" | "shuffle" | "repeat" }
+  | { do: "seek"; seconds: number }
+  | { do: "step"; seconds: number }
+  | { do: "volume"; level: number }
+  | { do: "muted"; muted: boolean }
+  | { do: "audio"; track: string }
+  | { do: "subtitle"; track: string | null }
+  | { do: "jump"; index: number }
+  | { do: "play_work"; work: string; source: string | null }
+  | { do: "play_songs"; songs: Song[]; at: number; shuffle: boolean; from_seconds: number | null };
+
 export interface WatchedDecision {
   /** direct_play, remux, transcode_audio or full_transcode. */
   method: string;
@@ -2575,8 +2643,20 @@ export const api = {
      notifications and, for an administrator, "activity" whenever a line of
      the journal is written and, when asked for, "playing" with what is being
      watched whenever it changes, and "failed" when it could not be read. */
-  liveLine: (playing: boolean) =>
-    new EventSource(`/api/v1/system/live${playing ? "?playing=true" : ""}`),
+  liveLine: (playing: boolean, devices: boolean) => {
+    const asked = new URLSearchParams();
+    if (playing) asked.set("playing", "true");
+    if (devices) asked.set("devices", "true");
+    const query = asked.toString();
+    return new EventSource(`/api/v1/system/live${query ? `?${query}` : ""}`);
+  },
+  /** This account's other devices that can be steered from here. */
+  steerableDevices: (signal?: AbortSignal) => get<SteerableDevice[]>("/api/v1/remote/devices", signal),
+  /** Says how loud this device plays and the queue of its music. */
+  tellTheRemotes: (told: Told) => put<{ kept: boolean }>("/api/v1/remote/told", told),
+  /** Asks one of this account's devices to do something. */
+  steer: (device: string, order: RemoteOrder) =>
+    post<{ sent: boolean }>(`/api/v1/remote/devices/${device}`, order),
   /* The player is told on its next word, and the server closes the
      conversion itself if it never obeys. */
   stopPlaying: (device: string) =>

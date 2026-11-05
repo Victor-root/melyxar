@@ -20,6 +20,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.double
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -93,7 +94,12 @@ class MusicBridge(
         try {
             when (name) {
                 "play" -> {
-                    listening.play(songs(0), number(1).int, asked.getOrNull(2)?.jsonPrimitive?.booleanOrNull == true)
+                    listening.play(
+                        songs(0),
+                        number(1).int,
+                        asked.getOrNull(2)?.jsonPrimitive?.booleanOrNull == true,
+                        asked.getOrNull(3)?.jsonPrimitive?.doubleOrNull ?: 0.0,
+                    )
                     onPlay()
                 }
                 "toggle" -> {

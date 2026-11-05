@@ -72,6 +72,7 @@ import { isCatalogued, isNamed } from "../works";
 import { FolderView, PhotoView } from "./own";
 import { lengthOfAPlay } from "../watching";
 import { useTabPage } from "../tab-page";
+import { PlayOnButton } from "../remote/remote";
 
 /**
  * How wide the picture at the head of the page is drawn, in plain lengths the
@@ -410,6 +411,12 @@ function TopOfTheWork({
                 <button className="button button-large" onClick={() => screen.play(version.id, true)}>
                   {t("player.from_the_start")}
                 </button>
+              )}
+              {version && !version.missing && (
+                <PlayOnButton
+                  className="button button-large"
+                  order={() => ({ do: "play_work", work: work.id, source: version.id })}
+                />
               )}
             </>
           )}
