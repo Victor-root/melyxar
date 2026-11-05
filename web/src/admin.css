@@ -1137,6 +1137,8 @@
 .recent-activity-lines {
   flex: 1;
   min-height: 0;
+  /* Room between the times at the end of each line and the scroll bar. */
+  padding-right: var(--gap);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
