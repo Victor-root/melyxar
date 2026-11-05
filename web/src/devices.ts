@@ -84,12 +84,17 @@ export async function foundBrowser(): Promise<string | null> {
   return brandOf(asked.userAgentData?.brands ?? []);
 }
 
+/* What Melyxar's television application calls itself as its browser. It
+   runs on Android TV and nothing else, whatever the line it signed in with
+   says: let in from a telephone, that line is only the model's name. */
+const THE_TELEVISION_APPLICATION = "Melyxar";
+
 /** The name a list shows for a device: the browser its page found when it
  *  found one, otherwise the one its line names. */
 export function deviceName(line: string, t: Wording, found: string | null = null): string {
   const said = deviceSaid(line);
   const browser = found ?? said.browser;
-  const system = said.system;
+  const system = found === THE_TELEVISION_APPLICATION ? "Android TV" : said.system;
   if (browser && system) {
     return t("device.on", { browser, system });
   }
