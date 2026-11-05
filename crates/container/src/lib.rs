@@ -154,7 +154,7 @@ mod tests {
             ("plain.mov", &["-an"]),
             (
                 "plain.webm",
-                &["-an", "-c:v", "libvpx-vp9", "-cpu-used", "8"],
+                &["-an", "-c:v", "libsvtav1", "-preset", "12"],
             ),
             // The index moved to the front of the file, which is what a film
             // meant to be played over a network carries.
