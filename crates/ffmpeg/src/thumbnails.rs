@@ -100,8 +100,11 @@ pub fn arguments(
         chain.push(',');
         chain.push_str(crate::command::TONE_MAP_FILTER);
     }
+    // Named rather than left to be agreed between the filters and the encoder:
+    // with no picture to agree over, the encoder refuses to open and a reading
+    // that found nothing comes back as a fault instead of an answer.
     chain.push_str(&format!(
-        ",split=2[grid][tally];[grid]tile={}x{}[sheets];[tally]scale=1:1[one]",
+        ",format=yuvj420p,split=2[grid][tally];[grid]tile={}x{}[sheets];[tally]scale=1:1[one]",
         layout.columns, layout.rows
     ));
     arguments.push(OsString::from("-filter_complex"));
