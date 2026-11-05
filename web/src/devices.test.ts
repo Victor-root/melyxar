@@ -20,7 +20,12 @@ describe("deviceName", () => {
   it("says the television application is on Android TV, whatever its line says", () => {
     expect(deviceName("SHIELD Android TV", t, "Melyxar")).toBe("Melyxar on Android TV");
     expect(deviceName("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV", t, "Melyxar")).toBe("Melyxar on Android TV");
-    expect(deviceName(ANDROID_CHROME, t)).toBe("Chrome on Android");
+    expect(deviceName(ANDROID_CHROME, t)).toBe("Chrome on Android web");
+  });
+
+  it("names the telephone application as Melyxar, whatever its page found", () => {
+    expect(deviceName(`${ANDROID_CHROME} MelyxarApp/0.4.0`, t, "Android WebView")).toBe("Melyxar on Android");
+    expect(deviceKind(`${ANDROID_CHROME} MelyxarApp/0.4.0`, "Android WebView")).toBe("phone");
   });
 });
 

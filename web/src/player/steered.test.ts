@@ -9,6 +9,7 @@ function film(playing: boolean): SteeredFilm {
     goTo: vi.fn(),
     stepBy: vi.fn(),
     leave: vi.fn(),
+    loudness: 0.5,
     setLoudness: vi.fn(),
     setMuted: vi.fn(),
     audioId: "a1",

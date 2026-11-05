@@ -726,15 +726,47 @@
   }
 }
 
-/* Its picture in a round, as the television shows the song it plays. */
+/* Its picture in a round, as the television shows the song it plays, and
+   while it plays a ring going out from it, now and then, to catch the eye:
+   drawn on a layer of its own, which moves without drawing anything else. */
 .header-elsewhere {
-  overflow: hidden;
+  position: relative;
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--text);
 }
 
 .header-elsewhere img {
   width: 100%;
   height: 100%;
+  border-radius: 50%;
   object-fit: cover;
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.header-elsewhere[data-playing]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent-bright);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: header-elsewhere-calls 2.4s var(--ease) infinite;
+}
+
+@keyframes header-elsewhere-calls {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  70%,
+  to {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-elsewhere[data-playing]::after {
+    animation: none;
+    opacity: 0;
+  }
 }

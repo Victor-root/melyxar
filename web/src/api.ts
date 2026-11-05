@@ -2205,6 +2205,7 @@ export type RemoteOrder =
   | { do: "seek"; seconds: number }
   | { do: "step"; seconds: number }
   | { do: "volume"; level: number }
+  | { do: "volume_step"; steps: number }
   | { do: "muted"; muted: boolean }
   | { do: "audio"; track: string }
   | { do: "subtitle"; track: string | null }

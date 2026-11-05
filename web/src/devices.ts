@@ -84,17 +84,30 @@ export async function foundBrowser(): Promise<string | null> {
   return brandOf(asked.userAgentData?.brands ?? []);
 }
 
-/* What Melyxar's television application calls itself as its browser. It
-   runs on Android TV and nothing else, whatever the line it signed in with
-   says: let in from a telephone, that line is only the model's name. */
+/* What Melyxar's own applications say of themselves: the telephone's page
+   in the line it signs in with, the television as the browser it names. The
+   television runs on Android TV and nothing else, whatever its line says: let
+   in from a telephone, that line is only the model's name. */
+const THE_PHONE_APPLICATION = /\bMelyxarApp\//;
 const THE_TELEVISION_APPLICATION = "Melyxar";
+
+/** What a device is, as a list names it: Melyxar's applications as such,
+ *  and a browser on Android told from the application there. */
+function whatItIs(line: string, found: string | null): DeviceSaid {
+  if (THE_PHONE_APPLICATION.test(line)) {
+    return { browser: "Melyxar", system: "Android" };
+  }
+  if (found === THE_TELEVISION_APPLICATION) {
+    return { browser: "Melyxar", system: "Android TV" };
+  }
+  const said = deviceSaid(line);
+  return { browser: found ?? said.browser, system: said.system === "Android" ? "Android web" : said.system };
+}
 
 /** The name a list shows for a device: the browser its page found when it
  *  found one, otherwise the one its line names. */
 export function deviceName(line: string, t: Wording, found: string | null = null): string {
-  const said = deviceSaid(line);
-  const browser = found ?? said.browser;
-  const system = found === THE_TELEVISION_APPLICATION ? "Android TV" : said.system;
+  const { browser, system } = whatItIs(line, found);
   if (browser && system) {
     return t("device.on", { browser, system });
   }
@@ -107,11 +120,11 @@ export type DeviceKind = "tv" | "phone" | "computer";
 /** The kind of device a line and the browser its page found say it is: a
  *  television, a telephone or a tablet, or a computer. */
 export function deviceKind(line: string, found: string | null = null): DeviceKind {
-  const { system } = deviceSaid(line);
-  if (found === THE_TELEVISION_APPLICATION || system === "TV") {
+  const { system } = whatItIs(line, found);
+  if (system === "Android TV" || system === "TV") {
     return "tv";
   }
-  return system === "Android" || system === "iOS" ? "phone" : "computer";
+  return system === "Android" || system === "Android web" || system === "iOS" ? "phone" : "computer";
 }
 
 const A_MINUTE_MS = 60_000;

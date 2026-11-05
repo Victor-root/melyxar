@@ -50,6 +50,7 @@ export function PlayingElsewhere() {
       <button
         type="button"
         className="header-icon header-elsewhere"
+        data-playing={playing.paused ? undefined : ""}
         title={`${said} · ${deviceName(device.name, t, device.browser)}`}
         aria-label={said}
         onClick={() => openTheRemote(device.device)}

@@ -236,6 +236,19 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   }, [heardAt, seekHeard, loudHeard]);
 
   const volume = loudening ?? device.volume;
+  /* A television or a telephone is turned up and down a step at a time, as
+     its own keys do it; a computer by dragging alone. */
+  const byKeys = deviceKind(device.name, device.browser) !== "computer";
+  const stepKey = (steps: number) => (
+    <button
+      type="button"
+      className="remote-button remote-button-small remote-volume-key"
+      aria-label={t(steps < 0 ? "remote.volume_down" : "remote.volume_up")}
+      onClick={() => send({ do: "volume_step", steps })}
+    >
+      {steps < 0 ? "\u2212" : "+"}
+    </button>
+  );
   const loudness =
     volume === null ? null : (
       <Line
@@ -245,17 +258,25 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
         step={0.01}
         onChange={loudTo}
         start={
-          <button
-            type="button"
-            className="remote-button remote-button-small"
-            aria-label={t(device.muted ? "player.unmute" : "player.mute")}
-            aria-pressed={device.muted === true}
-            onClick={() => send({ do: "muted", muted: device.muted !== true })}
-          >
-            <VolumeIcon size={20} off={device.muted === true} />
-          </button>
+          <>
+            <button
+              type="button"
+              className="remote-button remote-button-small"
+              aria-label={t(device.muted ? "player.unmute" : "player.mute")}
+              aria-pressed={device.muted === true}
+              onClick={() => send({ do: "muted", muted: device.muted !== true })}
+            >
+              <VolumeIcon size={20} off={device.muted === true} />
+            </button>
+            {byKeys && stepKey(-1)}
+          </>
         }
-        end={`${Math.round(volume * 100)} %`}
+        end={
+          <>
+            {byKeys && stepKey(1)}
+            <span className="remote-volume-said">{`${Math.round(volume * 100)} %`}</span>
+          </>
+        }
       />
     );
 
