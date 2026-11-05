@@ -25,7 +25,7 @@
 //! test: press play, copy, paste. What a crash leaves behind is the system
 //! journal's business, and it still gets everything.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{Mutex, OnceLock};
 
 use crate::time::{now, Timestamp};
@@ -285,7 +285,8 @@ pub struct Wanted {
     /// Keep only these tags. Empty keeps every tag, which is what somebody who
     /// has not ticked anything means.
     pub tags: Vec<String>,
-    /// Keep only lines holding this text, compared without case.
+    /// Keep only lines holding this text, compared without case. Text that
+    /// names an account keeps the lines of that account's sessions too.
     pub holding: Option<String>,
     /// At most this many, counted from the newest.
     pub most: usize,
@@ -296,15 +297,31 @@ pub fn lines(wanted: &Wanted) -> Vec<Line> {
     let lines = take();
     let holding = wanted.holding.as_ref().map(|text| text.to_lowercase());
 
-    let matching: Vec<&Line> = lines
+    let tagged: Vec<&Line> = lines
         .iter()
         .filter(|line| wanted.tags.is_empty() || wanted.tags.iter().any(|tag| tag == line.tag))
-        .filter(|line| {
-            holding
-                .as_ref()
-                .is_none_or(|text| line.message.to_lowercase().contains(text))
-        })
         .collect();
+    let matching: Vec<&Line> = match &holding {
+        None => tagged,
+        Some(text) => {
+            // Most lines of a film name only its session, so an account's name
+            // alone would find none of them: the sessions its own lines name
+            // are followed.
+            let named = format!("account={text}");
+            let followed: BTreeSet<&str> = tagged
+                .iter()
+                .filter(|line| line.message.to_lowercase().contains(&named))
+                .flat_map(|line| sessions_named(&line.message))
+                .collect();
+            tagged
+                .into_iter()
+                .filter(|line| {
+                    line.message.to_lowercase().contains(text)
+                        || sessions_named(&line.message).any(|session| followed.contains(session))
+                })
+                .collect()
+        }
+    };
 
     // Taken from the end: what somebody wants is what just happened, not the
     // first lines of a server that has been up for a week.
@@ -320,6 +337,13 @@ pub fn lines(wanted: &Wanted) -> Vec<Line> {
         .rev()
         .cloned()
         .collect()
+}
+
+/// The sessions a line names.
+fn sessions_named(message: &str) -> impl Iterator<Item = &str> {
+    message
+        .split_whitespace()
+        .filter_map(|word| word.strip_prefix("session="))
 }
 
 /// Every tag that has actually been written, with how many lines carry it.
@@ -514,6 +538,50 @@ mod tests {
         });
         assert_eq!(picked.len(), 1);
         assert_eq!(picked[0].message, "Picture size is invalid");
+    }
+
+    #[test]
+    fn an_account_named_keeps_the_lines_of_its_sessions_and_of_nobody_else() {
+        let _alone = alone();
+        remember(
+            "debug",
+            "melyxar_app::playback",
+            "a session was told where it begins account=Ada session=s1 beginning_at_second=0".into(),
+        );
+        remember(
+            "debug",
+            "melyxar_streaming::session",
+            "a segment was handed over session=s1 index=4".into(),
+        );
+        remember(
+            "debug",
+            "melyxar_streaming::session",
+            "a segment was handed over session=s2 index=9".into(),
+        );
+        remember(
+            "debug",
+            "melyxar_app::playback",
+            "a session was told where it begins account=Grace session=s2 beginning_at_second=0".into(),
+        );
+
+        let picked = lines(&Wanted {
+            holding: Some("ada".into()),
+            ..Wanted::default()
+        });
+        let said: Vec<&str> = picked.iter().map(|line| line.message.as_str()).collect();
+        assert_eq!(
+            said,
+            [
+                "a session was told where it begins account=Ada session=s1 beginning_at_second=0",
+                "a segment was handed over session=s1 index=4",
+            ]
+        );
+
+        let picked = lines(&Wanted {
+            holding: Some("index=9".into()),
+            ..Wanted::default()
+        });
+        assert_eq!(picked.len(), 1, "text that names no account follows no session");
     }
 
     #[test]

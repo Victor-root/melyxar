@@ -390,6 +390,7 @@ pub async fn plan(
     });
     let wide_gamut_shown = has_wide_gamut.then(|| wide_gamut_shown(&profile));
     tracing::info!(
+        account = %who.name,
         file = %file_name_of(&source.path),
         // What the page names a film handed over as it is by, in what it says
         // of it afterwards.
@@ -638,17 +639,7 @@ pub async fn open_session(
     // to be watched, rather than the beginning of a film nobody is at.
     recipe.where_the_viewer_starts = starting_at.or(plan.resume_from).unwrap_or(Millis::ZERO);
 
-    // Both sides named, because they disagreeing is the whole failure mode:
-    // the server producing one part of the film while the player asks for
-    // another costs a restart at best, and the two are set from one number on
-    // the page. A journal that shows only the answer cannot say which of them
-    // was wrong.
-    tracing::debug!(
-        said_by_the_player = starting_at.map(Millis::as_seconds_f64),
-        remembered = plan.resume_from.map(Millis::as_seconds_f64),
-        beginning_at_second = recipe.where_the_viewer_starts.as_seconds_f64(),
-        "a session was told where it begins"
-    );
+    let beginning_at = recipe.where_the_viewer_starts;
 
     // Only for a picture carried over untouched. One the server rebuilds gets
     // a key frame on every boundary, put there by the server itself, so the
@@ -671,6 +662,20 @@ pub async fn open_session(
     let session = sessions
         .open(who.id, device, recipe, expensive, limits)
         .await?;
+    // Both sides of where it begins named, because they disagreeing is the
+    // whole failure mode: the server producing one part of the film while the
+    // player asks for another costs a restart at best. And whose session it
+    // is, said once: every other line of it names only the session, and the
+    // journal's filter follows a session named on a line it kept, so this is
+    // what makes an account's films show under its name.
+    tracing::debug!(
+        account = %who.name,
+        session = %session.id,
+        said_by_the_player = starting_at.map(Millis::as_seconds_f64),
+        remembered = plan.resume_from.map(Millis::as_seconds_f64),
+        beginning_at_second = beginning_at.as_seconds_f64(),
+        "a session was told where it begins"
+    );
     say_how_the_film_was_cut(&session);
 
     // The upkeep normally pulled these out of the film long before anybody
