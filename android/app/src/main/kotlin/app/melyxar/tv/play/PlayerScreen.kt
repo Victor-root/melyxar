@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -62,6 +63,7 @@ import app.melyxar.tv.look.goesOut
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import app.melyxar.tv.inside.LocalMarks
+import app.melyxar.tv.inside.LocalSteered
 import app.melyxar.tv.inside.Play
 import app.melyxar.tv.inside.ready
 import app.melyxar.tv.inside.rememberFocusMemory
@@ -187,6 +189,26 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     // Heard on the player playing now: one is made anew when the picture
     // starts or stops being lit.
     val player = playback.player
+
+    // Steered from another device of the account: the film answers the
+    // orders, and how loud it plays is said for the remotes while it is on
+    // the screen, a player made anew keeping it.
+    val steered = LocalSteered.current
+    val leaving by rememberUpdatedState(onDone)
+    val nextNow by rememberUpdatedState(next)
+    DisposableEffect(steered) {
+        steered.filmLoudness = player.volume
+        onDispose {
+            steered.filmLoudness = null
+            steered.filmMuted = false
+        }
+    }
+    LaunchedEffect(steered, player) { soundTo(player, steered) }
+    LaunchedEffect(steered, playback) {
+        steered.orders.collect { order ->
+            obeyFilm(order, playback, steered, leaving, nextNow?.let { episode -> { playNext(episode) } })
+        }
+    }
     DisposableEffect(player) {
         val heard = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
