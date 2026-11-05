@@ -24,6 +24,8 @@ import { WhenLibrariesMove } from "./library-news";
 import { RequestsProvider } from "./requests/store";
 import { RequestTitlePage } from "./requests/title";
 import { NotesProvider } from "./notifications/store";
+import { SteeredHere } from "./remote/here";
+import { TheRemote } from "./remote/remote";
 import { LiveLine } from "./live";
 import { MaintenanceBand, MaintenanceScreen } from "./components/maintenance";
 import { useFollowedMaintenance, useMaintenance } from "./maintenance";
@@ -251,6 +253,8 @@ function BehindTheDoor() {
         <FrameRateMeter />
         <Tooltips />
         <WhenLibrariesMove />
+        <SteeredHere />
+        <TheRemote />
         {/* The player of music stands outside every page, so that going
             from one to the next never stops a song. */}
         <MusicMarksProvider>

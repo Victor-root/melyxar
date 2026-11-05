@@ -232,12 +232,13 @@ class Listening(
         describe()
     }
 
-    /** Plays [songs] from the one at [first], shuffled or not. */
-    fun play(songs: List<Song>, first: Int = 0, shuffle: Boolean = false) {
+    /** Plays [songs] from the one at [first], shuffled or not, [from]
+     *  seconds into it. */
+    fun play(songs: List<Song>, first: Int = 0, shuffle: Boolean = false, from: Double = 0.0) {
         if (songs.isEmpty()) {
             return
         }
-        start(playing(songs, first, shuffle, queue.repeat))
+        start(playing(songs, first, shuffle, queue.repeat), from)
     }
 
     /** Plays a whole library, in the order of its albums or shuffled. */
@@ -392,7 +393,7 @@ class Listening(
         }
     }
 
-    private fun start(next: Queue) {
+    private fun start(next: Queue, from: Double = 0.0) {
         val song = next.current ?: return
         // Whatever the other deck holds goes, a song still fading out of it
         // included.
@@ -400,7 +401,7 @@ class Listening(
         engine.clear(1 - deck)
         prepared = null
         queue = next
-        startSong(song, from = 0.0)
+        startSong(song, from)
     }
 
     private fun startSong(song: Song, from: Double) {

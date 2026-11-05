@@ -13,6 +13,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
+import { useLineKeptWhileHidden, useRemoteOrders } from "../../live";
 import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { showListening } from "../../tab";
@@ -47,6 +48,9 @@ import {
   without,
 } from "./queue";
 import type { Queue } from "./queue";
+import { useToldMusic } from "../../remote/told";
+import { obeyMusic } from "./remote";
+import type { SteeredMusic } from "./remote";
 import { useTellTheServer } from "./reporting";
 import { MediaSessionPosition, useMediaSession } from "./session";
 import { useTabs } from "./tabs";
@@ -61,8 +65,9 @@ export const BAR_LEAVES_MS = 180;
  *  next: a list or a tile reading only this is not drawn again when a song
  *  starts or pauses. */
 export interface MusicControls {
-  /** Plays these songs from the one at `index`, replacing the queue. */
-  play: (songs: Song[], index: number, shuffle?: boolean) => void;
+  /** Plays these songs from the one at `index`, replacing the queue, from
+   *  `from` seconds into it. */
+  play: (songs: Song[], index: number, shuffle?: boolean, from?: number) => void;
   toggle: () => void;
   /** Stops for good: the queue goes, and the bar with it. */
   stop: () => void;
@@ -874,10 +879,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       setTurn((was) => was + 1);
     };
     return {
-      play: (songs: Song[], index: number, shuffle = false) => {
+      play: (songs: Song[], index: number, shuffle = false, from = 0) => {
         if (songs.length === 0) {
           return;
         }
+        resumeFrom.current = from;
         change(playingFrom(songs, index, shuffle, queueNow.current.repeat), "picked");
       },
       toggle: () => {
@@ -1024,6 +1030,29 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => now.set(song, playing), [song, playing]);
 
   useMediaSession(music);
+
+  /* Steered from another device of the account: the page that answers for
+     the music does what it is asked, and keeps the line open while it plays
+     so that it can still be steered with the page hidden. */
+  const filmOnScreenNow = useRef(filmOnScreen);
+  filmOnScreenNow.current = filmOnScreen;
+  const steered = useMemo<SteeredMusic>(
+    () => ({
+      ...controls,
+      play: (songs, index, shuffle, from) => controls.play(songs, index, shuffle, from),
+      pause: () => run("pause", [], pause),
+      resume: () => run("resume", [], resume),
+      at: () => time.now.position,
+    }),
+    [controls, run, pause, resume],
+  );
+  useRemoteOrders((order) => {
+    const answers =
+      (appMusic !== null || holdsNow.current) && !filmOnScreenNow.current && queueNow.current.songs.length > 0;
+    obeyMusic(order, steered, answers);
+  });
+  useLineKeptWhileHidden((appMusic !== null || tabs.holds) && playing);
+  useToldMusic(queue, loudness.volume, loudness.muted, appMusic !== null || tabs.holds);
 
   return (
     <ControlsContext.Provider value={controls}>

@@ -1,0 +1,190 @@
+/*
+ * The remote: the account's other devices, then one of them and its
+ * buttons; and the choice of a device to play something on.
+ */
+
+.modal.remote {
+  width: min(460px, 100%);
+}
+
+.remote-empty {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.remote-devices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-tight);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remote-device {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: 100%;
+  padding: var(--gap) var(--gap);
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+  text-align: left;
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.remote-device:hover,
+.remote-device:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.remote-device-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remote-device-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.remote-device-playing {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-steering {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-wide);
+}
+
+.remote-now {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+}
+
+.remote-picture {
+  flex: 0 0 auto;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-control);
+  object-fit: cover;
+  background: var(--surface-deep);
+}
+
+.remote-now-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.remote-title {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-caption {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remote-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-tight);
+}
+
+.remote-button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  color: var(--text-soft);
+  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+}
+
+.remote-button:hover,
+.remote-button:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.remote-button[aria-pressed="true"] {
+  color: var(--accent-bright);
+}
+
+.remote-button-main {
+  width: 56px;
+  height: 56px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.remote-button-main:hover,
+.remote-button-main:focus-visible {
+  background: var(--accent-bright);
+  color: var(--accent-contrast);
+}
+
+.remote-loudness {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-tight);
+}
+
+.remote-loudness .slider {
+  flex: 1 1 auto;
+}
+
+.remote-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  color: var(--text-soft);
+}
+
+.remote-queue {
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.remote-queue-song {
+  width: 100%;
+  padding: var(--gap-tight) var(--gap);
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.remote-queue-song:hover,
+.remote-queue-song:focus-visible {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.remote-queue-song[aria-current="true"] {
+  color: var(--accent-bright);
+  font-weight: 600;
+}

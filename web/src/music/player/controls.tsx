@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { asClock } from "../../clock";
-import { HeartIcon } from "../../icons";
+import { HeartIcon, ScreenCastIcon } from "../../icons";
 import {
   NextEpisodeIcon,
   PauseIcon,
@@ -19,11 +19,13 @@ import {
 } from "../../player/icons";
 import { previewPlace } from "../../player/seek";
 import { ICON, SoundControl } from "../../player/sound";
+import { PlayOn } from "../../remote/remote";
+import { toldQueue } from "../../remote/told";
 import { useSettings } from "../../settings";
 import { useLiking } from "../marks";
 import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
 import { useNowPlayingPage } from "./opening";
-import { useMusicTime } from "./player";
+import { currentMusicClock, useMusicTime } from "./player";
 import type { Music } from "./player";
 import { canStepBack, canStepOn } from "./queue";
 
@@ -234,6 +236,36 @@ export function Ways({ music }: { music: Music }) {
       >
         <RepeatIcon one={repeat === "one"} size={ICON} />
       </button>
+    </>
+  );
+}
+
+/** Sends the queue to another device of the account, at the same song and
+ *  the same moment, and stops it here once it was sent. */
+export function ListenOnButton({ music }: { music: Music }) {
+  const { t } = useSettings();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="player-button" onClick={() => setOpen(true)} aria-label={t("remote.play_on")}>
+        <ScreenCastIcon size={ICON} />
+      </button>
+      {open && (
+        <PlayOn
+          order={() => {
+            const queue = toldQueue(music.queue);
+            return {
+              do: "play_songs",
+              songs: queue?.songs ?? [],
+              at: queue?.at ?? 0,
+              shuffle: false,
+              from_seconds: currentMusicClock().position,
+            };
+          }}
+          after={music.stop}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </>
   );
 }
