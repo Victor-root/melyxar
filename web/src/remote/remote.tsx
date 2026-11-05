@@ -14,6 +14,7 @@ import { api } from "../api";
 import type { PlaybackTrack, RemoteOrder, SteerableDevice, SteeredPlaying } from "../api";
 import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
+import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
@@ -396,10 +397,14 @@ export function Remote({ onClose }: { onClose: () => void }) {
   const { devices, heardAt, cut } = useSteerableDevices();
   const [chosen, setChosen] = useState<string | null>(null);
   const device = devices?.find((one) => one.device === chosen) ?? null;
+  /* A device chosen is a step of its own in the history, put in at the
+     press: added later, on the way back from it, a phone's back key would
+     step over it and leave the application. */
+  const leaveTheDevice = useBackClosesIt(() => setChosen(null), chosen !== null);
   return (
     <Modal
       title={device ? deviceName(device.name, t, device.browser) : t("nav.cast")}
-      onBack={device ? () => setChosen(null) : undefined}
+      onBack={device ? () => leaveTheDevice(() => setChosen(null)) : undefined}
       onClose={onClose}
       className="remote"
     >
@@ -497,9 +502,9 @@ export function PlayOnButton({
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={className} title={t("remote.play_on")} onClick={() => setOpen(true)}>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
         <ScreenCastIcon size={22} />
-        {t("remote.play_on_short")}
+        {t("remote.play_on")}
       </button>
       {open && <PlayOn order={order} after={after} onClose={() => setOpen(false)} />}
     </>
