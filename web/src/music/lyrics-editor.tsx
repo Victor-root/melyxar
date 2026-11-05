@@ -745,7 +745,7 @@ export function LyricsEditor({
               <button type="button" className="button button-quiet" onClick={() => setAsking(null)}>
                 {t("lyrics_editor.leave_stay")}
               </button>
-              <button type="button" className="button button-accent" onClick={onClose}>
+              <button type="button" className="button button-trouble" onClick={onClose}>
                 {t("lyrics_editor.leave_go")}
               </button>
             </>
@@ -764,7 +764,7 @@ export function LyricsEditor({
               <button type="button" className="button button-quiet" onClick={() => setAsking(null)}>
                 {t("lyrics_editor.leave_stay")}
               </button>
-              <button type="button" className="button button-accent" onClick={() => void revert()}>
+              <button type="button" className="button button-trouble" onClick={() => void revert()}>
                 {t("lyrics_editor.revert_go")}
               </button>
             </>

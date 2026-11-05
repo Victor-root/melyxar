@@ -360,7 +360,7 @@ export function ListHead({
           onClose={() => setDeleting(false)}
           footer={
             <button
-              className="button button-accent"
+              className="button button-trouble"
               onClick={() => void attempt(onDelete).then(() => setDeleting(false))}
             >
               {t(`${words}.delete`)}

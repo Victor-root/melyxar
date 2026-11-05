@@ -134,7 +134,11 @@ export function LyricsVersions({
               <button type="button" className="button button-quiet" onClick={() => setAsking(null)}>
                 {t(asking.doing === "delete" ? "lyrics_versions.keep" : "lyrics_editor.leave_stay")}
               </button>
-              <button type="button" className="button button-accent" onClick={() => void act(asking.version, asking.doing)}>
+              <button
+                type="button"
+                className={`button ${asking.doing === "delete" ? "button-trouble" : "button-accent"}`}
+                onClick={() => void act(asking.version, asking.doing)}
+              >
                 {t(asking.doing === "delete" ? "lyrics_versions.delete_go" : "lyrics_versions.put_back")}
               </button>
             </>

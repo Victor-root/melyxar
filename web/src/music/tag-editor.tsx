@@ -364,7 +364,7 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
               <button type="button" className="button button-quiet" onClick={() => setLeaving(false)}>
                 {t("music.tag.leave_stay")}
               </button>
-              <button type="button" className="button button-accent" onClick={onClose}>
+              <button type="button" className="button button-trouble" onClick={onClose}>
                 {t("music.tag.leave_go")}
               </button>
             </>

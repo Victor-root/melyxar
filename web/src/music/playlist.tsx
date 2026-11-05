@@ -256,7 +256,7 @@ export function MusicPlaylistPage() {
           onClose={() => setDeleting(false)}
           footer={
             <button
-              className="button button-accent"
+              className="button button-trouble"
               onClick={() =>
                 void attempt(async () => {
                   await music.deletePlaylist(id);

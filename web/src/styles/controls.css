@@ -106,6 +106,23 @@ input[type="radio"]:disabled {
   outline-color: var(--accent-contrast);
 }
 
+/* What cannot be undone: in the colour of a failure, never the accent each
+   account picks, which says "press here" rather than "think twice". */
+.button-trouble {
+  background: var(--trouble);
+  border-color: var(--trouble);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 16px var(--trouble-wash);
+}
+
+.button-trouble:hover:not(:disabled) {
+  background: var(--trouble);
+}
+
+.button-trouble:focus-visible {
+  outline-color: var(--accent-contrast);
+}
+
 .button-large {
   gap: 10px;
   padding: 12px 26px;

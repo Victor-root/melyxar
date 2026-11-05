@@ -112,6 +112,8 @@
   --news-wash: color-mix(in srgb, var(--news) 14%, transparent);
 
   --radius-panel: 14px;
+  /* A window over the page, as round as the pieces of the bar are. */
+  --radius-window: 24px;
   --radius-card: 10px;
   --radius-control: 8px;
   --radius-pill: 999px;

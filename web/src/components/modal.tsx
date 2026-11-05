@@ -86,12 +86,12 @@ export function Modal({
         <header className="modal-head">
           {onBack && (
             <button className="modal-step" onClick={onBack} aria-label={t("modal.back")}>
-              <BackIcon size={22} />
+              <BackIcon size={18} />
             </button>
           )}
           <h2 className="modal-title">{title}</h2>
           <button className="modal-step" onClick={onClose} aria-label={t("modal.close")}>
-            <CloseIcon size={22} />
+            <CloseIcon size={18} />
           </button>
         </header>
 

@@ -43,7 +43,7 @@ export function ForgetIdentityDialog({
       title={t("forget.title", { title })}
       onClose={onClose}
       footer={
-        <button className="button button-accent" disabled={told.busy} onClick={() => told.tell()}>
+        <button className="button button-trouble" disabled={told.busy} onClick={() => told.tell()}>
           {t("forget.confirm")}
         </button>
       }
