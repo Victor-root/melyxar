@@ -16,6 +16,14 @@ const MAC_SAFARI =
 const t = (key: string, values?: Record<string, string | number>) =>
   key === "device.on" ? `${values?.browser} on ${values?.system}` : key;
 
+describe("deviceName", () => {
+  it("says the television application is on Android TV, whatever its line says", () => {
+    expect(deviceName("SHIELD Android TV", t, "Melyxar")).toBe("Melyxar on Android TV");
+    expect(deviceName("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV", t, "Melyxar")).toBe("Melyxar on Android TV");
+    expect(deviceName(ANDROID_CHROME, t)).toBe("Chrome on Android");
+  });
+});
+
 describe("deviceSaid", () => {
   it("names the browser built on top rather than the one underneath", () => {
     expect(deviceSaid(WINDOWS_CHROME)).toEqual({ browser: "Chrome", system: "Windows" });
