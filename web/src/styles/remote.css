@@ -143,13 +143,6 @@
   justify-content: flex-end;
 }
 
-/* The keys of a television's volume: one step down, one step up. */
-.remote-volume-key {
-  font-size: 22px;
-  font-weight: 600;
-  line-height: 1;
-}
-
 .remote-volume-said {
   min-width: 44px;
   text-align: right;

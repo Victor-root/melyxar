@@ -11,7 +11,6 @@
 
 import type { RemoteOrder } from "../../api";
 import type { Song } from "../api";
-import { steppedVolume } from "../../remote/steps";
 
 /** What the remote can ask of the music. */
 export interface SteeredMusic {
@@ -24,8 +23,6 @@ export interface SteeredMusic {
   previous: () => void;
   seek: (seconds: number) => void;
   setVolume: (volume: number) => void;
-  /** How loud it plays, from nothing to everything. */
-  volume: () => number;
   setMuted: (muted: boolean) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
@@ -71,9 +68,6 @@ export function obeyMusic(order: RemoteOrder, music: SteeredMusic, answers: bool
       return true;
     case "volume":
       music.setVolume(order.level);
-      return true;
-    case "volume_step":
-      music.setVolume(steppedVolume(music.volume(), order.steps));
       return true;
     case "muted":
       music.setMuted(order.muted);

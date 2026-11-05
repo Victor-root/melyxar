@@ -6,7 +6,6 @@
  */
 
 import type { RemoteOrder } from "../api";
-import { steppedVolume } from "../remote/steps";
 
 /** What the remote can ask of the film on the screen. */
 export interface SteeredFilm {
@@ -18,7 +17,6 @@ export interface SteeredFilm {
   /** Absent for a film with no episode after or before it. */
   next?: () => void;
   previous?: () => void;
-  loudness: number;
   setLoudness: (volume: number) => void;
   setMuted: (off: boolean) => void;
   audioId: string | null;
@@ -55,9 +53,6 @@ export function obeyFilm(order: RemoteOrder, film: SteeredFilm): boolean {
       return film.previous !== undefined;
     case "volume":
       film.setLoudness(order.level);
-      return true;
-    case "volume_step":
-      film.setLoudness(steppedVolume(film.loudness, order.steps));
       return true;
     case "muted":
       film.setMuted(order.muted);

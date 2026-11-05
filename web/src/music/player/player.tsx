@@ -1043,7 +1043,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       pause: () => run("pause", [], pause),
       resume: () => run("resume", [], resume),
       at: () => time.now.position,
-      volume: () => stateNow.current.loudness.volume,
     }),
     [controls, run, pause, resume],
   );
