@@ -80,6 +80,14 @@ function onALeftEntry(): boolean {
   return typeof landed === "string" && !live.some((entry) => entry.id === landed);
 }
 
+/** Whether the history stands on the entry or on one put in after it and
+ *  still there: the step back shut only what was open over it, a list over
+ *  a window's step. */
+function standsOnOrAbove(entry: Entry): boolean {
+  const landed: unknown = window.history.state?.[MARK];
+  return live.slice(live.indexOf(entry)).some((it) => it.id === landed);
+}
+
 /* Gone back to such an entry, the step back goes on past it. */
 if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
@@ -179,7 +187,7 @@ export function useBackClosesIt(
     waiting.push(entry);
     inTurn(arm);
     const moved = () => {
-      if (!entry.live || entry.popping || isTheLatest(entry)) {
+      if (!entry.live || entry.popping || standsOnOrAbove(entry)) {
         return;
       }
       leftOut(entry);
