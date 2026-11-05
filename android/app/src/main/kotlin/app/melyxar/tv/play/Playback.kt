@@ -47,7 +47,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.io.IOException
@@ -227,6 +226,15 @@ class Playback(
 
     /** How long the film takes to start, for the debug build's log. */
     private val clock = StartClock()
+
+    private val journal = PlayerJournal(
+        api,
+        scope,
+        source,
+        session = { stream?.id },
+        shown = { player.videoDecoderCounters?.renderedOutputBufferCount ?: 0 },
+        playing = { player.playWhenReady },
+    )
     private var keeping: Job? = null
     private var hopping: Job? = null
     private var holding: Job? = null
@@ -281,6 +289,7 @@ class Playback(
             player.addAnalyticsListener(EventLogger(SOUND_LOG))
             player.addAnalyticsListener(clock)
         }
+        player.addAnalyticsListener(journal)
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long) {
                 videoDecoder = decoderName
@@ -473,21 +482,12 @@ class Playback(
     /** Writes into the journal the rung taken, and why, as the web player does. */
     private fun tellOfTheRung(why: String, from: Int?, to: Int) {
         val taken = ADAPTIVE_RUNGS[to]
-        val fact = buildJsonObject {
-            put("source", source)
-            put("saw", "quality_adapted")
+        journal.tell("quality_adapted") {
             put("why", why)
             measuredSpeed?.let { put("measured_kbps", (it.believed / 1000).roundToLong()) }
             from?.let { ADAPTIVE_RUNGS[it].bitrate }?.let { put("from_kbps", it / 1000) }
             taken.bitrate?.let { put("to_kbps", it / 1000) }
             taken.height?.let { put("to_height", it) }
-        }
-        scope.launch {
-            try {
-                api.tellTheJournal(fact)
-            } catch (_: IOException) {
-                // Only the journal goes without it.
-            }
         }
     }
 
@@ -808,6 +808,7 @@ class Playback(
     /** Takes the film to [seconds], never before its start nor past its end. */
     fun goTo(seconds: Double) {
         val to = seconds.coerceAtLeast(0.0)
+        journal.moving("a_step")
         player.seekTo((length?.let { to.coerceAtMost(it) } ?: to).times(1000).toLong())
     }
 
@@ -817,6 +818,7 @@ class Playback(
 
     fun play() {
         if (player.playbackState == Player.STATE_ENDED) {
+            journal.moving("a_step")
             player.seekTo(0)
         }
         player.play()
