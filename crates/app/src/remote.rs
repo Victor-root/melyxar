@@ -21,8 +21,9 @@ use crate::{AppError, AppState, Result};
 /// one nobody reads; the remote pressed again is the answer to a lost order.
 const WAITING_ORDERS: usize = 16;
 
-/// The most steps of volume one press goes.
-const MOST_STEPS_AT_ONCE: u32 = 10;
+/// The most steps a device's volume is said to go by: a system's are a few
+/// dozen at most.
+const MOST_VOLUME_STEPS: u32 = 1_000;
 
 /// The most songs one order hands over: a queue, not a library.
 const SONGS_HANDED_OVER: usize = 5_000;
@@ -43,9 +44,6 @@ pub enum Order {
     Previous,
     /// From nothing to everything.
     Volume { level: f64 },
-    /// Louder or quieter by so many steps, as a remote control's keys go:
-    /// a television's own steps, a page's of its own.
-    VolumeStep { steps: i32 },
     Muted { muted: bool },
     Audio { track: String },
     /// None takes the words away.
@@ -83,9 +81,6 @@ impl Order {
             Self::Seek { seconds } if !moment(*seconds) => Some("a moment is a number of seconds from the start"),
             Self::Step { seconds } if !seconds.is_finite() => Some("a step is a number of seconds"),
             Self::Volume { level } if !(0.0..=1.0).contains(level) => Some("a volume is between nothing and everything"),
-            Self::VolumeStep { steps } if *steps == 0 || steps.unsigned_abs() > MOST_STEPS_AT_ONCE => {
-                Some("a volume is stepped by a few steps up or down")
-            }
             Self::PlaySongs { songs, at, from_seconds, .. } => {
                 if songs.is_empty() || songs.len() > SONGS_HANDED_OVER {
                     Some("songs to play are at least one and at most a queue")
@@ -107,6 +102,11 @@ impl Order {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Told {
     pub volume: Option<f64>,
+    /// How many steps its volume goes by, when it goes by steps, as a
+    /// television's does under its keys: a remote then moves it a step at
+    /// a time.
+    #[serde(default)]
+    pub volume_steps: Option<u32>,
     pub muted: Option<bool>,
     pub queue: Option<ToldQueue>,
 }
@@ -125,6 +125,9 @@ impl Told {
     fn fault(&self) -> Option<&'static str> {
         if self.volume.is_some_and(|volume| !(0.0..=1.0).contains(&volume)) {
             return Some("a volume is between nothing and everything");
+        }
+        if self.volume_steps.is_some_and(|steps| steps == 0 || steps > MOST_VOLUME_STEPS) {
+            return Some("a volume goes by a few steps");
         }
         match &self.queue {
             Some(queue) if queue.songs.len() > SONGS_HANDED_OVER => Some("a queue is at most so many songs"),
@@ -457,7 +460,7 @@ mod tests {
     fn what_a_device_says_of_itself_is_kept_while_it_can_be_reached_and_said_when_it_moves() {
         let reachable = Reachable::default();
         let (user, device) = (UserId::new(), DeviceId::new());
-        let told = Told { volume: Some(0.4), muted: Some(false), queue: None };
+        let told = Told { volume: Some(0.4), volume_steps: Some(15), muted: Some(false), queue: None };
         assert!(!reachable.told(device, told.clone()), "a device with no line open is no one's");
 
         let (number, _orders) = reachable.line_opened(&viewer(user, device));
@@ -477,6 +480,8 @@ mod tests {
     #[test]
     fn what_a_device_says_of_itself_is_refused_when_it_makes_no_sense() {
         assert!(Told { volume: Some(2.0), ..Told::default() }.fault().is_some());
+        assert!(Told { volume_steps: Some(0), ..Told::default() }.fault().is_some());
+        assert_eq!(Told { volume: Some(0.4), volume_steps: Some(15), ..Told::default() }.fault(), None);
         let queue = |at| ToldQueue { songs: vec![serde_json::json!({})], at, shuffle: false, repeat: "off".into() };
         assert!(Told { queue: Some(queue(1)), ..Told::default() }.fault().is_some());
         assert_eq!(Told { queue: Some(queue(0)), ..Told::default() }.fault(), None);
@@ -492,9 +497,6 @@ mod tests {
             .fault()
             .is_some());
         assert_eq!(Order::Step { seconds: -10.0 }.fault(), None);
-        assert!(Order::VolumeStep { steps: 0 }.fault().is_some());
-        assert!(Order::VolumeStep { steps: 40 }.fault().is_some());
-        assert_eq!(Order::VolumeStep { steps: -1 }.fault(), None);
         assert_eq!(a_film().fault(), None);
     }
 
@@ -502,8 +504,6 @@ mod tests {
     fn an_order_is_written_the_way_pages_read_it() {
         let order: Order = serde_json::from_str(r#"{"do":"subtitle","track":null}"#).expect("read");
         assert_eq!(order, Order::Subtitle { track: None });
-        let order: Order = serde_json::from_str(r#"{"do":"volume_step","steps":1}"#).expect("read");
-        assert_eq!(order, Order::VolumeStep { steps: 1 });
         assert_eq!(
             serde_json::to_value(Order::Seek { seconds: 12.5 }).expect("written"),
             serde_json::json!({"do": "seek", "seconds": 12.5})

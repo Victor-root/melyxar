@@ -29,6 +29,9 @@ import { whichEpisode } from "../readable";
 import { useSettings } from "../settings";
 import { positionNow, useEverySecond, useSteerableDevices } from "./devices";
 
+/** How many steps the media volume of an Android telephone goes by. */
+const ANDROID_STEPS = 15;
+
 /** How far the step buttons go, back and on. */
 const STEP_BACK_SECONDS = 10;
 const STEP_ON_SECONDS = 30;
@@ -193,7 +196,7 @@ function Line({
           onChange={(event) => onChange(Number(event.target.value))}
         />
       </span>
-      <span className="remote-line-end">{end}</span>
+      {end !== null && <span className="remote-line-end">{end}</span>}
     </div>
   );
 }
@@ -236,47 +239,31 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   }, [heardAt, seekHeard, loudHeard]);
 
   const volume = loudening ?? device.volume;
-  /* A television or a telephone is turned up and down a step at a time, as
-     its own keys do it; a computer by dragging alone. */
-  const byKeys = deviceKind(device.name, device.browser) !== "computer";
-  const stepKey = (steps: number) => (
-    <button
-      type="button"
-      className="remote-button remote-button-small remote-volume-key"
-      aria-label={t(steps < 0 ? "remote.volume_down" : "remote.volume_up")}
-      onClick={() => send({ do: "volume_step", steps })}
-    >
-      {steps < 0 ? "\u2212" : "+"}
-    </button>
-  );
+  /* An Android television or telephone goes by steps, as its own bar of
+     volume does: the television says how many, a telephone's media go by
+     fifteen. A computer goes by any amount, said as a share. */
+  const volumeSteps =
+    device.volume_steps ?? (deviceKind(device.name, device.browser) !== "computer" ? ANDROID_STEPS : null);
   const loudness =
     volume === null ? null : (
       <Line
         label={t("player.loudness")}
-        value={volume}
-        max={1}
-        step={0.01}
-        onChange={loudTo}
+        value={volumeSteps === null ? volume : Math.round(volume * volumeSteps)}
+        max={volumeSteps ?? 1}
+        step={volumeSteps === null ? 0.01 : 1}
+        onChange={(value) => loudTo(volumeSteps === null ? value : value / volumeSteps)}
         start={
-          <>
-            <button
-              type="button"
-              className="remote-button remote-button-small"
-              aria-label={t(device.muted ? "player.unmute" : "player.mute")}
-              aria-pressed={device.muted === true}
-              onClick={() => send({ do: "muted", muted: device.muted !== true })}
-            >
-              <VolumeIcon size={20} off={device.muted === true} />
-            </button>
-            {byKeys && stepKey(-1)}
-          </>
+          <button
+            type="button"
+            className="remote-button remote-button-small"
+            aria-label={t(device.muted ? "player.unmute" : "player.mute")}
+            aria-pressed={device.muted === true}
+            onClick={() => send({ do: "muted", muted: device.muted !== true })}
+          >
+            <VolumeIcon size={20} off={device.muted === true} />
+          </button>
         }
-        end={
-          <>
-            {byKeys && stepKey(1)}
-            <span className="remote-volume-said">{`${Math.round(volume * 100)} %`}</span>
-          </>
-        }
+        end={volumeSteps === null ? <span className="remote-volume-said">{`${Math.round(volume * 100)} %`}</span> : null}
       />
     );
 

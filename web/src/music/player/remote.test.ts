@@ -14,7 +14,6 @@ function music(at = 0): SteeredMusic {
     previous: vi.fn(),
     seek: vi.fn(),
     setVolume: vi.fn(),
-    volume: vi.fn(() => 0.5),
     setMuted: vi.fn(),
     toggleShuffle: vi.fn(),
     cycleRepeat: vi.fn(),

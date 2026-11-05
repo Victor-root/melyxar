@@ -2157,6 +2157,8 @@ export interface SteerableDevice {
   /** How loud it plays and the queue of its music, as it said; nothing
    *  when it did not. */
   volume: number | null;
+  /** How many steps its volume goes by, when it goes by steps. */
+  volume_steps: number | null;
   muted: boolean | null;
   queue: ToldQueue | null;
 }
@@ -2164,6 +2166,7 @@ export interface SteerableDevice {
 /** What a device says of itself for the remotes steering it. */
 export interface Told {
   volume: number | null;
+  volume_steps: number | null;
   muted: boolean | null;
   queue: ToldQueue | null;
 }
@@ -2205,7 +2208,6 @@ export type RemoteOrder =
   | { do: "seek"; seconds: number }
   | { do: "step"; seconds: number }
   | { do: "volume"; level: number }
-  | { do: "volume_step"; steps: number }
   | { do: "muted"; muted: boolean }
   | { do: "audio"; track: string }
   | { do: "subtitle"; track: string | null }

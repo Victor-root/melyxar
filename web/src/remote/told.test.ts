@@ -9,10 +9,11 @@ describe("what this device says of itself", () => {
     const queue = { songs: [song("a")], at: 0, shuffle: false, repeat: "off" };
     expect(gathered({ music: { queue, volume: 0.2, muted: false }, film: { volume: 0.9, muted: true } })).toEqual({
       volume: 0.9,
+      volume_steps: null,
       muted: true,
       queue,
     });
-    expect(gathered({ music: null, film: null })).toEqual({ volume: null, muted: null, queue: null });
+    expect(gathered({ music: null, film: null })).toEqual({ volume: null, volume_steps: null, muted: null, queue: null });
   });
 
   it("says the queue in the order it plays, where it stands in that order", () => {

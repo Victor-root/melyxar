@@ -34,6 +34,8 @@ export function gathered({ music, film }: Said): Told {
   const loudness = film ?? music;
   return {
     volume: loudness?.volume ?? null,
+    // A page's volume goes by no steps of its own.
+    volume_steps: null,
     muted: loudness?.muted ?? null,
     queue: music?.queue ?? null,
   };
