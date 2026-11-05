@@ -78,6 +78,7 @@ import { music } from "../music/api";
 import { useNowPlayingPage } from "../music/player/opening";
 import { musicScopeOf, quickLinesOf } from "../music/search";
 import type { QuickLine } from "../music/search";
+import { PlayingElsewhere } from "../remote/elsewhere";
 import { RemoteButton } from "../remote/remote";
 
 /** How long the buttons of the bar stay unfolded once nobody has touched it. */
@@ -666,6 +667,9 @@ export function Header({
               <span className="glass-rim" />
             </span>
           </span>
+          {/* What plays on another device of the account, as the television
+              shows its song; not yet on a phone, which has no room for it. */}
+          {!onAPhone && <PlayingElsewhere />}
           <div className="header-buttons">
             <div className="header-buttons-track">
           {/* Everything anybody can press, one icon each, in the order this

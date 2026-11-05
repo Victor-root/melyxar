@@ -1,8 +1,5 @@
 package app.melyxar.tv.inside
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import app.melyxar.music.Listening
@@ -14,6 +11,8 @@ import app.melyxar.server.Song
 import app.melyxar.server.pageJson
 import app.melyxar.server.serverJson
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.debounce
@@ -62,19 +61,15 @@ data class Order(
 
 /**
  * This television as a device the account's remotes steer: the orders its
- * live line brings, handed to what plays, and how loud it plays and the
- * queue of its music, said to the server for the remotes to show.
+ * live line brings, handed to what plays, the volume set as the remote
+ * control sets it, and how loud it plays and the queue of its music, said to
+ * the server for the remotes to show.
  */
-class Steered(private val api: Api, private val listening: Listening) {
+class Steered(private val api: Api, private val listening: Listening, private val volume: TvVolume) {
     private val heard = MutableSharedFlow<Order>(extraBufferCapacity = WAITING_ORDERS)
 
     /** Every order, as it comes. */
     val orders: SharedFlow<Order> = heard
-
-    /** How loud the film on the screen plays, and whether it is silent,
-     *  while there is one: said in place of the music's. */
-    var filmLoudness by mutableStateOf<Float?>(null)
-    var filmMuted by mutableStateOf(false)
 
     /** Moved on whenever the line opens, the server forgetting what a device
      *  said once it can no longer be reached. */
@@ -84,7 +79,7 @@ class Steered(private val api: Api, private val listening: Listening) {
     fun heard(word: LiveWord) {
         when (word.name) {
             "remote" -> try {
-                heard.tryEmit(serverJson.decodeFromString(Order.serializer(), word.data))
+                obey(serverJson.decodeFromString(Order.serializer(), word.data))
             } catch (_: SerializationException) {
                 // An order of a newer server, left undone rather than taken
                 // for something else.
@@ -92,6 +87,16 @@ class Steered(private val api: Api, private val listening: Listening) {
                 // The same, in a shape this cannot read at all.
             }
             "open" -> opened.tryEmit(Unit)
+        }
+    }
+
+    /** The volume is the television's whatever plays; anything else is
+     *  handed to what plays. */
+    private fun obey(order: Order) {
+        when (order.act) {
+            "volume" -> order.level?.let { volume.set(it.toFloat()) }
+            "muted" -> order.muted?.let(volume::mute)
+            else -> heard.tryEmit(order)
         }
     }
 
@@ -107,8 +112,6 @@ class Steered(private val api: Api, private val listening: Listening) {
             "previous" -> listening.previous()
             "seek" -> order.seconds?.let(listening::seek)
             "step" -> order.seconds?.let { listening.seek((listening.position + it).coerceAtLeast(0.0)) }
-            "volume" -> order.level?.let { listening.changeVolume(it.toFloat()) }
-            "muted" -> order.muted?.let(listening::mute)
             "shuffle" -> listening.shuffle()
             "repeat" -> listening.repeat()
             "jump" -> order.index?.let(listening::jumpTo)
@@ -131,7 +134,8 @@ class Steered(private val api: Api, private val listening: Listening) {
      *  gathered a moment after it last moved, and again whenever the line
      *  opens, for as long as it is followed. */
     @OptIn(FlowPreview::class)
-    suspend fun follow() {
+    suspend fun follow() = coroutineScope {
+        launch { volume.follow() }
         merge(snapshotFlow { told() }, toldOnOpening())
             .debounce(GATHERED_FOR_MS)
             .collect { told ->
@@ -152,11 +156,11 @@ class Steered(private val api: Api, private val listening: Listening) {
     }
 
     private fun told(): JsonObject {
-        val film = filmLoudness
         val queue = listening.queue
+        val fixed = volume.fixed
         return buildJsonObject {
-            put("volume", film ?: listening.volume)
-            put("muted", if (film != null) filmMuted else listening.muted)
+            put("volume", if (fixed) null else volume.level)
+            put("muted", if (fixed) null else volume.muted)
             if (queue.order.isEmpty()) {
                 put("queue", null as String?)
             } else {

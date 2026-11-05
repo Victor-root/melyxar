@@ -27,9 +27,9 @@ import { askAboutMaintenance, maintenanceHeard } from "./maintenance";
  *  could not be had. */
 export type PlayingNews = { watched: Watched[] } | { cut: true };
 
-/** What the line says about the account's other devices: the list, or that
- *  it could not be had. */
-export type DevicesNews = { devices: SteerableDevice[] } | { cut: true };
+/** What the line says about the account's other devices: the list and when
+ *  it was told, or that it could not be had. */
+export type DevicesNews = { devices: SteerableDevice[]; heardAt: number } | { cut: true };
 
 /** The words of the line about this account's notifications. */
 const NOTIFICATION_WORDS = [
@@ -98,6 +98,10 @@ export function LiveLine({ children }: { children: ReactNode }) {
   const libraryListeners = useRef(new Set<() => void>());
   const orderListeners = useRef(new Set<(order: RemoteOrder) => void>());
   const deviceListeners = useRef(new Set<(news: DevicesNews) => void>());
+  /* The devices as last told, handed at once to whatever starts following
+     them while others already do: the line says them again only when they
+     change. */
+  const lastDevices = useRef<DevicesNews | null>(null);
   /* How many on the page steer the other devices: the line carries them only
      while at least one does. */
   const [deviceFollowers, setDeviceFollowers] = useState(0);
@@ -134,6 +138,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
       for (const listener of orderListeners.current) listener(order);
     };
     const toDevices = (news: DevicesNews) => {
+      lastDevices.current = news;
       for (const listener of deviceListeners.current) listener(news);
     };
     const open = () => {
@@ -164,7 +169,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
         toOrders(JSON.parse((event as MessageEvent<string>).data) as RemoteOrder),
       );
       line.addEventListener("devices", (event) =>
-        toDevices({ devices: JSON.parse((event as MessageEvent<string>).data) as SteerableDevice[] }),
+        toDevices({ devices: JSON.parse((event as MessageEvent<string>).data) as SteerableDevice[], heardAt: Date.now() }),
       );
       line.addEventListener("devices_failed", () => toDevices({ cut: true }));
       line.onerror = () => {
@@ -239,9 +244,15 @@ export function LiveLine({ children }: { children: ReactNode }) {
 
   const followDevices = useCallback((listener: (news: DevicesNews) => void) => {
     deviceListeners.current.add(listener);
+    if (lastDevices.current !== null) {
+      listener(lastDevices.current);
+    }
     setDeviceFollowers((count) => count + 1);
     return () => {
       deviceListeners.current.delete(listener);
+      if (deviceListeners.current.size === 0) {
+        lastDevices.current = null;
+      }
       setDeviceFollowers((count) => count - 1);
     };
   }, []);

@@ -392,10 +392,10 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
 }
 
 /** The remote itself: the devices, then one of them. */
-export function Remote({ onClose }: { onClose: () => void }) {
+export function Remote({ startOn, onClose }: { startOn: string | null; onClose: () => void }) {
   const { t } = useSettings();
   const { devices, heardAt, cut } = useSteerableDevices();
-  const [chosen, setChosen] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string | null>(startOn);
   const device = devices?.find((one) => one.device === chosen) ?? null;
   /* A device chosen is a step of its own in the history, put in at the
      press: added later, on the way back from it, a phone's back key would
@@ -450,24 +450,38 @@ export function PlayOn({ order, onClose, after }: { order: () => RemoteOrder; on
 }
 
 /* Whether the remote is open, held apart from the button that opened it: a
-   line of the account's menu goes with the menu, and the remote must not. */
-const opened = { now: false, listeners: new Set<() => void>() };
+   line of the account's menu goes with the menu, and the remote must not.
+   The device it opened on, when it opened on one. */
+const opened: { now: { on: string | null } | null; listeners: Set<() => void> } = {
+  now: null,
+  listeners: new Set(),
+};
 
-function setOpened(now: boolean) {
+function setOpened(now: { on: string | null } | null) {
   opened.now = now;
   for (const listener of opened.listeners) listener();
 }
 
-/** The remote, while it is open. Held once, by the page. */
-export function TheRemote() {
-  const open = useSyncExternalStore(
+/** Opens the remote, on this device when one is given. */
+export function openTheRemote(on: string | null = null) {
+  setOpened({ on });
+}
+
+/** Whether the remote is open. */
+export function useRemoteOpen(): boolean {
+  return useSyncExternalStore(
     (listener) => {
       opened.listeners.add(listener);
       return () => opened.listeners.delete(listener);
     },
-    () => opened.now,
+    () => opened.now !== null,
   );
-  return open ? <Remote onClose={() => setOpened(false)} /> : null;
+}
+
+/** The remote, while it is open. Held once, by the page. */
+export function TheRemote() {
+  const open = useRemoteOpen();
+  return open ? <Remote startOn={opened.now?.on ?? null} onClose={() => setOpened(null)} /> : null;
 }
 
 /** The remote's button, on the bar or as a line of the account's menu. */
@@ -480,7 +494,7 @@ export function RemoteButton({ inTheMenu }: { inTheMenu: boolean }) {
       className={inTheMenu ? "header-menu-line" : "header-icon"}
       title={inTheMenu ? undefined : said}
       aria-label={inTheMenu ? undefined : said}
-      onClick={() => setOpened(true)}
+      onClick={() => openTheRemote()}
     >
       <ScreenCastIcon size={inTheMenu ? 16 : 24} />
       {inTheMenu && said}

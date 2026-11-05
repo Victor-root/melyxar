@@ -302,7 +302,7 @@ fun Inside(
         LocalNotes provides remember(api) { Notes(api, scope, onSignedOut) },
         LocalRequests provides remember(api) { Requests(api, scope, onSignedOut) },
         LocalSongLevels provides remember(api) { SongLevels() },
-        LocalSteered provides remember(api) { Steered(api, listening) },
+        LocalSteered provides remember(api) { Steered(api, listening, TvVolume(context)) },
     ) {
         FollowSongLevels(LocalSongLevels.current)
         // The preferences carry the languages the libraries hold; the

@@ -613,6 +613,7 @@
    read as three decisions about what belongs with what: there is one, which
    is that this end of the bar is the end you press. */
 .header-side {
+  position: relative;
   padding-right: 4px;
 }
 
@@ -692,4 +693,48 @@
   flex-direction: column;
   padding: 6px;
   border-radius: var(--radius-card);
+}
+
+/* What plays on another device of the account (remote/elsewhere.tsx): the
+   end of the bar filled with the accent as far as it has played, running on
+   by itself on its own layer, behind the buttons, inside the piece. */
+.header-elsewhere-fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.header-elsewhere-fill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: scaleX(var(--from));
+  transform-origin: left;
+}
+
+.header-elsewhere-fill[data-running]::before {
+  animation: header-elsewhere-runs var(--left) linear forwards;
+}
+
+@keyframes header-elsewhere-runs {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Its picture in a round, as the television shows the song it plays. */
+.header-elsewhere {
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.header-elsewhere img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }

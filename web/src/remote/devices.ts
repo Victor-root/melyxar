@@ -24,7 +24,7 @@ export function useSteerableDevices(): Devices {
     setHeld((was) =>
       "cut" in news
         ? { ...was, cut: true }
-        : { devices: news.devices, heardAt: Date.now(), cut: false },
+        : { devices: news.devices, heardAt: news.heardAt, cut: false },
     ),
   );
   return held;
