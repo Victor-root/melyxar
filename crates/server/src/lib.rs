@@ -33,6 +33,7 @@ pub mod jobs;
 pub mod libraries;
 pub mod linking;
 pub mod live;
+pub mod remote;
 pub mod maintenance;
 pub mod music;
 pub mod music_playlists;

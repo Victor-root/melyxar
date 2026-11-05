@@ -48,6 +48,7 @@ pub mod playback;
 pub mod playlists;
 pub mod ratings;
 pub mod reach;
+pub mod remote;
 pub mod requests;
 pub mod preferences;
 pub mod scan;
