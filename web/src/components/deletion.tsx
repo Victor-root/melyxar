@@ -77,7 +77,7 @@ export function DeleteDialog({
       onClose={onClose}
       footer={
         <button
-          className="button button-accent"
+          className="button button-trouble"
           disabled={answer === null || told.busy}
           onClick={() => told.tell()}
         >
