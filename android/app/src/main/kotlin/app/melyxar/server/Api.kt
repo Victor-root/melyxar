@@ -58,6 +58,14 @@ val serverJson = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
+/** Songs written as the pages hold them: every field there, an empty one as
+ *  null. */
+@OptIn(ExperimentalSerializationApi::class)
+val pageJson = Json(serverJson) {
+    explicitNulls = true
+    encodeDefaults = true
+}
+
 /** The cookie the server keeps a session in. */
 internal const val SESSION_COOKIE = "melyxar_session"
 

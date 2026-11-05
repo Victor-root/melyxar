@@ -9,9 +9,9 @@ import app.melyxar.music.Listening
 import app.melyxar.music.PhoneMusic
 import app.melyxar.music.Queue
 import app.melyxar.server.Song
+import app.melyxar.server.pageJson
 import app.melyxar.server.serverJson
 import kotlinx.coroutines.launch
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -137,7 +137,7 @@ class MusicBridge(
         val songs = queue.songs.takeUnless { it === songsSent }
         songsSent = queue.songs
         val said = buildJsonObject {
-            songs?.let { put("songs", PAGE.encodeToJsonElement(ListSerializer(Song.serializer()), it)) }
+            songs?.let { put("songs", pageJson.encodeToJsonElement(ListSerializer(Song.serializer()), it)) }
             put("order", JsonArray(queue.order.map { JsonPrimitive(it) }))
             put("at", queue.at)
             put("shuffle", queue.shuffle)
@@ -179,13 +179,5 @@ class MusicBridge(
 
     private companion object {
         val READ: Json = serverJson
-
-        /** The songs written as the page reads them, every field there, an
-         *  empty one as null. */
-        @OptIn(ExperimentalSerializationApi::class)
-        val PAGE = Json(serverJson) {
-            explicitNulls = true
-            encodeDefaults = true
-        }
     }
 }

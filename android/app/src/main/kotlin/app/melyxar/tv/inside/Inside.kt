@@ -302,6 +302,7 @@ fun Inside(
         LocalNotes provides remember(api) { Notes(api, scope, onSignedOut) },
         LocalRequests provides remember(api) { Requests(api, scope, onSignedOut) },
         LocalSongLevels provides remember(api) { SongLevels() },
+        LocalSteered provides remember(api) { Steered(api, listening) },
     ) {
         FollowSongLevels(LocalSongLevels.current)
         // The preferences carry the languages the libraries hold; the
@@ -317,6 +318,8 @@ fun Inside(
         val notes = LocalNotes.current
         val requests = LocalRequests.current
         val maintenance = remember(api) { Maintenance(api, scope) }
+        val steered = LocalSteered.current
+        LaunchedEffect(steered) { steered.follow() }
         FollowTheLiveLine(
             onLibrariesMoved = marks::rowsHaveMoved,
             onLooksMoved = { looksMoved += 1 },
@@ -324,6 +327,7 @@ fun Inside(
                 notes.heard(word)
                 requests.heard(word)
                 maintenance.heard(word)
+                steered.heard(word)
             },
         )
         LaunchedEffect(api, comebacks) { maintenance.ask() }
@@ -397,6 +401,23 @@ fun Inside(
             }
         }
         val back: () -> Unit = remember { { if (trail.size > 1) backTo(trail.size - 1) } }
+        // Steered from another device of the account: a film started here
+        // takes the place of the one on the screen, if any; the music does
+        // what it is asked unless a film is on the screen, which answers the
+        // orders itself.
+        LaunchedEffect(steered) {
+            steered.orders.collect { order ->
+                val filmOnScreen = trail.lastOrNull() is Place.Playing
+                val work = order.work
+                when {
+                    order.act == "play_work" && work != null -> {
+                        val play = Play(work, order.source, null)
+                        if (filmOnScreen) trail[trail.lastIndex] = Place.Playing(play) else go(Place.Playing(play))
+                    }
+                    order.act == "play_songs" || !filmOnScreen -> steered.obeyMusic(order)
+                }
+            }
+        }
         // Turned away, the film and the music stop and the screens are put
         // down; once it ends, the television is back at home and every
         // screen reads again what it shows.
