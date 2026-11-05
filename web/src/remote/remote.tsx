@@ -308,46 +308,48 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
           end={`-${asClock(Math.max(0, length - position))}`}
         />
       )}
-      <div className="remote-buttons">
-        {steps && (
-          <button type="button" className="remote-button" aria-label={t("music.previous")} onClick={() => send({ do: "previous" })}>
-            <PreviousIcon size={22} />
+      <div className="remote-controls">
+        <div className="remote-buttons">
+          {steps && (
+            <button type="button" className="remote-button" aria-label={t("music.previous")} onClick={() => send({ do: "previous" })}>
+              <PreviousIcon size={22} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="remote-button"
+            aria-label={t("player.step_back", { seconds: STEP_BACK_SECONDS })}
+            onClick={() => send({ do: "step", seconds: -STEP_BACK_SECONDS })}
+          >
+            <StepBackIcon size={24} seconds={STEP_BACK_SECONDS} />
           </button>
-        )}
-        <button
-          type="button"
-          className="remote-button"
-          aria-label={t("player.step_back", { seconds: STEP_BACK_SECONDS })}
-          onClick={() => send({ do: "step", seconds: -STEP_BACK_SECONDS })}
-        >
-          <StepBackIcon size={24} seconds={STEP_BACK_SECONDS} />
-        </button>
-        <button
-          type="button"
-          className="remote-button remote-button-main"
-          aria-label={t(playing.paused ? "player.play" : "player.pause")}
-          onClick={() => send({ do: playing.paused ? "resume" : "pause" })}
-        >
-          {playing.paused ? <PlayIcon size={28} /> : <PauseIcon size={28} />}
-        </button>
-        <button
-          type="button"
-          className="remote-button"
-          aria-label={t("player.step_on", { seconds: STEP_ON_SECONDS })}
-          onClick={() => send({ do: "step", seconds: STEP_ON_SECONDS })}
-        >
-          <StepOnIcon size={24} seconds={STEP_ON_SECONDS} />
-        </button>
-        {steps && (
-          <button type="button" className="remote-button" aria-label={t("music.next")} onClick={() => send({ do: "next" })}>
-            <NextIcon size={22} />
+          <button
+            type="button"
+            className="remote-button remote-button-main"
+            aria-label={t(playing.paused ? "player.play" : "player.pause")}
+            onClick={() => send({ do: playing.paused ? "resume" : "pause" })}
+          >
+            {playing.paused ? <PlayIcon size={28} /> : <PauseIcon size={28} />}
           </button>
-        )}
-        <button type="button" className="remote-button" aria-label={t("music.stop")} onClick={() => send({ do: "stop" })}>
-          <StopIcon size={20} />
-        </button>
+          <button
+            type="button"
+            className="remote-button"
+            aria-label={t("player.step_on", { seconds: STEP_ON_SECONDS })}
+            onClick={() => send({ do: "step", seconds: STEP_ON_SECONDS })}
+          >
+            <StepOnIcon size={24} seconds={STEP_ON_SECONDS} />
+          </button>
+          {steps && (
+            <button type="button" className="remote-button" aria-label={t("music.next")} onClick={() => send({ do: "next" })}>
+              <NextIcon size={22} />
+            </button>
+          )}
+          <button type="button" className="remote-button" aria-label={t("music.stop")} onClick={() => send({ do: "stop" })}>
+            <StopIcon size={20} />
+          </button>
+        </div>
+        {loudness}
       </div>
-      {loudness}
       {!song && (playing.audio.length > 1 || playing.subtitles.length > 0) && (
         <div className="remote-tracks">
           {playing.audio.length > 1 && (

@@ -160,6 +160,19 @@
   width: auto;
 }
 
+/* The buttons and, at their right, the volume, on one line where there is
+   room for both. */
+.remote-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--gap-wide);
+}
+
+.remote-controls:not(:has(> .remote-line)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .remote-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -295,6 +308,11 @@
 
   .remote-title {
     font-size: 22px;
+  }
+
+  /* The volume under the buttons, the whole width of the screen. */
+  .remote-controls {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Every button on one line, the narrowest telephone included. */
