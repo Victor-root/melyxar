@@ -48,6 +48,7 @@ data class Order(
     @SerialName("do") val act: String,
     val seconds: Double? = null,
     val level: Double? = null,
+    val steps: Int? = null,
     val muted: Boolean? = null,
     val track: String? = null,
     val index: Int? = null,
@@ -95,6 +96,7 @@ class Steered(private val api: Api, private val listening: Listening, private va
     private fun obey(order: Order) {
         when (order.act) {
             "volume" -> order.level?.let { volume.set(it.toFloat()) }
+            "volume_step" -> order.steps?.let(volume::step)
             "muted" -> order.muted?.let(volume::mute)
             else -> heard.tryEmit(order)
         }

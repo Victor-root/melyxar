@@ -130,6 +130,9 @@
 
 .remote-line-end {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   min-width: 52px;
   color: var(--text-soft);
   font-size: 13px;
@@ -137,6 +140,18 @@
 }
 
 .remote-line-end:last-child {
+  justify-content: flex-end;
+}
+
+/* The keys of a television's volume: one step down, one step up. */
+.remote-volume-key {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.remote-volume-said {
+  min-width: 44px;
   text-align: right;
 }
 

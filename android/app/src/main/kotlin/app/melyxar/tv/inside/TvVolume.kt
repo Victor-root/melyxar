@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.awaitCancellation
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -42,6 +43,15 @@ class TvVolume(context: Context) {
         val most = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val step = (to.coerceIn(0f, 1f) * most).roundToInt()
         audio.setStreamVolume(AudioManager.STREAM_MUSIC, step, AudioManager.FLAG_SHOW_UI)
+    }
+
+    /** Up or down by so many of the system's own steps, each as one press
+     *  of the remote control's key. */
+    fun step(steps: Int) {
+        val way = if (steps > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+        repeat(abs(steps)) {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, way, AudioManager.FLAG_SHOW_UI)
+        }
     }
 
     fun mute(silent: Boolean) {

@@ -56,6 +56,9 @@ import kotlin.math.roundToLong
 /** How often the server is told where the film is, as the web tells it. */
 private const val REPORT_EVERY_MS = 10_000L
 
+/** How long a line to the server that broke waits before it is tied again. */
+private const val LINE_AGAIN_AFTER_MS = 3_000L
+
 /** How often the server is asked how far a rebuilt film has got, while it
  *  is on its way, as the web player asks. */
 private const val PREPARATION_EVERY_MS = 250L
@@ -226,6 +229,7 @@ class Playback(
     private val clock = StartClock()
     private var keeping: Job? = null
     private var hopping: Job? = null
+    private var holding: Job? = null
 
     /**
      * What plays the film. Made anew, where the film is, when the picture has
@@ -375,6 +379,7 @@ class Playback(
         keepTheStream()
         goOnPastHoles()
         reportEveryNowAndThen()
+        holdTheLine()
     }
 
     /** Plays it again from where it is, as the server now has it for these
@@ -657,6 +662,37 @@ class Playback(
         }
     }
 
+    /**
+     * The film's line to the server, held for as long as it is open, as the
+     * web's player holds it: its end, however the application ends, tells
+     * the server at once that the film is no longer watched, where the
+     * reports alone left it playing on every remote for most of a minute;
+     * and an administrator's stop comes down it the moment it is asked.
+     */
+    private fun holdTheLine() {
+        if (holding?.isActive == true) {
+            return
+        }
+        holding = scope.launch {
+            while (isActive) {
+                try {
+                    var stopped = false
+                    api.playerLine(work).collect { word -> if (word == "stop") stopped = true }
+                    if (stopped) {
+                        onStopped()
+                        return@launch
+                    }
+                } catch (_: Refusal) {
+                    // Another film plays on this device now: this one is over.
+                    return@launch
+                } catch (_: IOException) {
+                    // Tied again below.
+                }
+                delay(LINE_AGAIN_AFTER_MS)
+            }
+        }
+    }
+
     private fun reportEveryNowAndThen() {
         reporting?.cancel()
         reporting = scope.launch {
@@ -745,6 +781,7 @@ class Playback(
      */
     @kotlin.OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
     fun leave() {
+        holding?.cancel()
         reporting?.cancel()
         counting?.cancel()
         keeping?.cancel()
