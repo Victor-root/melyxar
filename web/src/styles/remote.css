@@ -282,18 +282,20 @@
     font-size: 22px;
   }
 
+  /* Every button on one line, the narrowest telephone included. */
   .remote-buttons {
-    gap: 4px;
+    flex-wrap: nowrap;
+    gap: 2px;
   }
 
   .remote-button {
-    width: 52px;
-    height: 52px;
+    width: 44px;
+    height: 44px;
   }
 
   .remote-button-main {
-    width: 72px;
-    height: 72px;
+    width: 64px;
+    height: 64px;
   }
 
   .remote-button-small {

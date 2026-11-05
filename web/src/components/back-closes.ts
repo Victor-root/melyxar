@@ -39,6 +39,8 @@ let counter = 0;
 let queue: Promise<void> = Promise.resolve();
 /** The entries in the history now, oldest first. */
 const live: Entry[] = [];
+/** The entries asked to be put in and not put in yet, first asked first. */
+const waiting: Entry[] = [];
 
 /** Runs a step once those before it are done. */
 function inTurn(step: () => void | Promise<void>): void {
@@ -87,10 +89,34 @@ if (typeof window !== "undefined") {
   });
 }
 
-/** Takes the entry out of the history, if it is still the last one in it. */
-async function takeOut(entry: Entry): Promise<void> {
+/**
+ * Gives the entry's place in the history to the next one waiting to be put
+ * in, rather than going back from it and adding another: one thing giving
+ * way to another, a menu to the window one of its lines opens, is then one
+ * entry that changes hands. Gone back and added again, the second entry
+ * would be one added without the hand of whoever pressed, which a phone's
+ * back key steps over, leaving the application instead of shutting it.
+ */
+function handOver(entry: Entry): boolean {
+  const next = waiting.shift();
+  if (!next) {
+    return false;
+  }
+  window.history.replaceState({ ...window.history.state, [MARK]: next.id }, "");
+  leftOut(entry);
+  next.live = true;
+  live.push(next);
+  return true;
+}
+
+/** Takes the entry out of the history, if it is still the last one in it,
+ *  or hands its place over when `mayHandOver` and something waits for one. */
+async function takeOut(entry: Entry, mayHandOver = true): Promise<void> {
   if (!entry.live || !isTheLatest(entry)) {
     leftOut(entry);
+    return;
+  }
+  if (mayHandOver && handOver(entry)) {
     return;
   }
   leftOut(entry);
@@ -142,10 +168,15 @@ export function useBackClosesIt(
     mine.current = entry;
     let wanted = true;
     const arm = () => {
-      if (wanted) {
+      const stillWaiting = waiting.indexOf(entry);
+      if (stillWaiting >= 0) {
+        waiting.splice(stillWaiting, 1);
+      }
+      if (wanted && !entry.live) {
         putIn(entry);
       }
     };
+    waiting.push(entry);
     inTurn(arm);
     const moved = () => {
       if (!entry.live || entry.popping || isTheLatest(entry)) {
@@ -159,6 +190,10 @@ export function useBackClosesIt(
     window.addEventListener("popstate", moved);
     return () => {
       wanted = false;
+      const stillWaiting = waiting.indexOf(entry);
+      if (stillWaiting >= 0) {
+        waiting.splice(stillWaiting, 1);
+      }
       window.removeEventListener("popstate", moved);
       inTurn(() => takeOut(entry));
     };
@@ -186,7 +221,7 @@ export function useBackClosesIt(
 export function afterTheOverlays(then: () => void): void {
   inTurn(async () => {
     for (const entry of [...live].reverse()) {
-      await takeOut(entry);
+      await takeOut(entry, false);
     }
     then();
   });
