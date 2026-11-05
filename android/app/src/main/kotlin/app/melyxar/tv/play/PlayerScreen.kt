@@ -191,22 +191,13 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     val player = playback.player
 
     // Steered from another device of the account: the film answers the
-    // orders, and how loud it plays is said for the remotes while it is on
-    // the screen, a player made anew keeping it.
+    // orders about what is on the screen.
     val steered = LocalSteered.current
     val leaving by rememberUpdatedState(onDone)
     val nextNow by rememberUpdatedState(next)
-    DisposableEffect(steered) {
-        steered.filmLoudness = player.volume
-        onDispose {
-            steered.filmLoudness = null
-            steered.filmMuted = false
-        }
-    }
-    LaunchedEffect(steered, player) { soundTo(player, steered) }
     LaunchedEffect(steered, playback) {
         steered.orders.collect { order ->
-            obeyFilm(order, playback, steered, leaving, nextNow?.let { episode -> { playNext(episode) } })
+            obeyFilm(order, playback, leaving, nextNow?.let { episode -> { playNext(episode) } })
         }
     }
     DisposableEffect(player) {
