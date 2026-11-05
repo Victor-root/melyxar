@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SignedInDevice } from "./api";
-import { aboutDevice, brandOf, deviceName, deviceSaid, lastSeen } from "./devices";
+import { aboutDevice, brandOf, deviceKind, deviceName, deviceSaid, lastSeen } from "./devices";
 
 const WINDOWS_CHROME =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -21,6 +21,16 @@ describe("deviceName", () => {
     expect(deviceName("SHIELD Android TV", t, "Melyxar")).toBe("Melyxar on Android TV");
     expect(deviceName("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV", t, "Melyxar")).toBe("Melyxar on Android TV");
     expect(deviceName(ANDROID_CHROME, t)).toBe("Chrome on Android");
+  });
+});
+
+describe("deviceKind", () => {
+  it("tells a television, a telephone and a computer apart", () => {
+    expect(deviceKind("SHIELD Android TV", "Melyxar")).toBe("tv");
+    expect(deviceKind("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV")).toBe("tv");
+    expect(deviceKind(ANDROID_CHROME)).toBe("phone");
+    expect(deviceKind(IPHONE_SAFARI)).toBe("phone");
+    expect(deviceKind(WINDOWS_CHROME, "Brave")).toBe("computer");
   });
 });
 

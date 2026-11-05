@@ -9,12 +9,26 @@
 import { useState } from "react";
 import type { SignedInDevice } from "../api";
 import { refusalOf, useTold } from "../asking";
-import { aboutDevice, deviceName } from "../devices";
+import { aboutDevice, deviceKind, deviceName } from "../devices";
+import type { DeviceKind } from "../devices";
 import { refusalKey } from "../i18n";
-import { DeviceIcon } from "../icons";
+import { DeviceIcon, PhoneIcon, SeriesIcon } from "../icons";
 import { useSettings } from "../settings";
 import { Face } from "./face";
 import { useToast } from "../notifications/toasts";
+
+/** The picture beside a device's name: a television, a telephone, or a
+ *  screen for a computer. */
+export function DeviceKindIcon({ kind, size }: { kind: DeviceKind; size: number }) {
+  switch (kind) {
+    case "tv":
+      return <SeriesIcon size={size} />;
+    case "phone":
+      return <PhoneIcon size={size} />;
+    case "computer":
+      return <DeviceIcon size={size} />;
+  }
+}
 
 export function DeviceLines({
   devices,
@@ -67,7 +81,7 @@ export function DeviceLines({
             </span>
           ) : (
             <span className="line-mark" aria-hidden="true">
-              <DeviceIcon size={18} />
+              <DeviceKindIcon kind={deviceKind(device.name, device.browser)} size={18} />
             </span>
           )}
           <span className="line-words">

@@ -9,15 +9,17 @@
  */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { ReactNode } from "react";
 import { api } from "../api";
 import type { PlaybackTrack, RemoteOrder, SteerableDevice, SteeredPlaying } from "../api";
-import { refusalOf } from "../asking";
+import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { Modal } from "../components/modal";
-import { Picker, Slider } from "../components/panel";
-import { deviceName } from "../devices";
+import { Picker } from "../components/panel";
+import { DeviceKindIcon } from "../components/device-lines";
+import { deviceKind, deviceName } from "../devices";
 import { refusalKey } from "../i18n";
-import { DeviceIcon, PlayIcon, ScreenCastIcon } from "../icons";
+import { PlayIcon, ScreenCastIcon } from "../icons";
 import { NextIcon, PreviousIcon, RepeatIcon, ShuffleIcon, StopIcon, VolumeIcon } from "../music/player/icons";
 import { useToast } from "../notifications/toasts";
 import { PauseIcon, StepBackIcon, StepOnIcon } from "../player/icons";
@@ -84,7 +86,7 @@ function DeviceList({
       {devices.map((device) => (
         <li key={device.device}>
           <button type="button" className="remote-device" onClick={() => onChoose(device)}>
-            <DeviceIcon size={22} />
+            <DeviceKindIcon kind={deviceKind(device.name, device.browser)} size={22} />
             <span className="remote-device-words">
               <span className="remote-device-name">{deviceName(device.name, t, device.browser)}</span>
               <span className="remote-device-playing">
@@ -156,6 +158,67 @@ function useSettling(send: (value: number) => void): [number | null, (value: num
   return [moving, move, settled];
 }
 
+/** A line along which a value is chosen, what it stands for said at each
+ *  end. Drawn as every slider of the interface is, across the whole width. */
+function Line({
+  label,
+  value,
+  max,
+  step,
+  onChange,
+  start,
+  end,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+  start: ReactNode;
+  end: ReactNode;
+}) {
+  const share = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
+  return (
+    <div className="slider remote-line">
+      <span className="remote-line-end">{start}</span>
+      <span className="slider-rail remote-rail" style={{ ["--share" as string]: `${share}` }}>
+        <input
+          type="range"
+          aria-label={label}
+          min={0}
+          max={max}
+          step={step}
+          value={Math.min(value, max)}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </span>
+      <span className="remote-line-end">{end}</span>
+    </div>
+  );
+}
+
+/** What plays, with its picture and what it is about, as the card of the
+ *  next episode shows one. */
+function NowPlaying({ playing }: { playing: SteeredPlaying }) {
+  const { t } = useSettings();
+  const song = playing.kind === "song";
+  const about = useAsked((signal) => (song ? Promise.resolve(null) : api.work(playing.work_id, signal)), [
+    playing.work_id,
+    song,
+  ]).answer;
+  const caption = captionOf(playing, t);
+  return (
+    <div className={song ? "remote-now remote-now-song" : "remote-now"}>
+      {playing.picture && <img className="remote-picture" src={playing.picture} alt="" />}
+      <div className="remote-now-words">
+        {caption && <span className="remote-caption">{caption}</span>}
+        <span className="remote-title">{playing.title}</span>
+        {about?.overview && <p className="remote-overview">{about.overview}</p>}
+      </div>
+    </div>
+  );
+}
+
 /** One device and its buttons. */
 function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: number }) {
   const { t } = useSettings();
@@ -174,26 +237,25 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   const volume = loudening ?? device.volume;
   const loudness =
     volume === null ? null : (
-      <div className="remote-loudness">
-        <button
-          type="button"
-          className="remote-button"
-          aria-label={t(device.muted ? "player.unmute" : "player.mute")}
-          aria-pressed={device.muted === true}
-          onClick={() => send({ do: "muted", muted: device.muted !== true })}
-        >
-          <VolumeIcon size={20} off={device.muted === true} />
-        </button>
-        <Slider
-          label={t("player.loudness")}
-          value={volume}
-          min={0}
-          max={1}
-          step={0.01}
-          shown={`${Math.round(volume * 100)} %`}
-          onChange={loudTo}
-        />
-      </div>
+      <Line
+        label={t("player.loudness")}
+        value={volume}
+        max={1}
+        step={0.01}
+        onChange={loudTo}
+        start={
+          <button
+            type="button"
+            className="remote-button remote-button-small"
+            aria-label={t(device.muted ? "player.unmute" : "player.mute")}
+            aria-pressed={device.muted === true}
+            onClick={() => send({ do: "muted", muted: device.muted !== true })}
+          >
+            <VolumeIcon size={20} off={device.muted === true} />
+          </button>
+        }
+        end={`${Math.round(volume * 100)} %`}
+      />
     );
 
   if (playing === null) {
@@ -207,28 +269,21 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   const song = playing.kind === "song";
   const length = playing.duration_seconds;
   const position = seeking ?? positionNow(playing, heardAt, now);
-  const caption = captionOf(playing, t);
   const queue = song ? device.queue : null;
   // A film on its own has nothing before or after it.
   const steps = song || playing.kind === "episode";
   return (
     <div className="remote-steering">
-      <div className="remote-now">
-        {playing.picture && <img className="remote-picture" src={playing.picture} alt="" />}
-        <div className="remote-now-words">
-          <span className="remote-title">{playing.title}</span>
-          {caption && <span className="remote-caption">{caption}</span>}
-        </div>
-      </div>
+      <NowPlaying playing={playing} />
       {length !== null && (
-        <Slider
+        <Line
           label={t("player.position")}
-          value={Math.min(position, length)}
-          min={0}
+          value={position}
           max={length}
           step={1}
-          shown={`${asClock(position)} / ${asClock(length)}`}
           onChange={seekTo}
+          start={asClock(position)}
+          end={`-${asClock(Math.max(0, length - position))}`}
         />
       )}
       <div className="remote-buttons">
@@ -271,23 +326,27 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
         </button>
       </div>
       {loudness}
-      {!song && playing.audio.length > 1 && (
-        <TrackChoice
-          label={t("work.audio")}
-          tracks={playing.audio}
-          chosen={playing.chosen_audio_id}
-          withNone={false}
-          onPick={(track) => track !== null && send({ do: "audio", track })}
-        />
-      )}
-      {!song && playing.subtitles.length > 0 && (
-        <TrackChoice
-          label={t("work.subtitles")}
-          tracks={playing.subtitles}
-          chosen={playing.chosen_subtitle_id}
-          withNone
-          onPick={(track) => send({ do: "subtitle", track })}
-        />
+      {!song && (playing.audio.length > 1 || playing.subtitles.length > 0) && (
+        <div className="remote-tracks">
+          {playing.audio.length > 1 && (
+            <TrackChoice
+              label={t("work.audio")}
+              tracks={playing.audio}
+              chosen={playing.chosen_audio_id}
+              withNone={false}
+              onPick={(track) => track !== null && send({ do: "audio", track })}
+            />
+          )}
+          {playing.subtitles.length > 0 && (
+            <TrackChoice
+              label={t("work.subtitles")}
+              tracks={playing.subtitles}
+              chosen={playing.chosen_subtitle_id}
+              withNone
+              onPick={(track) => send({ do: "subtitle", track })}
+            />
+          )}
+        </div>
       )}
       {queue && (
         <>
