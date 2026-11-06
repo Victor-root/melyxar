@@ -52,9 +52,9 @@ fun PageBackdrop(backdrop: String, light: Int, modifier: Modifier = Modifier) {
     when (backdrop) {
         "light" -> {
             val painting = PAINTINGS[lightNumber(light) - 1]
-            Spacer(modifier.drawWithCache { drawn(paintingOf(painting, palette)) })
+            Spacer(modifier.keptReady().drawWithCache { drawn(paintingOf(painting, palette)) })
         }
-        "library" -> Spacer(modifier.drawWithCache { drawn(shelfOf(palette)) })
+        "library" -> Spacer(modifier.keptReady().drawWithCache { drawn(shelfOf(palette)) })
     }
 }
 
