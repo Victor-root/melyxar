@@ -178,9 +178,11 @@ fun PictureCard(
                 .boxShadow(CardShape, *palette.shadowTile) { 1f - lit }
                 .halo(CardShape, palette) { lit }
                 .clip(CardShape)
+                // Over the kept picture rather than in it: the rim lighting
+                // has no need of the card being drawn again on every frame.
+                .rim(CardShape, palette.accentBright, 1.5.dp) { lit }
                 .keptReady()
-                .background(ground)
-                .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
+                .background(ground),
         ) {
             picture(glowing)
         }
