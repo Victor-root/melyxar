@@ -166,7 +166,7 @@ fun Hero(
                 }
             },
             label = "hero",
-            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().probed(Part.Banner).then(if (Probe.shows(Part.BannerFade) && !Lighter.on) Modifier.fadesIntoThePage() else Modifier),
+            modifier = Modifier.fillMaxWidth().runsOnUnderTheRow().probed(Part.Banner),
         ) { index ->
             items.getOrNull(index)?.let { Backdrop(it) }
         }
@@ -200,7 +200,7 @@ private fun Modifier.onKey(key: Key, action: () -> Unit) = onPreviewKeyEvent { e
 @Composable
 private fun Backdrop(work: WithCard<HeroMore>) {
     val palette = LocalPalette.current
-    Box(Modifier.fillMaxSize().drawWithCache {
+    Box(Modifier.fillMaxSize().then(if (Probe.shows(Part.BannerFade) && !Lighter.on) Modifier.fadesIntoThePage() else Modifier).drawWithCache {
         // Shaded enough on the left to read the words over, never so much
         // that the picture looks pushed aside: a solid edge reads as a hole.
         val below = Brush.verticalGradient(0.58f to Color.Transparent, 0.98f to palette.ground)
@@ -240,7 +240,9 @@ private fun Modifier.runsOnUnderTheRow() = layout { measurable, constraints ->
 /**
  * The web's `--hero-fade`: the banner, its picture and its shades together,
  * made clear towards its foot, so the page's own ground shows through it
- * rather than a band of plain colour. Its foot is under the row below.
+ * rather than a band of plain colour. Its foot is under the row below. Each
+ * work keeps its own, so that turning from one to the next only lays two
+ * kept pictures over each other rather than drawing both on every frame.
  */
 private fun Modifier.fadesIntoThePage() = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
