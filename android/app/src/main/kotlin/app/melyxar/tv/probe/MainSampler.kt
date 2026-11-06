@@ -8,7 +8,8 @@ import android.util.Log
  * Where the main thread spends its time after the remote is pressed: its
  * stack is read every few milliseconds until the keys have been still for a
  * while, and the methods found on it most often are logged, each counted
- * once per reading it was in.
+ * once per reading it was in. Off until asked for on the machine that wants
+ * it, `adb shell setprop log.tag.MlxPerf.Sample DEBUG`.
  */
 internal object MainSampler {
     private const val TAG = "MlxPerf.Sample"
@@ -21,6 +22,9 @@ internal object MainSampler {
         "android.os.", "android.app.ActivityThread", "java.lang.", "com.android.internal.", "dalvik.",
         "android.view.Choreographer", "android.view.ViewRootImpl", "android.view.View.", "android.view.ViewGroup.",
     )
+
+    /** Whether the stack is to be read after the keys at all. */
+    val asked: Boolean get() = Log.isLoggable(TAG, Log.DEBUG)
 
     @Volatile
     private var until = 0L

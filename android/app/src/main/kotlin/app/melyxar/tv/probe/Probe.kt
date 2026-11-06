@@ -16,14 +16,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import app.melyxar.BuildConfig
 import app.melyxar.tv.look.Lighter
 import coil3.memory.MemoryCache
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /*
- * Temporary smoothness probe, logged in every build while the television is
- * being tuned. Everything it adds lives in this package or calls `Probe.`,
+ * Temporary smoothness probe, logged in the debug build alone while the
+ * television is being tuned. Everything it adds lives in this package or calls `Probe.`,
  * and every line it logs carries a tag starting with "MlxPerf", so it can be
  * found and removed whole.
  */
@@ -166,7 +167,7 @@ object Probe {
     fun show(part: Part, on: Boolean) {
         shown.getValue(part).value = on
         kept?.edit()?.putBoolean(part.name, on)?.apply()
-        Log.i(TAG_PART, "${part.name} ${if (on) "on" else "off"}")
+        if (BuildConfig.TRACES) Log.i(TAG_PART, "${part.name} ${if (on) "on" else "off"}")
     }
 
     /** What each part is now, to be put back after a measure that changes them. */
@@ -270,6 +271,9 @@ object Probe {
     fun watch(activity: Activity) {
         kept = activity.getSharedPreferences(KEPT, Context.MODE_PRIVATE).also { prefs ->
             Part.entries.forEach { part -> shown.getValue(part).value = prefs.getBoolean(part.name, part.byDefault) }
+        }
+        if (!BuildConfig.TRACES) {
+            return
         }
         screen = activity.window.decorView
         @Suppress("DEPRECATION")
@@ -399,7 +403,7 @@ object Probe {
 
     /** A key the activity is handed, with how long it waited to be. */
     fun key(event: KeyEvent) {
-        if (event.action != KeyEvent.ACTION_DOWN) {
+        if (!BuildConfig.TRACES || event.action != KeyEvent.ACTION_DOWN) {
             return
         }
         keys.incrementAndGet()
@@ -407,9 +411,9 @@ object Probe {
         val gap = if (lastKey == 0L) 0 else now - lastKey
         lastKey = now
         lastKeyNs = event.eventTime * 1_000_000
-        // Reading the main thread's stack stops it every few milliseconds: a
-        // box drawn lighter is one that cannot spare them.
-        if (!Tour.running && !Lighter.on) {
+        // Reading the main thread's stack stops it every few milliseconds, so
+        // it is asked for by hand, and a box drawn lighter cannot spare them.
+        if (!Tour.running && !Lighter.on && MainSampler.asked) {
             MainSampler.pressed()
         }
         Log.d(TAG_KEY, "${KeyEvent.keyCodeToString(event.keyCode)} repeat=${event.repeatCount} waited=${now - event.eventTime} ms gap=$gap ms")
@@ -447,6 +451,9 @@ object Probe {
     /** [pictures] fetched into memory ahead of the screen in [took] ms, and
      *  how full that leaves the memory kept for pictures. */
     fun fetchedAhead(pictures: Int, took: Long, memory: MemoryCache?) {
+        if (!BuildConfig.TRACES) {
+            return
+        }
         val mb = 1024 * 1024
         Log.i(TAG_AHEAD, "$pictures pictures in $took ms, memory ${memory?.size?.div(mb)} of ${memory?.maxSize?.div(mb)} MB")
     }
@@ -454,12 +461,12 @@ object Probe {
     /** A sheet of thumbnails made ready to cut from, [bytes] long, in [took]
      *  ms; no bytes when it did not come. */
     fun sheetOpened(sheet: String, bytes: Int?, took: Long) {
-        Log.i(TAG_THUMB, "sheet $sheet ${bytes?.let { "${it / 1024} KB" } ?: "failed"} in $took ms")
+        if (BuildConfig.TRACES) Log.i(TAG_THUMB, "sheet $sheet ${bytes?.let { "${it / 1024} KB" } ?: "failed"} in $took ms")
     }
 
     /** A thumbnail cut out of its sheet in [took] ms. */
     fun thumbnailCut(took: Long) {
-        Log.d(TAG_THUMB, "cut in $took ms")
+        if (BuildConfig.TRACES) Log.d(TAG_THUMB, "cut in $took ms")
     }
 
     /** A piece's lighting or fading starting, by 1, or ending, by -1. */
