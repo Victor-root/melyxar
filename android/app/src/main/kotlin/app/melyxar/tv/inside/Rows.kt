@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyListScope
@@ -89,7 +90,11 @@ fun <T> CardRow(
                 ),
                 contentPadding = PaddingValues(horizontal = Gutter, vertical = ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(CardGap),
-                modifier = Modifier.landsAsLeft(row, (items.getOrNull(startsOn) ?: items.firstOrNull())?.let(key)),
+                // The whole width even with few cards, or what stands over the
+                // last of them, a title wider than it, is cut at its edge.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .landsAsLeft(row, (items.getOrNull(startsOn) ?: items.firstOrNull())?.let(key)),
             ) {
                 items(items.size, key = { key(items[it]) }) { at ->
                     Box(Modifier.inRow(row, key(items[at]))) { card(items[at]) }
