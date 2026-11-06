@@ -187,6 +187,16 @@ sealed interface Place {
  *  says, or where the server has it stopped. */
 data class Play(val work: String, val source: String?, val from: Double?)
 
+/**
+ * The page to leave under [next] when it follows [left], or nothing when the
+ * one [under] the film stays: the page of the episode left gives way to the
+ * next one's, so that the way out of the film lands on the episode reached
+ * rather than on the one the sitting began with. Any other page, a series'
+ * own among them, is still the right one to come back to.
+ */
+internal fun pageUnderTheNext(under: Place?, left: Play, next: Play): Place? =
+    (under as? Place.Opened)?.takeIf { it.work == left.work }?.let { Place.Opened(next.work) }
+
 /** The library whose pages these are, which a search asked from them looks
  *  in, as the web's does. */
 private val Place.library: Library?
@@ -582,7 +592,14 @@ fun Inside(
                                                 PlayerScreen(
                                                     here.play,
                                                     onDone = { backTo(trail.size - 1) },
-                                                    onNext = { next -> trail[trail.lastIndex] = Place.Playing(next) },
+                                                    onNext = { next ->
+                                                        val under = trail.lastIndex - 1
+                                                        pageUnderTheNext(trail.getOrNull(under), here.play, next)?.let { page ->
+                                                            kept.removeState(trail[under].key)
+                                                            trail[under] = page
+                                                        }
+                                                        trail[trail.lastIndex] = Place.Playing(next)
+                                                    },
                                                 )
                                             }
                                         }
