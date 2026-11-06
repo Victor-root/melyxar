@@ -20,6 +20,7 @@ import app.melyxar.tv.probe.PictureProbe
 import app.melyxar.tv.probe.Probe
 import app.melyxar.tv.probe.probed
 import coil3.ImageLoader
+import coil3.bitmapFactoryMaxParallelism
 import coil3.compose.AsyncImage
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -33,6 +34,13 @@ import kotlinx.coroutines.coroutineScope
 /** The share of the app's memory the pictures already drawn are kept in:
  *  the home screen's alone fill the usual fifth. */
 private const val PICTURES_KEPT = 0.35
+
+/** The most pictures decoded at once, what the picture loader takes alone. */
+private const val MOST_AT_ONCE = 4
+
+/** How many pictures are decoded at once: as many as leaves two cores to
+ *  the screen, whose first drawing otherwise waits behind a row of them. */
+private fun picturesAtOnce() = (Runtime.getRuntime().availableProcessors() - 2).coerceIn(1, MOST_AT_ONCE)
 
 /** The server the screens are drawn from, and the pictures fetched from it
  *  with its session. */
@@ -48,6 +56,7 @@ fun rememberPictures(api: Api): ImageLoader {
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { api.http })) }
             .eventListener(PictureProbe)
             .memoryCache { MemoryCache.Builder().maxSizePercent(context, PICTURES_KEPT).build() }
+            .bitmapFactoryMaxParallelism(picturesAtOnce())
             .build()
     }
 }

@@ -1,2 +1,16 @@
 HSPLapp/melyxar/**->**(**)**
 Lapp/melyxar/**;
+HSPLandroidx/compose/**->**(**)**
+Landroidx/compose/**;
+HSPLcoil3/**->**(**)**
+Lcoil3/**;
+HSPLokhttp3/**->**(**)**
+Lokhttp3/**;
+HSPLokio/**->**(**)**
+Lokio/**;
+HSPLkotlinx/coroutines/**->**(**)**
+Lkotlinx/coroutines/**;
+HSPLkotlinx/serialization/**->**(**)**
+Lkotlinx/serialization/**;
+HSPLkotlin/**->**(**)**
+Lkotlin/**;
