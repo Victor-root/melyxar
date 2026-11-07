@@ -18,7 +18,6 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/remote/devices", axum::routing::get(devices))
         .route("/api/v1/remote/devices/{device}", axum::routing::post(order))
         .route("/api/v1/remote/told", axum::routing::put(told))
-        .route("/api/v1/remote/here", axum::routing::post(still_here))
 }
 
 /// One device a remote can steer.
@@ -123,14 +122,6 @@ async fn told(
 ) -> Result<Json<serde_json::Value>> {
     melyxar_app::remote::tell(&state, watcher.device, told)?;
     Ok(Json(serde_json::json!({ "kept": true })))
-}
-
-/// Says this device is there, as its open line alone does not.
-async fn still_here(
-    State(state): State<AppState>,
-    Watcher(watcher): Watcher,
-) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "kept": melyxar_app::remote::still_here(&state, watcher.device) }))
 }
 
 /// Hands an order to one of this account's devices.

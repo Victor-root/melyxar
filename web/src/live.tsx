@@ -23,10 +23,6 @@ import { api } from "./api";
 import type { Maintenance, RemoteOrder, SteerableDevice, Watched } from "./api";
 import { askAboutMaintenance, maintenanceHeard } from "./maintenance";
 
-/** How often this device says it is there: a line left open by a device gone
- *  without a word proves nothing. */
-const STILL_HERE_EVERY_MS = 60_000;
-
 /** What the line says about what is being watched: the list, or that it
  *  could not be had. */
 export type PlayingNews = { watched: Watched[] } | { cut: true };
@@ -196,14 +192,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
       open();
     }
     document.addEventListener("visibilitychange", followVisibility);
-    const saysItIsHere = window.setInterval(() => {
-      if (line !== null) {
-        // Said again in a minute, and refused by a server older than this.
-        void api.stillHere().catch(() => {});
-      }
-    }, STILL_HERE_EVERY_MS);
     return () => {
-      window.clearInterval(saysItIsHere);
       document.removeEventListener("visibilitychange", followVisibility);
       close();
     };

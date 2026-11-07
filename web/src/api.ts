@@ -2657,8 +2657,6 @@ export const api = {
   steerableDevices: (signal?: AbortSignal) => get<SteerableDevice[]>("/api/v1/remote/devices", signal),
   /** Says how loud this device plays and the queue of its music. */
   tellTheRemotes: (told: Told) => put<{ kept: boolean }>("/api/v1/remote/told", told),
-  /** Says this device is there, which its open line alone does not prove. */
-  stillHere: () => post<{ kept: boolean }>("/api/v1/remote/here", {}),
   /** Asks one of this account's devices to do something. */
   steer: (device: string, order: RemoteOrder) =>
     post<{ sent: boolean }>(`/api/v1/remote/devices/${device}`, order),
