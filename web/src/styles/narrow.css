@@ -578,8 +578,9 @@
    * list under it that scrolls, and a handle at the foot that is pulled up.
    * What is behind it is dimmed.
    */
-  .bell-list {
+  .top-sheet {
     position: fixed;
+    z-index: 111;
     top: 0;
     right: 0;
     left: 0;
@@ -587,13 +588,13 @@
     flex-direction: column;
     width: auto;
     max-height: 82dvh;
-    padding: var(--safe-top) 0 0;
+    padding: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     border: 0;
     border-radius: 0 0 24px 24px;
     box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--app-ground) 55%, transparent);
-    animation: bell-sheet-in var(--calm) var(--ease);
+    animation: top-sheet-in var(--calm) var(--ease);
   }
 
   .bell-list .notes {
@@ -601,7 +602,7 @@
     overflow: visible;
   }
 
-  .bell-sheet-head {
+  .top-sheet-head {
     position: sticky;
     top: 0;
     z-index: 1;
@@ -614,7 +615,7 @@
     backdrop-filter: blur(18px);
   }
 
-  .bell-sheet-icon {
+  .top-sheet-icon {
     display: grid;
     place-items: center;
     width: 34px;
@@ -624,13 +625,13 @@
     color: var(--accent-contrast);
   }
 
-  .bell-sheet-title {
+  .top-sheet-title {
     flex: 1 1 auto;
     font-size: 17px;
     font-weight: 650;
   }
 
-  .bell-sheet-close {
+  .top-sheet-close {
     display: grid;
     place-items: center;
     width: 36px;
@@ -639,7 +640,14 @@
     color: var(--text-soft);
   }
 
-  .bell-handle {
+  .account-sheet > .header-menu-line {
+    margin: 2px 8px;
+    padding: 14px 12px;
+    font-size: 16px;
+    white-space: normal;
+  }
+
+  .top-sheet-handle {
     position: sticky;
     bottom: 0;
     display: grid;
@@ -651,7 +659,7 @@
     touch-action: none;
   }
 
-  .bell-handle > span {
+  .top-sheet-handle > span {
     width: 44px;
     height: 5px;
     border-radius: var(--radius-pill);
@@ -1037,14 +1045,14 @@
   }
 }
 
-@keyframes bell-sheet-in {
+@keyframes top-sheet-in {
   from {
     transform: translateY(-100%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bell-list {
+  .top-sheet {
     animation: none;
   }
 }
