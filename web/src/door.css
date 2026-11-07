@@ -1148,6 +1148,7 @@ img.door-greeting-mark {
        it, so that a short screen shows the whole door without a scroll, and
        a tall one stands as it always has. */
     --door-room: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+    grid-template-columns: minmax(0, 1fr);
     gap: clamp(6px, calc(var(--door-room) * 0.016), var(--gap));
     padding: calc(12px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
   }
