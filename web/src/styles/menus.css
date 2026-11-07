@@ -111,3 +111,14 @@
   padding-left: 36px;
   font-size: 13px;
 }
+
+/* Their bar runs between their round corners, not through them. */
+@media (pointer: fine) {
+  .header-menu-list::-webkit-scrollbar-track,
+  .quick-search::-webkit-scrollbar-track,
+  .colour-picker::-webkit-scrollbar-track,
+  .player-menu-body::-webkit-scrollbar-track,
+  .modal-body::-webkit-scrollbar-track {
+    margin-block: var(--radius-window);
+  }
+}
