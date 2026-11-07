@@ -473,6 +473,12 @@
   color: var(--text);
 }
 
+/* Its list open, it is lit in the accent the bar is washed with. */
+.search-scope > .header-link.header-link-on {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
+}
+
 /* A field that grows while somebody watches is the point of it. A field that
    grows for somebody who asked their system for less movement is not. */
 @media (prefers-reduced-motion: reduce) {

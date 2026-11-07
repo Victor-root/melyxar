@@ -952,10 +952,15 @@ function Scope({
 }) {
   const { t } = useSettings();
 
+  /* All of a kind stands above its libraries under words of its own: named
+     after the kind, it read twice over when a library bears the same name. */
+  const nameOf = ({ kind, libraries }: Category): string =>
+    libraries.length > 1 ? t(`search.all.${kind}`) : nameOfKind(kind, libraries, t);
+
   const named = (value: string): string => {
     const kind = categories.find((category) => `kind:${category.kind}` === value);
     if (kind) {
-      return nameOfKind(kind.kind, kind.libraries, t);
+      return nameOf(kind);
     }
     const library = categories
       .flatMap((category) => category.libraries)
@@ -976,7 +981,7 @@ function Scope({
         <Fragment key={category.kind}>
           <ScopeLine value={`kind:${category.kind}`} scope={scope} onChoose={onChoose}>
             <KindIcon kind={category.kind} size={16} />
-            {nameOfKind(category.kind, category.libraries, t)}
+            {nameOf(category)}
           </ScopeLine>
           {category.libraries.length > 1 &&
             category.libraries.map((library) => (
@@ -987,6 +992,7 @@ function Scope({
                 onChoose={onChoose}
                 under
               >
+                <KindIcon kind={category.kind} size={16} />
                 {library.name}
               </ScopeLine>
             ))}
