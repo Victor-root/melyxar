@@ -44,7 +44,7 @@ import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
 import { useBackClosesIt } from "../components/back-closes";
 import { LinkAtTheDoor } from "./door-link";
-import { ON_A_PHONE, useMediaQuery } from "../media-query";
+import { columnsOfFaces } from "../door-columns";
 
 /**
  * What the screen is showing.
@@ -66,8 +66,6 @@ export function Door({
   cameIn: (who: Account) => void;
 }) {
   const { t, languageChoice } = useSettings();
-  /* Somebody already holding a phone is sent to another device, not to one. */
-  const linkInvitation = t(useMediaQuery(ON_A_PHONE) ? "door.link.go_elsewhere" : "door.link.go");
   const door = useDoorScreen(branding, cameIn, languageChoice);
 
   const [name, setName] = useState("");
@@ -210,7 +208,10 @@ export function Door({
               signing in done in one press. */}
           {showing.the === "accounts" && (
             <>
-              <div className="door-who">
+              <div
+                className="door-who"
+                style={{ "--door-columns": columnsOfFaces(door.names.length) } as React.CSSProperties}
+              >
                 {door.names.map((offered, at) => (
                   <button
                     type="button"
@@ -245,7 +246,7 @@ export function Door({
               </button>
               <button type="button" className="door-by-hand" onClick={toTheTelephone}>
                 <DeviceIcon size={18} />
-                {linkInvitation}
+                {t("door.link.go")}
               </button>
             </>
           )}
@@ -433,7 +434,7 @@ export function Door({
                   </div>
                   <button type="button" className="button button-large door-make" onClick={toTheTelephone}>
                     <DeviceIcon size={20} />
-                    {linkInvitation}
+                    {t("door.link.go")}
                   </button>
                   {/* Nothing behind this one either: accounts on this server are
                       made by whoever runs it. Turned off rather than left out,
