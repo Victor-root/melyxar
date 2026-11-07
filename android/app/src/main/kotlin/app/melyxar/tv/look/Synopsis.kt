@@ -35,8 +35,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import app.melyxar.tv.look.window
 import kotlinx.coroutines.launch
 
 /** How far one press of an arrow scrolls a long text. */
@@ -82,7 +80,7 @@ fun Synopsis(
             .clickable(interaction, indication = null) { reading = cut },
     )
     if (reading) {
-        Dialog(onDismissRequest = { reading = false }) {
+        WindowDialog({ reading = false }) {
             Whole(text, title)
         }
     }

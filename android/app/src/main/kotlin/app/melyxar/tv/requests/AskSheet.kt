@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import app.melyxar.R
 import app.melyxar.server.Asking
 import app.melyxar.server.Found
@@ -49,6 +48,7 @@ import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
+import app.melyxar.tv.look.WindowDialog
 import app.melyxar.tv.look.listLine
 import app.melyxar.tv.look.litBy
 import app.melyxar.tv.look.window
@@ -81,7 +81,7 @@ fun AskSheet(found: Found, onClose: () -> Unit) {
     var refused by remember { mutableStateOf(false) }
     val send = remember { FocusRequester() }
     val ready = !busy && (!series || whole || chosen.isNotEmpty())
-    Dialog(onDismissRequest = onClose) {
+    WindowDialog(onClose) {
         Column(
             modifier = Modifier
                 .width(640.dp)

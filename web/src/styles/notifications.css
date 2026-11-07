@@ -15,7 +15,6 @@
   top: calc(var(--header-height) - 8px);
   right: var(--gutter);
   z-index: 110;
-  /* The wash of the accent over the glass, the bar's own. */
   --toast-glow: color-mix(in srgb, var(--accent) 22%, transparent);
   display: flex;
   flex-direction: column;
@@ -25,9 +24,8 @@
   pointer-events: none;
 }
 
-/* The glass of the bar and of its lists: rimmed in the accent, washed with it
-   and lit by a halo, whatever the word says. What it says is carried by its
-   mark, in the colour of its level. */
+/* What opens over the page looks one way, whatever the word says. What it
+   says is carried by its mark, in the colour of its level. */
 .toast {
   position: relative;
   overflow: hidden;
@@ -37,15 +35,10 @@
   gap: 12px;
   width: 100%;
   padding: 14px 12px 14px 14px;
-  border-radius: var(--radius-panel);
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background:
-    linear-gradient(var(--toast-glow), var(--toast-glow)),
-    var(--header-glass);
-  backdrop-filter: blur(18px);
-  box-shadow:
-    var(--shadow-card),
-    0 0 14px 2px var(--accent-glow);
+  border-radius: var(--radius-window);
+  border: var(--window-rim);
+  background: var(--window-ground);
+  box-shadow: var(--window-shadow);
   animation: toast-in var(--calm) var(--ease);
 }
 

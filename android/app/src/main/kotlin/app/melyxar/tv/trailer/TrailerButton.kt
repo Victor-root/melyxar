@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import app.melyxar.R
 import app.melyxar.tv.inside.LocalChrome
@@ -30,6 +29,7 @@ import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
+import app.melyxar.tv.look.WindowDialog
 import app.melyxar.tv.look.window
 
 /**
@@ -68,7 +68,7 @@ fun TrailerButton(trailer: Trailer, title: String, modifier: Modifier = Modifier
 private fun Nowhere(onClose: () -> Unit) {
     val palette = LocalPalette.current
     val close = remember { FocusRequester() }
-    Dialog(onDismissRequest = onClose) {
+    WindowDialog(onClose) {
         Column(
             modifier = Modifier
                 .width(520.dp)
