@@ -33,8 +33,8 @@
     <string name="tv_code_of">%1$s, entrez votre code</string>
     <string name="tv_code_wrong">Code incorrect.</string>
     <string name="tv_code_erase">Effacer</string>
-    <string name="tv_link_go">Se connecter avec un téléphone</string>
-    <string name="tv_link_title">Se connecter avec un téléphone</string>
+    <string name="tv_link_go">Se connecter avec un autre appareil</string>
+    <string name="tv_link_title">Se connecter avec un autre appareil</string>
     <string name="tv_link_how">Dans l’application Melyxar du téléphone, ouvrez le menu de votre compte et choisissez Connecter un appareil : scannez-y ce QR code, ou tapez le code ci-dessous. Sur un ordinateur, tapez le code.</string>
     <string name="tv_link_left">Valable encore %1$s</string>
     <string name="tv_link_back">Retour</string>
