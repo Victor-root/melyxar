@@ -112,7 +112,13 @@ export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
        picture with it, which then never says it arrived. */
     const asking = new Set<HTMLImageElement>();
     let started = false;
+    /* Standing aside while the page moves: every picture arriving then costs
+       a frame of the scroll it was fetched to spare. */
+    let moving = 0;
     const askMore = () => {
+      if (moving) {
+        return;
+      }
       waiting ??= Array.from(holder.current?.querySelectorAll<HTMLImageElement>("img[loading=lazy]") ?? []);
       while (asking.size < FETCHED_AHEAD_AT_ONCE && at < waiting.length) {
         const picture = waiting[at];
@@ -159,18 +165,33 @@ export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
       started = true;
       askMore();
     };
+    const moved = () => {
+      window.clearTimeout(moving);
+      moving = window.setTimeout(() => {
+        moving = 0;
+        if (started) {
+          askMore();
+        }
+      }, STILL_AFTER_MS);
+    };
+    window.addEventListener("scroll", moved, { capture: true, passive: true });
+    const stop = () => {
+      window.clearTimeout(moving);
+      window.removeEventListener("scroll", moved, { capture: true });
+      changed.disconnect();
+    };
     // Safari has no idle moments to offer, so it is given a second instead.
     if (typeof window.requestIdleCallback === "function") {
       const asked = window.requestIdleCallback(start, { timeout: 2000 });
       return () => {
         window.cancelIdleCallback(asked);
-        changed.disconnect();
+        stop();
       };
     }
     const asked = setTimeout(start, 1000);
     return () => {
       clearTimeout(asked);
-      changed.disconnect();
+      stop();
     };
   }, [holder]);
 }
@@ -178,6 +199,9 @@ export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
 /** How many pictures are fetched ahead at once: a little more than a browser
  *  fetches at the same time from one server. */
 const FETCHED_AHEAD_AT_ONCE = 8;
+
+/** How long a page stays still before fetching ahead goes on. */
+const STILL_AFTER_MS = 250;
 
 export const Card = memo(function Card({
   card,
