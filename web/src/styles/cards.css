@@ -688,6 +688,16 @@ button.seen-mark:not(.seen-mark-on):hover {
   background: var(--accent-bright);
 }
 
+/* Centred on what the eye weighs rather than on their outline: a heart's
+   weight is in its lobes, a spanner's in its head at the top left. */
+.card-mark-heart {
+  transform: translateY(0.8px);
+}
+
+.card-mark-tool {
+  transform: translate(0.3px, 0.3px);
+}
+
 .card-corner {
   position: absolute;
   right: 8px;

@@ -403,7 +403,7 @@ export const Card = memo(function Card({
                 title={t(favourite ? "card.unfavourite" : "card.favourite")}
                 onClick={stop(() => marks.setFavourite(card, !favourite))}
               >
-                <HeartIcon size={17} filled={favourite} />
+                <HeartIcon className="card-mark-heart" size={18} filled={favourite} />
               </button>
               <button
                 ref={kebab}
@@ -414,7 +414,7 @@ export const Card = memo(function Card({
                 aria-expanded={menu.open}
                 onClick={stop(() => menu.toggle(kebab.current))}
               >
-                <ToolIcon size={17} />
+                <ToolIcon className="card-mark-tool" size={18} />
               </button>
             </div>
           </div>
