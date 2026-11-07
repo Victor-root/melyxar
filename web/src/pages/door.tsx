@@ -44,6 +44,7 @@ import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
 import { useBackClosesIt } from "../components/back-closes";
 import { LinkAtTheDoor } from "./door-link";
+import { ON_A_PHONE, useMediaQuery } from "../media-query";
 
 /**
  * What the screen is showing.
@@ -65,6 +66,8 @@ export function Door({
   cameIn: (who: Account) => void;
 }) {
   const { t, languageChoice } = useSettings();
+  /* Somebody already holding a phone is sent to another device, not to one. */
+  const linkInvitation = t(useMediaQuery(ON_A_PHONE) ? "door.link.go_elsewhere" : "door.link.go");
   const door = useDoorScreen(branding, cameIn, languageChoice);
 
   const [name, setName] = useState("");
@@ -242,7 +245,7 @@ export function Door({
               </button>
               <button type="button" className="door-by-hand" onClick={toTheTelephone}>
                 <DeviceIcon size={18} />
-                {t("door.link.go")}
+                {linkInvitation}
               </button>
             </>
           )}
@@ -430,7 +433,7 @@ export function Door({
                   </div>
                   <button type="button" className="button button-large door-make" onClick={toTheTelephone}>
                     <DeviceIcon size={20} />
-                    {t("door.link.go")}
+                    {linkInvitation}
                   </button>
                   {/* Nothing behind this one either: accounts on this server are
                       made by whoever runs it. Turned off rather than left out,
