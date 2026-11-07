@@ -69,8 +69,12 @@ pub async fn counted(state: &AppState, library_id: Option<LibraryId>) -> Result<
         // walks would cost twice and end with the same number.
         Found::OutOfDate(counted) if !state.counts().take_it_on(library_id) => Ok(counted),
         Found::OutOfDate(_) | Found::Nothing => {
+            let counting = Counting {
+                counts: state.counts(),
+                library_id,
+            };
             let counted = count(state, library_id).await;
-            state.counts().done_counting(library_id);
+            drop(counting);
             let counted = Arc::new(counted?);
             state.counts().remember(library_id, version, counted.clone());
             Ok(counted)
@@ -142,6 +146,22 @@ impl Counts {
         self.kept
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// A count under way, let go of however it ends.
+///
+/// A request whose page is closed halfway through is dropped in the middle of
+/// its count. Left marked as counting, the library would be served the answer
+/// from before that count for as long as the server runs.
+struct Counting<'a> {
+    counts: &'a Counts,
+    library_id: Option<LibraryId>,
+}
+
+impl Drop for Counting<'_> {
+    fn drop(&mut self) {
+        self.counts.done_counting(self.library_id);
     }
 }
 
@@ -237,6 +257,18 @@ mod tests {
 
         counts.done_counting(None);
         assert!(counts.take_it_on(None));
+    }
+
+    #[test]
+    fn a_count_dropped_halfway_lets_the_next_visitor_count() {
+        let counts = Counts::default();
+        counts.remember(None, 1, a_count(5));
+        assert!(counts.take_it_on(None));
+        drop(Counting {
+            counts: &counts,
+            library_id: None,
+        });
+        assert!(counts.take_it_on(None), "a page closed while counting leaves nothing behind");
     }
 
     #[test]
