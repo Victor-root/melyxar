@@ -517,6 +517,11 @@
   gap: var(--gap);
 }
 
+/* Under the title and level with it; only the picture is centred. */
+.cropper > .settings-why {
+  justify-self: start;
+}
+
 /* The square the picture will be. Pulled by a finger as well as a mouse, so
    the page is told not to scroll under it. */
 .cropper-frame {
