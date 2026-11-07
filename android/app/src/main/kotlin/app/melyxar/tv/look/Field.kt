@@ -58,6 +58,7 @@ fun TvField(
 ) {
     val palette = LocalPalette.current
     var typing by remember { mutableStateOf(false) }
+    var pressedHere by remember { mutableStateOf(false) }
     // The screen makes room for the keyboard while this is typed in.
     val room = LocalKeyboardRoom.current
     if (room != null) {
@@ -85,12 +86,20 @@ fun TvField(
             if (typing || !enabled || !opens) {
                 return@onPreviewKeyEvent false
             }
-            if (event.type == KeyEventType.KeyUp) {
-                typing = true
+            // Only a press that began here: the end of the one that opened
+            // the panel this field stands on must not open the keyboard too.
+            when (event.type) {
+                KeyEventType.KeyDown -> pressedHere = true
+                KeyEventType.KeyUp -> typing = pressedHere
             }
             true
         }
-        .onFocusChanged { if (!it.isFocused) typing = false }
+        .onFocusChanged {
+            if (!it.isFocused) {
+                typing = false
+                pressedHere = false
+            }
+        }
         .fillMaxWidth()
         .grows({ lit }, 1.02f)
         .clip(ControlShape)
