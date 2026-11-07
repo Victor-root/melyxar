@@ -101,6 +101,11 @@
   min-width: 0;
 }
 
+/* With no picture the words take the whole width, not the picture's place. */
+.remote-now-words:first-child {
+  grid-column: 1 / -1;
+}
+
 .remote-title {
   font-size: 19px;
   font-weight: 650;
