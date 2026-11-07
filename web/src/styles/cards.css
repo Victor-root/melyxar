@@ -776,21 +776,22 @@ button.seen-mark:not(.seen-mark-on):hover {
 /* What can be done with the chosen cards, at the foot of the window. */
 .selection-bar {
   position: fixed;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   bottom: calc(var(--gap-wide) + var(--safe-bottom));
   z-index: 30;
-  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: var(--gap-tight);
-  max-width: calc(100vw - 32px);
+  width: fit-content;
+  margin-inline: auto;
   padding: 8px 10px 8px 16px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-raised);
+  border-radius: var(--radius-window);
+  border: var(--window-rim);
+  background: var(--window-ground);
+  box-shadow: var(--window-shadow);
   animation: header-menu-arrive var(--quick) var(--ease) both;
 }
 
