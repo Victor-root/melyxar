@@ -17,13 +17,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -116,11 +119,20 @@ private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusReque
     val age = person.bornOn?.let { yearsBetween(it, until) }
     val born = person.bornOn?.let { readableDay(it, locale) }
     val died = person.diedOn?.let { readableDay(it, locale) }
+    // Only ever a place to start from: found by the arrows later on, it would
+    // stand between the works and the biography with nothing lit to say so.
+    var starting by remember { mutableStateOf(true) }
+    var resting by remember { mutableStateOf(false) }
     Row(
         // Where the remote rests as the page opens when nothing in it can be
         // opened: nothing lights, and the page stays at its top.
         modifier = Modifier
             .focusRequester(top)
+            .focusProperties { canFocus = starting && memory.last == null }
+            .onFocusChanged {
+                if (resting && !it.isFocused) starting = false
+                resting = it.isFocused
+            }
             .focusable()
             .padding(start = Gutter, end = Gutter, top = 30.dp, bottom = 34.dp),
         horizontalArrangement = Arrangement.spacedBy(36.dp),
