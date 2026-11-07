@@ -936,6 +936,18 @@
     transition: transform 340ms var(--ease);
   }
 
+  /* On layers of their own for good, as the rim of the bar at the top is:
+     promoted only as they start to move, they were drawn again at every step
+     of the way. */
+  .music-tabs-rim .glass-rim {
+    will-change: transform;
+  }
+
+  .music-tabs-track,
+  .music-bubble {
+    will-change: opacity;
+  }
+
   /* Nothing of the tabs shows round the dots: they come in once the bubble
      is on its way out, and go before it closes. */
   .music-tabs-track {
