@@ -138,8 +138,21 @@ export function Hero({ items }: { items: HeroItem[] }) {
      below is redone whenever it changes. */
   const shown = items[Math.min(at, items.length - 1)];
 
+  /* Turning only while it can be seen: scrolled away, each turn still drew
+     the page again and read the words of the next work for nobody. */
+  const [inView, setInView] = useState(true);
   useEffect(() => {
-    if (!many || held) {
+    const element = holder.current;
+    if (!element) {
+      return;
+    }
+    const watcher = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting));
+    watcher.observe(element);
+    return () => watcher.disconnect();
+  }, [many]);
+
+  useEffect(() => {
+    if (!many || held || !inView) {
       return;
     }
     const step = window.setInterval(
@@ -147,7 +160,7 @@ export function Hero({ items }: { items: HeroItem[] }) {
       EACH_STANDS_FOR,
     );
     return () => window.clearInterval(step);
-  }, [many, held, items.length]);
+  }, [many, held, inView, items.length]);
 
   useEffect(() => setFarthest((was) => Math.max(was, at + 1)), [at]);
 
