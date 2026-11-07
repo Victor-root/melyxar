@@ -364,7 +364,15 @@
 
   /* The two times as close to the bar as each other: no column kept for a
      time longer than this one. */
-  .remote-steering > .remote-line > .remote-line-end {
+  .remote-steering > .remote-line > .remote-line-end,
+  .remote-controls > .remote-line > .remote-line-end,
+  .remote-volume-said {
     min-width: 0;
+  }
+
+  /* The picture of the button, not the room round it for the thumb, is what
+     stands as far from the bar as the words do. */
+  .remote-line-end > .remote-button-small:only-child {
+    margin-inline: -10px;
   }
 }
