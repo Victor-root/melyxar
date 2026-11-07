@@ -9,6 +9,22 @@ export interface Placed {
   letter: string | undefined;
 }
 
+/** The first of `count` blocks standing in order whose foot reaches past
+ *  `line`, found by halving; `count` when none does. */
+export function firstBlockReaching(count: number, footOf: (index: number) => number, line: number): number {
+  let low = 0;
+  let high = count;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (footOf(middle) > line) {
+      high = middle;
+    } else {
+      low = middle + 1;
+    }
+  }
+  return low;
+}
+
 /**
  * The letter most of the top row is filed under, the later one when two share
  * it.
