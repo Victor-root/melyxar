@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use melyxar_core::id::{DeviceId, MediaSourceId, UserId, WorkId};
 use serde::{Deserialize, Serialize};
@@ -27,6 +28,12 @@ const MOST_VOLUME_STEPS: u32 = 1_000;
 
 /// The most songs one order hands over: a queue, not a library.
 const SONGS_HANDED_OVER: usize = 5_000;
+
+/// How long a device that says it is there can stay silent before no remote
+/// shows it: three of the beats its applications send, a minute apart. A line
+/// alone proves nothing, since whatever stands between the server and a
+/// device that left without a word goes on accepting what is written to it.
+const SILENT_FOR_AT_MOST: Duration = Duration::from_secs(150);
 
 /// What a device is asked to do.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -167,6 +174,11 @@ struct Present {
     /// Each line by its number, oldest first.
     lines: Vec<(u64, mpsc::Sender<Order>)>,
     told: Told,
+    /// When it last said it was there. Never, for an application older than
+    /// those words, which stays shown for as long as its line is open.
+    heard: Option<Instant>,
+    /// Whether it has been silent too long for a remote to show it.
+    silent: bool,
 }
 
 /// Where the orders for one line arrive, for as long as it lives.
@@ -208,14 +220,20 @@ impl Reachable {
             browser: None,
             lines: Vec::new(),
             told: Told::default(),
+            heard: None,
+            silent: false,
         });
         // A newer page knows the browser better than an older one did.
         if viewer.browser.is_some() {
             present.browser.clone_from(&viewer.browser);
         }
         present.lines.push((number, sender));
+        let back = std::mem::take(&mut present.silent);
+        if back {
+            present.heard = Some(Instant::now());
+        }
         drop(held);
-        if fresh {
+        if fresh || back {
             self.tell();
         }
         (number, orders)
@@ -270,12 +288,41 @@ impl Reachable {
         true
     }
 
+    /// Keeps that a device is there, and takes off the remotes those gone
+    /// silent: every remote says it is there too, so one showing a device is
+    /// never left waiting for it. Answers whether its line is known.
+    fn still_here(&self, device: DeviceId, now: Instant) -> bool {
+        let mut held = self.held();
+        let known = match held.get_mut(&device) {
+            Some(present) => {
+                present.heard = Some(now);
+                true
+            }
+            None => false,
+        };
+        let mut moved = false;
+        for present in held.values_mut() {
+            let silent = present
+                .heard
+                .is_some_and(|heard| now.duration_since(heard) > SILENT_FOR_AT_MOST);
+            moved |= silent != present.silent;
+            present.silent = silent;
+        }
+        drop(held);
+        if moved {
+            self.tell();
+        }
+        known
+    }
+
     /// The devices of this account that can be reached, but this one.
     fn of(&self, user: UserId, except: DeviceId) -> Vec<Reached> {
         let mut found: Vec<_> = self
             .held()
             .iter()
-            .filter(|(device, present)| present.user == user && **device != except)
+            .filter(|(device, present)| {
+                present.user == user && **device != except && !present.silent
+            })
             .map(|(device, present)| Reached {
                 device: *device,
                 name: present.name.clone(),
@@ -343,6 +390,11 @@ pub fn tell(state: &AppState, device: DeviceId, told: Told) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+/// Keeps that this device is there, which a line open does not prove.
+pub fn still_here(state: &AppState, device: DeviceId) -> bool {
+    state.reachable().still_here(device, Instant::now())
 }
 
 /// One device a remote can steer, and what plays there.
@@ -422,6 +474,59 @@ mod tests {
         assert!(reachable.hand(user, device, &film));
         assert!(read(&mut older).is_empty());
         assert_eq!(read(&mut newer), vec![film]);
+    }
+
+    #[test]
+    fn a_device_gone_silent_leaves_the_remotes_until_it_is_heard_again() {
+        let reachable = Reachable::default();
+        let (user, gone, remote) = (UserId::new(), DeviceId::new(), DeviceId::new());
+        let _gone = reachable.line_opened(&viewer(user, gone));
+        let _remote = reachable.line_opened(&viewer(user, remote));
+        let start = Instant::now();
+
+        assert!(reachable.still_here(gone, start));
+        assert!(reachable.still_here(remote, start));
+        assert_eq!(reachable.of(user, remote).len(), 1);
+
+        let later = start + SILENT_FOR_AT_MOST + Duration::from_secs(1);
+        assert!(reachable.still_here(remote, later));
+        assert!(reachable.of(user, remote).is_empty(), "nothing answers on its line");
+
+        assert!(reachable.still_here(gone, later));
+        assert_eq!(reachable.of(user, remote).len(), 1, "it was only asleep");
+    }
+
+    #[test]
+    fn a_device_that_never_said_it_is_there_stays_for_as_long_as_its_line() {
+        let reachable = Reachable::default();
+        let (user, old, remote) = (UserId::new(), DeviceId::new(), DeviceId::new());
+        let _old = reachable.line_opened(&viewer(user, old));
+        let _remote = reachable.line_opened(&viewer(user, remote));
+
+        let later = Instant::now() + SILENT_FOR_AT_MOST * 2;
+        assert!(reachable.still_here(remote, later));
+        assert_eq!(reachable.of(user, remote).len(), 1);
+    }
+
+    #[test]
+    fn a_silent_device_opening_a_line_again_comes_back() {
+        let reachable = Reachable::default();
+        let (user, gone, remote) = (UserId::new(), DeviceId::new(), DeviceId::new());
+        let _gone = reachable.line_opened(&viewer(user, gone));
+        let _remote = reachable.line_opened(&viewer(user, remote));
+        let start = Instant::now();
+        reachable.still_here(gone, start);
+        reachable.still_here(remote, start + SILENT_FOR_AT_MOST + Duration::from_secs(1));
+        assert!(reachable.of(user, remote).is_empty());
+
+        let _again = reachable.line_opened(&viewer(user, gone));
+        assert_eq!(reachable.of(user, remote).len(), 1);
+    }
+
+    #[test]
+    fn saying_it_is_there_without_a_line_is_not_a_fault() {
+        let reachable = Reachable::default();
+        assert!(!reachable.still_here(DeviceId::new(), Instant::now()));
     }
 
     #[test]

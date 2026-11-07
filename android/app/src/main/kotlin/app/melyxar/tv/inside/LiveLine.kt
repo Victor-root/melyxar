@@ -7,14 +7,21 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import app.melyxar.server.Api
 import app.melyxar.server.LiveWord
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.LocalServer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 import java.io.IOException
 
 /** How long a broken line waits before it is opened again. */
 private const val AGAIN_AFTER_MS = 5_000L
+
+/** How often the television says it is there, as its web page does: a line
+ *  left open by a television gone without a word proves nothing. */
+private const val STILL_HERE_EVERY_MS = 60_000L
 
 /**
  * The server's live line, held while Melyxar is on the screen, as the web's
@@ -36,6 +43,12 @@ fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onLooksMoved: () -> Unit, on
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(api, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            launch {
+                while (true) {
+                    delay(STILL_HERE_EVERY_MS)
+                    saidHere(api)
+                }
+            }
             // The screens read everything as they come on: only a line
             // opened again after breaking has anything to catch up on.
             var opened = false
@@ -65,5 +78,15 @@ fun FollowTheLiveLine(onLibrariesMoved: () -> Unit, onLooksMoved: () -> Unit, on
                 delay(AGAIN_AFTER_MS)
             }
         }
+    }
+}
+
+private suspend fun saidHere(api: Api) {
+    try {
+        api.send("POST", "/api/v1/remote/here", JsonObject(emptyMap()))
+    } catch (_: Refusal) {
+        // A server older than these words, or a line about to say why.
+    } catch (_: IOException) {
+        // Said again in a minute.
     }
 }
