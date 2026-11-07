@@ -64,7 +64,7 @@ export function markTheEdgeRoom(): void {
        leaves jumped as soon as the keyboard arrived. */
     const measureTheScreen = () => {
       if (!keyboard) {
-        root.style.setProperty("--whole-height", `${window.innerHeight}px`);
+        root.style.setProperty("--whole-height", `${window.visualViewport?.height ?? window.innerHeight}px`);
       }
     };
     const told = () => {
