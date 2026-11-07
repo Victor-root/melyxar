@@ -82,6 +82,14 @@
   margin-top: 6px;
 }
 
+/* A sentence in a pill wraps inside it rather than leaving the card. */
+.finder-head-state .state-pill {
+  height: auto;
+  min-height: 24px;
+  padding-block: 3px;
+  white-space: normal;
+}
+
 /* Said, without the colour of a state. */
 .finder-pill-plain {
   background: var(--surface-hover);
