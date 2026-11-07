@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -35,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.geometry.Offset
@@ -290,6 +293,8 @@ private fun Profiles(
 ) {
     val palette = LocalPalette.current
     val first = remember { FocusRequester() }
+    // Coming down to the foot lands on the button left, or on its first.
+    val foot = remember { FocusRequester() }
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = Gutter, vertical = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -321,19 +326,27 @@ private fun Profiles(
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(36.dp),
-                modifier = Modifier.focusRestorer(first).drawBehind {
-                    // The pool of light the tiles stand in.
-                    val across = maxOf(size.width, TILE.toPx() * 4)
-                    val center = Offset(size.width / 2, TILE.toPx() * 1.0f)
-                    scaleFloor(center, across / 2, TILE.toPx() * 0.45f, palette.accent, palette.accentDim)
-                },
+                modifier = Modifier
+                    .focusRestorer(first)
+                    .drawBehind {
+                        // The pool of light the tiles stand in.
+                        val across = maxOf(size.width, TILE.toPx() * 4)
+                        val center = Offset(size.width / 2, TILE.toPx() * 1.0f)
+                        scaleFloor(center, across / 2, TILE.toPx() * 0.45f, palette.accent, palette.accentDim)
+                    }
+                    // More faces than the screen is wide: the remote brings
+                    // them in as it comes to them.
+                    .horizontalScroll(rememberScrollState()),
             ) {
                 profiles.forEachIndexed { at, profile ->
                     ProfileTile(
                         profile = profile,
                         arrivesAfterMs = 80 + minOf(at, 8) * 55,
                         onPick = { onPick(profile.name) },
-                        modifier = if (at == 0) Modifier.focusRequester(first) else Modifier,
+                        // Scrolled along, a face further up the row looks
+                        // nearer than the foot of the screen.
+                        modifier = (if (at == 0) Modifier.focusRequester(first) else Modifier)
+                            .focusProperties { down = foot },
                     )
                 }
                 if (profiles.isEmpty()) {
@@ -341,8 +354,6 @@ private fun Profiles(
                 }
             }
         }
-        // Coming down to the foot lands on the button left, or on its first.
-        val foot = remember { FocusRequester() }
         Row(modifier = Modifier.fillMaxWidth().focusRestorer(foot), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(palette.ok))
             Text(

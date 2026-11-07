@@ -643,6 +643,10 @@ img.door-greeting-mark {
   animation-delay: 260ms;
 }
 
+.door-hall > .door-by-hand + .door-by-hand {
+  margin-top: 12px;
+}
+
 .door-by-hand:hover {
   color: var(--text);
   border-color: var(--border-strong);
@@ -1190,20 +1194,24 @@ img.door-greeting-mark {
   }
 
   .door-hall {
-    --door-tile: clamp(54px, min(26vw, calc(var(--door-room) * 0.118)), 112px);
     --door-tile-gap: 18px;
     padding-bottom: 0;
   }
 
   .door-who {
-    max-width: calc(3 * var(--door-tile) + 2 * var(--door-tile-gap));
+    --door-across: var(--door-columns);
+    --door-tile: clamp(
+      48px,
+      min(
+        26vw,
+        calc(var(--door-room) * 0.118),
+        calc((100vw - 2 * clamp(14px, 4vw, 28px) - (var(--door-across) - 1) * var(--door-tile-gap)) / var(--door-across))
+      ),
+      112px
+    );
+    max-width: calc(var(--door-across) * var(--door-tile) + (var(--door-across) - 1) * var(--door-tile-gap));
     gap: clamp(6px, calc(var(--door-room) * 0.024), 22px) var(--door-tile-gap);
     margin-bottom: clamp(8px, calc(var(--door-room) * 0.03), 30px);
-  }
-
-  /* The two ways in that are not a face, kept apart. */
-  .door-hall > .door-by-hand + .door-by-hand {
-    margin-top: 12px;
   }
 
   .door-by-hand {
@@ -1250,12 +1258,11 @@ img.door-greeting-mark {
 /* A phone too short for two lines of faces: four stand on one. */
 @media (max-width: 760px) and (max-height: 680px) {
   .door-hall {
-    --door-tile: clamp(54px, min(20vw, calc(var(--door-room) * 0.118)), 112px);
     --door-tile-gap: 12px;
   }
 
   .door-who {
-    max-width: calc(4 * var(--door-tile) + 3 * var(--door-tile-gap));
+    --door-across: max(var(--door-columns), 4);
   }
 }
 
