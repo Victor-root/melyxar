@@ -75,12 +75,18 @@
     var(--header-glass);
   box-shadow: 0 0 10px 1px var(--accent-glow);
   color: var(--text-soft);
-  transition: background var(--quick) var(--ease), color var(--quick) var(--ease);
+  transition: background var(--quick) var(--ease), border-color var(--quick) var(--ease),
+    box-shadow var(--quick) var(--ease), color var(--quick) var(--ease);
 }
 
-.modal-step:hover {
-  background: var(--surface-hover);
-  color: var(--text);
+/* Lit as the chevron of a library is under the pointer. */
+@media (hover: hover) {
+  .modal-step:hover {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 0 22px 4px var(--accent-glow);
+    color: var(--accent-contrast);
+  }
 }
 
 /* The one part that scrolls, so the title and the action stay where they
