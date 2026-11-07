@@ -288,6 +288,16 @@
 
 
   /*
+   * The glass and the rim that slide stand on layers of their own for good:
+   * promoted only as they start to move, the rim was drawn again at every
+   * step of the way, three times the work of the graphics card.
+   */
+  .header-glass-run,
+  .header-rim-run > .glass-rim {
+    will-change: transform;
+  }
+
+  /*
    * The piece at the right end is the whole band, and only its glass shows
    * how much of it is out: folded, the end with the arrow and the account;
    * unfolded, all of it, the piece at the left giving way. The glass slides
