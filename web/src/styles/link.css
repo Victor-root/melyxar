@@ -5,12 +5,19 @@
 
 /* One column, everything on its middle: a phone is where this is mostly
    done, and a code, a device and one button read down its middle. */
-.link-card {
+.link-form {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--gap);
   text-align: center;
+}
+
+.modal.link-dialog {
+  width: min(520px, 100%);
+}
+
+.link-card {
   max-width: 560px;
   padding: 22px;
   border: 1px solid var(--border);

@@ -43,6 +43,7 @@ import { useAccount } from "../account";
 import { Bell, BellLine } from "../notifications/bell";
 import { useRequests } from "../requests/store";
 import { Dropdown } from "./dropdown";
+import { LinkDialog } from "../pages/link";
 import { TopSheetHandle, TopSheetHead } from "./top-sheet";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
@@ -52,7 +53,7 @@ import type { Area, Found } from "../findable";
 import { useSettings } from "../settings";
 import { Face } from "./face";
 import { headroomAt } from "../headroom";
-import { PHONE, useMediaQuery } from "../media-query";
+import { ON_A_PHONE, PHONE, useMediaQuery } from "../media-query";
 import type { Headroom } from "../headroom";
 import {
   BackIcon,
@@ -197,6 +198,8 @@ export function Header({
 }) {
   const { t, headerHides, headerHidesOnPhone, headerButtons, buttonsInTheBar } = useSettings();
   const onAPhone = useMediaQuery(PHONE);
+  const phoneSized = useMediaQuery(ON_A_PHONE);
+  const [linking, setLinking] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const [parameters] = useSearchParams();
@@ -894,16 +897,24 @@ export function Header({
 
             {/* Letting in a television or a browser waiting at its door, by
                 the code it shows. */}
-            <NavLink to="/link" className="header-menu-line">
-              <DeviceIcon size={16} />
-              {t("nav.link")}
-            </NavLink>
+            {phoneSized ? (
+              <NavLink to="/link" className="header-menu-line">
+                <DeviceIcon size={16} />
+                {t("nav.link")}
+              </NavLink>
+            ) : (
+              <button type="button" className="header-menu-line" onClick={() => setLinking(true)}>
+                <DeviceIcon size={16} />
+                {t("nav.link")}
+              </button>
+            )}
             <button type="button" className="header-menu-line" onClick={() => void leave()}>
               <LeaveIcon size={16} />
               {t("nav.sign_out")}
             </button>
             <TopSheetHandle />
           </Dropdown>
+          {linking && <LinkDialog onClose={() => setLinking(false)} />}
         </div>
       </div>
     </header>
