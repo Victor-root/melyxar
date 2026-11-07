@@ -5,12 +5,13 @@
  * administrator may open it on another account than their own.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import type { ManagedAccount } from "../api";
 import { useAccount } from "../account";
 import { PageBackdrop } from "../components/backdrop";
+import { Modal } from "../components/modal";
 import { Picker } from "../components/panel";
 import { CameraIcon, DeviceIcon, TickIcon } from "../icons";
 import { spacedCode } from "./door-link";
@@ -30,7 +31,8 @@ function refusalOf(error: unknown): string {
   return "error.unreachable";
 }
 
-export function LinkPage() {
+/** What lets a device in, on the page and in the window a computer opens. */
+function LinkForm({ cursorHere = false }: { cursorHere?: boolean }) {
   const { t } = useSettings();
   const { account } = useAccount();
   const [search] = useSearchParams();
@@ -42,6 +44,16 @@ export function LinkPage() {
   const administrator = account?.is_administrator === true;
   const [accounts, setAccounts] = useState<ManagedAccount[]>([]);
   const [on, setOn] = useState<string>(account?.id ?? "");
+  const field = useRef<HTMLInputElement>(null);
+
+  // A window takes the focus for itself as it opens, after this has run.
+  useEffect(() => {
+    if (!cursorHere) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => field.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [cursorHere]);
 
   // The device a whole code names, asked once the six digits are in.
   useEffect(() => {
@@ -104,6 +116,69 @@ export function LinkPage() {
   };
 
   return (
+    <div className="link-form">
+      <p className="link-lead">{t("link.lead")}</p>
+      {done && (
+        <p className="panel-notice panel-notice-ok link-done">
+          <TickIcon size={16} />
+          {t("link.done", { device: done })}
+        </p>
+      )}
+      <input
+        className="field-line link-code"
+        ref={field}
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        aria-label={t("link.code")}
+        placeholder="000 000"
+        value={spacedCode(typed)}
+        onChange={(event) => {
+          setDone(null);
+          setTyped(event.target.value.replace(/\D/g, "").slice(0, DIGITS));
+        }}
+      />
+      {/* The phone's own camera, in the application: no reader of QR codes
+          of its own to find, and no browser opened beside it. */}
+      {appScanner && (
+        <button type="button" className="button link-scan" onClick={scan}>
+          <CameraIcon size={17} />
+          {t("link.scan")}
+        </button>
+      )}
+      {refusal && (
+        <p className="panel-notice panel-notice-trouble" role="alert">
+          {t(refusal)}
+        </p>
+      )}
+      {device && (
+        <div className="link-device">
+          <span className="link-device-name">
+            <DeviceIcon size={18} />
+            {device}
+          </span>
+          {administrator && accounts.length > 1 && (
+            <span className="link-on">
+              <span className="line-note">{t("link.on")}</span>
+              <Picker
+                label={t("link.on")}
+                value={on}
+                options={accounts.map((one) => [one.id, one.name] as const)}
+                onPick={setOn}
+              />
+            </span>
+          )}
+          <button type="button" className="button button-accent" disabled={sending} onClick={letIn}>
+            {t("link.go")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function LinkPage() {
+  const { t } = useSettings();
+  return (
     <>
       <PageBackdrop />
       <main className="page link-page">
@@ -111,62 +186,19 @@ export function LinkPage() {
           <h1>{t("link.title")}</h1>
         </div>
         <section className="link-card">
-          <p className="link-lead">{t("link.lead")}</p>
-          {done && (
-            <p className="panel-notice panel-notice-ok link-done">
-              <TickIcon size={16} />
-              {t("link.done", { device: done })}
-            </p>
-          )}
-          <input
-            className="field-line link-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            aria-label={t("link.code")}
-            placeholder="000 000"
-            value={spacedCode(typed)}
-            onChange={(event) => {
-              setDone(null);
-              setTyped(event.target.value.replace(/\D/g, "").slice(0, DIGITS));
-            }}
-          />
-          {/* The phone's own camera, in the application: no reader of QR codes
-              of its own to find, and no browser opened beside it. */}
-          {appScanner && (
-            <button type="button" className="button link-scan" onClick={scan}>
-              <CameraIcon size={17} />
-              {t("link.scan")}
-            </button>
-          )}
-          {refusal && (
-            <p className="panel-notice panel-notice-trouble" role="alert">
-              {t(refusal)}
-            </p>
-          )}
-          {device && (
-            <div className="link-device">
-              <span className="link-device-name">
-                <DeviceIcon size={18} />
-                {device}
-              </span>
-              {administrator && accounts.length > 1 && (
-                <span className="link-on">
-                  <span className="line-note">{t("link.on")}</span>
-                  <Picker
-                    label={t("link.on")}
-                    value={on}
-                    options={accounts.map((one) => [one.id, one.name] as const)}
-                    onPick={setOn}
-                  />
-                </span>
-              )}
-              <button type="button" className="button button-accent" disabled={sending} onClick={letIn}>
-                {t("link.go")}
-              </button>
-            </div>
-          )}
+          <LinkForm />
         </section>
       </main>
     </>
+  );
+}
+
+/** The same in a window, for a computer: too small a thing for a page. */
+export function LinkDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useSettings();
+  return (
+    <Modal title={t("link.title")} onClose={onClose} className="link-dialog">
+      <LinkForm cursorHere />
+    </Modal>
   );
 }
