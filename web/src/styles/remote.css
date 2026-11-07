@@ -361,4 +361,10 @@
     width: 40px;
     height: 40px;
   }
+
+  /* The two times as close to the bar as each other: no column kept for a
+     time longer than this one. */
+  .remote-steering > .remote-line > .remote-line-end {
+    min-width: 0;
+  }
 }
