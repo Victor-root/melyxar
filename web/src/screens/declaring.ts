@@ -77,6 +77,7 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
         keeps_resume_points: wanted.keeps_resume_points,
         keeps_watched_marks: wanted.keeps_watched_marks,
         in_the_hero: wanted.in_the_hero,
+        holds_back_until_ready: wanted.holds_back_until_ready,
         metadata_language: wanted.metadata_language,
       })
       .then((kept) => {
@@ -85,8 +86,9 @@ export function useLibraryEditing(onChanged: () => void): LibraryEditing {
             ? null
             : { kind: "asked_about_again", count: kept.asked_about_again },
         );
-        // The banner of the home page is drawn by the server from this.
-        if ("in_the_hero" in changes) {
+        // The banner of the home page is drawn by the server from this, and
+        // so is every row holding back what is not ready.
+        if ("in_the_hero" in changes || "holds_back_until_ready" in changes) {
           rowsHaveMoved();
         }
         onChanged();
@@ -189,7 +191,8 @@ export function useRemoving(
 
 /** What a library does until somebody chooses otherwise, the same as the
  *  server's: every heavy reading wanted and left to the night, the folders
- *  left unwatched, and every play remembered. */
+ *  left unwatched, every play remembered, and nothing shown before it is
+ *  ready. */
 const USUAL_CHOICES: LibraryChoices = {
   extract_subtitles: true,
   make_thumbnails: true,
@@ -200,6 +203,7 @@ const USUAL_CHOICES: LibraryChoices = {
   keeps_resume_points: true,
   keeps_watched_marks: true,
   in_the_hero: true,
+  holds_back_until_ready: true,
 };
 
 /** A library being declared, and what it is made of so far. */

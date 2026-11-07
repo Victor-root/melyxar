@@ -262,6 +262,7 @@ export const FINDABLE: FindableSection[] = [
     files: ["pages/admin/libraries.tsx", "music/library-options.tsx"],
     named: [
       ["settings.library_name"],
+      ["settings.holds_back_until_ready"],
       ["settings.extract_subtitles", "admin.extract_subtitles_why"],
       ["settings.make_thumbnails", "admin.make_thumbnails_why"],
       ["settings.detect_openings", "admin.detect_openings_why"],

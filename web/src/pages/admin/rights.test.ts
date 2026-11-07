@@ -20,6 +20,7 @@ function library(id: string, name: string): Library {
     keeps_resume_points: true,
     keeps_watched_marks: true,
     in_the_hero: true,
+    holds_back_until_ready: true,
     watch_state: null,
     watch_refusal: null,
     metadata_language: "fr",

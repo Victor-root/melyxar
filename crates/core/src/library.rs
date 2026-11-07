@@ -220,11 +220,15 @@ pub struct LibraryOptions {
     pub keeps_watched_marks: bool,
     /// Let its works stand in the banner at the top of the home page.
     pub in_the_hero: bool,
+    /// Keep what arrives out of sight until it has been analysed, named and
+    /// read for where a jump can land. Only ever asked of a library of videos.
+    pub holds_back_until_ready: bool,
 }
 
 impl Default for LibraryOptions {
     /// Every heavy reading wanted and left to the scheduled tasks, the
-    /// folders left unwatched, and every play remembered.
+    /// folders left unwatched, every play remembered, and nothing shown
+    /// before it is ready.
     fn default() -> Self {
         Self {
             extract_subtitles: true,
@@ -236,6 +240,7 @@ impl Default for LibraryOptions {
             keeps_resume_points: true,
             keeps_watched_marks: true,
             in_the_hero: true,
+            holds_back_until_ready: true,
         }
     }
 }
@@ -279,6 +284,16 @@ pub struct Library {
     pub roots: Vec<LibraryRoot>,
 }
 
+impl Library {
+    /// Whether what arrives here is kept out of sight until it is ready.
+    ///
+    /// Never for music or cameras, whatever the switch says: nothing in them
+    /// is read for where a jump can land, so nothing is ever waited for.
+    pub fn holds_back_until_ready(&self) -> bool {
+        self.kind.holds_videos() && self.options.holds_back_until_ready
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,6 +323,26 @@ mod tests {
         let usual = LibraryOptions::default();
         assert!(usual.extract_subtitles && usual.make_thumbnails && usual.detect_openings);
         assert!(!usual.process_on_arrival);
+    }
+
+    #[test]
+    fn only_a_library_of_videos_holds_back_what_is_not_ready() {
+        assert!(LibraryOptions::default().holds_back_until_ready);
+        let library = |kind, holds_back_until_ready| Library {
+            id: LibraryId::new(),
+            name: String::new(),
+            kind,
+            metadata_language: "fr".to_string(),
+            options: LibraryOptions {
+                holds_back_until_ready,
+                ..LibraryOptions::default()
+            },
+            roots: Vec::new(),
+        };
+        for kind in LibraryKind::every() {
+            assert_eq!(library(kind, true).holds_back_until_ready(), kind.holds_videos());
+            assert!(!library(kind, false).holds_back_until_ready());
+        }
     }
 
     #[test]

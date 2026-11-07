@@ -578,6 +578,20 @@ function LibraryChoicesFields({
           </span>
         </div>
       </div>
+      {/* Only a video is read for where a jump can land, so only a library
+          of videos has anything to wait for. */}
+      {kind !== "music" && kind !== "cameras" && (
+        <Setting
+          label={t("settings.holds_back_until_ready")}
+          why={t(kind === "home_media" ? "admin.holds_back_own_why" : "admin.holds_back_why")}
+        >
+          <Toggle
+            label={t("settings.holds_back_until_ready")}
+            checked={choices.holds_back_until_ready}
+            onChange={(holds_back_until_ready) => onChange({ holds_back_until_ready })}
+          />
+        </Setting>
+      )}
       {/* Every reading offered here goes through a video: a library of music
           has none of them to choose. */}
       {kind !== "music" && (

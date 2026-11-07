@@ -168,6 +168,8 @@ struct LibraryView {
     keeps_watched_marks: bool,
     /// Whether its works may stand in the banner at the top of the home page.
     in_the_hero: bool,
+    /// Whether what arrives is kept out of sight until it is ready to play.
+    holds_back_until_ready: bool,
     /// Where that watching stands, for a library that asked for it:
     /// watching, starting while it is being set up, or refused.
     watch_state: Option<&'static str>,
@@ -228,6 +230,7 @@ async fn libraries(
                 keeps_resume_points: library.options.keeps_resume_points,
                 keeps_watched_marks: library.options.keeps_watched_marks,
                 in_the_hero: library.options.in_the_hero,
+                holds_back_until_ready: library.options.holds_back_until_ready,
                 watch_state,
                 watch_refusal,
                 metadata_language: library.metadata_language,

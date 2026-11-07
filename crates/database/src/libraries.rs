@@ -218,12 +218,14 @@ impl Database {
                 SET extract_subtitles = ?1, make_thumbnails = ?2, detect_openings = ?3,
                     process_on_arrival = ?4, watch_in_real_time = ?5,
                     keeps_resume_points = ?6, keeps_watched_marks = ?7,
-                    generate_subtitles = ?8, in_the_hero = ?11, updated_at = ?9
+                    generate_subtitles = ?8, in_the_hero = ?11,
+                    holds_back_until_ready = ?12, updated_at = ?9
               WHERE id = ?10
                 AND (extract_subtitles <> ?1 OR make_thumbnails <> ?2 OR detect_openings <> ?3
                      OR process_on_arrival <> ?4 OR watch_in_real_time <> ?5
                      OR keeps_resume_points <> ?6 OR keeps_watched_marks <> ?7
-                     OR generate_subtitles <> ?8 OR in_the_hero <> ?11)",
+                     OR generate_subtitles <> ?8 OR in_the_hero <> ?11
+                     OR holds_back_until_ready <> ?12)",
         )
         .bind(options.extract_subtitles)
         .bind(options.make_thumbnails)
@@ -236,6 +238,7 @@ impl Database {
         .bind(timestamp_to_text(now()))
         .bind(id.to_db_string())
         .bind(options.in_the_hero)
+        .bind(options.holds_back_until_ready)
         .execute(self.writer())
         .await?;
         Ok(result.rows_affected() > 0)
@@ -282,7 +285,7 @@ impl Database {
             "SELECT id, name, kind, metadata_language,
                     extract_subtitles, make_thumbnails, detect_openings, process_on_arrival,
                     watch_in_real_time, keeps_resume_points, keeps_watched_marks,
-                    generate_subtitles, in_the_hero
+                    generate_subtitles, in_the_hero, holds_back_until_ready
              FROM libraries ORDER BY name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -322,7 +325,7 @@ impl Database {
         let row = sqlx::query(
             "SELECT l.kind, l.extract_subtitles, l.make_thumbnails, l.detect_openings,
                     l.process_on_arrival, l.watch_in_real_time, l.keeps_resume_points, l.keeps_watched_marks,
-                    l.generate_subtitles, l.in_the_hero
+                    l.generate_subtitles, l.in_the_hero, l.holds_back_until_ready
                FROM works w JOIN libraries l ON l.id = w.library_id
               WHERE w.id = ?",
         )
@@ -701,6 +704,7 @@ fn options_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<LibraryOptions> {
         keeps_resume_points: row.try_get("keeps_resume_points")?,
         keeps_watched_marks: row.try_get("keeps_watched_marks")?,
         in_the_hero: row.try_get("in_the_hero")?,
+        holds_back_until_ready: row.try_get("holds_back_until_ready")?,
     })
 }
 
@@ -945,6 +949,14 @@ mod tests {
             "leaving the banner is a change of its own"
         );
         assert_eq!(database.list_libraries().await.expect("listed")[0].options, left_out);
+
+        assert!(library.options.holds_back_until_ready, "every library waits for what is not ready");
+        let shown_at_once = LibraryOptions { holds_back_until_ready: false, ..left_out };
+        assert!(
+            database.set_library_options(library.id, shown_at_once).await.expect("written"),
+            "showing what arrives at once is a change of its own"
+        );
+        assert_eq!(database.list_libraries().await.expect("listed")[0].options, shown_at_once);
     }
 
     #[tokio::test]
