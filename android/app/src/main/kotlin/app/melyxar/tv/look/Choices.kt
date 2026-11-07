@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,7 +49,6 @@ private class Scale(
     val narrow: Dp,
     val wide: Dp,
     val tallest: Dp,
-    val corner: Dp,
     val rim: Dp,
     val title: TextUnit,
     val name: TextUnit,
@@ -61,8 +59,8 @@ private class Scale(
     val down: Dp,
 )
 
-private val SMALL = Scale(320.dp, 420.dp, 360.dp, 10.dp, 6.dp, 14.sp, 14.sp, 13.sp, 13.sp, 18.dp, 10.dp, 9.dp)
-private val LARGE = Scale(620.dp, 760.dp, 560.dp, 16.dp, 10.dp, 22.sp, 19.sp, 17.sp, 16.sp, 24.dp, 20.dp, 16.dp)
+private val SMALL = Scale(320.dp, 420.dp, 360.dp, 8.dp, 18.sp, 14.sp, 13.sp, 13.sp, 18.dp, 10.dp, 9.dp)
+private val LARGE = Scale(620.dp, 760.dp, 560.dp, 10.dp, 22.sp, 19.sp, 17.sp, 16.sp, 24.dp, 20.dp, 16.dp)
 
 /**
  * A list of [choices] over the screen, under its [title], the one in force
@@ -96,7 +94,6 @@ fun ChoiceList(
     val palette = LocalPalette.current
     val scale = if (large) LARGE else SMALL
     val start = remember { FocusRequester() }
-    val shape = RoundedCornerShape(scale.corner)
     val first = startAt.coerceIn(0, (choices.size - 1).coerceAtLeast(0))
     BackHandler(onBack = onClose)
     Column(
@@ -104,21 +101,16 @@ fun ChoiceList(
             .width(if (values.all { it == null }) scale.narrow else scale.wide)
             .focusProperties { onExit = { cancelFocusChange() } }
             .then(if (choices.isEmpty()) Modifier.focusRequester(start).focusable() else Modifier.focusGroup())
-            .boxShadow(shape, palette.shadowRaised)
-            .clip(shape)
-            .background(palette.surfaceRaised)
-            .background(palette.accent.copy(alpha = 0.14f))
-            .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+            .window()
             .padding(scale.rim),
     ) {
         Text(
             title,
             fontSize = scale.title,
-            fontWeight = FontWeight.SemiBold,
+            fontWeight = FontWeight.Bold,
             color = palette.text,
             modifier = Modifier.padding(horizontal = scale.across, vertical = scale.down * 0.9f),
         )
-        Box(Modifier.fillMaxWidth().height(1.dp).background(palette.border))
         note?.let {
             Text(
                 it,

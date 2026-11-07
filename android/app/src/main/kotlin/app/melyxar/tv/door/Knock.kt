@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,12 +43,10 @@ import app.melyxar.server.KeptSession
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.AboveKeyboard
 import app.melyxar.tv.look.AccentButton
-import app.melyxar.tv.look.BoxShadow
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
 import app.melyxar.tv.look.TvField
-import app.melyxar.tv.look.boxShadow
-import app.melyxar.tv.look.shadowCard
+import app.melyxar.tv.look.window
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -168,18 +165,13 @@ fun DoorPanel(
 ) {
     val palette = LocalPalette.current
     AboveKeyboard(Modifier.background(palette.ground.copy(alpha = 0.72f))) {
-        val shape = RoundedCornerShape(18.dp)
         Column(
             modifier = Modifier
                 .width(width)
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup()
                 .graphicsLayer { translationX = shake.value.dp.toPx() }
-                .boxShadow(shape, palette.shadowCard, BoxShadow(palette.accentGlow, blur = 14.dp, spread = 2.dp))
-                .clip(shape)
-                .background(palette.surfaceRaised)
-                .background(palette.accent.copy(alpha = 0.10f))
-                .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+                .window()
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),

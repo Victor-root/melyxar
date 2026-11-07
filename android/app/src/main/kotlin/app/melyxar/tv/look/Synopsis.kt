@@ -1,7 +1,5 @@
 package app.melyxar.tv.look
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -38,6 +36,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import app.melyxar.tv.look.window
 import kotlinx.coroutines.launch
 
 /** How far one press of an arrow scrolls a long text. */
@@ -96,17 +95,13 @@ private fun Whole(text: String, title: String) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val held = remember { FocusRequester() }
-    val shape = RoundedCornerShape(18.dp)
     Column(
         modifier = Modifier
             .width(640.dp)
-            .boxShadow(shape, palette.shadowRaised)
-            .clip(shape)
-            .background(palette.surfaceRaised)
-            .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+            .window()
             .padding(28.dp),
     ) {
-        Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = palette.text)
+        Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.text)
         Text(
             text,
             fontSize = 16.sp,
