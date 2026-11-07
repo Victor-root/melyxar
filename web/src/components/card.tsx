@@ -412,7 +412,7 @@ export const Card = memo(function Card({
                 aria-label={t("card.more")}
                 title={t("card.more")}
                 aria-expanded={menu.open}
-                onClick={stop(() => menu.toggle(kebab.current))}
+                onClick={stop(() => menu.toggle(kebab.current, kebab.current?.closest(".card")))}
               >
                 <ToolIcon className="card-mark-tool" size={18} />
               </button>

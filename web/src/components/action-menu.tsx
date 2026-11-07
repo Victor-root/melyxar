@@ -16,6 +16,7 @@ import { PHONE, PHONE_SIDEWAYS, useMediaQuery } from "../media-query";
 import { useSettings } from "../settings";
 import { BottomSheet } from "./bottom-sheet";
 import { useBackClosesIt } from "./back-closes";
+import { menuPlace } from "./menu-place";
 
 /** One line of a menu. */
 export interface MenuEntry {
@@ -29,13 +30,11 @@ export interface MenuEntry {
   act?: () => void;
 }
 
-/** How far from the edge of the window a menu is allowed to sit. */
-const OFF_THE_EDGE = 8;
-
 export function ActionMenu({
   title,
   groups,
   from,
+  beside,
   openedBy,
   onClose,
   into,
@@ -47,6 +46,8 @@ export function ActionMenu({
   groups: MenuEntry[][];
   /** The button it was opened from, which is where it is drawn. */
   from: DOMRect;
+  /** What it stands beside rather than under the button, when it is given. */
+  beside?: DOMRect;
   /** That button itself. A press on it is the one press anywhere outside
       this menu that must not close it, because the button is already going
       to: closing here as well shut it and let the button open it again, so
@@ -74,17 +75,27 @@ export function ActionMenu({
       </BottomSheet>
     );
   }
-  return <FloatingMenu groups={lines} from={from} openedBy={openedBy} onClose={onClose} />;
+  return (
+    <FloatingMenu
+      groups={lines}
+      from={from}
+      beside={beside}
+      openedBy={openedBy}
+      onClose={onClose}
+    />
+  );
 }
 
 function FloatingMenu({
   groups,
   from,
+  beside,
   openedBy,
   onClose,
 }: {
   groups: MenuEntry[][];
   from: DOMRect;
+  beside?: DOMRect;
   openedBy: HTMLElement | null;
   onClose: () => void;
 }) {
@@ -92,26 +103,21 @@ function FloatingMenu({
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   useBackClosesIt(onClose);
 
-  // Placed once it has been drawn, since where it fits depends on how tall it
-  // came out: above the button when there is no room under it, and pulled
-  // back from the edge rather than hanging off it.
+  // Placed once it has been drawn, since where it fits depends on how large
+  // it came out.
   useLayoutEffect(() => {
     const menu = holder.current;
     if (!menu) {
       return;
     }
     const { width, height } = menu.getBoundingClientRect();
-    const under = from.bottom + 6;
-    const top =
-      under + height > window.innerHeight - OFF_THE_EDGE
-        ? Math.max(OFF_THE_EDGE, from.top - height - 6)
-        : under;
-    const left = Math.min(
-      Math.max(OFF_THE_EDGE, from.right - width),
-      window.innerWidth - width - OFF_THE_EDGE,
+    setAt(
+      menuPlace({ width, height }, from, beside, {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      }),
     );
-    setAt({ top, left });
-  }, [from]);
+  }, [from, beside]);
 
   useEffect(() => {
     const elsewhere = (event: MouseEvent) => {
