@@ -11,11 +11,13 @@
   gap: var(--gap);
 }
 
+/* The lock falls under the name when a half width has no room for both. */
 .details-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--gap-tight);
+  gap: 4px var(--gap-tight);
 }
 
 .details-field textarea {
@@ -45,6 +47,11 @@
 
 .details-row input {
   min-width: 0;
+}
+
+/* Fields side by side keep their boxes level whatever their heads took. */
+.details-row .details-field {
+  justify-content: space-between;
 }
 
 /* Quiet while the provider still decides, in the accent once the field is
