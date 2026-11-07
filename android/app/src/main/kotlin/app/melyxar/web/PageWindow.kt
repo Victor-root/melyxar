@@ -5,6 +5,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsAnimationCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import kotlinx.serialization.Serializable
@@ -21,16 +22,57 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
     @Volatile
     private var edges = Json.encodeToString(Edges(0f, 0f, 0f, 0f))
 
+    /** Whether the keyboard is on its way, and what the window was told last
+     *  while it is. */
+    private var keyboardMoving = false
+    private var heardWhileMoving: WindowInsetsCompat? = null
+
     init {
         ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
             val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            view.updatePadding(bottom = keyboard)
-            heard(insets, keyboard > 0)
+            // Coming up, the keyboard slides over the page and the page gives
+            // way once it has arrived: given way at the start, a black band
+            // stood where the keyboard was still to come. Going down, the page
+            // is already whole behind it.
+            if (keyboardMoving && keyboard > view.paddingBottom) {
+                heardWhileMoving = insets
+            } else {
+                settle(view, insets)
+            }
             insets
         }
+        ViewCompat.setWindowInsetsAnimationCallback(
+            holder,
+            object : WindowInsetsAnimationCompat.Callback(DISPATCH_MODE_STOP) {
+                override fun onPrepare(animation: WindowInsetsAnimationCompat) {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
+                        keyboardMoving = true
+                    }
+                }
+
+                override fun onProgress(
+                    insets: WindowInsetsCompat,
+                    running: MutableList<WindowInsetsAnimationCompat>,
+                ) = insets
+
+                override fun onEnd(animation: WindowInsetsAnimationCompat) {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
+                        keyboardMoving = false
+                        heardWhileMoving?.let { settle(holder, it) }
+                        heardWhileMoving = null
+                    }
+                }
+            },
+        )
         // Said once, by the page, from what it is told here: the web view
         // saying it again on its own would count every edge twice.
         ViewCompat.setOnApplyWindowInsetsListener(page) { _, _ -> WindowInsetsCompat.CONSUMED }
+    }
+
+    private fun settle(view: View, insets: WindowInsetsCompat) {
+        val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+        view.updatePadding(bottom = keyboard)
+        heard(insets, keyboard > 0)
     }
 
     /** The keyboard covers the bottom bar, and the page is already above it. */
