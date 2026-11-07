@@ -15,6 +15,7 @@ export function LanguagePicker({ quiet = false }: { quiet?: boolean }) {
   return (
     <Picker
       label={t("nav.language")}
+      sheetOnAPhone
       icon={quiet ? <LanguagesIcon size={16} /> : undefined}
       fieldWording={quiet && languageChoice === "auto" ? t("language.auto_short") : undefined}
       value={languageChoice}

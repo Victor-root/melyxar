@@ -14,10 +14,12 @@ import type { ComponentType, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon, EditIcon, TickIcon } from "../icons";
 import type { IconProps } from "../icons";
+import { ON_A_PHONE, useMediaQuery } from "../media-query";
 import { insideTheRange } from "../readable";
 import { useSettings } from "../settings";
 import { useSection } from "./sectioned";
 import { useBackClosesIt } from "./back-closes";
+import { BottomSheet } from "./bottom-sheet";
 
 /**
  * The head of a page: what it is, and what it is for.
@@ -328,6 +330,7 @@ export function Picker<T extends string>({
   disabled,
   icon,
   fieldWording,
+  sheetOnAPhone,
 }: {
   value: T;
   /** Each option as it is kept, and as it is read. */
@@ -339,7 +342,10 @@ export function Picker<T extends string>({
   icon?: ReactNode;
   /** What the shut field reads, when shorter than the line in the list. */
   fieldWording?: string;
+  /** Opens from the foot of the screen on a phone rather than under the field. */
+  sheetOnAPhone?: boolean;
 }) {
+  const asASheet = useMediaQuery(ON_A_PHONE) && sheetOnAPhone === true;
   const [open, setOpen] = useState(false);
   const field = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -428,6 +434,34 @@ export function Picker<T extends string>({
     lines[(next + lines.length) % lines.length]?.focus();
   };
 
+  /* Each line, and what closes the list before its choice is made. */
+  const lines = (close: (then: () => void) => void) =>
+    options.map(([option, wording]) => {
+      const chosen = option === value;
+      return (
+        <button
+          key={option}
+          type="button"
+          role="option"
+          aria-selected={chosen}
+          className={`header-menu-line${chosen ? " header-menu-line-on" : ""}`}
+          onClick={() =>
+            close(() => {
+              // Chosen once the list is out of the history: a choice that
+              // rewrites the address in place rewrites the page's own, not
+              // the list's.
+              if (!chosen) {
+                leaveHistory(() => onPick(option));
+              }
+            })
+          }
+        >
+          <span className="picker-line-words">{wording}</span>
+          {chosen && <TickIcon size={16} />}
+        </button>
+      );
+    });
+
   return (
     <>
       <button
@@ -445,7 +479,17 @@ export function Picker<T extends string>({
         <span className="picker-value">{shown}</span>
         <ChevronDownIcon size={16} className="picker-arrow" />
       </button>
+      {open && asASheet && (
+        <BottomSheet title={label} onClose={() => setOpen(false)} ownsHistory={false}>
+          {(shut) => (
+            <div ref={list} id={listId} role="listbox" aria-label={label} className="sheet-menu" onKeyDown={walk}>
+              {lines(shut)}
+            </div>
+          )}
+        </BottomSheet>
+      )}
       {open &&
+        !asASheet &&
         createPortal(
           <div
             ref={list}
@@ -463,30 +507,10 @@ export function Picker<T extends string>({
             }}
             onKeyDown={walk}
           >
-            {options.map(([option, wording]) => {
-              const chosen = option === value;
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  role="option"
-                  aria-selected={chosen}
-                  className={`header-menu-line${chosen ? " header-menu-line-on" : ""}`}
-                  onClick={() => {
-                    setOpen(false);
-                    field.current?.focus();
-                    // Chosen once the list is out of the history: a choice
-                    // that rewrites the address in place rewrites the page's
-                    // own, not the list's.
-                    if (!chosen) {
-                      leaveHistory(() => onPick(option));
-                    }
-                  }}
-                >
-                  <span className="picker-line-words">{wording}</span>
-                  {chosen && <TickIcon size={16} />}
-                </button>
-              );
+            {lines((then) => {
+              setOpen(false);
+              field.current?.focus();
+              then();
             })}
           </div>,
           document.body,
