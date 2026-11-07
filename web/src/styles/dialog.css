@@ -30,7 +30,9 @@
   border-radius: var(--radius-window);
   border: var(--window-rim);
   background: var(--window-ground);
+  color: var(--text);
   box-shadow: var(--window-shadow);
+  outline: none;
   overflow: hidden;
 }
 

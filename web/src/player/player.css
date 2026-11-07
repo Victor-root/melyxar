@@ -108,6 +108,7 @@
      edit away from following the interface again if that is ever wanted, and
      a panel can never end up half themed. */
   --surface-deep: var(--app-ground);
+  --surface: var(--surface-raised);
   --surface-raised: #101216;
   --surface-hover: rgba(255, 255, 255, 0.1);
   --border: rgba(255, 255, 255, 0.12);
@@ -115,6 +116,7 @@
   --text: #fff;
   --text-soft: rgba(255, 255, 255, 0.72);
   --text-faint: rgba(255, 255, 255, 0.55);
+  color-scheme: dark;
 
   /* What the strip along the bottom and the buttons floating over the film
      are made of: the surface above, with the film showing through it rather
