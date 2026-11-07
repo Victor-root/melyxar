@@ -16,6 +16,7 @@ import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
+import { PHONE, useMediaQuery } from "../media-query";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
 import { deviceKind, deviceName } from "../devices";
@@ -229,6 +230,7 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   const steer = useSteer();
   const send = (order: RemoteOrder) => void steer(device.device, order);
   const playing = device.playing;
+  const onAPhone = useMediaQuery(PHONE);
   const now = useEverySecond(playing !== null && !playing.paused);
   const [seeking, seekTo, seekHeard] = useSettling((seconds) => send({ do: "seek", seconds }));
   const [loudening, loudTo, loudHeard] = useSettling((level) => send({ do: "volume", level }));
@@ -281,6 +283,19 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   const queue = song ? device.queue : null;
   // A film on its own has nothing before or after it.
   const steps = song || playing.kind === "episode";
+  // On a telephone it would crowd the buttons out from under the thumb.
+  const stopByTheLine = onAPhone && length !== null;
+  const stop = (
+    <button
+      type="button"
+      className={stopByTheLine ? "remote-button remote-button-small" : "remote-button"}
+      aria-label={t("music.stop")}
+      onClick={() => send({ do: "stop" })}
+    >
+      <StopIcon size={20} />
+    </button>
+  );
+  const left = length === null ? "" : `-${asClock(Math.max(0, length - position))}`;
   return (
     <div className="remote-steering">
       <NowPlaying playing={playing} />
@@ -292,7 +307,16 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
           step={1}
           onChange={seekTo}
           start={asClock(position)}
-          end={`-${asClock(Math.max(0, length - position))}`}
+          end={
+            stopByTheLine ? (
+              <>
+                {left}
+                {stop}
+              </>
+            ) : (
+              left
+            )
+          }
         />
       )}
       <div className="remote-controls">
@@ -331,9 +355,7 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
               <NextIcon size={22} />
             </button>
           )}
-          <button type="button" className="remote-button" aria-label={t("music.stop")} onClick={() => send({ do: "stop" })}>
-            <StopIcon size={20} />
-          </button>
+          {!stopByTheLine && stop}
         </div>
         {loudness}
       </div>
