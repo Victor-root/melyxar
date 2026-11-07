@@ -21,6 +21,7 @@ use sqlx::{AssertSqlSafe, Row};
 use std::collections::HashMap;
 
 use crate::convert::{parse_id, parse_timestamp};
+use crate::held_back::HeldBack;
 use crate::images::StoredImage;
 use crate::{Database, DatabaseError, Result};
 
@@ -145,6 +146,8 @@ pub struct BrowseRequest {
     /// point of the right being written down rather than guessed at from a
     /// list that happens to be empty.
     pub within: Option<Vec<LibraryId>>,
+    /// What the libraries still taking in keep out of sight.
+    pub held_back: HeldBack,
     /// The letter a grid was asked to start at.
     pub initial: Option<Initial>,
     pub order: WorkOrder,
@@ -308,6 +311,7 @@ impl Default for BrowseRequest {
         Self {
             library_id: None,
             within: None,
+            held_back: HeldBack::nothing(),
             initial: None,
             order: WorkOrder::Title,
             descending: false,
@@ -449,6 +453,7 @@ impl Database {
             });
         };
         sql.push_str(&inside);
+        sql.push_str(&request.held_back.work_shown("w"));
         if request.genre.is_some() {
             sql.push_str(" AND g.name = ? COLLATE NOCASE");
         }
@@ -553,6 +558,9 @@ impl Database {
         for granted in request.within.iter().flatten() {
             query = query.bind(granted.to_db_string());
         }
+        if let Some(held) = request.held_back.bound() {
+            query = query.bind(held);
+        }
         if let Some(genre) = &request.genre {
             query = query.bind(genre.clone());
         }
@@ -602,7 +610,7 @@ impl Database {
             self.attach_wide_pictures(&mut cards).await?;
         }
         if let Some(viewer) = request.viewer {
-            self.attach_viewer_state(viewer, &mut cards).await?;
+            self.attach_viewer_state(viewer, &mut cards, &request.held_back).await?;
         }
         Ok(WorkPage { cards, next })
     }
@@ -611,19 +619,26 @@ impl Database {
     ///
     /// What the page of a work carries for the marks it shares with every
     /// card of the same work: ticked on the page, the cards say so too.
-    pub async fn card_of(&self, viewer: UserId, work_id: WorkId) -> Result<Option<WorkCard>> {
-        let row = sqlx::query(AssertSqlSafe(format!(
-            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id = ?"
+    pub async fn card_of(
+        &self,
+        viewer: UserId,
+        work_id: WorkId,
+        held: &HeldBack,
+    ) -> Result<Option<WorkCard>> {
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id = ?{}",
+            held.work_shown("w")
         )))
-        .bind(work_id.to_db_string())
-        .fetch_optional(self.reader())
-        .await?;
-        let Some(row) = row else {
+        .bind(work_id.to_db_string());
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let Some(row) = query.fetch_optional(self.reader()).await? else {
             return Ok(None);
         };
         let mut cards = [card_from_row(&row)?];
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         let [card] = cards;
         Ok(Some(card))
     }
@@ -648,6 +663,7 @@ impl Database {
         &self,
         viewer: UserId,
         cards: &mut [WorkCard],
+        held: &HeldBack,
     ) -> Result<()> {
         if cards.is_empty() {
             return Ok(());
@@ -665,6 +681,9 @@ impl Database {
             .map(|place| format!("?{place}"))
             .collect::<Vec<_>>()
             .join(", ");
+        // A copy held back is never the one a button starts, bound after the
+        // cards.
+        let shown = held.copy_shown_at("s", &format!("?{}", cards.len() + 2));
         let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT w.id,
                     -- What this library keeps of a play: a mark or a place
@@ -680,7 +699,7 @@ impl Database {
                     -- biggest one still on the disk, the same one every other
                     -- play button in this server means.
                     (SELECT s.id FROM media_sources s
-                      WHERE s.work_id = w.id AND s.missing_since IS NULL
+                      WHERE s.work_id = w.id AND s.missing_since IS NULL{shown}
                       ORDER BY s.size_bytes DESC LIMIT 1) AS source_id,
                     -- Episodes below this one, at either depth: a season holds
                     -- them directly, a series holds them under its seasons.
@@ -709,7 +728,7 @@ impl Database {
                     -- work somebody stopped partway through, and only then.
                     CASE WHEN p.position_ms > 0 AND l.keeps_resume_points THEN
                         (SELECT s.duration_ms FROM media_sources s
-                          WHERE s.work_id = w.id AND s.missing_since IS NULL
+                          WHERE s.work_id = w.id AND s.missing_since IS NULL{shown}
                           ORDER BY s.size_bytes DESC LIMIT 1)
                     END AS resume_length_ms
              FROM works w
@@ -724,6 +743,9 @@ impl Database {
         let mut query = rows;
         for card in cards.iter() {
             query = query.bind(card.id.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query.fetch_all(self.reader()).await?;
 
@@ -966,27 +988,27 @@ impl Database {
     ///
     /// Asked for separately and only when a total is actually displayed: a
     /// count walks the whole set, which is exactly what paging avoids.
-    pub async fn count_browsable(&self, library_id: Option<LibraryId>) -> Result<i64> {
-        let row: (i64,) = match library_id {
-            Some(id) => {
-                sqlx::query_as(AssertSqlSafe(format!(
-                    "SELECT count(*) FROM works WHERE library_id = ? AND {}",
-                    met_on_its_own("")
-                )))
-                .bind(id.to_db_string())
-                .fetch_one(self.reader())
-                .await?
-            }
-            None => {
-                sqlx::query_as(AssertSqlSafe(format!(
-                    "SELECT count(*) FROM works WHERE {}",
-                    met_on_its_own("")
-                )))
-                .fetch_one(self.reader())
-                .await?
-            }
+    pub async fn count_browsable(
+        &self,
+        library_id: Option<LibraryId>,
+        held: &HeldBack,
+    ) -> Result<i64> {
+        let inside = match library_id {
+            Some(_) => " AND library_id = ?",
+            None => "",
         };
-        Ok(row.0)
+        let mut query = sqlx::query_scalar(AssertSqlSafe(format!(
+            "SELECT count(*) FROM works WHERE {}{inside}{}",
+            met_on_its_own(""),
+            held.work_shown("works")
+        )));
+        if let Some(id) = library_id {
+            query = query.bind(id.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        Ok(query.fetch_one(self.reader()).await?)
     }
 
     /// How many works are still waiting for a name.
@@ -1020,34 +1042,31 @@ impl Database {
     ///
     /// What a filter menu is built from: offering a genre nobody has leads to
     /// an empty grid and looks like a fault.
-    pub async fn genres_in_use(&self, library_id: Option<LibraryId>) -> Result<Vec<(String, i64)>> {
-        let rows = match library_id {
-            Some(id) => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "SELECT g.name, count(*) AS total FROM genres g
-                 JOIN work_genres wg ON wg.genre_id = g.id
-                 JOIN works w ON w.id = wg.work_id
-                 WHERE w.library_id = ? AND {}
-                 GROUP BY g.id ORDER BY total DESC, g.name",
-                    met_on_its_own("w.")
-                )))
-                .bind(id.to_db_string())
-                .fetch_all(self.reader())
-                .await?
-            }
-            None => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "SELECT g.name, count(*) AS total FROM genres g
-                 JOIN work_genres wg ON wg.genre_id = g.id
-                 JOIN works w ON w.id = wg.work_id
-                 WHERE {}
-                 GROUP BY g.id ORDER BY total DESC, g.name",
-                    met_on_its_own("w.")
-                )))
-                .fetch_all(self.reader())
-                .await?
-            }
+    pub async fn genres_in_use(
+        &self,
+        library_id: Option<LibraryId>,
+        held: &HeldBack,
+    ) -> Result<Vec<(String, i64)>> {
+        let inside = match library_id {
+            Some(_) => "w.library_id = ? AND ",
+            None => "",
         };
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT g.name, count(*) AS total FROM genres g
+             JOIN work_genres wg ON wg.genre_id = g.id
+             JOIN works w ON w.id = wg.work_id
+             WHERE {inside}{}{}
+             GROUP BY g.id ORDER BY total DESC, g.name",
+            met_on_its_own("w."),
+            held.work_shown("w")
+        )));
+        if let Some(id) = library_id {
+            query = query.bind(id.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let rows = query.fetch_all(self.reader()).await?;
 
         rows.iter()
             .map(|row| Ok((row.try_get("name")?, row.try_get("total")?)))
@@ -1062,32 +1081,29 @@ impl Database {
     pub async fn initials_in_use(
         &self,
         library_id: Option<LibraryId>,
+        held: &HeldBack,
     ) -> Result<Vec<(String, i64)>> {
+        let inside = match library_id {
+            Some(_) => " AND w.library_id = ?",
+            None => "",
+        };
         // The bucket for everything beginning with no letter sorts before the
         // letters, which is where a row of them wants it.
-        let counted = format!(
-            "SELECT {} AS initial, count(*) AS total FROM works w WHERE {}",
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {} AS initial, count(*) AS total FROM works w
+              WHERE {}{inside}{}
+              GROUP BY initial ORDER BY initial",
             initial_of_a_title!(),
-            met_on_its_own("w.")
-        );
-
-        let rows = match library_id {
-            Some(id) => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "{counted} AND w.library_id = ? GROUP BY initial ORDER BY initial"
-                )))
-                .bind(id.to_db_string())
-                .fetch_all(self.reader())
-                .await?
-            }
-            None => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "{counted} GROUP BY initial ORDER BY initial"
-                )))
-                .fetch_all(self.reader())
-                .await?
-            }
-        };
+            met_on_its_own("w."),
+            held.work_shown("w")
+        )));
+        if let Some(id) = library_id {
+            query = query.bind(id.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let rows = query.fetch_all(self.reader()).await?;
 
         rows.iter()
             .map(|row| Ok((row.try_get("initial")?, row.try_get("total")?)))
@@ -1095,30 +1111,29 @@ impl Database {
     }
 
     /// The decades the collection actually spans, newest first.
-    pub async fn decades_in_use(&self, library_id: Option<LibraryId>) -> Result<Vec<(i32, i64)>> {
-        let rows = match library_id {
-            Some(id) => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "SELECT decade, count(*) AS total FROM works
-                 WHERE decade IS NOT NULL AND library_id = ? AND {}
-                 GROUP BY decade ORDER BY decade DESC",
-                    met_on_its_own("")
-                )))
-                .bind(id.to_db_string())
-                .fetch_all(self.reader())
-                .await?
-            }
-            None => {
-                sqlx::query(AssertSqlSafe(format!(
-                    "SELECT decade, count(*) AS total FROM works
-                 WHERE decade IS NOT NULL AND {}
-                 GROUP BY decade ORDER BY decade DESC",
-                    met_on_its_own("")
-                )))
-                .fetch_all(self.reader())
-                .await?
-            }
+    pub async fn decades_in_use(
+        &self,
+        library_id: Option<LibraryId>,
+        held: &HeldBack,
+    ) -> Result<Vec<(i32, i64)>> {
+        let inside = match library_id {
+            Some(_) => " AND library_id = ?",
+            None => "",
         };
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT decade, count(*) AS total FROM works
+              WHERE decade IS NOT NULL{inside} AND {}{}
+              GROUP BY decade ORDER BY decade DESC",
+            met_on_its_own(""),
+            held.work_shown("works")
+        )));
+        if let Some(id) = library_id {
+            query = query.bind(id.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let rows = query.fetch_all(self.reader()).await?;
 
         rows.iter()
             .map(|row| Ok((row.try_get("decade")?, row.try_get("total")?)))
@@ -1308,7 +1323,7 @@ mod tests {
             .expect("favourite set");
 
         let card = database
-            .card_of(who, film)
+            .card_of(who, film, &Default::default())
             .await
             .expect("read")
             .expect("present");
@@ -1317,7 +1332,7 @@ mod tests {
 
         assert_eq!(
             database
-                .card_of(who, melyxar_core::id::WorkId::new())
+                .card_of(who, melyxar_core::id::WorkId::new(), &Default::default())
                 .await
                 .expect("read"),
             None
@@ -1972,7 +1987,7 @@ mod tests {
 
         assert_eq!(
             database
-                .count_browsable(Some(library_id))
+                .count_browsable(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             shown,
@@ -1980,7 +1995,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .genres_in_use(Some(library_id))
+                .genres_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![("Drame".to_string(), shown)],
@@ -1988,7 +2003,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .decades_in_use(Some(library_id))
+                .decades_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![(2010, shown)],
@@ -1996,7 +2011,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .initials_in_use(Some(library_id))
+                .initials_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read")
                 .iter()
@@ -2054,14 +2069,14 @@ mod tests {
         assert_eq!(shown, 2, "the film, and the episode belonging to nothing");
         assert_eq!(
             database
-                .count_browsable(Some(library_id))
+                .count_browsable(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             shown
         );
         assert_eq!(
             database
-                .genres_in_use(Some(library_id))
+                .genres_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![("Drame".to_string(), 1)],
@@ -2069,14 +2084,14 @@ mod tests {
         );
         assert_eq!(
             database
-                .decades_in_use(Some(library_id))
+                .decades_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![(2010, shown)]
         );
         assert_eq!(
             database
-                .initials_in_use(Some(library_id))
+                .initials_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read")
                 .iter()
@@ -2212,13 +2227,13 @@ mod tests {
 
         assert_eq!(
             database
-                .count_browsable(Some(library_id))
+                .count_browsable(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             2
         );
         assert_eq!(
-            database.count_browsable(None).await.expect("read"),
+            database.count_browsable(None, &Default::default()).await.expect("read"),
             2,
             "without a library named, the count covers everything"
         );
@@ -2237,7 +2252,7 @@ mod tests {
             .expect("library created");
         assert_eq!(
             database
-                .count_browsable(Some(elsewhere.id))
+                .count_browsable(Some(elsewhere.id), &Default::default())
                 .await
                 .expect("read"),
             0,
@@ -2409,7 +2424,7 @@ mod tests {
             .expect("year cleared");
         assert!(
             database
-                .decades_in_use(Some(library_id))
+                .decades_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -2640,7 +2655,7 @@ mod tests {
 
         assert_eq!(
             database
-                .initials_in_use(Some(library_id))
+                .initials_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![
@@ -2780,14 +2795,14 @@ mod tests {
 
         assert_eq!(
             database
-                .genres_in_use(Some(library_id))
+                .genres_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![("Drame".to_string(), 1)]
         );
         assert_eq!(
             database
-                .decades_in_use(Some(library_id))
+                .decades_in_use(Some(library_id), &Default::default())
                 .await
                 .expect("read"),
             vec![(2010, 1)]
@@ -2816,7 +2831,7 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(page.cards.len(), 1);
-        assert_eq!(database.count_browsable(None).await.expect("read"), 1);
+        assert_eq!(database.count_browsable(None, &Default::default()).await.expect("read"), 1);
     }
 
     #[tokio::test]
@@ -2828,7 +2843,7 @@ mod tests {
             .expect("read");
         assert!(page.cards.is_empty());
         assert!(page.next.is_none());
-        assert!(database.genres_in_use(None).await.expect("read").is_empty());
+        assert!(database.genres_in_use(None, &Default::default()).await.expect("read").is_empty());
     }
 
     /// A partial index is used only when the question names exactly what it

@@ -458,7 +458,7 @@ mod tests {
 
         let viewer = a_viewer(database).await;
         database
-            .children_of(viewer, series_id, "fr")
+            .children_of(viewer, series_id, "fr", &Default::default())
             .await
             .expect("read")
             .into_iter()

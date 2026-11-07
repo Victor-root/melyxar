@@ -11,6 +11,7 @@ use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::Work;
 use melyxar_database::browse::WorkCard;
 use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
+use melyxar_database::held_back::HeldBack;
 use melyxar_database::home::Alike;
 use melyxar_database::images::StoredImage;
 
@@ -219,12 +220,13 @@ async fn what_to_carry_on_with(
     state: &AppState,
     viewer: melyxar_core::id::UserId,
     within: WorkId,
+    held: &HeldBack,
 ) -> Result<Option<CarryOn>> {
     let database = state.database();
-    let Some(episode) = database.where_to_resume(viewer, within).await? else {
+    let Some(episode) = database.where_to_resume(viewer, within, held).await? else {
         return Ok(None);
     };
-    Ok(Some(as_carry_on(state, episode).await?))
+    Ok(Some(as_carry_on(state, episode, held).await?))
 }
 
 /// One episode, ready for the button that offers it.
@@ -232,7 +234,11 @@ async fn what_to_carry_on_with(
 /// Written once because two questions end here: the one a series page asks and
 /// the one an episode page asks. A button that says the season on one page and
 /// not on the other would be the same button behaving differently.
-async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Result<CarryOn> {
+async fn as_carry_on(
+    state: &AppState,
+    episode: melyxar_core::work::Work,
+    held: &HeldBack,
+) -> Result<CarryOn> {
     let database = state.database();
     let language = crate::hand_edits::language_of(state, episode.library_id).await?;
     let overview = texts_of(state, episode.id, &language)
@@ -254,19 +260,23 @@ async fn as_carry_on(state: &AppState, episode: melyxar_core::work::Work) -> Res
         None => None,
     };
 
+    // The biggest copy, which is what pressing play without choosing means
+    // everywhere else in this server, and never one held back.
+    let mut playable = Vec::new();
+    for source in database.sources_of_work(episode.id).await? {
+        if source.missing_since.is_none() && !database.is_held_back(source.id, held).await? {
+            playable.push(source);
+        }
+    }
+
     Ok(CarryOn {
         has_own_name: !crate::episodes::is_only_a_number(
             episode.kind,
             episode.ordinal,
             &episode.title,
         ),
-        // The biggest copy, which is what pressing play without choosing means
-        // everywhere else in this server.
-        source_id: database
-            .sources_of_work(episode.id)
-            .await?
+        source_id: playable
             .into_iter()
-            .filter(|source| source.missing_since.is_none())
             .max_by_key(|source| source.size_bytes)
             .map(|source| source.id),
         id: episode.id,
@@ -312,10 +322,14 @@ async fn saga_and_its_kin(
     state: &AppState,
     who: &melyxar_core::user::User,
     work_id: WorkId,
+    held: &HeldBack,
 ) -> Result<Option<SagaRow>> {
     let database = state.database();
     let within = crate::reach::within(who);
-    let (name, mut cards) = match database.saga_of(who.id, work_id, within.as_deref()).await? {
+    let (name, mut cards) = match database
+        .saga_of(who.id, work_id, within.as_deref(), held)
+        .await?
+    {
         Some(saga) if saga.cards.len() > 1 => (Some(saga.name), saga.cards),
         _ => (None, Vec::new()),
     };
@@ -329,10 +343,10 @@ async fn saga_and_its_kin(
     people.sort();
     people.dedup();
     let elsewhere = database
-        .roles_elsewhere(&people, &films, within.as_deref())
+        .roles_elsewhere(&people, &films, within.as_deref(), held)
         .await?;
     let kin = melyxar_core::saga::kin_of_a_saga(&leads, &elsewhere);
-    cards.extend(database.cards_in_order(who.id, &kin).await?);
+    cards.extend(database.cards_in_order(who.id, &kin, held).await?);
 
     Ok((!cards.is_empty()).then_some(SagaRow { name, cards }))
 }
@@ -382,6 +396,11 @@ pub async fn work_detail(
         return Ok(None);
     }
     let viewer = who.id;
+    // A work held back is not there yet, any more than in a grid.
+    let held = crate::held_back::now(state).await?;
+    let Some(card) = database.card_of(viewer, work_id, &held).await? else {
+        return Ok(None);
+    };
 
     let language = crate::hand_edits::language_of(state, work.library_id).await?;
 
@@ -392,6 +411,10 @@ pub async fn work_detail(
     let runs_the_server = who.permissions.is_administrator;
     let mut versions = Vec::new();
     for source in database.sources_of_work(work_id).await? {
+        // A copy held back is not offered until it is ready.
+        if database.is_held_back(source.id, &held).await? {
+            continue;
+        }
         let (analysis, analysed_at) = database
             .source_details(source.id)
             .await?
@@ -446,10 +469,10 @@ pub async fn work_detail(
             }),
     );
 
-    let children = database.children_of(viewer, work_id, &language).await?;
+    let children = database.children_of(viewer, work_id, &language, &held).await?;
     let siblings = match (work.kind, work.parent_id) {
         (melyxar_core::work::WorkKind::Episode, Some(season)) => {
-            database.children_of(viewer, season, &language).await?
+            database.children_of(viewer, season, &language, &held).await?
         }
         _ => Vec::new(),
     };
@@ -518,13 +541,15 @@ pub async fn work_detail(
     // that starts again where they already are.
     let carry_on_with = match work.kind {
         melyxar_core::work::WorkKind::Series => {
-            what_to_carry_on_with(state, viewer, work.id).await?
+            what_to_carry_on_with(state, viewer, work.id, &held).await?
         }
         melyxar_core::work::WorkKind::Season => {
-            match what_to_carry_on_with(state, viewer, work.id).await? {
+            match what_to_carry_on_with(state, viewer, work.id, &held).await? {
                 Some(inside) => Some(inside),
                 None => match work.parent_id {
-                    Some(series_id) => what_to_carry_on_with(state, viewer, series_id).await?,
+                    Some(series_id) => {
+                        what_to_carry_on_with(state, viewer, series_id, &held).await?
+                    }
                     None => None,
                 },
             }
@@ -533,8 +558,8 @@ pub async fn work_detail(
         // at the end of an episode means the next one, not the next one they
         // happen to have missed.
         melyxar_core::work::WorkKind::Episode => {
-            match database.next_episode_after(viewer, work.id).await? {
-                Some(next) => Some(as_carry_on(state, next).await?),
+            match database.next_episode_after(viewer, work.id, &held).await? {
+                Some(next) => Some(as_carry_on(state, next, &held).await?),
                 None => None,
             }
         }
@@ -545,8 +570,8 @@ pub async fn work_detail(
     // nothing playing to step back out of.
     let previous_episode = match work.kind {
         melyxar_core::work::WorkKind::Episode => {
-            match database.previous_episode_before(work.id).await? {
-                Some(previous) => Some(as_carry_on(state, previous).await?),
+            match database.previous_episode_before(work.id, &held).await? {
+                Some(previous) => Some(as_carry_on(state, previous, &held).await?),
                 None => None,
             }
         }
@@ -554,7 +579,7 @@ pub async fn work_detail(
     };
 
     let (previous_photo, next_photo) = match work.kind {
-        melyxar_core::work::WorkKind::Photo => database.neighbouring_photos(&work).await?,
+        melyxar_core::work::WorkKind::Photo => database.neighbouring_photos(&work, &held).await?,
         _ => (None, None),
     };
 
@@ -562,19 +587,21 @@ pub async fn work_detail(
         melyxar_core::work::WorkKind::Movie | melyxar_core::work::WorkKind::Series => {
             let within = crate::reach::within(who);
             database
-                .alike_by_genre(viewer, work_id, within.as_deref(), ROW_OF_ALIKE)
+                .alike_by_genre(viewer, work_id, within.as_deref(), &held, ROW_OF_ALIKE)
                 .await?
         }
         _ => None,
     };
 
     let saga = match work.kind {
-        melyxar_core::work::WorkKind::Movie => saga_and_its_kin(state, who, work_id).await?,
+        melyxar_core::work::WorkKind::Movie => {
+            saga_and_its_kin(state, who, work_id, &held).await?
+        }
         _ => None,
     };
 
     Ok(Some(WorkDetail {
-        card: database.card_of(viewer, work_id).await?,
+        card: Some(card),
         alike,
         saga,
         previous_photo,

@@ -10,6 +10,7 @@ use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
 
 use crate::browse::{kept_inside, WorkCard, WHAT_A_CARD_IS};
 use crate::convert::{parse_id, timestamp_to_text};
+use crate::held_back::HeldBack;
 use crate::{Database, Result};
 
 /// One playlist as the list of them shows it.
@@ -37,6 +38,7 @@ impl Database {
         &self,
         owner: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Vec<PlaylistSummary>> {
         // A library taken away leaves the playlist there, empty of what it
         // held from it.
@@ -46,17 +48,21 @@ impl Database {
                 SELECT pi.playlist_id, pi.work_id, pi.ordinal
                   FROM playlist_items pi
                   JOIN works w ON w.id = pi.work_id
-                 WHERE 1 = 1{inside})
+                 WHERE 1 = 1{inside}{})
              SELECT p.id, p.name,
                     (SELECT count(*) FROM visible v WHERE v.playlist_id = p.id) AS held,
                     (SELECT v.work_id FROM visible v WHERE v.playlist_id = p.id
                       ORDER BY v.ordinal LIMIT 1) AS cover
                FROM playlists p
               WHERE p.user_id = ?
-              ORDER BY p.name COLLATE NOCASE"
+              ORDER BY p.name COLLATE NOCASE",
+            held.work_shown("w")
         )));
         for library in within.unwrap_or_default() {
             query = query.bind(library.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query
             .bind(owner.to_db_string())
@@ -77,7 +83,7 @@ impl Database {
             ));
         }
         let covers: Vec<WorkId> = found.iter().filter_map(|(_, cover)| *cover).collect();
-        let cards = self.cards_in_order(owner, &covers).await?;
+        let cards = self.cards_in_order(owner, &covers, held).await?;
         Ok(found
             .into_iter()
             .map(|(mut summary, cover)| {
@@ -94,6 +100,7 @@ impl Database {
         owner: UserId,
         id: PlaylistId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Option<PlaylistHeld>> {
         let name: Option<String> =
             sqlx::query_scalar("SELECT name FROM playlists WHERE id = ? AND user_id = ?")
@@ -110,12 +117,16 @@ impl Database {
                 "SELECT {WHAT_A_CARD_IS}
                    FROM works w
                    JOIN playlist_items pi ON pi.work_id = w.id
-                  WHERE pi.playlist_id = ?{inside}
-                  ORDER BY pi.ordinal"
+                  WHERE pi.playlist_id = ?{inside}{}
+                  ORDER BY pi.ordinal",
+                held.work_shown("w")
             )))
             .bind(id.to_db_string());
             for library in within.unwrap_or_default() {
                 query = query.bind(library.to_db_string());
+            }
+            if let Some(held) = held.bound() {
+                query = query.bind(held);
             }
             cards = query
                 .fetch_all(self.reader())
@@ -124,7 +135,7 @@ impl Database {
                 .map(crate::browse::card_from_row)
                 .collect::<Result<Vec<_>>>()?;
             self.attach_posters(&mut cards).await?;
-            self.attach_viewer_state(owner, &mut cards).await?;
+            self.attach_viewer_state(owner, &mut cards, held).await?;
         }
         Ok(Some(PlaylistHeld { id, name, cards }))
     }
@@ -324,31 +335,31 @@ mod tests {
         let night = database.create_playlist(me, "Friday night").await.expect("made");
         assert!(database.add_to_playlist(me, night, &[a, b, c, a]).await.expect("added"));
         assert!(!database.add_to_playlist(other, night, &[a]).await.expect("refused"));
-        assert!(database.playlist(other, night, None).await.expect("read").is_none());
-        assert!(database.playlists(other, None).await.expect("read").is_empty());
+        assert!(database.playlist(other, night, None, &Default::default()).await.expect("read").is_none());
+        assert!(database.playlists(other, None, &Default::default()).await.expect("read").is_empty());
 
         assert!(database.reorder_playlist(me, night, &[c, a]).await.expect("reordered"));
-        let held = database.playlist(me, night, None).await.expect("read").expect("there");
+        let held = database.playlist(me, night, None, &Default::default()).await.expect("read").expect("there");
         assert_eq!(
             held.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
             vec![c, a, b],
             "what the order left out keeps its place after it"
         );
 
-        let listed = database.playlists(me, None).await.expect("read");
+        let listed = database.playlists(me, None, &Default::default()).await.expect("read");
         assert_eq!((listed.len(), listed[0].held), (1, 3));
         assert_eq!(listed[0].cover.as_ref().map(|card| card.id), Some(c));
-        assert_eq!(database.playlists(me, Some(&[])).await.expect("read")[0].held, 0);
+        assert_eq!(database.playlists(me, Some(&[]), &Default::default()).await.expect("read")[0].held, 0);
         assert_eq!(database.playlists_holding(me, a).await.expect("read"), vec![night]);
         assert!(database.playlists_holding(other, a).await.expect("read").is_empty());
 
         assert!(database.remove_from_playlist(me, night, &[c]).await.expect("taken out"));
         assert!(database.rename_playlist(me, night, "Saturday").await.expect("renamed"));
         assert!(!database.rename_playlist(other, night, "Mine").await.expect("refused"));
-        let held = database.playlist(me, night, None).await.expect("read").expect("there");
+        let held = database.playlist(me, night, None, &Default::default()).await.expect("read").expect("there");
         assert_eq!((held.name.as_str(), held.cards.len()), ("Saturday", 2));
         assert!(!database.delete_playlist(other, night).await.expect("refused"));
         assert!(database.delete_playlist(me, night).await.expect("deleted"));
-        assert!(database.playlists(me, None).await.expect("read").is_empty());
+        assert!(database.playlists(me, None, &Default::default()).await.expect("read").is_empty());
     }
 }

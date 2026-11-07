@@ -158,15 +158,20 @@ async fn version_of(state: &AppState, library_id: Option<LibraryId>) -> Result<i
 }
 
 /// Walks the library and counts everything a page asks about it.
+///
+/// What a library still taking in holds back is left out, and counted in once
+/// it comes into sight: that moves the library, which is what has it counted
+/// again.
 async fn count(state: &AppState, library_id: Option<LibraryId>) -> Result<Counted> {
     let database = state.database();
+    let held = crate::held_back::now(state).await?;
     Ok(Counted {
         filters: Filters {
-            genres: database.genres_in_use(library_id).await?,
-            decades: database.decades_in_use(library_id).await?,
-            initials: database.initials_in_use(library_id).await?,
+            genres: database.genres_in_use(library_id, &held).await?,
+            decades: database.decades_in_use(library_id, &held).await?,
+            initials: database.initials_in_use(library_id, &held).await?,
         },
-        browsable: database.count_browsable(library_id).await?,
+        browsable: database.count_browsable(library_id, &held).await?,
         awaiting_identification: database.count_awaiting_identification(library_id).await?,
     })
 }

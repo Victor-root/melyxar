@@ -418,11 +418,12 @@ async fn works(
 ) -> Result<Json<PageView>> {
     let request = BrowseRequest {
         library_id: params.library.as_deref().map(parse_library).transpose()?,
-        // What this account may read, and whose marks the cards come back
-        // wearing, are not the client's to send: both are put on by the use
-        // case, which is the one place that knows them.
+        // What this account may read, whose marks the cards come back
+        // wearing and what is held back, are not the client's to send: all
+        // are put on by the use case, which is the one place that knows them.
         within: None,
         viewer: None,
+        held_back: Default::default(),
         order: params.order.unwrap_or(WorkOrder::Title),
         descending: params.descending,
         after: params.after.as_deref().map(parse_work).transpose()?,

@@ -16,6 +16,7 @@ use sqlx::{AssertSqlSafe, Row};
 
 use crate::browse::WHAT_A_CARD_IS;
 use crate::convert::{parse_id, parse_optional_timestamp, timestamp_to_text};
+use crate::held_back::HeldBack;
 use crate::{Database, DatabaseError, Result};
 
 /// One file, with everything needed to hand it to a viewer.
@@ -127,6 +128,7 @@ impl Database {
         &self,
         user_id: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Vec<WorkToCarryOn>> {
         // Kept inside what this account was granted, like every other read.
@@ -153,13 +155,17 @@ impl Database {
              JOIN libraries l ON l.id = w.library_id AND l.keeps_resume_points
              LEFT JOIN works season ON season.id = w.parent_id AND w.kind = 'episode'
              LEFT JOIN works series ON series.id = season.parent_id
-             WHERE p.user_id = ? AND p.position_ms > 0{inside}
+             WHERE p.user_id = ? AND p.position_ms > 0{inside}{}
              ORDER BY p.last_played_at DESC, w.sort_title
-             LIMIT ?"
+             LIMIT ?",
+            held.work_shown("w")
         )))
         .bind(user_id.to_db_string());
         for granted in within.iter().copied().flatten() {
             query = query.bind(granted.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query.bind(limit).fetch_all(self.reader()).await?;
 
@@ -192,7 +198,7 @@ impl Database {
         self.attach_wide_pictures(&mut cards).await?;
         // The same card is drawn here as in a grid, so it carries the same
         // marks: one component, one shape of card, one hover.
-        self.attach_viewer_state(user_id, &mut cards).await?;
+        self.attach_viewer_state(user_id, &mut cards, held).await?;
         for (entry, card) in carrying_on.iter_mut().zip(cards) {
             entry.card = card;
         }
@@ -295,6 +301,7 @@ impl Database {
         &self,
         user_id: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Vec<UpNext>> {
         // An account granted nothing has nothing waiting for it.
@@ -317,6 +324,8 @@ impl Database {
                     .join(", ")
             ),
         };
+        // Numbered on after the libraries, for the same reason.
+        let shown = held.copy_shown_at("m", &format!("?{}", granted.len() + 5));
 
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "WITH lately AS (
@@ -376,7 +385,7 @@ impl Database {
                             AND coalesce(p.state, 'not_started') = 'not_started'
                             AND EXISTS (SELECT 1 FROM media_sources m
                                          WHERE m.work_id = e.id
-                                           AND m.missing_since IS NULL)
+                                           AND m.missing_since IS NULL{shown})
                           ORDER BY s.ordinal, e.ordinal, e.id
                           LIMIT 1) AS episode_id
                    FROM begun
@@ -400,6 +409,9 @@ impl Database {
         for library in granted {
             query = query.bind(library.to_db_string());
         }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
         let rows = query.fetch_all(self.reader()).await?;
 
         let mut waiting: Vec<UpNext> = rows
@@ -419,7 +431,7 @@ impl Database {
             waiting.iter().map(|entry| entry.card.clone()).collect();
         self.attach_posters(&mut cards).await?;
         self.attach_wide_pictures(&mut cards).await?;
-        self.attach_viewer_state(user_id, &mut cards).await?;
+        self.attach_viewer_state(user_id, &mut cards, held).await?;
         for (entry, card) in waiting.iter_mut().zip(cards) {
             entry.card = card;
         }
@@ -854,7 +866,7 @@ mod tests {
 
         assert!(
             database
-                .up_next(user_id, None, 10)
+                .up_next(user_id, None, &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -866,7 +878,7 @@ mod tests {
             .await
             .expect("marked");
 
-        let waiting = database.up_next(user_id, None, 10).await.expect("read");
+        let waiting = database.up_next(user_id, None, &Default::default(), 10).await.expect("read");
         assert_eq!(waiting.len(), 1);
         assert_eq!(waiting[0].card.id, episodes[1], "the next one, in order");
         assert_eq!(waiting[0].series_id, series);
@@ -891,7 +903,7 @@ mod tests {
             .mark_watched(user_id, episodes[0], true)
             .await
             .expect("marked");
-        assert_eq!(database.up_next(user_id, None, 10).await.expect("read").len(), 1);
+        assert_eq!(database.up_next(user_id, None, &Default::default(), 10).await.expect("read").len(), 1);
 
         database
             .set_library_options(
@@ -904,7 +916,7 @@ mod tests {
             .await
             .expect("switched");
         assert!(
-            database.up_next(user_id, None, 10).await.expect("read").is_empty(),
+            database.up_next(user_id, None, &Default::default(), 10).await.expect("read").is_empty(),
             "up next is read from watched marks, and this library keeps none"
         );
     }
@@ -939,7 +951,7 @@ mod tests {
 
         assert!(
             database
-                .up_next(user_id, None, 10)
+                .up_next(user_id, None, &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -965,7 +977,7 @@ mod tests {
             .await
             .expect("marked");
 
-        let waiting = database.up_next(user_id, None, 10).await.expect("read");
+        let waiting = database.up_next(user_id, None, &Default::default(), 10).await.expect("read");
         assert_eq!(
             waiting[0].card.id, episodes[2],
             "this ends in a button that has to play something"
@@ -1011,7 +1023,7 @@ mod tests {
 
         assert!(
             database
-                .works_to_carry_on(user_id, Some(&[elsewhere.id]), 10)
+                .works_to_carry_on(user_id, Some(&[elsewhere.id]), &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1019,14 +1031,14 @@ mod tests {
         );
         assert!(
             database
-                .up_next(user_id, Some(&[elsewhere.id]), 10)
+                .up_next(user_id, Some(&[elsewhere.id]), &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty()
         );
         assert!(
             database
-                .works_to_carry_on(user_id, Some(&[]), 10)
+                .works_to_carry_on(user_id, Some(&[]), &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1034,7 +1046,7 @@ mod tests {
         );
         assert!(
             !database
-                .works_to_carry_on(user_id, Some(&[library]), 10)
+                .works_to_carry_on(user_id, Some(&[library]), &Default::default(), 10)
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1253,7 +1265,7 @@ mod tests {
     /// from, says this viewer likes it.
     async fn liked(database: &Database, user_id: UserId, work_id: WorkId) -> bool {
         database
-            .card_of(user_id, work_id)
+            .card_of(user_id, work_id, &Default::default())
             .await
             .expect("read")
             .and_then(|card| card.state)
@@ -1376,7 +1388,7 @@ mod tests {
         // remembering the title and hunting it down in the whole library.
         let (database, user_id, work_id, _) = one_film().await;
         assert!(database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read")
             .is_empty());
@@ -1392,7 +1404,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
+        let carrying_on = database.works_to_carry_on(user_id, None, &Default::default(), 20).await.expect("read");
         assert_eq!(carrying_on.len(), 1);
         assert_eq!(carrying_on[0].card.id, work_id);
         assert_eq!(carrying_on[0].card.title, "Quiet Harbour");
@@ -1415,7 +1427,7 @@ mod tests {
             .await
             .expect("recorded");
         assert!(database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read")
             .is_empty());
@@ -1450,7 +1462,7 @@ mod tests {
             .await
             .expect("switched");
         assert!(database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read")
             .is_empty());
@@ -1460,7 +1472,7 @@ mod tests {
             .await
             .expect("switched");
         assert_eq!(
-            database.works_to_carry_on(user_id, None, 20).await.expect("read").len(),
+            database.works_to_carry_on(user_id, None, &Default::default(), 20).await.expect("read").len(),
             1,
             "turned back on, the place kept before is offered again"
         );
@@ -1484,7 +1496,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
+        let carrying_on = database.works_to_carry_on(user_id, None, &Default::default(), 20).await.expect("read");
         assert_eq!(carrying_on.len(), 1, "watched once, it still has a place to carry on from");
         assert_eq!(carrying_on[0].position, Millis::new(1_800_000));
 
@@ -1493,7 +1505,7 @@ mod tests {
             .await
             .expect("unmarked");
         assert_eq!(
-            database.works_to_carry_on(user_id, None, 20).await.expect("read").len(),
+            database.works_to_carry_on(user_id, None, &Default::default(), 20).await.expect("read").len(),
             1,
             "unmarking changes nothing about where it stopped"
         );
@@ -1503,7 +1515,7 @@ mod tests {
             .await
             .expect("marked again");
         assert!(database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read")
             .is_empty());
@@ -1527,7 +1539,7 @@ mod tests {
             .expect("recorded");
 
         let carrying_on = database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read");
         assert_eq!(carrying_on.len(), 1);
@@ -1598,7 +1610,7 @@ mod tests {
         }
 
         let carrying_on = database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read");
         let wide_of = |id: WorkId| {
@@ -1640,7 +1652,7 @@ mod tests {
             .expect("recorded");
 
         let carrying_on = database
-            .works_to_carry_on(user_id, None, 20)
+            .works_to_carry_on(user_id, None, &Default::default(), 20)
             .await
             .expect("read");
         assert_eq!(carrying_on[0].series_id, None);
@@ -1679,7 +1691,7 @@ mod tests {
             .await
             .expect("recorded");
 
-        let carrying_on = database.works_to_carry_on(user_id, None, 20).await.expect("read");
+        let carrying_on = database.works_to_carry_on(user_id, None, &Default::default(), 20).await.expect("read");
         assert_eq!(
             carrying_on
                 .iter()

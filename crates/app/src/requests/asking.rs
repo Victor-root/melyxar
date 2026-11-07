@@ -56,6 +56,7 @@ pub async fn ask<P: MetadataProvider>(
             catalogue,
             std::slice::from_ref(&details.external_id),
             crate::reach::within(who).as_deref(),
+            &crate::held_back::now(state).await?,
         )
         .await?;
     may_be_asked(

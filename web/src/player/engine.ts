@@ -146,6 +146,8 @@ function wording(error: unknown): string {
       return "player.no_conversion";
     case "not_described":
       return "player.not_described";
+    case "not_ready":
+      return "player.not_ready";
     case "too_many_streams":
       return "player.too_many_streams";
     case "no_room_left":

@@ -17,6 +17,7 @@ use melyxar_core::id::{LibraryId, UserId, WorkId};
 use melyxar_core::time::Millis;
 use melyxar_core::user::{Permissions, User};
 use melyxar_core::work::WorkKind;
+use melyxar_database::held_back::HeldBack;
 use melyxar_database::import::{TakenListen, TakenProgress, WorkToMatch};
 use melyxar_import::matching::{self, Matches, Ours};
 use melyxar_import::{Backup, Kind, Mark, Refusal, Server};
@@ -416,7 +417,7 @@ async fn taken_up(state: &AppState, who: &User, read: &Read, choices: &Choices) 
             }
         }
         if !videos.is_empty() {
-            if database.playlists(owner, None).await?.iter().any(|kept| kept.name == playlist.name) {
+            if database.playlists(owner, None, &HeldBack::nothing()).await?.iter().any(|kept| kept.name == playlist.name) {
                 report.left_alone.push(playlist.name.clone());
             } else {
                 let id = database.create_playlist(owner, &playlist.name).await?;
@@ -428,7 +429,7 @@ async fn taken_up(state: &AppState, who: &User, read: &Read, choices: &Choices) 
 
     let chosen: HashSet<&str> = choices.collections.iter().map(String::as_str).collect();
     let kept: HashSet<String> = database
-        .collections(who.id, None, true)
+        .collections(who.id, None, &HeldBack::nothing(), true)
         .await?
         .into_iter()
         .map(|collection| collection.name.to_lowercase())
@@ -746,9 +747,9 @@ mod tests {
         let left = database.playback_progress(ben.id, road).await.unwrap().unwrap();
         assert_eq!((left.state, left.position), (PlaybackState::InProgress, Millis::new(600_000)));
 
-        let playlists = database.playlists(ada.id, None).await.unwrap();
+        let playlists = database.playlists(ada.id, None, &Default::default()).await.unwrap();
         assert_eq!((playlists[0].name.as_str(), playlists[0].held), ("Evening", 2));
-        let collections = database.collections(ada.id, None, true).await.unwrap();
+        let collections = database.collections(ada.id, None, &Default::default(), true).await.unwrap();
         assert_eq!(collections.iter().map(|collection| collection.name.as_str()).collect::<Vec<_>>(), vec!["Rainy days"]);
 
         // Taken up twice, nothing is made twice.
@@ -787,7 +788,7 @@ mod tests {
 
         let database = state.database();
         assert!(database.playback_progress(ada.id, harbour).await.unwrap().is_none());
-        assert!(database.playlists(ada.id, None).await.unwrap().is_empty());
+        assert!(database.playlists(ada.id, None, &Default::default()).await.unwrap().is_empty());
         let (ben, _) = database.user_by_name("Ben").await.unwrap().unwrap();
         assert!(database.playback_progress(ben.id, road).await.unwrap().is_some());
     }

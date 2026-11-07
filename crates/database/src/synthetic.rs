@@ -1114,7 +1114,7 @@ mod tests {
         let (database, library_id, _) = a_small_invented_library().await;
 
         let genres = database
-            .genres_in_use(Some(library_id))
+            .genres_in_use(Some(library_id), &Default::default())
             .await
             .expect("the genre menu reads");
         assert_eq!(genres.len(), 2, "{genres:?}");
@@ -1123,13 +1123,13 @@ mod tests {
         assert!(genres.iter().all(|(_, count)| *count == 3), "{genres:?}");
 
         let decades = database
-            .decades_in_use(Some(library_id))
+            .decades_in_use(Some(library_id), &Default::default())
             .await
             .expect("the decade menu reads");
         assert_eq!(decades.len(), 3, "{decades:?}");
 
         let initials = database
-            .initials_in_use(Some(library_id))
+            .initials_in_use(Some(library_id), &Default::default())
             .await
             .expect("the letters read");
         assert!(!initials.is_empty());
@@ -1152,7 +1152,7 @@ mod tests {
             .expect("the series is met on its own");
 
         let seasons = database
-            .children_of(viewer, series.id, "fr")
+            .children_of(viewer, series.id, "fr", &Default::default())
             .await
             .expect("the seasons read");
         assert_eq!(seasons.len(), 1);
@@ -1163,7 +1163,7 @@ mod tests {
         );
 
         let episodes = database
-            .children_of(viewer, seasons[0].card.id, "fr")
+            .children_of(viewer, seasons[0].card.id, "fr", &Default::default())
             .await
             .expect("the episodes read");
         assert_eq!(episodes.len(), 1);

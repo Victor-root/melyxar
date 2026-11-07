@@ -42,6 +42,8 @@ struct Inner {
     /// What each library has been counted for, so a page never counts a
     /// hundred thousand works to draw a menu.
     counts: crate::counted::Counts,
+    /// The libraries a scan and what follows it are under way in.
+    intakes: crate::held_back::Intakes,
     /// Wrong passwords, so that guessing one costs time rather than a
     /// processor.
     wrong_answers: crate::wrong_answers::WrongAnswers,
@@ -130,6 +132,7 @@ impl AppState {
                 tools,
                 capabilities,
                 counts: crate::counted::Counts::default(),
+                intakes: crate::held_back::Intakes::default(),
                 wrong_answers: crate::wrong_answers::WrongAnswers::default(),
                 passwords: crate::passwords::Passwords::default(),
                 avatar_making: crate::avatars::Making::default(),
@@ -229,6 +232,10 @@ impl AppState {
     /// What each library has been counted for.
     pub(crate) fn counts(&self) -> &crate::counted::Counts {
         &self.inner.counts
+    }
+
+    pub(crate) fn intakes(&self) -> &crate::held_back::Intakes {
+        &self.inner.intakes
     }
 
     /// The metadata provider, when there is one to use.

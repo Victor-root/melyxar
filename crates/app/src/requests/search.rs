@@ -106,6 +106,7 @@ pub(super) async fn standing_of(
 ) -> Result<Standing> {
     let database = state.database();
     let within = crate::reach::within(who);
+    let held_back = crate::held_back::now(state).await?;
     let mut standing = Standing {
         held: HashMap::new(),
         open: HashMap::new(),
@@ -117,7 +118,7 @@ pub(super) async fn standing_of(
             .map(|one| one.external_id.clone())
             .collect();
         for (id, held) in database
-            .held_titles(word_of(catalogue), &ids, within.as_deref())
+            .held_titles(word_of(catalogue), &ids, within.as_deref(), &held_back)
             .await?
         {
             standing.held.insert((catalogue, id), held);
@@ -202,6 +203,7 @@ pub async fn seasons_of<P: MetadataProvider>(
             word_of(Catalogue::Series),
             &[tmdb_id.to_string()],
             crate::reach::within(who).as_deref(),
+            &crate::held_back::now(state).await?,
         )
         .await?
         .remove(tmdb_id)

@@ -175,6 +175,7 @@ pub async fn file_of(
     source_id: melyxar_core::id::MediaSourceId,
 ) -> Result<std::path::PathBuf> {
     crate::reach::may_read_the_copy(state, who, source_id).await?;
+    crate::held_back::may_play(state, source_id).await?;
     Ok(crate::playable_file(state.database(), source_id).await?.path)
 }
 
@@ -239,6 +240,7 @@ pub async fn plan(
     // Before anything is decided or produced, or said about its disk: a film
     // of a library this account was not granted is a film it cannot start.
     crate::reach::may_read_the_copy(state, who, request.source_id).await?;
+    crate::held_back::may_play(state, request.source_id).await?;
     let source = crate::playable_file(database, request.source_id).await?;
     let user_id = who.id;
 
@@ -3614,7 +3616,7 @@ mod tests {
         let who = crate::an_ordinary_account(user_id);
         let put_aside = || async {
             database
-                .card_of(user_id, work_id)
+                .card_of(user_id, work_id, &Default::default())
                 .await
                 .expect("read")
                 .and_then(|card| card.state)

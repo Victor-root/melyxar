@@ -1,7 +1,7 @@
-//! What the server does of its own accord, every minute: announce what has
-//! settled in the libraries, recall a maintenance whose time is near and
-//! take away the ones whose time has passed; and once a day, forget what
-//! was read a year ago.
+//! What the server does of its own accord, every minute: write down the
+//! libraries that have settled, announce what has settled in them, recall a
+//! maintenance whose time is near and take away the ones whose time has
+//! passed; and once a day, forget what was read a year ago.
 
 use melyxar_core::time::Timestamp;
 
@@ -53,6 +53,9 @@ pub fn keep_making_the_rounds(state: &AppState) -> tokio::task::JoinHandle<()> {
         loop {
             tokio::time::sleep(EVERY).await;
             let now = melyxar_core::time::now();
+            if let Err(error) = crate::held_back::settle_every_library(&state).await {
+                tracing::warn!(%error, "the libraries done taking in could not be settled");
+            }
             if let Err(error) = super::news::announce(&state).await {
                 tracing::warn!(%error, "what arrived in the libraries could not be announced");
             }

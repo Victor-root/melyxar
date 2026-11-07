@@ -14,6 +14,7 @@ use sqlx::{AssertSqlSafe, Row, Sqlite};
 
 use crate::browse::{card_from_row, WorkCard, WHAT_A_CARD_IS};
 use crate::convert::{parse_id, parse_optional_timestamp, parse_timestamp, timestamp_to_text};
+use crate::held_back::HeldBack;
 use crate::{Database, DatabaseError, Result};
 
 /// Everything a work is, as every reader of one asks for it.
@@ -413,10 +414,13 @@ impl Database {
         viewer: UserId,
         parent_id: WorkId,
         language: &str,
+        held: &HeldBack,
     ) -> Result<Vec<ChildWork>> {
         // Ordered the one way children are ever ordered, named below so the
-        // shelf read and this one cannot come back in different orders.
-        let rows = sqlx::query(AssertSqlSafe(format!(
+        // shelf read and this one cannot come back in different orders. What
+        // is held back is bound after both.
+        let shown = held.work_shown_at("w", "?3");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}, w.ordinal, w.child_count,
                     (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
                         AS longest_ms,
@@ -426,13 +430,15 @@ impl Database {
                     ON asked.work_id = w.id AND asked.language = ?2
              LEFT JOIN work_translations english
                     ON english.work_id = w.id AND english.language = 'en'
-             WHERE w.parent_id = ?1
+             WHERE w.parent_id = ?1{shown}
              {IN_THE_ONE_ORDER}"
         )))
         .bind(parent_id.to_db_string())
-        .bind(language)
-        .fetch_all(self.reader())
-        .await?;
+        .bind(language);
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let rows = query.fetch_all(self.reader()).await?;
 
         let mut cards = Vec::with_capacity(rows.len());
         let mut places = Vec::with_capacity(rows.len());
@@ -450,7 +456,7 @@ impl Database {
         }
         self.attach_posters(&mut cards).await?;
         self.attach_wide_pictures(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
 
         Ok(places
             .into_iter()
@@ -497,11 +503,12 @@ impl Database {
         &self,
         viewer: UserId,
         episode_id: WorkId,
+        held: &HeldBack,
     ) -> Result<Option<Work>> {
         let Some((series_id, at)) = self.where_an_episode_sits(episode_id).await? else {
             return Ok(None);
         };
-        self.an_episode_of(viewer, series_id, Some(at), false).await
+        self.an_episode_of(viewer, series_id, Some(at), false, held).await
     }
 
     /// The episode before this one, in the order they are watched.
@@ -510,27 +517,36 @@ impl Database {
     /// season before: the same order `next_episode_after` reads, walked the
     /// other way. Nobody's progress is asked about, because stepping back
     /// means the one before this one, watched or not, same as stepping on.
-    pub async fn previous_episode_before(&self, episode_id: WorkId) -> Result<Option<Work>> {
+    pub async fn previous_episode_before(
+        &self,
+        episode_id: WorkId,
+        held: &HeldBack,
+    ) -> Result<Option<Work>> {
         let Some((series_id, (season, episode))) = self.where_an_episode_sits(episode_id).await?
         else {
             return Ok(None);
         };
-        let row = sqlx::query(AssertSqlSafe(format!(
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              WHERE s.parent_id = ? AND e.kind = 'episode'
                AND EXISTS (SELECT 1 FROM media_sources m
-                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL{})
                AND (s.ordinal, e.ordinal) < (?, ?)
              ORDER BY s.ordinal DESC, e.ordinal DESC
              LIMIT 1",
-            what_a_work_is("e.")
+            what_a_work_is("e."),
+            held.copy_shown("m")
         )))
-        .bind(series_id.to_db_string())
-        .bind(season)
-        .bind(episode)
-        .fetch_optional(self.reader())
-        .await?;
+        .bind(series_id.to_db_string());
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let row = query
+            .bind(season)
+            .bind(episode)
+            .fetch_optional(self.reader())
+            .await?;
 
         row.map(|row| work_from_row(&row)).transpose()
     }
@@ -545,11 +561,16 @@ impl Database {
     /// what somebody means by where they are. Nothing when every episode here
     /// has been watched, which is a series to start again rather than to
     /// carry on.
-    pub async fn where_to_resume(&self, viewer: UserId, within: WorkId) -> Result<Option<Work>> {
-        if let Some(halfway) = self.an_episode_left_halfway(viewer, within).await? {
+    pub async fn where_to_resume(
+        &self,
+        viewer: UserId,
+        within: WorkId,
+        held: &HeldBack,
+    ) -> Result<Option<Work>> {
+        if let Some(halfway) = self.an_episode_left_halfway(viewer, within, held).await? {
             return Ok(Some(halfway));
         }
-        self.an_episode_of(viewer, within, None, true).await
+        self.an_episode_of(viewer, within, None, true, held).await
     }
 
     /// The episode of a series, or of one season of it, a viewer played last
@@ -559,23 +580,27 @@ impl Database {
         &self,
         viewer: UserId,
         within: WorkId,
+        held: &HeldBack,
     ) -> Result<Option<Work>> {
-        let row = sqlx::query(AssertSqlSafe(format!(
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
              JOIN libraries l ON l.id = e.library_id AND l.keeps_resume_points
              WHERE {SEASONS_WITHIN} AND e.kind = 'episode' AND p.position_ms > 0
                AND EXISTS (SELECT 1 FROM media_sources m
-                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL{})
              ORDER BY p.last_played_at DESC
              LIMIT 1",
-            what_a_work_is("e.")
+            what_a_work_is("e."),
+            held.copy_shown("m")
         )))
         .bind(viewer.to_db_string())
-        .bind(within.to_db_string())
-        .fetch_optional(self.reader())
-        .await?;
+        .bind(within.to_db_string());
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let row = query.fetch_optional(self.reader()).await?;
 
         row.map(|row| work_from_row(&row)).transpose()
     }
@@ -621,31 +646,35 @@ impl Database {
         within: WorkId,
         after: Option<(i32, i32)>,
         only_unwatched: bool,
+        held: &HeldBack,
     ) -> Result<Option<Work>> {
         let (season, episode) = after.unwrap_or((0, 0));
-        let row = sqlx::query(AssertSqlSafe(format!(
+        let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {} FROM works e
              JOIN works s ON s.id = e.parent_id
              JOIN libraries l ON l.id = e.library_id
              LEFT JOIN playback_progress p ON p.work_id = e.id AND p.user_id = ?
              WHERE {SEASONS_WITHIN} AND e.kind = 'episode'
                AND EXISTS (SELECT 1 FROM media_sources m
-                            WHERE m.work_id = e.id AND m.missing_since IS NULL)
+                            WHERE m.work_id = e.id AND m.missing_since IS NULL{})
                AND (?3 = 0 OR (s.ordinal, e.ordinal) > (?4, ?5))
                AND (?6 = 0 OR NOT l.keeps_watched_marks
                     OR coalesce(p.state, 'not_started') <> 'watched')
              ORDER BY s.ordinal, e.ordinal
              LIMIT 1",
-            what_a_work_is("e.")
+            what_a_work_is("e."),
+            held.copy_shown_at("m", "?7")
         )))
         .bind(viewer.to_db_string())
         .bind(within.to_db_string())
         .bind(i64::from(after.is_some()))
         .bind(season)
         .bind(episode)
-        .bind(i64::from(only_unwatched))
-        .fetch_optional(self.reader())
-        .await?;
+        .bind(i64::from(only_unwatched));
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
+        let row = query.fetch_optional(self.reader()).await?;
 
         row.map(|row| work_from_row(&row)).transpose()
     }
@@ -1845,7 +1874,7 @@ pub(crate) mod tests {
         let (series, seasons, _) = a_series(&database, library_id).await;
 
         let viewer = a_viewer(&database).await;
-        let answered = database.children_of(viewer, series, "fr").await.expect("read");
+        let answered = database.children_of(viewer, series, "fr", &Default::default()).await.expect("read");
         assert_eq!(
             answered
                 .iter()
@@ -1865,7 +1894,7 @@ pub(crate) mod tests {
         );
 
         let first = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read");
         assert_eq!(first.len(), 2);
@@ -1887,7 +1916,7 @@ pub(crate) mod tests {
 
         // One episode with no file at all.
         let untouched = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read")
             .into_iter()
@@ -1906,7 +1935,7 @@ pub(crate) mod tests {
             .expect("file recorded");
 
         let named = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read")
             .into_iter()
@@ -1954,7 +1983,7 @@ pub(crate) mod tests {
 
         let viewer = a_viewer(&database).await;
         let read = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -1987,7 +2016,7 @@ pub(crate) mod tests {
 
         let viewer = a_viewer(&database).await;
         assert!(database
-            .children_of(viewer, film.id, "fr")
+            .children_of(viewer, film.id, "fr", &Default::default())
             .await
             .expect("read")
             .is_empty());
@@ -2067,14 +2096,14 @@ pub(crate) mod tests {
 
         // Season one holds two, season two holds one.
         let after_first = database
-            .next_episode_after(viewer, episodes[0])
+            .next_episode_after(viewer, episodes[0], &Default::default())
             .await
             .expect("read")
             .expect("there is one after it");
         assert_eq!(after_first.id, episodes[1]);
 
         let across = database
-            .next_episode_after(viewer, episodes[1])
+            .next_episode_after(viewer, episodes[1], &Default::default())
             .await
             .expect("read")
             .expect("the first of the next season");
@@ -2083,7 +2112,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             database
-                .next_episode_after(viewer, episodes[2])
+                .next_episode_after(viewer, episodes[2], &Default::default())
                 .await
                 .expect("read"),
             None,
@@ -2102,7 +2131,7 @@ pub(crate) mod tests {
         }
 
         let before_last = database
-            .previous_episode_before(episodes[2])
+            .previous_episode_before(episodes[2], &Default::default())
             .await
             .expect("read")
             .expect("the last of the season before it");
@@ -2110,7 +2139,7 @@ pub(crate) mod tests {
         assert_eq!(before_last.parent_id, Some(seasons[0]));
 
         let before_second = database
-            .previous_episode_before(episodes[1])
+            .previous_episode_before(episodes[1], &Default::default())
             .await
             .expect("read")
             .expect("there is one before it");
@@ -2118,7 +2147,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             database
-                .previous_episode_before(episodes[0])
+                .previous_episode_before(episodes[0], &Default::default())
                 .await
                 .expect("read"),
             None,
@@ -2138,7 +2167,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             database
-                .next_episode_after(viewer, episodes[0])
+                .next_episode_after(viewer, episodes[0], &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2160,7 +2189,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2173,7 +2202,7 @@ pub(crate) mod tests {
         watched(&database, viewer, episodes[2]).await;
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2184,7 +2213,7 @@ pub(crate) mod tests {
         watched(&database, viewer, episodes[1]).await;
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read"),
             None,
@@ -2223,7 +2252,7 @@ pub(crate) mod tests {
         left_halfway(&database, viewer, episodes[2], melyxar_core::time::now()).await;
         let picked_up = || async {
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id)
@@ -2272,7 +2301,7 @@ pub(crate) mod tests {
         left_halfway(&database, viewer, episodes[2], two_days_ago).await;
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2284,7 +2313,7 @@ pub(crate) mod tests {
         left_halfway(&database, viewer, episodes[1], two_days_ago + time::Duration::DAY).await;
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2295,7 +2324,7 @@ pub(crate) mod tests {
         watched(&database, viewer, episodes[1]).await;
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2317,7 +2346,7 @@ pub(crate) mod tests {
             let database = &database;
             async move {
                 database
-                    .where_to_resume(viewer, within)
+                    .where_to_resume(viewer, within, &Default::default())
                     .await
                     .expect("read")
                     .map(|found| found.id)
@@ -2349,7 +2378,7 @@ pub(crate) mod tests {
         }
         watched(&database, viewer, episodes[0]).await;
 
-        let read = database.children_of(viewer, series, "fr").await.expect("read");
+        let read = database.children_of(viewer, series, "fr", &Default::default()).await.expect("read");
         assert_eq!(
             read.iter()
                 .map(|season| (season.child_count, state_of(season).unwatched))
@@ -2359,7 +2388,7 @@ pub(crate) mod tests {
         );
 
         let inside = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -2393,7 +2422,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             database
-                .where_to_resume(viewer, series)
+                .where_to_resume(viewer, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2401,7 +2430,7 @@ pub(crate) mod tests {
         );
         assert_eq!(
             database
-                .where_to_resume(other, series)
+                .where_to_resume(other, series, &Default::default())
                 .await
                 .expect("read")
                 .map(|found| found.id),
@@ -2430,7 +2459,7 @@ pub(crate) mod tests {
 
         let viewer = a_viewer(&database).await;
         let read = database
-            .children_of(viewer, seasons[0], "fr")
+            .children_of(viewer, seasons[0], "fr", &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -2966,7 +2995,7 @@ pub(crate) mod tests {
         );
 
         let viewer = a_viewer(&database).await;
-        let seasons = database.children_of(viewer, kept, "fr").await.expect("read");
+        let seasons = database.children_of(viewer, kept, "fr", &Default::default()).await.expect("read");
         assert_eq!(
             seasons
                 .iter()

@@ -51,8 +51,9 @@ async fn person_page_asking(
         return Ok(None);
     };
     let within = crate::reach::within(who);
+    let held = crate::held_back::now(state).await?;
     let works = database
-        .works_crediting(who.id, id, within.as_deref())
+        .works_crediting(who.id, id, within.as_deref(), &held)
         .await?;
     let Some(first) = works.first() else {
         return Ok(None);

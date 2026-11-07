@@ -310,12 +310,13 @@ fn status_for(code: ErrorCode) -> StatusCode {
         ErrorCode::Forbidden | ErrorCode::PathNotAllowed => StatusCode::FORBIDDEN,
         ErrorCode::TooManyAttempts | ErrorCode::TooManyStreams => StatusCode::TOO_MANY_REQUESTS,
         // Each will work again once a disk is plugged back in, a tool is
-        // installed or a film being converted ends, which is what tells a
+        // installed, a film being converted ends or one just arrived is ready, which is what tells a
         // client to say so rather than to announce a failure of the server
         // itself.
         ErrorCode::RootUnavailable
         | ErrorCode::DependencyMissing
         | ErrorCode::NoRoomLeft
+        | ErrorCode::NotReady
         | ErrorCode::Maintenance => StatusCode::SERVICE_UNAVAILABLE,
         // The file is there and is the problem: nothing about the server will
         // change that, and no amount of waiting will either.
@@ -406,6 +407,7 @@ mod tests {
                 StatusCode::SERVICE_UNAVAILABLE,
             ),
             (ErrorCode::NotDescribed, StatusCode::UNPROCESSABLE_ENTITY),
+            (ErrorCode::NotReady, StatusCode::SERVICE_UNAVAILABLE),
             (
                 ErrorCode::ExternalServiceUnavailable,
                 StatusCode::BAD_GATEWAY,

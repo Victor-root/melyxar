@@ -14,6 +14,7 @@ use melyxar_core::library::{LibraryKind, LibraryOptions, RootAccess};
 
 use crate::browse::{BrowseRequest, WorkCard, WorkOrder, WorkPage};
 use crate::{AppState, Result};
+use melyxar_database::held_back::HeldBack;
 use melyxar_database::home::Dressed;
 use melyxar_database::playback::{UpNext, WorkToCarryOn};
 
@@ -274,6 +275,18 @@ pub async fn browse(
     request: &BrowseRequest,
     who: &User,
 ) -> Result<WorkPage> {
+    let held = crate::held_back::now(state).await?;
+    browse_holding_back(state, request, who, &held).await
+}
+
+/// The same, for a page that reads several grids against one answer about
+/// what is held back.
+async fn browse_holding_back(
+    state: &AppState,
+    request: &BrowseRequest,
+    who: &User,
+    held: &HeldBack,
+) -> Result<WorkPage> {
     if let Some(library_id) = request.library_id {
         crate::reach::may_read(who, library_id)?;
     }
@@ -290,6 +303,7 @@ pub async fn browse(
     let request = BrowseRequest {
         within: crate::reach::within(who),
         viewer: Some(who.id),
+        held_back: held.clone(),
         ..request.clone()
     };
     Ok(state.database().browse_works(&request).await?)
@@ -331,8 +345,9 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     let database = state.database();
     let within = crate::reach::within(who);
     let granted = within.as_deref();
+    let held = crate::held_back::now(state).await?;
 
-    let recently_added = browse(
+    let recently_added = browse_holding_back(
         state,
         &BrowseRequest {
             library_id,
@@ -345,13 +360,14 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
             ..Default::default()
         },
         who,
+        &held,
     )
     .await?;
 
     let carry_on = database
-        .works_to_carry_on(who.id, granted, CARRY_ON)
+        .works_to_carry_on(who.id, granted, &held, CARRY_ON)
         .await?;
-    let up_next = database.up_next(who.id, granted, UP_NEXT).await?;
+    let up_next = database.up_next(who.id, granted, &held, UP_NEXT).await?;
 
     // Counted once per change rather than on the way here: both of these walk
     // the whole collection, and a home page that counts a hundred thousand
@@ -376,7 +392,12 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         // dearest part of the page, and nobody would see the result.
         hero: match who.preferences.banner_shown {
             true => {
-                let reach = Reach { granted, banner: banner_within.as_deref(), kept_out: &kept_out };
+                let reach = Reach {
+                    granted,
+                    banner: banner_within.as_deref(),
+                    kept_out: &kept_out,
+                    held: &held,
+                };
                 the_hero(state, who, reach, &carry_on, &up_next, &recently_added).await?
             }
             false => Vec::new(),
@@ -384,7 +405,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
         hero_at_random: who.preferences.banner_at_random,
         carry_on,
         up_next,
-        shelves: the_shelves(state, who, &seen, &library_order).await?,
+        shelves: the_shelves(state, who, &seen, &library_order, &held).await?,
         recently_added,
         works: counted.browsable,
         awaiting_identification: counted.awaiting_identification,
@@ -405,6 +426,8 @@ struct Reach<'a> {
     banner: Option<&'a [LibraryId]>,
     /// Those kept out of it, for what is read from everywhere at once.
     kept_out: &'a HashSet<LibraryId>,
+    /// What the libraries still taking in keep out of sight.
+    held: &'a HeldBack,
 }
 
 /// The few works the page opens on.
@@ -435,7 +458,9 @@ async fn the_hero(
     // this is how "put on the front page" came to do nothing at all: somebody
     // watching five things at once has a full banner before the question is
     // ever asked, and that is the normal state of a server in use.
-    let pinned = database.pinned_works(who.id, granted, IN_THE_HERO).await?;
+    let pinned = database
+        .pinned_works(who.id, granted, reach.held, IN_THE_HERO)
+        .await?;
 
     // A banner somebody asked to be different every time is filled from a
     // draw instead of from what was left halfway and what has just arrived.
@@ -443,10 +468,16 @@ async fn the_hero(
     // deliberately is not something a shuffle undoes.
     let random = who.preferences.banner_at_random;
     let drawn = match random {
-        true => database.works_at_random(who.id, reach.banner, IN_THE_HERO).await?,
+        true => {
+            database
+                .works_at_random(who.id, reach.banner, reach.held, IN_THE_HERO)
+                .await?
+        }
         false => Vec::new(),
     };
-    let suggested = database.suggestions(who.id, reach.banner, IN_THE_HERO).await?;
+    let suggested = database
+        .suggestions(who.id, reach.banner, reach.held, IN_THE_HERO)
+        .await?;
 
     let started: Vec<(&WorkCard, Option<EpisodePlace>)> = carry_on
         .iter()
@@ -650,6 +681,7 @@ async fn the_shelves(
     who: &User,
     seen: &[LibrarySummary],
     order: &[LibraryId],
+    held: &HeldBack,
 ) -> Result<Vec<Shelf>> {
     let mut shelves = Vec::new();
     for id in order {
@@ -668,11 +700,11 @@ async fn the_shelves(
             limit: ON_A_SHELF,
             ..Default::default()
         };
-        let page = browse(state, &newest, who).await?;
+        let page = browse_holding_back(state, &newest, who, held).await?;
         // Asked apart from the row: the newest arrivals of a library are
         // often files nobody has named yet, and a fan drawn from those alone
         // is a fan of holes on a library full of posters.
-        let fan = browse(
+        let fan = browse_holding_back(
             state,
             &BrowseRequest {
                 identified_only: true,
@@ -680,6 +712,7 @@ async fn the_shelves(
                 ..newest
             },
             who,
+            held,
         )
         .await?;
         shelves.push(Shelf {

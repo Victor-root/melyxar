@@ -24,7 +24,7 @@
 //! that was.
 
 use melyxar_core::id::{LibraryId, MediaSourceId};
-use melyxar_core::job::{JobKind, JobPriority, JobStep};
+use melyxar_core::job::{Job, JobKind, JobPriority, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media_log::file_name_of as name_of_file;
 use melyxar_database::Database;
@@ -175,33 +175,39 @@ impl UpkeepTask {
     }
 }
 
-/// Whether a library is still taking in what arrived in it: a scan, or one of
-/// the readings its files get as they arrive, is under way or waiting its turn.
+/// Whether a library is still taking in what arrived in it: a scan, the look
+/// up that follows it, or one of the readings its files get as they arrive,
+/// is under way or waiting its turn.
 ///
 /// Only the readings the library asked to have done on arrival count: what is
 /// left to the night is not something a film arriving now waits for. This is
 /// what a film is held back by before somebody is told it is ready, so a
 /// notification never sends anyone to a film whose bar still lands seconds
-/// early.
+/// early, and what keeps it out of sight meanwhile where the library asked.
 pub async fn is_still_taking_in(state: &AppState, library: &Library) -> Result<bool> {
-    let database = state.database();
+    let unfinished = state.database().unfinished_jobs().await?;
+    Ok(takes_in(state, library, &unfinished))
+}
+
+/// The same, against the jobs already read as unfinished, for whoever asks it
+/// of every library at once.
+///
+/// A scan and what follows it count from start to end, including the instant
+/// between one of its jobs and the next, when none of them is running.
+pub(crate) fn takes_in(state: &AppState, library: &Library, unfinished: &[Job]) -> bool {
+    if state.intakes().holds(library.id) {
+        return true;
+    }
     let target = library.id.to_string();
-    if database
-        .has_unfinished_job(JobKind::ScanLibrary, Some(&target))
-        .await?
-    {
-        return Ok(true);
-    }
-    for task in UpkeepTask::ALL {
-        if task.follows_an_arrival_in(library)
-            && database
-                .has_unfinished_job(task.job_kind(), Some(&target))
-                .await?
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    unfinished
+        .iter()
+        .filter(|job| job.target_id.as_deref() == Some(target.as_str()))
+        .any(|job| {
+            matches!(job.kind, JobKind::ScanLibrary | JobKind::IdentifyWork)
+                || UpkeepTask::ALL
+                    .iter()
+                    .any(|task| task.job_kind() == job.kind && task.follows_an_arrival_in(library))
+        })
 }
 
 /// How many files one batch asks for.
@@ -403,10 +409,16 @@ pub(crate) async fn read_the_key_frames_of(
         )
         .await;
 
-        read += done
+        let read_now = done
             .iter()
             .filter(|how| **how != HowItWasRead::NotAtAll)
             .count();
+        read += read_now;
+        // A film read here may be what its library was holding back, and
+        // the pages are told so batch by batch rather than at the very end.
+        if read_now > 0 && library.holds_back_until_ready() {
+            database.bump_library_version(library.id).await?;
+        }
         from_their_own_index += done
             .iter()
             .filter(|how| **how == HowItWasRead::FromItsOwnIndex)

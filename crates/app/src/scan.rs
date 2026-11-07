@@ -204,11 +204,12 @@ pub async fn start_scan_and_identification(
     priority: JobPriority,
     mode: RefreshMode,
 ) -> Result<JobId> {
+    let intake = crate::held_back::Intake::begins(state, library.id);
     let scan = start_scan(state, library.clone(), priority, mode).await?;
     let id = scan.id();
     let state = state.clone();
     tokio::spawn(async move {
-        what_follows_a_scan(&state, library, scan, priority, mode).await;
+        what_follows_a_scan(&state, library, scan, priority, mode, intake).await;
     });
     Ok(id)
 }
@@ -224,15 +225,34 @@ pub async fn scan_and_what_follows(
     priority: JobPriority,
     mode: RefreshMode,
 ) -> Result<JobState> {
+    let intake = crate::held_back::Intake::begins(state, library.id);
     let scan = start_scan(state, library.clone(), priority, mode).await?;
-    Ok(what_follows_a_scan(state, library, scan, priority, mode).await)
+    Ok(what_follows_a_scan(state, library, scan, priority, mode, intake).await)
 }
 
 /// Waits for a scan, then looks up what it found and reads what follows an
 /// arrival. Answers how the scan ended.
+///
+/// The library is taking in for as long as this runs, and settles once it is
+/// over: what it held back meanwhile comes into sight.
 async fn what_follows_a_scan(
     state: &AppState,
     library: Library,
+    scan: ScanJob,
+    priority: JobPriority,
+    mode: RefreshMode,
+    intake: crate::held_back::Intake,
+) -> JobState {
+    let ended = taking_in_what_a_scan_found(state, &library, scan, priority, mode).await;
+    drop(intake);
+    crate::held_back::settle(state, &library).await;
+    ended
+}
+
+/// The look up and the readings, once the scan is over, in that order.
+async fn taking_in_what_a_scan_found(
+    state: &AppState,
+    library: &Library,
     scan: ScanJob,
     priority: JobPriority,
     mode: RefreshMode,
@@ -265,7 +285,7 @@ async fn what_follows_a_scan(
 
     // And only then the readings of the files. A look up that went wrong
     // does not hold them back: they are about the files.
-    read_what_follows_an_arrival_in(state, &library, priority).await;
+    read_what_follows_an_arrival_in(state, library, priority).await;
     // The songs are measured for how loud they are, which is music's own
     // reading and the only one a library of music has.
     if library.kind == LibraryKind::Music
@@ -3271,6 +3291,18 @@ mod tests {
             place_of(JobKind::IdentifyWork) < place_of(JobKind::GenerateThumbnails),
             "and before it is read for its bar: {ran:?}"
         );
+
+        // Once the chain is over the library has settled, and what it held
+        // back meanwhile is in sight for good.
+        let database = state.database();
+        for _ in 0..600 {
+            if !database.arrived_since_settled(library.id).await.expect("read") {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(!database.arrived_since_settled(library.id).await.expect("read"));
+        assert!(!crate::held_back::now(&state).await.expect("read").holds_anything());
     }
 
     #[tokio::test]

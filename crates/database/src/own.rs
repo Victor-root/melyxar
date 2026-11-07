@@ -14,6 +14,7 @@ use sqlx::{AssertSqlSafe, Row};
 
 use crate::catalogue::{insert_work, recount_children, what_a_work_is, work_from_row, Placed};
 use crate::convert::parse_id;
+use crate::held_back::HeldBack;
 use crate::images::{image_from_row, StoredImage, WHAT_A_PICTURE_IS};
 use crate::{Database, DatabaseError, Result};
 
@@ -163,22 +164,26 @@ impl Database {
     pub async fn neighbouring_photos(
         &self,
         photo: &Work,
+        held: &HeldBack,
     ) -> Result<(Option<WorkId>, Option<WorkId>)> {
         let mut found = [None, None];
         for (slot, (side, order)) in [("<", "DESC"), (">", "ASC")].iter().enumerate() {
-            let row = sqlx::query(AssertSqlSafe(format!(
+            let mut query = sqlx::query(AssertSqlSafe(format!(
                 "SELECT id FROM works
                   WHERE library_id = ? AND parent_id IS ? AND kind = 'photo'
-                    AND (sort_title, id) {side} (?, ?)
+                    AND (sort_title, id) {side} (?, ?){}
                   ORDER BY sort_title {order}, id {order}
-                  LIMIT 1"
+                  LIMIT 1",
+                held.work_shown("works")
             )))
             .bind(photo.library_id.to_db_string())
             .bind(photo.parent_id.map(|folder| folder.to_db_string()))
             .bind(&photo.sort_title)
-            .bind(photo.id.to_db_string())
-            .fetch_optional(self.reader())
-            .await?;
+            .bind(photo.id.to_db_string());
+            if let Some(held) = held.bound() {
+                query = query.bind(held);
+            }
+            let row = query.fetch_optional(self.reader()).await?;
             found[slot] = row
                 .map(|row| parse_id(&row.try_get::<String, _>("id")?))
                 .transpose()?;
@@ -601,15 +606,15 @@ mod tests {
 
         let [c, a, b] = [&photos[0], &photos[1], &photos[2]];
         assert_eq!(
-            database.neighbouring_photos(b).await.expect("read"),
+            database.neighbouring_photos(b, &Default::default()).await.expect("read"),
             (Some(a.id), Some(c.id))
         );
         assert_eq!(
-            database.neighbouring_photos(a).await.expect("read"),
+            database.neighbouring_photos(a, &Default::default()).await.expect("read"),
             (None, Some(b.id))
         );
         assert_eq!(
-            database.neighbouring_photos(c).await.expect("read"),
+            database.neighbouring_photos(c, &Default::default()).await.expect("read"),
             (Some(b.id), None)
         );
 
@@ -618,7 +623,7 @@ mod tests {
             .await
             .expect("account created");
         let shown: Vec<String> = database
-            .children_of(viewer.id, summer.id, "fr")
+            .children_of(viewer.id, summer.id, "fr", &Default::default())
             .await
             .expect("read")
             .into_iter()

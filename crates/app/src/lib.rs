@@ -25,6 +25,7 @@ pub mod diagnostics;
 pub mod episodes;
 pub mod folder_watch;
 pub mod hand_edits;
+pub mod held_back;
 pub mod import;
 pub mod identify;
 pub mod images;

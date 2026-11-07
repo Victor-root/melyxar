@@ -10,6 +10,7 @@ use melyxar_core::time::{now, Timestamp};
 use sqlx::{AssertSqlSafe, Row};
 
 use crate::browse::{kept_inside, met_on_its_own, WorkCard, WHAT_A_CARD_IS};
+use crate::held_back::HeldBack;
 use crate::convert::{parse_optional_timestamp, timestamp_to_text};
 use crate::{Database, Result};
 
@@ -104,6 +105,7 @@ impl Database {
         viewer: UserId,
         person: PersonId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Vec<WorkCard>> {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(Vec::new());
@@ -117,14 +119,18 @@ impl Database {
                                    JOIN works episode ON episode.id = c.work_id
                                    JOIN works season ON season.id = episode.parent_id
                                   WHERE c.person_id = ? AND episode.kind = 'episode'))
-                AND {}{inside}
+                AND {}{inside}{}
               ORDER BY w.release_year IS NULL, w.release_year DESC, w.sort_title",
-            met_on_its_own("w.")
+            met_on_its_own("w."),
+            held.work_shown("w")
         )))
         .bind(person.to_db_string())
         .bind(person.to_db_string());
         for granted in within.iter().copied().flatten() {
             query = query.bind(granted.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query.fetch_all(self.reader()).await?;
 
@@ -133,7 +139,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(cards)
     }
 }
@@ -276,7 +282,7 @@ mod tests {
         let (database, viewer, films, ada, written) = a_career().await;
 
         let everything = database
-            .works_crediting(viewer, ada, None)
+            .works_crediting(viewer, ada, None, &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -286,7 +292,7 @@ mod tests {
         );
 
         let granted = database
-            .works_crediting(viewer, ada, Some(&[films]))
+            .works_crediting(viewer, ada, Some(&[films]), &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -297,7 +303,7 @@ mod tests {
 
         assert!(
             database
-                .works_crediting(viewer, ada, Some(&[]))
+                .works_crediting(viewer, ada, Some(&[]), &Default::default())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -339,7 +345,7 @@ mod tests {
         }
 
         let career = database
-            .works_crediting(viewer, ada, None)
+            .works_crediting(viewer, ada, None, &Default::default())
             .await
             .expect("read");
         assert_eq!(

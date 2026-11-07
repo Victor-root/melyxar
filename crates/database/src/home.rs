@@ -13,6 +13,7 @@ use sqlx::{AssertSqlSafe, Row};
 use std::collections::HashMap;
 
 use crate::browse::{kept_inside, met_on_its_own, WorkCard, WHAT_A_CARD_IS};
+use crate::held_back::HeldBack;
 use crate::convert::{parse_id, timestamp_to_text};
 use crate::images::StoredImage;
 use crate::{Database, Result};
@@ -185,11 +186,13 @@ impl Database {
         &self,
         viewer: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Vec<WorkCard>> {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(Vec::new());
         };
+        let shown = held.work_shown("w");
         // No question here of what is met on its own. That rule keeps seasons
         // and episodes out of the grids nobody asked to see them in; this row
         // is the one place where somebody did ask, by hand, for this exact
@@ -199,12 +202,15 @@ impl Database {
             "SELECT {WHAT_A_CARD_IS}
                FROM pinned_works p
                JOIN works w ON w.id = p.work_id
-              WHERE 1 = 1{inside}
+              WHERE 1 = 1{inside}{shown}
               ORDER BY p.rank, p.pinned_at
               LIMIT ?"
         )));
         for granted in within.iter().copied().flatten() {
             query = query.bind(granted.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query.bind(limit).fetch_all(self.reader()).await?;
 
@@ -213,7 +219,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(cards)
     }
 
@@ -289,6 +295,7 @@ impl Database {
         &self,
         viewer: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Vec<WorkCard>> {
         // An account granted nothing has nothing to be suggested.
@@ -309,6 +316,8 @@ impl Database {
                     .join(", ")
             ),
         };
+        // Numbered on after the libraries, for the same reason.
+        let shown = held.work_shown_at("w", &format!("?{}", granted.len() + 4));
 
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "WITH watched_genres AS (
@@ -345,7 +354,7 @@ impl Database {
                 AND (NOT EXISTS (SELECT 1 FROM watched_genres)
                      OR EXISTS (SELECT 1 FROM work_genres wg
                                   JOIN watched_genres ON watched_genres.genre_id = wg.genre_id
-                                 WHERE wg.work_id = w.id)){inside}
+                                 WHERE wg.work_id = w.id)){inside}{shown}
               ORDER BY w.community_rating DESC
               LIMIT ?3",
             met_on_its_own("w.")
@@ -356,6 +365,9 @@ impl Database {
         for library in granted {
             query = query.bind(library.to_db_string());
         }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
         let rows = query.fetch_all(self.reader()).await?;
 
         let mut cards = rows
@@ -363,7 +375,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(cards)
     }
 
@@ -381,6 +393,7 @@ impl Database {
         &self,
         viewer: UserId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Vec<WorkCard>> {
         // An account granted nothing has nothing to draw from.
@@ -398,6 +411,7 @@ impl Database {
                     .join(", ")
             ),
         };
+        let shown = held.work_shown_at("w", &format!("?{}", granted.len() + 2));
 
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}
@@ -406,7 +420,7 @@ impl Database {
                 AND EXISTS (SELECT 1 FROM images i
                              WHERE i.owner_kind = 'work'
                                AND i.owner_id = w.id
-                               AND i.image_kind = 'backdrop'){inside}
+                               AND i.image_kind = 'backdrop'){inside}{shown}
               ORDER BY random()
               LIMIT ?1",
             met_on_its_own("w.")
@@ -415,6 +429,9 @@ impl Database {
         for library in granted {
             query = query.bind(library.to_db_string());
         }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
         let rows = query.fetch_all(self.reader()).await?;
 
         let mut cards = rows
@@ -422,7 +439,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(cards)
     }
 }
@@ -462,6 +479,7 @@ impl Database {
         viewer: UserId,
         work_id: WorkId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
         limit: i64,
     ) -> Result<Option<Alike>> {
         let (Some(beside), Some(inside)) = (
@@ -471,6 +489,7 @@ impl Database {
             return Ok(None);
         };
         let granted = within.unwrap_or_default();
+        let (other_shown, shown) = (held.work_shown("o"), held.work_shown("w"));
 
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT id, name FROM (
@@ -478,7 +497,7 @@ impl Database {
                         (SELECT count(*) FROM work_genres t
                            JOIN works o ON o.id = t.work_id
                           WHERE t.genre_id = g.id AND o.id <> me.id
-                            AND o.kind = me.kind{beside}) AS others
+                            AND o.kind = me.kind{beside}{other_shown}) AS others
                    FROM work_genres mine
                    JOIN genres g ON g.id = mine.genre_id
                    JOIN works me ON me.id = mine.work_id
@@ -490,6 +509,9 @@ impl Database {
         )));
         for library in granted {
             query = query.bind(library.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let Some(chosen) = query
             .bind(work_id.to_db_string())
@@ -508,7 +530,7 @@ impl Database {
                FROM works w
                JOIN work_genres wg ON wg.work_id = w.id AND wg.genre_id = ?
               WHERE w.id <> ?
-                AND w.kind = (SELECT kind FROM works WHERE id = ?){inside}
+                AND w.kind = (SELECT kind FROM works WHERE id = ?){inside}{shown}
               ORDER BY (SELECT count(*) FROM work_genres a
                           JOIN work_genres b ON b.genre_id = a.genre_id
                          WHERE a.work_id = w.id AND b.work_id = ?) DESC,
@@ -521,6 +543,9 @@ impl Database {
         for library in granted {
             query = query.bind(library.to_db_string());
         }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
         let rows = query
             .bind(work_id.to_db_string())
             .bind(limit)
@@ -532,7 +557,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(Some(Alike { genre, cards }))
     }
 
@@ -545,6 +570,7 @@ impl Database {
         viewer: UserId,
         work_id: WorkId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Option<Saga>> {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(None);
@@ -566,12 +592,16 @@ impl Database {
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}
                FROM works w
-               JOIN collection_items ci ON ci.work_id = w.id AND ci.collection_id = ?{inside}
-              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title"
+               JOIN collection_items ci ON ci.work_id = w.id AND ci.collection_id = ?{inside}{}
+              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title",
+            held.work_shown("w")
         )))
         .bind(&saga_id);
         for library in within.unwrap_or_default() {
             query = query.bind(library.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let rows = query.fetch_all(self.reader()).await?;
 
@@ -580,7 +610,7 @@ impl Database {
             .map(crate::browse::card_from_row)
             .collect::<Result<Vec<_>>>()?;
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(Some(Saga { name, cards }))
     }
 
@@ -610,6 +640,7 @@ impl Database {
         people: &[PersonId],
         leaving_out: &[WorkId],
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Vec<Role>> {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(Vec::new());
@@ -625,8 +656,9 @@ impl Database {
                JOIN works w ON w.id = c.work_id
               WHERE c.person_id IN ({who}) AND c.role = 'actor'
                 AND c.character_name IS NOT NULL
-                AND w.kind = 'movie' AND w.id NOT IN ({left}){inside}
-              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title, c.ordinal"
+                AND w.kind = 'movie' AND w.id NOT IN ({left}){inside}{}
+              ORDER BY w.release_year IS NULL, w.release_year, w.sort_title, c.ordinal",
+            held.work_shown("w")
         )));
         for person in people {
             query = query.bind(person.to_db_string());
@@ -637,21 +669,33 @@ impl Database {
         for library in within.unwrap_or_default() {
             query = query.bind(library.to_db_string());
         }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
+        }
         let rows = query.fetch_all(self.reader()).await?;
         rows.iter().map(role_from_row).collect()
     }
 
     /// The cards of these works, in the order they are given.
-    pub async fn cards_in_order(&self, viewer: UserId, works: &[WorkId]) -> Result<Vec<WorkCard>> {
+    pub async fn cards_in_order(
+        &self,
+        viewer: UserId,
+        works: &[WorkId],
+        held: &HeldBack,
+    ) -> Result<Vec<WorkCard>> {
         if works.is_empty() {
             return Ok(Vec::new());
         }
         let places = vec!["?"; works.len()].join(", ");
         let mut query = sqlx::query(AssertSqlSafe(format!(
-            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id IN ({places})"
+            "SELECT {WHAT_A_CARD_IS} FROM works w WHERE w.id IN ({places}){}",
+            held.work_shown("w")
         )));
         for work in works {
             query = query.bind(work.to_db_string());
+        }
+        if let Some(held) = held.bound() {
+            query = query.bind(held);
         }
         let mut cards = query
             .fetch_all(self.reader())
@@ -661,7 +705,7 @@ impl Database {
             .collect::<Result<Vec<_>>>()?;
         cards.sort_by_key(|card| works.iter().position(|work| *work == card.id));
         self.attach_posters(&mut cards).await?;
-        self.attach_viewer_state(viewer, &mut cards).await?;
+        self.attach_viewer_state(viewer, &mut cards, held).await?;
         Ok(cards)
     }
 }
@@ -778,7 +822,7 @@ mod tests {
         with_a_backdrop(&database, films[2]).await;
 
         let drawn = database
-            .works_at_random(who, None, 5)
+            .works_at_random(who, None, &Default::default(), 5)
             .await
             .expect("a draw comes back");
 
@@ -802,7 +846,7 @@ mod tests {
 
         assert_eq!(
             database
-                .works_at_random(who, Some(&[library]), 5)
+                .works_at_random(who, Some(&[library]), &Default::default(), 5)
                 .await
                 .expect("a draw comes back")
                 .len(),
@@ -811,7 +855,7 @@ mod tests {
         );
         assert!(
             database
-                .works_at_random(who, Some(&[]), 5)
+                .works_at_random(who, Some(&[]), &Default::default(), 5)
                 .await
                 .expect("a draw comes back")
                 .is_empty(),
@@ -833,7 +877,7 @@ mod tests {
 
         assert_eq!(
             database
-                .works_at_random(who, None, 2)
+                .works_at_random(who, None, &Default::default(), 2)
                 .await
                 .expect("a draw comes back")
                 .len(),
@@ -855,7 +899,7 @@ mod tests {
         let displaced = database.pin_work(films[2], 2).await.expect("pinned");
 
         assert_eq!(displaced, vec![films[0]]);
-        let front = database.pinned_works(who, None, 10).await.expect("pinned read");
+        let front = database.pinned_works(who, None, &Default::default(), 10).await.expect("pinned read");
         assert_eq!(
             front.iter().map(|card| card.id).collect::<Vec<_>>(),
             vec![films[2], films[1]]
@@ -872,7 +916,7 @@ mod tests {
         database.pin_work(films[1], 5).await.expect("pinned");
 
         let front = database
-            .pinned_works(who, None, 10)
+            .pinned_works(who, None, &Default::default(), 10)
             .await
             .expect("pinned read");
         assert_eq!(
@@ -882,7 +926,7 @@ mod tests {
 
         // Pinned again, it comes back to the front.
         database.pin_work(films[0], 5).await.expect("pinned again");
-        let front = database.pinned_works(who, None, 10).await.expect("pinned read");
+        let front = database.pinned_works(who, None, &Default::default(), 10).await.expect("pinned read");
         assert_eq!(front[0].id, films[0]);
 
         assert!(database.is_pinned(films[0]).await.expect("read"));
@@ -895,7 +939,7 @@ mod tests {
 
         assert!(
             database
-                .pinned_works(who, Some(&[]), 10)
+                .pinned_works(who, Some(&[]), &Default::default(), 10)
                 .await
                 .expect("pinned read")
                 .is_empty(),
@@ -934,7 +978,7 @@ mod tests {
 
         assert_eq!(
             database
-                .pinned_works(who, None, 10)
+                .pinned_works(who, None, &Default::default(), 10)
                 .await
                 .expect("pinned read")
                 .iter()
@@ -980,7 +1024,7 @@ mod tests {
         also_of(&database, series.id, "Action").await;
 
         let alike = database
-            .alike_by_genre(who, films[0], None, 10)
+            .alike_by_genre(who, films[0], None, &Default::default(), 10)
             .await
             .expect("read")
             .expect("a genre is shared");
@@ -993,7 +1037,7 @@ mod tests {
 
         assert_eq!(
             database
-                .alike_by_genre(who, films[0], Some(&[]), 10)
+                .alike_by_genre(who, films[0], Some(&[]), &Default::default(), 10)
                 .await
                 .expect("read"),
             None,
@@ -1001,7 +1045,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .alike_by_genre(who, films[3], None, 10)
+                .alike_by_genre(who, films[3], None, &Default::default(), 10)
                 .await
                 .expect("read"),
             None,
@@ -1053,7 +1097,7 @@ mod tests {
         in_a_saga(&database, "Pond Saga", &[films[3]]).await;
 
         let saga = database
-            .saga_of(who, films[0], None)
+            .saga_of(who, films[0], None, &Default::default())
             .await
             .expect("read")
             .expect("a saga");
@@ -1066,7 +1110,7 @@ mod tests {
 
         assert_eq!(
             database
-                .saga_of(who, films[3], None)
+                .saga_of(who, films[3], None, &Default::default())
                 .await
                 .expect("read")
                 .expect("a saga")
@@ -1077,14 +1121,14 @@ mod tests {
         );
         assert_eq!(
             database
-                .saga_of(who, WorkId::new(), None)
+                .saga_of(who, WorkId::new(), None, &Default::default())
                 .await
                 .expect("read"),
             None,
             "a work in no saga has none"
         );
         assert_eq!(
-            database.saga_of(who, films[0], Some(&[])).await.expect("read"),
+            database.saga_of(who, films[0], Some(&[]), &Default::default()).await.expect("read"),
             None,
             "an account granted nothing is offered nothing"
         );
@@ -1150,7 +1194,7 @@ mod tests {
         assert!(leads.iter().all(|role| role.person_id == hero && role.billed == 0));
 
         let elsewhere = database
-            .roles_elsewhere(&[hero], &saga, None)
+            .roles_elsewhere(&[hero], &saga, None, &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -1163,7 +1207,7 @@ mod tests {
         );
         assert!(
             database
-                .roles_elsewhere(&[hero], &saga, Some(&[]))
+                .roles_elsewhere(&[hero], &saga, Some(&[]), &Default::default())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -1171,7 +1215,7 @@ mod tests {
         );
         assert_eq!(
             database
-                .roles_elsewhere(&[hero], &saga, Some(&[library]))
+                .roles_elsewhere(&[hero], &saga, Some(&[library]), &Default::default())
                 .await
                 .expect("read")
                 .len(),
@@ -1179,7 +1223,7 @@ mod tests {
         );
 
         let cards = database
-            .cards_in_order(who, &[films[2], films[0], films[3]])
+            .cards_in_order(who, &[films[2], films[0], films[3]], &Default::default())
             .await
             .expect("read");
         assert_eq!(
@@ -1201,7 +1245,7 @@ mod tests {
         // Nothing watched yet: the best rated thing comes first, whatever it
         // is, because there is nothing to go on.
         let blind = database
-            .suggestions(who, None, 10)
+            .suggestions(who, None, &Default::default(), 10)
             .await
             .expect("suggestions read");
         assert_eq!(blind[0].id, films[1], "the best rated, with nothing to go on");
@@ -1212,7 +1256,7 @@ mod tests {
             .expect("marked");
 
         let leaning = database
-            .suggestions(who, None, 10)
+            .suggestions(who, None, &Default::default(), 10)
             .await
             .expect("suggestions read");
         assert_eq!(
@@ -1354,7 +1398,7 @@ mod tests {
             .expect("position recorded");
 
         let offered = database
-            .suggestions(who, None, 10)
+            .suggestions(who, None, &Default::default(), 10)
             .await
             .expect("suggestions read");
         assert_eq!(

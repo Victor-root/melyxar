@@ -8,6 +8,7 @@
 use melyxar_core::id::{PlaylistId, WorkId};
 use melyxar_core::user::User;
 use melyxar_core::work::WorkKind;
+use melyxar_database::held_back::HeldBack;
 pub use melyxar_database::playlists::{PlaylistHeld, PlaylistSummary};
 
 use crate::collections::{named, not_too_long, room_for_another};
@@ -16,13 +17,21 @@ use crate::{AppError, AppState, Result};
 /// Every playlist of this account, by name.
 pub async fn every_one(state: &AppState, who: &User) -> Result<Vec<PlaylistSummary>> {
     let within = crate::reach::within(who);
-    Ok(state.database().playlists(who.id, within.as_deref()).await?)
+    let held = crate::held_back::now(state).await?;
+    Ok(state
+        .database()
+        .playlists(who.id, within.as_deref(), &held)
+        .await?)
 }
 
 /// One playlist of this account, with the works of it it can reach.
 pub async fn one(state: &AppState, who: &User, id: PlaylistId) -> Result<Option<PlaylistHeld>> {
     let within = crate::reach::within(who);
-    Ok(state.database().playlist(who.id, id, within.as_deref()).await?)
+    let held = crate::held_back::now(state).await?;
+    Ok(state
+        .database()
+        .playlist(who.id, id, within.as_deref(), &held)
+        .await?)
 }
 
 /// The playlists of this account a work is in.
@@ -35,7 +44,7 @@ pub async fn create(state: &AppState, who: &User, name: &str, works: &[WorkId]) 
     let name = named(name)?;
     not_too_long(works.len())?;
     let database = state.database();
-    room_for_another(database.playlists(who.id, None).await?.len())?;
+    room_for_another(database.playlists(who.id, None, &HeldBack::nothing()).await?.len())?;
     playable(state, who, works).await?;
     let id = database.create_playlist(who.id, name).await?;
     database.add_to_playlist(who.id, id, works).await?;

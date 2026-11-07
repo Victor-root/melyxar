@@ -13,6 +13,7 @@ use crate::convert::{
     timestamp_to_text,
 };
 use crate::browse::kept_inside;
+use crate::held_back::HeldBack;
 use crate::{Database, DatabaseError, Result};
 
 /// One request about to be written.
@@ -362,6 +363,7 @@ impl Database {
         catalogue: &str,
         tmdb_ids: &[String],
         within: Option<&[LibraryId]>,
+        held_back: &HeldBack,
     ) -> Result<HashMap<String, HeldTitle>> {
         let Some(inside) = kept_inside(within, "w.library_id") else {
             return Ok(HashMap::new());
@@ -379,9 +381,10 @@ impl Database {
                JOIN works w ON w.id = e.work_id
               WHERE e.provider = 'tmdb' AND w.kind = ? AND w.parent_id IS NULL
                 AND w.identification IN ('identified', 'manual')
-                AND e.external_id IN ({}){inside}
+                AND e.external_id IN ({}){inside}{}
               ORDER BY w.added_at",
-            vec!["?"; tmdb_ids.len()].join(", ")
+            vec!["?"; tmdb_ids.len()].join(", "),
+            held_back.work_shown("w")
         )))
         .bind(kind_of(catalogue));
         for id in tmdb_ids {
@@ -389,6 +392,9 @@ impl Database {
         }
         for library in within.unwrap_or_default() {
             query = query.bind(library.to_db_string());
+        }
+        if let Some(held) = held_back.bound() {
+            query = query.bind(held);
         }
         let rows = query.fetch_all(self.reader()).await?;
 
@@ -563,7 +569,7 @@ mod tests {
             let asked = asked.clone();
             async move {
                 database
-                    .held_titles("films", &asked, within.as_deref())
+                    .held_titles("films", &asked, within.as_deref(), &Default::default())
                     .await
                     .expect("read")
                     .remove("70")
@@ -613,7 +619,7 @@ mod tests {
             .expect("named");
         let asked = vec!["40".to_string(), "41".to_string()];
         assert!(
-            database.held_titles("series", &asked, None).await.expect("read").is_empty(),
+            database.held_titles("series", &asked, None, &Default::default()).await.expect("read").is_empty(),
             "a work not yet identified is not held"
         );
 
@@ -622,7 +628,7 @@ mod tests {
             .execute(database.writer())
             .await
             .expect("identified");
-        let held = database.held_titles("series", &asked, None).await.expect("read");
+        let held = database.held_titles("series", &asked, None, &Default::default()).await.expect("read");
         assert_eq!(
             held.get("40"),
             Some(&HeldTitle {
@@ -632,7 +638,7 @@ mod tests {
             })
         );
         assert!(
-            database.held_titles("films", &asked, None).await.expect("read").is_empty(),
+            database.held_titles("films", &asked, None, &Default::default()).await.expect("read").is_empty(),
             "a film and a series do not share their identifiers"
         );
 

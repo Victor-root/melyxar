@@ -12,6 +12,7 @@ use sqlx::{AssertSqlSafe, Row};
 
 use crate::browse::{kept_inside, WorkCard, WHAT_A_CARD_IS};
 use crate::convert::{parse_id, timestamp_to_text};
+use crate::held_back::HeldBack;
 use crate::{Database, Result};
 
 /// The fewest films a saga needs here before it counts as a collection: one
@@ -53,6 +54,7 @@ impl Database {
         &self,
         viewer: UserId,
         within: Option<&[LibraryId]>,
+        held_back: &HeldBack,
         with_the_empty: bool,
     ) -> Result<Vec<CollectionSummary>> {
         let inside = kept_inside(within, "w.library_id");
@@ -65,7 +67,7 @@ impl Database {
                           FROM collection_items ci
                           JOIN collections c ON c.id = ci.collection_id
                           JOIN works w ON w.id = ci.work_id
-                         WHERE 1 = 1{inside})
+                         WHERE 1 = 1{inside}{})
                      SELECT c.id, c.name, c.origin,
                             (SELECT count(*) FROM visible v WHERE v.collection_id = c.id) AS held,
                             (SELECT v.work_id FROM visible v WHERE v.collection_id = c.id
@@ -73,10 +75,14 @@ impl Database {
                                        v.sort_title
                               LIMIT 1) AS cover
                        FROM collections c
-                      ORDER BY c.sort_name"
+                      ORDER BY c.sort_name",
+                    held_back.work_shown("w")
                 )));
                 for library in within.unwrap_or_default() {
                     query = query.bind(library.to_db_string());
+                }
+                if let Some(held) = held_back.bound() {
+                    query = query.bind(held);
                 }
                 query.fetch_all(self.reader()).await?
             }
@@ -111,7 +117,7 @@ impl Database {
             ));
         }
 
-        let cards = self.cards_in_order(viewer, &covers).await?;
+        let cards = self.cards_in_order(viewer, &covers, held_back).await?;
         Ok(found
             .into_iter()
             .map(|(mut summary, cover)| {
@@ -128,6 +134,7 @@ impl Database {
         viewer: UserId,
         id: CollectionId,
         within: Option<&[LibraryId]>,
+        held: &HeldBack,
     ) -> Result<Option<CollectionHeld>> {
         let named: Option<(String, String)> =
             sqlx::query_as("SELECT name, origin FROM collections WHERE id = ?")
@@ -144,12 +151,16 @@ impl Database {
                    FROM works w
                    JOIN collection_items ci ON ci.work_id = w.id
                    JOIN collections c ON c.id = ci.collection_id
-                  WHERE c.id = ?{inside}
-                  ORDER BY {IN_ITS_ORDER}"
+                  WHERE c.id = ?{inside}{}
+                  ORDER BY {IN_ITS_ORDER}",
+                held.work_shown("w")
             )))
             .bind(id.to_db_string());
             for library in within.unwrap_or_default() {
                 query = query.bind(library.to_db_string());
+            }
+            if let Some(held) = held.bound() {
+                query = query.bind(held);
             }
             cards = query
                 .fetch_all(self.reader())
@@ -158,7 +169,7 @@ impl Database {
                 .map(crate::browse::card_from_row)
                 .collect::<Result<Vec<_>>>()?;
             self.attach_posters(&mut cards).await?;
-            self.attach_viewer_state(viewer, &mut cards).await?;
+            self.attach_viewer_state(viewer, &mut cards, held).await?;
         }
         Ok(Some(CollectionHeld {
             id,
@@ -359,7 +370,7 @@ mod tests {
         assert!(database.add_to_collection(christmas, &[late]).await.expect("added again"));
         assert_eq!(database.hand_made_collections_of(late).await.expect("read"), vec![christmas]);
 
-        let held = database.collection(viewer, christmas, None).await.expect("read").expect("there");
+        let held = database.collection(viewer, christmas, None, &Default::default()).await.expect("read").expect("there");
         assert!(held.made_by_hand);
         assert_eq!(
             held.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
@@ -368,22 +379,22 @@ mod tests {
         );
 
         let films_only = [films];
-        let listed = database.collections(viewer, Some(&films_only), false).await.expect("read");
+        let listed = database.collections(viewer, Some(&films_only), &Default::default(), false).await.expect("read");
         assert_eq!(listed.len(), 1, "an empty collection is left out");
         assert_eq!((listed[0].held, listed[0].cover.as_ref().map(|card| card.id)), (1, Some(late)));
         assert_eq!(
-            database.collections(viewer, None, true).await.expect("read").len(),
+            database.collections(viewer, None, &Default::default(), true).await.expect("read").len(),
             2,
             "whoever manages them sees the empty one too"
         );
-        assert!(database.collections(viewer, Some(&[]), true).await.expect("read").is_empty());
+        assert!(database.collections(viewer, Some(&[]), &Default::default(), true).await.expect("read").is_empty());
 
         assert!(database.remove_from_collection(christmas, &[late]).await.expect("taken out"));
         assert!(database.rename_collection(christmas, "Noël", "noël").await.expect("renamed"));
-        let held = database.collection(viewer, christmas, None).await.expect("read").expect("there");
+        let held = database.collection(viewer, christmas, None, &Default::default()).await.expect("read").expect("there");
         assert_eq!((held.name.as_str(), held.cards.len()), ("Noël", 1));
         assert!(database.delete_collection(empty).await.expect("deleted"));
-        assert!(database.collection(viewer, empty, None).await.expect("read").is_none());
+        assert!(database.collection(viewer, empty, None, &Default::default()).await.expect("read").is_none());
     }
 
     #[tokio::test]
@@ -396,15 +407,15 @@ mod tests {
             .id;
         let second = a_film(&database, films, "Harbour Two", 2012, Some("Harbour")).await;
         assert!(
-            database.collections(viewer, None, true).await.expect("read").is_empty(),
+            database.collections(viewer, None, &Default::default(), true).await.expect("read").is_empty(),
             "one film gathers nothing"
         );
         let first = a_film(&database, films, "Harbour One", 2008, Some("Harbour")).await;
 
-        let listed = database.collections(viewer, None, false).await.expect("read");
+        let listed = database.collections(viewer, None, &Default::default(), false).await.expect("read");
         assert_eq!(listed.len(), 1);
         assert!(!listed[0].made_by_hand);
-        let saga = database.collection(viewer, listed[0].id, None).await.expect("read").expect("there");
+        let saga = database.collection(viewer, listed[0].id, None, &Default::default()).await.expect("read").expect("there");
         assert_eq!(
             saga.cards.iter().map(|card| card.id).collect::<Vec<_>>(),
             vec![first, second],

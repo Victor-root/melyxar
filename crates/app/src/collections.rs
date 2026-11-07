@@ -46,16 +46,26 @@ pub(crate) fn room_for_another(kept: usize) -> Result<()> {
 /// Every collection this account can see something of, by name.
 pub async fn every_one(state: &AppState, who: &User) -> Result<Vec<CollectionSummary>> {
     let within = crate::reach::within(who);
+    let held = crate::held_back::now(state).await?;
     Ok(state
         .database()
-        .collections(who.id, within.as_deref(), who.permissions.may_manage_collections)
+        .collections(
+            who.id,
+            within.as_deref(),
+            &held,
+            who.permissions.may_manage_collections,
+        )
         .await?)
 }
 
 /// One collection, with the works of it this account can reach.
 pub async fn one(state: &AppState, who: &User, id: CollectionId) -> Result<Option<CollectionHeld>> {
     let within = crate::reach::within(who);
-    Ok(state.database().collection(who.id, id, within.as_deref()).await?)
+    let held = crate::held_back::now(state).await?;
+    Ok(state
+        .database()
+        .collection(who.id, id, within.as_deref(), &held)
+        .await?)
 }
 
 /// The collections made by hand a work is in, for the window that puts it in

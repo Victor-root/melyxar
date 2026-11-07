@@ -29,6 +29,9 @@ pub enum ErrorCode {
     /// Nothing has managed to describe the file, so there is nothing to decide
     /// how to play it with.
     NotDescribed,
+    /// The copy has just arrived in a library that waits for it to be ready
+    /// before it is shown or played.
+    NotReady,
     DependencyMissing,
     /// The cache of films being converted is full of what nobody may give up
     /// yet, so another cannot start until one ends.
@@ -55,6 +58,7 @@ impl ErrorCode {
             Self::PathNotAllowed => "path_not_allowed",
             Self::RootUnavailable => "root_unavailable",
             Self::NotDescribed => "not_described",
+            Self::NotReady => "not_ready",
             Self::DependencyMissing => "dependency_missing",
             Self::NoRoomLeft => "no_room_left",
             Self::ExternalServiceUnavailable => "external_service_unavailable",
@@ -142,6 +146,7 @@ mod tests {
             (ErrorCode::PathNotAllowed, "path_not_allowed"),
             (ErrorCode::RootUnavailable, "root_unavailable"),
             (ErrorCode::NotDescribed, "not_described"),
+            (ErrorCode::NotReady, "not_ready"),
             (ErrorCode::DependencyMissing, "dependency_missing"),
             (
                 ErrorCode::ExternalServiceUnavailable,

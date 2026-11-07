@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use melyxar_core::id::{RequestId, UserId, WorkId};
+use melyxar_database::held_back::HeldBack;
 use melyxar_database::requests::TitleRequest;
 
 use super::live::moved;
@@ -43,7 +44,7 @@ pub async fn settle_arrivals(state: &AppState) -> Result<()> {
                 .collect();
             let ids: Vec<String> = asked.iter().map(|request| request.tmdb_id.clone()).collect();
             let held = database
-                .held_titles(word_of(catalogue), &ids, within.as_deref())
+                .held_titles(word_of(catalogue), &ids, within.as_deref(), &HeldBack::nothing())
                 .await?;
             for request in asked {
                 if let Some(title) = held.get(&request.tmdb_id)
