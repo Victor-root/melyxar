@@ -76,8 +76,9 @@ type Entry = Omit<MenuEntry, "said"> & {
 export interface WorkMenu {
   /** Whether it is open, for the button that opens it to say so. */
   open: boolean;
-  /** Opens it under a button, or shuts it when it was open. */
-  toggle: (button: HTMLElement | null) => void;
+  /** Opens it from a button, beside what the button stands on if it is
+   *  given, or shuts it when it was open. */
+  toggle: (button: HTMLElement | null, beside?: HTMLElement | null) => void;
   /** The menu and the panels its lines open, to be drawn beside the button. */
   drawn: ReactNode;
 }
@@ -97,9 +98,13 @@ export function useWorkMenu(card: Card, after: WorkMenuAfter): WorkMenu {
   const [opened, setOpened] = useState(false);
   const shut = useCallback(() => setFrom(null), []);
 
-  const toggle = useCallback((button: HTMLElement | null) => {
+  const toggle = useCallback((button: HTMLElement | null, beside?: HTMLElement | null) => {
     setOpened(true);
-    setFrom((was) => (was || !button ? null : { rect: button.getBoundingClientRect(), button }));
+    setFrom((was) =>
+      was || !button
+        ? null
+        : { rect: button.getBoundingClientRect(), beside: beside?.getBoundingClientRect(), button },
+    );
   }, []);
 
   const drawn = opened ? <WorkMenuPanels card={card} from={from} shut={shut} after={after} /> : null;
@@ -109,6 +114,7 @@ export function useWorkMenu(card: Card, after: WorkMenuAfter): WorkMenu {
 /** What a work's menu was opened from: the button, and where it stood. */
 interface MenuFrom {
   rect: DOMRect;
+  beside?: DOMRect;
   button: HTMLElement;
 }
 
@@ -170,6 +176,7 @@ function WorkMenuPanels({
         <CardMenu
           card={card}
           from={from.rect}
+          beside={from.beside}
           openedBy={from.button}
           onIdentify={() => setIdentifying(true)}
           onEditImages={() => setChoosingPictures(true)}
@@ -260,6 +267,7 @@ function WorkMenuPanels({
 export function CardMenu({
   card,
   from,
+  beside,
   openedBy,
   onIdentify,
   onEditImages,
@@ -276,6 +284,8 @@ export function CardMenu({
   card: Card;
   /** The button it was opened from, which is where it is drawn. */
   from: DOMRect;
+  /** What it stands beside rather than under the button, when it is given. */
+  beside?: DOMRect;
   /** That button itself. A press on it is the one press anywhere outside
       this menu that must not close it, because the button is already going
       to: closing here as well shut it and let the button open it again, so
@@ -471,6 +481,7 @@ export function CardMenu({
           .map((entry) => ({ ...entry, said: t(`card.menu.${entry.key}`) })),
       )}
       from={from}
+      beside={beside}
       openedBy={openedBy}
       onClose={onClose}
     />
