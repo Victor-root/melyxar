@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { letterOfTheTopRow, type Placed } from "./letters";
+import { firstBlockReaching, letterOfTheTopRow, type Placed } from "./letters";
 
 /** Rows of cards 300 high with 50 between them, from the top of the page. */
 function rows(...letters: (string | undefined)[][]): Placed[] {
@@ -40,5 +40,23 @@ describe("letterOfTheTopRow", () => {
 
   it("leaves out a card nobody has filed yet", () => {
     expect(read(rows(["a", undefined, "b", "b"]), 0)).toBe("b");
+  });
+});
+
+describe("firstBlockReaching", () => {
+  const feet = [100, 200, 300];
+  const reaching = (line: number) => firstBlockReaching(feet.length, (index) => feet[index], line);
+
+  it("finds the block the line falls in", () => {
+    expect(reaching(50)).toBe(0);
+    expect(reaching(150)).toBe(1);
+  });
+
+  it("passes on to the next block from a foot exactly on the line", () => {
+    expect(reaching(100)).toBe(1);
+  });
+
+  it("answers the count past the last block", () => {
+    expect(reaching(300)).toBe(3);
   });
 });

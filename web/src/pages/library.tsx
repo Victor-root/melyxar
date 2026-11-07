@@ -23,7 +23,7 @@ import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../ic
 import { useMarks } from "../marks";
 import { barRoom } from "../bar-room";
 import { landOn, scrollerOf } from "../landing";
-import { letterOfTheTopRow } from "../letters";
+import { firstBlockReaching, letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
 import { LIBRARY_VIEWS, layoutOf } from "../library-views";
 import { ORDERS, useBrowsing } from "../screens/browsing";
@@ -176,10 +176,11 @@ export function LibraryPage({
       return;
     }
     const filedUnder = new Map(cards.map((card) => [card.id, card.initial]));
-    /* The cards drawn, looked for again only once a card has come or gone:
-       looked for on every frame of a scroll, the thousands of a library were
-       walked through each time. The buttons a card makes under the pointer
-       come and go too, and say nothing about which cards there are. */
+    /* The blocks of cards drawn, looked for again only once a card has come
+       or gone: looked for on every frame of a scroll, the thousands of a
+       library were walked through each time. The buttons a card makes under
+       the pointer come and go too, and say nothing about which cards there
+       are. */
     let drawn: NodeListOf<HTMLElement> | null = null;
     const isACard = (node: Node) =>
       node instanceof HTMLElement && (node.matches("[data-card]") || node.querySelector("[data-card]") !== null);
@@ -198,7 +199,7 @@ export function LibraryPage({
         return;
       }
       held.current = null;
-      drawn ??= grid.querySelectorAll<HTMLElement>("[data-card]");
+      drawn ??= grid.querySelectorAll<HTMLElement>(".grid-block");
       setReading(letterAtTheTop(drawn, box, filedUnder));
     };
     const soon = () => {
@@ -470,21 +471,29 @@ export function LibraryPage({
 const A_NUDGE = 2;
 
 /** The letter of the titles at the top of the grid, where the bar at the top
- *  of the screen stops. */
+ *  of the screen stops. Only the block at that line is looked into: asked of
+ *  the cards of the whole grid, each measurement landed in a block the browser
+ *  had skipped, and had it laid out on every frame of a scroll. */
 function letterAtTheTop(
-  drawn: NodeListOf<HTMLElement>,
+  blocks: NodeListOf<HTMLElement>,
   box: HTMLElement,
   filedUnder: Map<string, string>,
 ): string | null {
-  const room = barRoom();
-  return letterOfTheTopRow(
-    drawn.length,
-    (index) => {
-      const { top, height } = drawn[index].getBoundingClientRect();
-      return { top, height, letter: filedUnder.get(drawn[index].dataset.card ?? "") };
-    },
-    box.getBoundingClientRect().top + room,
-  );
+  const line = box.getBoundingClientRect().top + barRoom();
+  const letterIn = (block: HTMLElement | undefined) => {
+    const cards = block?.querySelectorAll<HTMLElement>("[data-card]") ?? [];
+    return letterOfTheTopRow(
+      cards.length,
+      (index) => {
+        const { top, height } = cards[index].getBoundingClientRect();
+        return { top, height, letter: filedUnder.get(cards[index].dataset.card ?? "") };
+      },
+      line,
+    );
+  };
+  const first = firstBlockReaching(blocks.length, (index) => blocks[index].getBoundingClientRect().bottom, line);
+  // The top row of a block scrolled most of the way out is the next block's.
+  return letterIn(blocks[first]) ?? letterIn(blocks[first + 1]);
 }
 
 /**
