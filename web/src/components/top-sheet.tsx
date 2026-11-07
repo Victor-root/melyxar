@@ -21,13 +21,13 @@ const PRESS_SLACK = 6;
 const LETS_GO_MS = 180;
 
 /** The title of the sheet, after what `children` draws at its left. */
-export function TopSheetHead({ title, children }: { title: string; children: ReactNode }) {
+export function TopSheetHead({ title, children }: { title: string; children?: ReactNode }) {
   const { t } = useSettings();
   return (
     <div className="top-sheet-head">
       {children}
       <span className="top-sheet-title">{title}</span>
-      <button type="button" className="top-sheet-close" aria-label={t("modal.close")}>
+      <button type="button" className="modal-step" aria-label={t("modal.close")}>
         <CloseIcon size={18} />
       </button>
     </div>

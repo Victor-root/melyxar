@@ -17,7 +17,7 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BackIcon } from "../icons";
+import { BackIcon, CloseIcon } from "../icons";
 import { useSettings } from "../settings";
 import { useBackClosesIt } from "./back-closes";
 import { useHoldsTheScreen } from "./hold-the-screen";
@@ -166,10 +166,18 @@ export function BottomSheet({
             <h2 className="sheet-title">{title}</h2>
           </div>
           {onBack && (
-            <button type="button" className="sheet-back" onClick={onBack} aria-label={t("modal.back")}>
-              <BackIcon size={22} />
+            <button type="button" className="modal-step sheet-back" onClick={onBack} aria-label={t("modal.back")}>
+              <BackIcon size={18} />
             </button>
           )}
+          <button
+            type="button"
+            className="modal-step"
+            onClick={() => shut()}
+            aria-label={t("modal.close")}
+          >
+            <CloseIcon size={18} />
+          </button>
         </div>
         <div className="sheet-scroll">
           <div className="sheet-body" ref={body}>

@@ -327,8 +327,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 6px;
-  border-radius: var(--radius-card);
+  padding: 8px;
 }
 
 .quick-search-line {
@@ -691,8 +690,7 @@
   z-index: 30;
   display: flex;
   flex-direction: column;
-  padding: 6px;
-  border-radius: var(--radius-card);
+  padding: 8px;
 }
 
 /* What plays on another device of the account (remote/elsewhere.tsx): the

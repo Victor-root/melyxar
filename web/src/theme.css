@@ -114,6 +114,11 @@
   --radius-panel: 14px;
   /* A window over the page, as round as the pieces of the bar are. */
   --radius-window: 24px;
+  /* The round buttons at the head of a window, which decide how tall it is,
+     and the air above and under them. */
+  --modal-step: 38px;
+  --modal-head-over: 20px;
+  --modal-head-under: 8px;
   --radius-card: 10px;
   --radius-control: 8px;
   --radius-pill: 999px;
@@ -159,12 +164,6 @@
      tells them from the page they sit on. */
   --header-piece: 46px;
 
-  /* The same recipe the player's panels mix for their own glass, worked out
-     here from this theme's surface instead of a forced dark one: what sits
-     behind the header is a page, not a film, so it has to follow day and
-     night like everything else rather than stay black on a light theme. Each
-     piece of the bar is mixed from it. */
-  --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 
   /* The same glass, thicker, for the panels the administration and the
      settings are laid out in: they hold text to be read for a while rather
@@ -490,4 +489,23 @@ img {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* What opens over the page, one look for all of it: the rim and the glow of
+   the accent, the accent washing down from the top. Written again for the
+   player, which keeps its dark colours in a light theme: a value made here
+   from the surface would otherwise stay the root's. */
+:root,
+.player {
+  /* The same recipe the player's panels mix for their own glass, worked out
+     here from this theme's surface instead of a forced dark one: what sits
+     behind the header is a page, not a film, so it has to follow day and
+     night like everything else rather than stay black on a light theme. Each
+     piece of the bar is mixed from it. */
+  --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
+  --window-rim: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  --window-ground:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 160px),
+    var(--surface-raised);
+  --window-shadow: var(--shadow-raised), 0 0 32px 0 var(--accent-glow);
 }

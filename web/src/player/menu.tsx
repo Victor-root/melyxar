@@ -176,7 +176,7 @@ export function Menu({
     >
       <div className="player-menu-head">
         {onBack && (
-          <button className="player-button player-button-small" onClick={onBack}>
+          <button className="modal-step" onClick={onBack}>
             <BackIcon size={18} />
           </button>
         )}
