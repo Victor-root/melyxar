@@ -2,6 +2,7 @@ package app.melyxar.tv.look
 
 import android.util.Log
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,10 @@ import app.melyxar.BuildConfig
  *  nothing. */
 private const val KEYBOARD_SHARE = 0.5f
 
+/** How long the screen takes to make room, about what a keyboard takes to
+ *  rise. Not [calm]: moving at once is what makes the screen jump. */
+private const val MAKING_ROOM_MILLIS = 280
+
 /** Whether a field of the screen is being typed in, said by the field. */
 @Stable
 class KeyboardRoom {
@@ -56,7 +61,11 @@ fun AboveKeyboard(modifier: Modifier = Modifier, content: @Composable ColumnScop
         LaunchedEffect(said, room.typing) { Log.d("Melyxar", "keyboard: says $said, typing ${room.typing}") }
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val lift by animateDpAsState(if (room.typing) max(said, maxHeight * KEYBOARD_SHARE) else said, calm(), label = "lift")
+        val lift by animateDpAsState(
+            if (room.typing) max(said, maxHeight * KEYBOARD_SHARE) else said,
+            tween(MAKING_ROOM_MILLIS, easing = Ease),
+            label = "lift",
+        )
         CompositionLocalProvider(LocalKeyboardRoom provides room) {
             Column(
                 modifier = Modifier

@@ -18,8 +18,8 @@
 .door {
   /* The window itself does not scroll, so this screen holds its own scroll:
      on a short window the sign in field has to stay reachable. */
-  min-height: 100dvh;
-  max-height: 100dvh;
+  min-height: calc(100dvh - var(--keyboard-rise));
+  max-height: calc(100dvh - var(--keyboard-rise));
   overflow-y: auto;
   overflow-x: hidden;
   position: relative;
@@ -1157,7 +1157,7 @@ img.door-greeting-mark {
     /* What is left between the bars of the phone: everything below follows
        it, so that a short screen shows the whole door without a scroll, and
        a tall one stands as it always has. */
-    --door-room: calc(100dvh - var(--safe-top) - var(--safe-bottom));
+    --door-room: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--keyboard-rise));
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(6px, calc(var(--door-room) * 0.016), var(--gap));
     padding: calc(12px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
@@ -1218,6 +1218,10 @@ img.door-greeting-mark {
      most of the screen. */
   .door-forwhom-face {
     --door-tile: clamp(60px, calc(60px + (var(--door-room) - 560px) * 0.6), 170px);
+  }
+
+  .door-forwhom-name {
+    font-size: clamp(20px, calc((100dvh - var(--keyboard-rise)) * 0.026), 26px);
   }
 
   .door-box {

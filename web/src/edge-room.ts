@@ -17,6 +17,7 @@
 import { scrollerOf } from "./landing";
 import { appWindow } from "./app-window";
 import type { Edges } from "./app-window";
+import { keyboardAt, keyboardRise } from "./keyboard-slide";
 
 const SIDES = ["top", "bottom", "left", "right"] as const;
 
@@ -59,20 +60,42 @@ export function markTheEdgeRoom(): void {
   if (appWindow) {
     const app = appWindow;
     let keyboard = false;
+    let keyboardHeight = 0;
+    let bottomBar = 0;
+    let wholeHeight = 0;
+    let slideFrame = 0;
+    const viewHeight = () => window.visualViewport?.height ?? window.innerHeight;
+    const followTheKeyboard = () => {
+      const rise = keyboardRise(keyboardHeight, wholeHeight - viewHeight(), bottomBar);
+      root.style.setProperty("--keyboard-rise", `${rise}px`);
+    };
     /* The height of the whole screen, kept while the keyboard is up, for what
        is sized from it: a banner measured against the room the keyboard
        leaves jumped as soon as the keyboard arrived. */
     const measureTheScreen = () => {
       if (!keyboard) {
-        root.style.setProperty("--whole-height", `${window.visualViewport?.height ?? window.innerHeight}px`);
+        wholeHeight = viewHeight();
+        root.style.setProperty("--whole-height", `${wholeHeight}px`);
       }
+      followTheKeyboard();
     };
     const told = () => {
       const edges = JSON.parse(app.edges()) as Edges;
+      // The bar comes back with the window, in the same frame, or the foot of
+      // the screen jumps by its height.
+      if (keyboard && edges.keyboard !== true && viewHeight() < wholeHeight) {
+        return;
+      }
       const rooms = roomsOf(edges);
       SIDES.forEach((side, index) => root.style.setProperty(`--safe-${side}`, rooms[index]));
       mark(rooms);
       keyboard = edges.keyboard === true;
+      bottomBar = edges.bottom;
+      // A keyboard can also go away without a slide to say so.
+      if (!keyboard && slideFrame === 0) {
+        keyboardHeight = 0;
+      }
+      followTheKeyboard();
     };
     told();
     measureTheScreen();
@@ -83,12 +106,24 @@ export function markTheEdgeRoom(): void {
         scrollerOf(field)?.scrollBy({ top: pixels, behavior: "instant" });
       }
     };
-    window.addEventListener("resize", measureTheScreen);
+    window.melyxarKeyboardSlide = (slide) => {
+      cancelAnimationFrame(slideFrame);
+      const step = () => {
+        const now = Date.now();
+        keyboardHeight = keyboardAt(slide, now);
+        followTheKeyboard();
+        slideFrame = now < slide.startedAt + slide.duration ? requestAnimationFrame(step) : 0;
+      };
+      step();
+    };
+    window.addEventListener("resize", () => {
+      told();
+      measureTheScreen();
+    });
     document.addEventListener("focusin", ({ target }) => {
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        // A window over the page gives way by itself once the keyboard is
-        // there: raised with it, it came down again before going back up.
-        app.fieldAt?.(target.closest('[role="dialog"]') ? 0 : target.getBoundingClientRect().bottom);
+        // A window over the page and the door follow the keyboard themselves.
+        app.fieldAt?.(target.closest('[role="dialog"], .door') ? 0 : target.getBoundingClientRect().bottom);
       }
     });
     return;
