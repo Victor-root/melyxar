@@ -323,6 +323,7 @@
     border-color: transparent;
     background: none;
     backdrop-filter: none;
+    box-shadow: none;
   }
 
   .header-side > :not(.header-glass, .header-rim) {
@@ -350,6 +351,7 @@
     inset: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     border-width: 0;
+    box-shadow: none;
     transition: transform 340ms var(--ease);
   }
 
@@ -487,6 +489,7 @@
   }
 
   .band-slot::after {
+    box-shadow: none;
   }
 
   .band-tile {
@@ -811,6 +814,7 @@
     border-color: transparent;
     background: none;
     backdrop-filter: none;
+    box-shadow: none;
     pointer-events: none;
     transition: transform var(--calm) var(--ease);
     /* Kept on a layer of its own while it is away, as the bar it steps
@@ -851,6 +855,7 @@
     position: absolute;
     inset: -1px;
     border-width: 0;
+    box-shadow: none;
     clip-path: inset(0 var(--bubble-o) round var(--radius-pill));
     pointer-events: none;
     transition: clip-path 200ms var(--ease);
