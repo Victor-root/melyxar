@@ -581,6 +581,18 @@
   white-space: pre-wrap;
 }
 
+/* On a phone the words get the whole width, under the line's own facts. */
+@media (max-width: 600px) {
+  .log-line {
+    grid-template-columns: auto 5ch minmax(0, 1fr);
+    gap: 2px 12px;
+  }
+
+  .log-said {
+    grid-column: 1 / -1;
+  }
+}
+
 .log-warn .log-level,
 .log-warn .log-said {
   color: var(--attention);
