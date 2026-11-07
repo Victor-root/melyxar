@@ -181,6 +181,8 @@
    scroll to learn what the blocks had already told it. */
 .grid-block > .card {
   content-visibility: visible;
+  /* What skipping brought with it, kept: a card is drawn exactly as it was. */
+  contain: layout style paint;
 }
 
 /* The whole card grows a little under the pointer, picture and words
