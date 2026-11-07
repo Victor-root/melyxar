@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,8 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.server.Note
 import app.melyxar.tv.look.LocalPalette
-import app.melyxar.tv.look.glassPiece
-import app.melyxar.tv.look.rim
+import app.melyxar.tv.look.window
 import kotlinx.coroutines.delay
 
 /** How long a notification stays in the corner, by what it says. */
@@ -67,13 +65,11 @@ fun NotesCorner(modifier: Modifier = Modifier) {
 private fun CornerNote(note: Note, wording: Wording) {
     val palette = LocalPalette.current
     val said = wording.say(note)
-    val shape = RoundedCornerShape(14.dp)
     Row(
         modifier = Modifier
             .width(380.dp)
-            .glassPiece(shape)
-            .rim(shape, palette.ofLevel(note.level), 1.5.dp)
-            .padding(12.dp),
+            .window()
+            .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

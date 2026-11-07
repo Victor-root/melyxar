@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 /*
  * The controls of the web interface (`styles/controls.css`, `work.css`), made
@@ -197,6 +199,18 @@ fun Modifier.window(shape: Shape = WindowShape): Modifier {
 
 /** How far down the accent washes. */
 private val WASH = 160.dp
+
+/** The room a window of the system leaves round what it holds, for the glow:
+ *  it would stop square at the edge of that window otherwise. */
+val WindowAir = 40.dp
+
+/** A [window] of its own, the remote kept in it, over a dimmed screen. */
+@Composable
+fun WindowDialog(onClose: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.padding(WindowAir)) { content() }
+    }
+}
 
 /** The shape of a line of a list of settings or notifications. */
 val LineShape = RoundedCornerShape(12.dp)
