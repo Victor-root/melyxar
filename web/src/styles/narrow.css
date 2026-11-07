@@ -323,7 +323,6 @@
     border-color: transparent;
     background: none;
     backdrop-filter: none;
-    box-shadow: none;
   }
 
   .header-side > :not(.header-glass, .header-rim) {
@@ -351,7 +350,6 @@
     inset: 0;
     border-radius: var(--radius-pill) 0 0 var(--radius-pill);
     border-width: 0;
-    box-shadow: none;
     transition: transform 340ms var(--ease);
   }
 
@@ -489,7 +487,6 @@
   }
 
   .band-slot::after {
-    box-shadow: none;
   }
 
   .band-tile {
@@ -593,10 +590,34 @@
     overscroll-behavior: contain;
     border-top: 0;
     border-radius: 0 0 var(--radius-window) var(--radius-window);
-    box-shadow:
-      var(--window-shadow),
-      0 0 0 100vmax color-mix(in srgb, var(--surface-deep) 72%, transparent);
-    animation: top-sheet-in var(--calm) var(--ease);
+    animation: top-sheet-in var(--calm) var(--ease) backwards;
+  }
+
+  /* The first one the application opens has its drawing made for the first
+     time, which holds the screen for a moment: out of sight, the page dimming
+     meanwhile to answer the finger, it stops nothing that moves. */
+  .top-sheet[data-first] {
+    animation-delay: 100ms;
+  }
+
+  .top-sheet[data-leaving] {
+    animation: none;
+    transform: translateY(-100%);
+    transition: transform 200ms var(--ease);
+    pointer-events: none;
+  }
+
+  .top-sheet-over {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
+    animation: sheet-dim var(--calm) var(--ease);
+    transition: opacity 200ms var(--ease);
+  }
+
+  .top-sheet-over[data-leaving] {
+    opacity: 0;
   }
 
   .bell-list .notes {
@@ -790,7 +811,6 @@
     border-color: transparent;
     background: none;
     backdrop-filter: none;
-    box-shadow: none;
     pointer-events: none;
     transition: transform var(--calm) var(--ease);
     /* Kept on a layer of its own while it is away, as the bar it steps
@@ -831,7 +851,6 @@
     position: absolute;
     inset: -1px;
     border-width: 0;
-    box-shadow: none;
     clip-path: inset(0 var(--bubble-o) round var(--radius-pill));
     pointer-events: none;
     transition: clip-path 200ms var(--ease);
@@ -1034,7 +1053,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .top-sheet {
+  .top-sheet,
+  .top-sheet-over {
     animation: none;
   }
 }

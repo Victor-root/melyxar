@@ -1,7 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDownIcon } from "../icons";
 import { useBackClosesIt } from "./back-closes";
+
+/** How long a sheet takes to go back up, as the style sheet draws it. */
+const LEAVES_IN_MS = 200;
+
+/** Whether a sheet has been drawn since the application started. */
+let sheetDrawn = false;
 
 /**
  * A word that opens a short list under it.
@@ -47,11 +53,33 @@ export function Dropdown({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const firstSheet = useRef(false);
   const holder = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   /** Where the list goes: under what opened it, and ending where it ends. */
   const [under, setUnder] = useState({ top: 0, right: 0 });
-  useBackClosesIt(() => setOpen(false), open);
+  /* A sheet goes the way it came. A list under its word just goes. */
+  const shut = useCallback(() => {
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (placed || still) {
+      setOpen(false);
+    } else {
+      setLeaving(true);
+    }
+  }, [placed]);
+  useBackClosesIt(shut, open);
+
+  useEffect(() => {
+    if (!leaving) {
+      return;
+    }
+    const gone = window.setTimeout(() => {
+      setOpen(false);
+      setLeaving(false);
+    }, LEAVES_IN_MS);
+    return () => window.clearTimeout(gone);
+  }, [leaving]);
 
   /* Measured when it opens and again if the window changes shape. The bar it
      hangs from is fixed to the window, so a page scrolled underneath moves
@@ -80,12 +108,12 @@ export function Dropdown({
     const elsewhere = (event: MouseEvent) => {
       const on = event.target as Node;
       if (!holder.current?.contains(on) && !list.current?.contains(on)) {
-        setOpen(false);
+        shut();
       }
     };
     const away = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setOpen(false);
+        shut();
       }
     };
     document.addEventListener("mousedown", elsewhere);
@@ -94,7 +122,7 @@ export function Dropdown({
       document.removeEventListener("mousedown", elsewhere);
       document.removeEventListener("keydown", away);
     };
-  }, [open]);
+  }, [open, shut]);
 
   /* Shut along with whatever folded it away, or it would be left hanging
      over a field that is no longer there. */
@@ -114,8 +142,14 @@ export function Dropdown({
         title={icon}
         tabIndex={reachable ? undefined : -1}
         onClick={() => {
-          if (!open) onOpen?.();
-          setOpen(!open);
+          if (open) {
+            shut();
+          } else {
+            onOpen?.();
+            firstSheet.current = !placed && !sheetDrawn;
+            sheetDrawn = sheetDrawn || !placed;
+            setOpen(true);
+          }
         }}
       >
         {label}
@@ -123,20 +157,27 @@ export function Dropdown({
       </button>
       {open &&
         createPortal(
-          <div
-            className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
-            ref={list}
-            style={placed ? { top: under.top, right: under.right } : undefined}
-            /* A press in the list leaves the focus where it was. Drawn at
-               the end of the page, the list is outside what opened it, and
-               a press taking the focus there read as leaving: the search
-               field, empty, folded away with its scope list under the hand
-               choosing from it. */
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => setOpen(false)}
-          >
-            {children}
-          </div>,
+          <>
+            {/* The page dimmed behind a sheet, on a layer of its own: part
+                of the sheet, it would be moved with it at every image. */}
+            {!placed && <div className="top-sheet-over" data-leaving={leaving || undefined} />}
+            <div
+              className={`header-menu-list${listClassName ? ` ${listClassName}` : ""}`}
+              ref={list}
+              data-leaving={leaving || undefined}
+              data-first={firstSheet.current || undefined}
+              style={placed ? { top: under.top, right: under.right } : undefined}
+              /* A press in the list leaves the focus where it was. Drawn at
+                 the end of the page, the list is outside what opened it, and
+                 a press taking the focus there read as leaving: the search
+                 field, empty, folded away with its scope list under the hand
+                 choosing from it. */
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={shut}
+            >
+              {children}
+            </div>
+          </>,
           document.body,
         )}
     </div>
