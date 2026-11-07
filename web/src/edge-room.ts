@@ -21,6 +21,9 @@ import { keyboardAt, keyboardRise } from "./keyboard-slide";
 
 const SIDES = ["top", "bottom", "left", "right"] as const;
 
+/** What moves up with the keyboard of the Android application. */
+const RISES_WITH_THE_KEYBOARD = ".door, .sheet-over, .modal-over";
+
 /** The room at each edge, as the stylesheet writes it, from what the
  *  application says. */
 export function roomsOf(edges: Edges): string[] {
@@ -65,9 +68,13 @@ export function markTheEdgeRoom(): void {
     let wholeHeight = 0;
     let slideFrame = 0;
     const viewHeight = () => window.visualViewport?.height ?? window.innerHeight;
+    /* Written on what stands on it rather than on the root, which would have
+       every element of the page styled again at each image of the slide. */
     const followTheKeyboard = () => {
       const rise = keyboardRise(keyboardHeight, wholeHeight - viewHeight(), bottomBar);
-      root.style.setProperty("--keyboard-rise", `${rise}px`);
+      for (const standing of document.querySelectorAll<HTMLElement>(RISES_WITH_THE_KEYBOARD)) {
+        standing.style.setProperty("--keyboard-rise", `${rise}px`);
+      }
     };
     /* The height of the whole screen, kept while the keyboard is up, for what
        is sized from it: a banner measured against the room the keyboard
