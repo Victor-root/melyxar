@@ -654,6 +654,13 @@
     white-space: normal;
   }
 
+  /* In the same proportion to the words as on a computer. */
+  .account-sheet > .header-menu-line > svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+  }
+
   .top-sheet-handle {
     position: sticky;
     bottom: 0;
