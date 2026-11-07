@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useBackClosesIt } from "../components/back-closes";
+import { CloseIcon } from "../icons";
 import { COARSE, useMediaQuery } from "../media-query";
 import { framed } from "./frame";
 import type { Frame, Hold } from "./frame";
@@ -125,8 +126,8 @@ export function PlayerWindow({
       ))}
       <div className="player-window-head" {...framing.grip("move")}>
         <strong>{title}</strong>
-        <button className="player-button" onClick={onClose} aria-label={closeLabel}>
-          ✕
+        <button className="modal-step" onClick={onClose} aria-label={closeLabel}>
+          <CloseIcon size={18} />
         </button>
       </div>
       {children}

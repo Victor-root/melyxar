@@ -80,11 +80,7 @@ export function Bell({ administrator }: { administrator: boolean }) {
         </>
       }
     >
-      <TopSheetHead title={t("nav.notifications")}>
-        <span className="top-sheet-icon">
-          <BellIcon size={20} />
-        </span>
-      </TopSheetHead>
+      <TopSheetHead title={t("nav.notifications")} />
       {/* The work the server is doing, each piece as a notification of its own
           with its bar, which fills in as the work does. Only for an
           administrator, who is the one it concerns. */}

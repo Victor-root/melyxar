@@ -1074,7 +1074,6 @@ melyxar-picture.player-video {
   max-height: calc(100% - 124px - 88px);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-card);
   overflow: hidden;
   animation: player-menu-in var(--quick) var(--ease);
 }
@@ -1110,15 +1109,15 @@ melyxar-picture.player-video {
 .player-menu-head {
   display: flex;
   align-items: center;
-  gap: var(--gap-tight);
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--gap);
+  padding: var(--gap) var(--gap-wide) var(--modal-head-under);
 }
 
 .player-menu-title {
   flex: 1;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .player-menu-body {
@@ -1558,24 +1557,19 @@ melyxar-picture.player-video {
   max-height: calc(100% - var(--window-top) - 124px);
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-card);
   overflow: hidden;
 }
 
-/* The bar it is moved by: as tall as its title, with the cross drawn
-   smaller than the player's own buttons, which are sized for a hand
-   reaching across a whole picture. */
+/* The bar it is moved by. */
 .player-window-head {
-  --player-button: 30px;
-  --player-button-ring: 1px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--gap);
-  padding: 4px 6px 4px var(--gap);
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 650;
+  padding: var(--gap) 12px var(--modal-head-under) var(--gap);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   cursor: move;
   user-select: none;
   touch-action: none;

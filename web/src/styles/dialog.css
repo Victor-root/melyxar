@@ -20,27 +20,17 @@
 }
 
 .modal {
-  /* The buttons of the head, which are what decides how tall it is, and the
-     air above and under them. */
-  --modal-step: 38px;
-  --modal-head-over: 20px;
-  --modal-head-under: 8px;
   display: flex;
   flex-direction: column;
   width: min(760px, 100%);
   max-height: min(860px, 100%);
-  /* The rim and the glow of the accent the pieces of the bar are drawn
-     with, the accent washing down from the top. On a solid ground rather than
-     their glass: what is behind would show through the words without a blur,
-     and a blur costs every frame of a scroll inside it. */
+  /* On a solid ground rather than the glass of the bar: what is behind would
+     show through the words without a blur, and a blur costs every frame of a
+     scroll inside it. */
   border-radius: var(--radius-window);
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 160px),
-    var(--surface-raised);
-  box-shadow:
-    var(--shadow-raised),
-    0 0 32px 0 var(--accent-glow);
+  border: var(--window-rim);
+  background: var(--window-ground);
+  box-shadow: var(--window-shadow);
   overflow: hidden;
 }
 

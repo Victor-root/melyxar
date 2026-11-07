@@ -33,17 +33,12 @@
   width: calc(100% + 2px);
   margin: 0 -1px;
   max-height: calc((100dvh - var(--keyboard-rise)) * 0.88);
-  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border: var(--window-rim);
   border-bottom: 0;
-  border-radius: 32px 32px 0 0;
-  --header-glow: color-mix(in srgb, var(--accent) 14%, transparent);
-  background:
-    linear-gradient(var(--header-glow), var(--header-glow)),
-    var(--surface-raised);
+  border-radius: var(--radius-window) var(--radius-window) 0 0;
+  background: var(--window-ground);
   color: var(--text);
-  box-shadow:
-    var(--shadow-raised),
-    0 0 14px 2px var(--accent-glow);
+  box-shadow: var(--window-shadow);
   outline: none;
   animation: sheet-arrive var(--calm) var(--ease);
   will-change: transform;
@@ -54,18 +49,17 @@
   flex: 0 0 auto;
 }
 
-/* The way back to the sheet this one was reached from, beside the title and
-   not in the part held to pull the sheet down. */
-.sheet-back {
+/* The round buttons of a window, either side of the title and not in the part
+   held to pull the sheet down. */
+.sheet-head > .modal-step {
   position: absolute;
-  bottom: 0;
-  left: calc(var(--gap) + var(--safe-left));
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-control);
-  color: var(--text-soft);
+  bottom: 6px;
+  right: calc(18px + var(--safe-right));
+}
+
+.sheet-head > .sheet-back {
+  right: auto;
+  left: calc(var(--gap-wide) + var(--safe-left));
 }
 
 /* What is held to pull the sheet down: the handle and the title, which a
@@ -74,14 +68,22 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 10px calc(var(--gap-wide) + var(--safe-right)) 6px calc(var(--gap-wide) + var(--safe-left));
+  align-items: stretch;
+  gap: 8px;
+  min-height: var(--modal-step);
+  padding: 10px calc(var(--gap-wide) + var(--gap) + var(--modal-step) + var(--safe-right)) 6px calc(var(--gap-wide) + var(--safe-left));
   cursor: grab;
   touch-action: none;
 }
 
+.sheet-head:has(> .sheet-back) .sheet-title {
+  padding-left: calc(var(--modal-step) + var(--gap));
+}
+
 .sheet-handle {
+  position: relative;
+  left: calc((var(--gap) + var(--modal-step)) / 2);
+  align-self: center;
   width: 40px;
   height: 4px;
   border-radius: 2px;
@@ -90,9 +92,10 @@
 
 .sheet-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 650;
+  font-size: 21px;
+  font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 
 /* The body and the line that says where in it somebody is, which is the one
