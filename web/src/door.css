@@ -1218,8 +1218,10 @@ img.door-greeting-mark {
     padding-block: clamp(7px, calc(var(--door-room) * 0.014), 11px);
   }
 
+  /* As large as the room leaves it, and small once the keyboard has taken
+     most of the screen. */
   .door-forwhom-face {
-    --door-tile: clamp(60px, calc(var(--door-room) * 0.13), 92px);
+    --door-tile: clamp(60px, calc(60px + (var(--door-room) - 560px) * 0.6), 170px);
   }
 
   .door-box {
@@ -1277,10 +1279,6 @@ img.door-greeting-mark {
 
   :root[data-whole-screen][data-edge-room] .door-forwhom {
     margin-bottom: 14px;
-  }
-
-  :root[data-whole-screen][data-edge-room] .door-forwhom-face {
-    --door-tile: clamp(60px, calc(var(--door-room) * 0.11), 80px);
   }
 
   :root[data-whole-screen][data-edge-room] .door-box {
