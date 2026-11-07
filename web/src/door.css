@@ -988,6 +988,10 @@ img.door-greeting-mark {
   border-color: var(--border-strong);
 }
 
+.door-make + .door-make {
+  margin-top: 12px;
+}
+
 .door-make:hover:not(:disabled) {
   background: var(--surface-hover);
 }
@@ -1196,7 +1200,7 @@ img.door-greeting-mark {
   }
 
   .door-forwhom-face {
-    --door-tile: 92px;
+    --door-tile: clamp(60px, calc(var(--door-room) * 0.13), 92px);
   }
 
   .door-box {
@@ -1205,6 +1209,14 @@ img.door-greeting-mark {
 
   .door-or {
     margin: 8px 0;
+  }
+
+  /* The longest of these on one line, on the narrowest phone. */
+  .door-make {
+    gap: 8px;
+    padding-inline: 10px;
+    font-size: clamp(13px, 4.1vw, 15px);
+    white-space: nowrap;
   }
 
   .door-foot {
@@ -1250,7 +1262,7 @@ img.door-greeting-mark {
   }
 
   :root[data-whole-screen][data-edge-room] .door-forwhom-face {
-    --door-tile: 80px;
+    --door-tile: clamp(60px, calc(var(--door-room) * 0.11), 80px);
   }
 
   :root[data-whole-screen][data-edge-room] .door-box {
