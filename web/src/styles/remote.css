@@ -372,7 +372,7 @@
 
   /* The picture of the button, not the room round it for the thumb, is what
      stands as far from the bar as the words do. */
-  .remote-line-end > .remote-button-small:only-child {
+  .remote-line-end:first-child > .remote-button-small {
     margin-inline: -10px;
   }
 }
