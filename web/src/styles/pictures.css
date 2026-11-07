@@ -73,6 +73,13 @@
   padding: var(--gap);
 }
 
+/* On the dark of a picture, which is where it is meant to sit: most are
+   white, and a light theme's window lost them. */
+.pictures-tile-logo .pictures-frame,
+.pictures-offered-logo .pictures-frame {
+  background: var(--app-ground);
+}
+
 .pictures-none {
   color: var(--text-faint);
   font-size: 13px;
