@@ -91,6 +91,15 @@ export async function foundBrowser(): Promise<string | null> {
 const THE_PHONE_APPLICATION = /\bMelyxarApp\//;
 const THE_TELEVISION_APPLICATION = "Melyxar";
 
+/**
+ * The model of a television running the application, which tells two of them
+ * in one house apart: inside its line when it signed in by itself, the whole
+ * of it when it was let in from a telephone.
+ */
+function televisionModel(line: string): string {
+  return /^MelyxarTV\/\S+ \(Linux; Android [^;]*; ([^)]+)\)/.exec(line)?.[1] ?? line;
+}
+
 /** What a device is, as a list names it: Melyxar's applications as such,
  *  and a browser on Android told from the application there. */
 function whatItIs(line: string, found: string | null): DeviceSaid {
@@ -107,6 +116,9 @@ function whatItIs(line: string, found: string | null): DeviceSaid {
 /** The name a list shows for a device: the browser its page found when it
  *  found one, otherwise the one its line names. */
 export function deviceName(line: string, t: Wording, found: string | null = null): string {
+  if (found === THE_TELEVISION_APPLICATION) {
+    return t("device.on", { browser: found, system: televisionModel(line) });
+  }
   const { browser, system } = whatItIs(line, found);
   if (browser && system) {
     return t("device.on", { browser, system });

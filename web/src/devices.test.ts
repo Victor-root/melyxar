@@ -17,9 +17,14 @@ const t = (key: string, values?: Record<string, string | number>) =>
   key === "device.on" ? `${values?.browser} on ${values?.system}` : key;
 
 describe("deviceName", () => {
-  it("says the television application is on Android TV, whatever its line says", () => {
-    expect(deviceName("SHIELD Android TV", t, "Melyxar")).toBe("Melyxar on Android TV");
-    expect(deviceName("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV", t, "Melyxar")).toBe("Melyxar on Android TV");
+  it("names the television application by the television's model", () => {
+    expect(deviceName("SHIELD Android TV", t, "Melyxar")).toBe("Melyxar on SHIELD Android TV");
+    expect(deviceName("MelyxarTV/1.0 (Linux; Android 12; BRAVIA) SmartTV", t, "Melyxar")).toBe(
+      "Melyxar on BRAVIA",
+    );
+    expect(
+      deviceName("MelyxarTV/0.1.0-20261107-1630 (Linux; Android 14; GLKM-MINI2) SmartTV", t, "Melyxar"),
+    ).toBe("Melyxar on GLKM-MINI2");
     expect(deviceName(ANDROID_CHROME, t)).toBe("Chrome on Android web");
   });
 
