@@ -2,10 +2,12 @@
  * The remote: the account's other devices, then one of them and its
  * buttons; and the choice of a device to play something on. Wide enough on a
  * computer for what plays to be shown as the card of the next episode shows
- * it; the whole screen on a telephone.
+ * it. The remote takes the whole screen on a telephone, for its buttons to
+ * fall under the thumb; the choice, a list and nothing else, stays a window.
  */
 
-.modal.remote {
+.modal.remote,
+.modal.remote-choice {
   width: min(720px, 100%);
 }
 

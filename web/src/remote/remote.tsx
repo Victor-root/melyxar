@@ -447,7 +447,7 @@ export function PlayOn({ order, onClose, after }: { order: () => RemoteOrder; on
     }
   };
   return (
-    <Modal title={t("remote.play_on")} onClose={onClose} className="remote">
+    <Modal title={t("remote.play_on")} onClose={onClose} className="remote-choice">
       {cut && devices === null ? (
         <p className="remote-empty">{t("remote.cut")}</p>
       ) : devices === null ? (
