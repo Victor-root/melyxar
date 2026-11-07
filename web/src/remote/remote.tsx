@@ -539,18 +539,27 @@ export function PlayOnButton({
   order,
   after,
   className,
+  round,
 }: {
   order: () => RemoteOrder;
   after?: () => void;
   className: string;
+  /** Its picture alone, among the round marks of a work. */
+  round?: boolean;
 }) {
   const { t } = useSettings();
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className={className}
+        onClick={() => setOpen(true)}
+        aria-label={round ? t("remote.play_on") : undefined}
+        title={round ? t("remote.play_on") : undefined}
+      >
         <ScreenCastIcon size={22} />
-        {t("remote.play_on")}
+        {!round && t("remote.play_on")}
       </button>
       {open && <PlayOn order={order} after={after} onClose={() => setOpen(false)} />}
     </>

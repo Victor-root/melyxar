@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
-import type { Card as CardData, Child, PlaybackPlan, Version, Work } from "../api";
+import type { Card as CardData, Child, PlaybackPlan, RemoteOrder, Version, Work } from "../api";
 import { useAccount } from "../account";
 import { useTold } from "../asking";
 import { WayBackUp } from "../components/ancestry";
@@ -412,12 +412,6 @@ function TopOfTheWork({
                   {t("player.from_the_start")}
                 </button>
               )}
-              {version && !version.missing && (
-                <PlayOnButton
-                  className="button button-large"
-                  order={() => ({ do: "play_work", work: work.id, source: version.id })}
-                />
-              )}
             </>
           )}
           {/* One sitting next to the film plays here; failing that, a link
@@ -445,6 +439,11 @@ function TopOfTheWork({
           {work.card && (
             <Marks
               card={work.card}
+              playOn={
+                !holdsOthers && version && !version.missing
+                  ? () => ({ do: "play_work", work: work.id, source: version.id })
+                  : undefined
+              }
               onIdentified={screen.readAgain}
               onChanged={screen.readAgain}
               onDeleted={() => navigate(-1)}
@@ -599,11 +598,14 @@ function pictureOf(version: Version): string {
  */
 function Marks({
   card,
+  playOn,
   onIdentified,
   onChanged,
   onDeleted,
 }: {
   card: CardData;
+  /** What playing it on another device asks, when it can be played. */
+  playOn?: () => RemoteOrder;
   onIdentified: () => void;
   onChanged: () => void;
   onDeleted: () => void;
@@ -623,6 +625,7 @@ function Marks({
 
   return (
     <span className="work-marks">
+      {playOn && <PlayOnButton className="work-mark" order={playOn} round />}
       {card.watched_marks && <SeenButton card={card} />}
       <button
         type="button"
