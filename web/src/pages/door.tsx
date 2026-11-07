@@ -45,6 +45,7 @@ import { ServerMark } from "../components/server-mark";
 import { useBackClosesIt } from "../components/back-closes";
 import { LinkAtTheDoor } from "./door-link";
 import { columnsOfFaces } from "../door-columns";
+import { COARSE, useMediaQuery } from "../media-query";
 
 /**
  * What the screen is showing.
@@ -97,13 +98,15 @@ export function Door({
 
   // The cursor where the next word goes, every time the screen turns to the
   // form: the name for somebody typing their own, the password for somebody
-  // whose name was settled by the tile they pressed.
+  // whose name was settled by the tile they pressed. Not on a touch screen,
+  // where it would raise the keyboard before anybody asked to type.
+  const touch = useMediaQuery(COARSE);
   useEffect(() => {
-    if (!door.asked || !onTheForm) {
+    if (!door.asked || !onTheForm || touch) {
       return;
     }
     (forWhom === null ? first : passwordField).current?.focus();
-  }, [door.asked, onTheForm, forWhom]);
+  }, [door.asked, onTheForm, forWhom, touch]);
 
   const refusal = twiceDiffers
     ? { key: "door.refused.not_the_same", values: {} }
