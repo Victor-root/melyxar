@@ -9,6 +9,8 @@
  * Absent in a browser, where nothing here is used.
  */
 
+import type { KeyboardSlide } from "./keyboard-slide";
+
 /** The room taken at each edge, in the page's pixels. */
 export interface Edges {
   top: number;
@@ -35,6 +37,8 @@ declare global {
     melyxarEdgesChanged?: () => void;
     /** Called by the application to scroll by what it raised the page by. */
     melyxarRaise?: (pixels: number) => void;
+    /** Called by the application as the keyboard starts moving. */
+    melyxarKeyboardSlide?: (slide: KeyboardSlide) => void;
   }
 }
 

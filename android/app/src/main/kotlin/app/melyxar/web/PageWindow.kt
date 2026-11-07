@@ -37,14 +37,17 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
     private var lift = 0f
     private var keyboardHeight = 0
 
+    /** Where the keyboard stands and where it is heading, in the screen's
+     *  pixels: a slide can start from the middle of the one before. */
+    private var keyboardNow = 0
+    private var keyboardGoal = 0
+
     init {
         ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
-            val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-            // Coming up, the keyboard slides over the page and the page gives
-            // way once it has arrived: given way at the start, a black band
-            // stood where the keyboard was still to come. Going down, the page
-            // is already whole behind it.
-            if (keyboardMoving && keyboard > view.paddingBottom) {
+            // The page gives way once the keyboard has arrived: given way at
+            // the start, a black band stood where it was still to come. Going
+            // down, the page is whole from the start of the slide, see onStart.
+            if (keyboardMoving) {
                 heardWhileMoving = insets
             } else {
                 settle(view, insets)
@@ -64,7 +67,16 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
                     animation: WindowInsetsAnimationCompat,
                     bounds: WindowInsetsAnimationCompat.BoundsCompat,
                 ): WindowInsetsAnimationCompat.BoundsCompat {
-                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0 && holder.paddingBottom == 0) {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() == 0) {
+                        return bounds
+                    }
+                    val shown = ViewCompat.getRootWindowInsets(holder)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                    keyboardGoal = if (shown) bounds.upperBound.bottom else 0
+                    tellSlide(animation)
+                    if (keyboardGoal < holder.paddingBottom) {
+                        arrived()
+                    }
+                    if (shown && holder.paddingBottom == 0) {
                         keyboardHeight = bounds.upperBound.bottom
                         val density = activity.resources.displayMetrics.density
                         val room = holder.height - keyboardHeight
@@ -77,9 +89,11 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
                     insets: WindowInsetsCompat,
                     running: MutableList<WindowInsetsAnimationCompat>,
                 ): WindowInsetsCompat {
-                    if (lift > 0f && keyboardHeight > 0) {
-                        val risen = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
-                        page.translationY = -lift * risen / keyboardHeight
+                    if (running.any { it.typeMask and WindowInsetsCompat.Type.ime() != 0 }) {
+                        keyboardNow = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                        if (lift > 0f && keyboardHeight > 0) {
+                            page.translationY = -lift * keyboardNow / keyboardHeight
+                        }
                     }
                     return insets
                 }
@@ -87,6 +101,7 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {
                     if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
                         keyboardMoving = false
+                        keyboardNow = keyboardGoal
                         val risen = lift
                         lift = 0f
                         if (risen > 0f) {
@@ -101,6 +116,20 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
         // Said once, by the page, from what it is told here: the web view
         // saying it again on its own would count every edge twice.
         ViewCompat.setOnApplyWindowInsetsListener(page) { _, _ -> WindowInsetsCompat.CONSUMED }
+    }
+
+    /** The whole slide at once, for the page to play it in step with the
+     *  keyboard however busy it is. */
+    private fun tellSlide(animation: WindowInsetsAnimationCompat) {
+        val density = activity.resources.displayMetrics.density
+        val duration = animation.durationMillis.takeIf { it > 0 } ?: FALLBACK_SLIDE_MILLIS
+        val course = (0..COURSE_STEPS).map { step ->
+            val time = step.toFloat() / COURSE_STEPS
+            animation.interpolator?.getInterpolation(time) ?: time
+        }
+        val slide = "{from:${keyboardNow / density},to:${keyboardGoal / density},duration:$duration," +
+            "course:[${course.joinToString(",")}],startedAt:${System.currentTimeMillis()}}"
+        page.evaluateJavascript("window.melyxarKeyboardSlide && window.melyxarKeyboardSlide($slide)", null)
     }
 
     private fun arrived() {
@@ -129,6 +158,9 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
     private fun settle(view: View, insets: WindowInsetsCompat) {
         val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
         view.updatePadding(bottom = keyboard)
+        if (!keyboardMoving) {
+            keyboardNow = keyboard
+        }
         heard(insets, keyboard > 0)
     }
 
@@ -162,6 +194,12 @@ class PageWindow(private val activity: ComponentActivity, private val holder: Vi
 
 /** The air kept between a field and the keyboard, in the page's pixels. */
 private const val FIELD_AIR = 16f
+
+/** How many steps the page is given of the keyboard's slide. */
+private const val COURSE_STEPS = 16
+
+/** How long a slide lasts when the system does not say. */
+private const val FALLBACK_SLIDE_MILLIS = 285L
 
 /** The room taken at each edge, in the page's pixels. */
 @Serializable

@@ -10,6 +10,7 @@
   z-index: 60;
   display: flex;
   align-items: flex-end;
+  padding-bottom: var(--keyboard-rise);
   background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
   animation: sheet-dim var(--calm) var(--ease);
   transition: opacity var(--calm) var(--ease);
@@ -31,7 +32,7 @@
   flex: none;
   width: calc(100% + 2px);
   margin: 0 -1px;
-  max-height: 88dvh;
+  max-height: calc((100dvh - var(--keyboard-rise)) * 0.88);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-bottom: 0;
   border-radius: 32px 32px 0 0;

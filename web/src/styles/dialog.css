@@ -15,6 +15,7 @@
   display: grid;
   place-items: center;
   padding: var(--gap-wide);
+  padding-bottom: calc(var(--gap-wide) + var(--keyboard-rise));
   background: color-mix(in srgb, var(--surface-deep) 72%, transparent);
 }
 
@@ -136,6 +137,6 @@
 /* A telephone keeps only a margin of the page around the window. */
 @media (max-width: 600px) {
   .modal-over {
-    padding: max(var(--gap), var(--safe-top)) var(--gap) max(var(--gap), var(--safe-bottom));
+    padding: max(var(--gap), var(--safe-top)) var(--gap) calc(max(var(--gap), var(--safe-bottom)) + var(--keyboard-rise));
   }
 }

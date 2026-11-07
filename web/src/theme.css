@@ -148,6 +148,8 @@
      everywhere else, so nothing outside that mode moves. */
   --safe-top: 0px;
   --safe-bottom: 0px;
+  /* What the keyboard of the Android application takes while it moves. */
+  --keyboard-rise: 0px;
   --safe-left: 0px;
   --safe-right: 0px;
 
