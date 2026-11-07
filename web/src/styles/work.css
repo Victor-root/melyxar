@@ -19,7 +19,7 @@
 .work-backdrop {
   position: absolute;
   inset: 0 0 auto 0;
-  height: min(100dvh, 1100px);
+  height: min(var(--whole-height, 100dvh), 1100px);
   z-index: -1;
   overflow: hidden;
   mask-image: linear-gradient(to bottom, black 55%, transparent);

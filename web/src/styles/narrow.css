@@ -97,7 +97,7 @@
     --header-height: calc(var(--header-piece) + 2 * var(--header-edge) + var(--safe-top));
     /* Tall enough for the words and the way through the five, which have
        the whole width and no corner of their own to share. */
-    --hero-height: clamp(360px, 56dvh, 480px);
+    --hero-height: clamp(360px, calc(var(--whole-height, 100dvh) * 0.56), 480px);
   }
 
   /* Drawn edge to edge, the bar stands a little higher, just under the status

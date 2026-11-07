@@ -14,6 +14,7 @@
  * the edges.
  */
 
+import { scrollerOf } from "./landing";
 import { appWindow } from "./app-window";
 import type { Edges } from "./app-window";
 
@@ -57,13 +58,37 @@ export function markTheEdgeRoom(): void {
   // the application may say nothing at all.
   if (appWindow) {
     const app = appWindow;
+    let keyboard = false;
+    /* The height of the whole screen, kept while the keyboard is up, for what
+       is sized from it: a banner measured against the room the keyboard
+       leaves jumped as soon as the keyboard arrived. */
+    const measureTheScreen = () => {
+      if (!keyboard) {
+        root.style.setProperty("--whole-height", `${window.innerHeight}px`);
+      }
+    };
     const told = () => {
-      const rooms = roomsOf(JSON.parse(app.edges()) as Edges);
+      const edges = JSON.parse(app.edges()) as Edges;
+      const rooms = roomsOf(edges);
       SIDES.forEach((side, index) => root.style.setProperty(`--safe-${side}`, rooms[index]));
       mark(rooms);
+      keyboard = edges.keyboard === true;
     };
     told();
+    measureTheScreen();
     window.melyxarEdgesChanged = told;
+    window.melyxarRaise = (pixels) => {
+      const field = document.activeElement;
+      if (field instanceof HTMLElement) {
+        scrollerOf(field)?.scrollBy({ top: pixels, behavior: "instant" });
+      }
+    };
+    window.addEventListener("resize", measureTheScreen);
+    document.addEventListener("focusin", ({ target }) => {
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        app.fieldAt?.(target.getBoundingClientRect().bottom);
+      }
+    });
     return;
   }
 
