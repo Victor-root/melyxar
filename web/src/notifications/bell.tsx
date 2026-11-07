@@ -1,8 +1,8 @@
-import { useRef } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { BellIcon, CloseIcon, TickIcon } from "../icons";
+import { BellIcon, TickIcon } from "../icons";
 import { PHONE, useMediaQuery } from "../media-query";
 import { Dropdown } from "../components/dropdown";
+import { TopSheetHandle, TopSheetHead } from "../components/top-sheet";
 import { sayPoint } from "../pages/admin/activity";
 import { JobCard } from "../pages/admin/tasks";
 import { useRunning } from "../running";
@@ -46,16 +46,6 @@ function Count({ count, levels, line }: { count: number; levels: Level[]; line?:
   );
 }
 
-/** How far up the handle has to be pulled to put the sheet away, at most: a
- *  short sheet goes with a third of its height. */
-const PULL_TO_CLOSE = 120;
-
-/** How far a finger may wander on the handle and still be pressing it. */
-const PRESS_SLACK = 6;
-
-/** How long the sheet takes to go, or to come back, once let go of. */
-const LETS_GO_MS = 180;
-
 /**
  * The bell of the bar: how many things wait, in the colour of the gravest,
  * and on a press the points deserving an administrator's look, then this
@@ -69,15 +59,12 @@ export function Bell({ administrator }: { administrator: boolean }) {
   const { jobs } = useRunning();
   const looked = administrator ? (points ?? []) : [];
   const onAPhone = useMediaQuery(PHONE);
-  /* The pull in progress on the handle: where the finger went down and the
-     sheet it is moving. */
-  const pulled = useRef<{ from: number; sheet: HTMLElement; moved: boolean } | null>(null);
 
   return (
     <Dropdown
       className="header-bell"
       icon={t("nav.notifications")}
-      listClassName="bell-list"
+      listClassName="bell-list top-sheet"
       placed={!onAPhone}
       /* Looked at, so read: what was new is told by the count that goes, and
          any of them can be put back as unread. */
@@ -93,17 +80,11 @@ export function Bell({ administrator }: { administrator: boolean }) {
         </>
       }
     >
-      {/* The title of the sheet a phone opens, with the way out: not drawn
-          anywhere else. */}
-      <div className="bell-sheet-head">
-        <span className="bell-sheet-icon">
+      <TopSheetHead title={t("nav.notifications")}>
+        <span className="top-sheet-icon">
           <BellIcon size={20} />
         </span>
-        <span className="bell-sheet-title">{t("nav.notifications")}</span>
-        <button type="button" className="bell-sheet-close" aria-label={t("modal.close")}>
-          <CloseIcon size={18} />
-        </button>
-      </div>
+      </TopSheetHead>
       {/* The work the server is doing, each piece as a notification of its own
           with its bar, which fills in as the work does. Only for an
           administrator, who is the one it concerns. */}
@@ -163,73 +144,7 @@ export function Bell({ administrator }: { administrator: boolean }) {
       <Link to="/notifications" className="bell-all">
         {t("notes.see_all")}
       </Link>
-      {/* The handle at the foot of the sheet: held and pulled up, the sheet
-          follows the finger and goes if it was pulled far enough; pressed, it
-          goes at once, as any press in the list does. */}
-      <button
-        type="button"
-        className="bell-handle"
-        aria-label={t("modal.close")}
-        onPointerDown={(event) => {
-          const sheet = event.currentTarget.closest<HTMLElement>(".bell-list");
-          if (!sheet) {
-            return;
-          }
-          event.currentTarget.setPointerCapture(event.pointerId);
-          sheet.style.animation = "none";
-          sheet.style.transition = "none";
-          pulled.current = { from: event.clientY, sheet, moved: false };
-        }}
-        onPointerMove={(event) => {
-          const pull = pulled.current;
-          if (!pull) {
-            return;
-          }
-          const up = Math.min(0, event.clientY - pull.from);
-          pull.moved = pull.moved || up < -PRESS_SLACK;
-          pull.sheet.style.transform = `translateY(${up}px)`;
-        }}
-        onPointerUp={(event) => {
-          const pull = pulled.current;
-          if (!pull) {
-            return;
-          }
-          const handle = event.currentTarget;
-          const up = event.clientY - pull.from;
-          pull.sheet.style.transition = `transform ${LETS_GO_MS}ms ease-out`;
-          if (up < -Math.min(PULL_TO_CLOSE, pull.sheet.offsetHeight * 0.3)) {
-            pull.sheet.style.transform = "translateY(-100%)";
-            /* The click the browser sends after this is the end of the pull
-               and is swallowed; the one that shuts the sheet is sent once it
-               has gone. */
-            pull.moved = true;
-            window.setTimeout(() => {
-              pulled.current = null;
-              handle.click();
-            }, LETS_GO_MS);
-            return;
-          }
-          pull.sheet.style.transform = "";
-        }}
-        onPointerCancel={() => {
-          const pull = pulled.current;
-          pulled.current = null;
-          if (pull) {
-            pull.sheet.style.transition = `transform ${LETS_GO_MS}ms ease-out`;
-            pull.sheet.style.transform = "";
-          }
-        }}
-        onClick={(event) => {
-          /* The press that ends a pull is not a press on the handle. */
-          const pull = pulled.current;
-          pulled.current = null;
-          if (pull?.moved) {
-            event.stopPropagation();
-          }
-        }}
-      >
-        <span aria-hidden="true" />
-      </button>
+      <TopSheetHandle />
     </Dropdown>
   );
 }

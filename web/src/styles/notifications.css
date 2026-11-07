@@ -284,8 +284,8 @@
    the words of the corner while it is open: it is what is being read. */
 /* The title and the handle of the sheet a phone opens: see the style sheet
    for narrow screens. */
-.bell-sheet-head,
-.bell-handle {
+.top-sheet-head,
+.top-sheet-handle {
   display: none;
 }
 

@@ -43,6 +43,7 @@ import { useAccount } from "../account";
 import { Bell, BellLine } from "../notifications/bell";
 import { useRequests } from "../requests/store";
 import { Dropdown } from "./dropdown";
+import { TopSheetHandle, TopSheetHead } from "./top-sheet";
 import { KINDS, nameOfKind } from "../libraries";
 import { useBranding } from "../player/logo";
 import { offeredButtons } from "../buttons";
@@ -851,6 +852,8 @@ export function Header({
 
           <Dropdown
             className="header-account"
+            listClassName="top-sheet account-sheet"
+            placed={!onAPhone}
             reachable
             label={
               <>
@@ -863,6 +866,13 @@ export function Header({
               </>
             }
           >
+            <TopSheetHead title={account?.name ?? t("nav.account")}>
+              <Face
+                className="avatar"
+                name={account?.name ?? t("nav.account")}
+                avatar={account?.avatar ?? null}
+              />
+            </TopSheetHead>
             {/* What is not on the bar, in the same order as the bar, and
                 leaving last whatever was chosen. */}
             {offered.filter(inTheMenu).map((button) =>
@@ -892,6 +902,7 @@ export function Header({
               <LeaveIcon size={16} />
               {t("nav.sign_out")}
             </button>
+            <TopSheetHandle />
           </Dropdown>
         </div>
       </div>
