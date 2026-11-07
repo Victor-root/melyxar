@@ -655,6 +655,15 @@ img.door-greeting-mark {
   box-shadow: var(--focus-rim);
 }
 
+/* The way in that does not need a face, as loud as signing in itself. */
+.door-by-hand-accent,
+.door-by-hand-accent:hover {
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
 /*
  * Whose password is being asked for.
  *

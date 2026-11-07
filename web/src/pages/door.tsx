@@ -237,7 +237,7 @@ export function Door({
                   who would rather. */}
               <button
                 type="button"
-                className="door-by-hand"
+                className="door-by-hand door-by-hand-accent"
                 onClick={() => turnTo({ the: "form", forWhom: null })}
               >
                 <AccountIcon size={18} />
