@@ -1,7 +1,5 @@
 package app.melyxar.tv.requests
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -51,10 +49,9 @@ import app.melyxar.tv.look.Glyph
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.TvField
-import app.melyxar.tv.look.boxShadow
 import app.melyxar.tv.look.listLine
 import app.melyxar.tv.look.litBy
-import app.melyxar.tv.look.shadowRaised
+import app.melyxar.tv.look.window
 import java.io.IOException
 import kotlinx.coroutines.launch
 
@@ -84,19 +81,15 @@ fun AskSheet(found: Found, onClose: () -> Unit) {
     var refused by remember { mutableStateOf(false) }
     val send = remember { FocusRequester() }
     val ready = !busy && (!series || whole || chosen.isNotEmpty())
-    val shape = RoundedCornerShape(18.dp)
     Dialog(onDismissRequest = onClose) {
         Column(
             modifier = Modifier
                 .width(640.dp)
-                .boxShadow(shape, palette.shadowRaised)
-                .clip(shape)
-                .background(palette.surfaceRaised)
-                .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+                .window()
                 .padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(stringResource(R.string.tv_requests), fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = palette.text)
+            Text(stringResource(R.string.tv_requests), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = palette.text)
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.size(64.dp, 96.dp).clip(RoundedCornerShape(8.dp))) { TitlePoster(found.poster, 64.dp) }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

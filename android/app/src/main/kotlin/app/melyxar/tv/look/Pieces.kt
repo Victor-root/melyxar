@@ -19,6 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
@@ -172,6 +175,28 @@ fun Modifier.glassPiece(shape: Shape = PillShape): Modifier {
         .background(palette.accent.copy(alpha = 0.22f))
         .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
 }
+
+/** The corners of what opens over a screen. */
+val WindowShape = RoundedCornerShape(24.dp)
+
+/** What opens over a screen, one look for all of it, the web's: a solid
+ *  ground, the accent washing down from the top, and its rim and glow. */
+@Composable
+fun Modifier.window(shape: Shape = WindowShape): Modifier {
+    val palette = LocalPalette.current
+    return this
+        .boxShadow(shape, palette.shadowRaised, BoxShadow(palette.accentGlow, blur = 32.dp))
+        .clip(shape)
+        .background(palette.surfaceRaised)
+        .drawBehind {
+            val wash = listOf(palette.accent.copy(alpha = 0.16f), Color.Transparent)
+            drawRect(Brush.verticalGradient(wash, endY = WASH.toPx()), size = Size(size.width, WASH.toPx()))
+        }
+        .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+}
+
+/** How far down the accent washes. */
+private val WASH = 160.dp
 
 /** The shape of a line of a list of settings or notifications. */
 val LineShape = RoundedCornerShape(12.dp)

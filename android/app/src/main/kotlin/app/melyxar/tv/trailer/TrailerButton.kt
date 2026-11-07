@@ -2,13 +2,10 @@ package app.melyxar.tv.trailer
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -34,8 +30,7 @@ import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.Icons
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.PlainButton
-import app.melyxar.tv.look.boxShadow
-import app.melyxar.tv.look.shadowRaised
+import app.melyxar.tv.look.window
 
 /**
  * The trailer of the work called [title], offered beside how to play it: a
@@ -72,16 +67,12 @@ fun TrailerButton(trailer: Trailer, title: String, modifier: Modifier = Modifier
 @Composable
 private fun Nowhere(onClose: () -> Unit) {
     val palette = LocalPalette.current
-    val shape = RoundedCornerShape(18.dp)
     val close = remember { FocusRequester() }
     Dialog(onDismissRequest = onClose) {
         Column(
             modifier = Modifier
                 .width(520.dp)
-                .boxShadow(shape, palette.shadowRaised)
-                .clip(shape)
-                .background(palette.surfaceRaised)
-                .border(1.dp, palette.accent.copy(alpha = 0.55f), shape)
+                .window()
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp),
