@@ -18,7 +18,7 @@ import kotlinx.serialization.json.Json
  * application rather than left to the web view, which only learnt to say it
  * in its recent versions. The keyboard lifts the whole page above it.
  */
-class PageWindow(private val activity: ComponentActivity, holder: View, private val page: WebView) {
+class PageWindow(private val activity: ComponentActivity, private val holder: View, private val page: WebView) {
     @Volatile
     private var edges = Json.encodeToString(Edges(0f, 0f, 0f, 0f))
 
@@ -26,6 +26,16 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
      *  while it is. */
     private var keyboardMoving = false
     private var heardWhileMoving: WindowInsetsCompat? = null
+
+    /** Where the foot of the field being typed in stands, in the page's
+     *  pixels, as the page said when it was reached. */
+    @Volatile
+    private var fieldFoot = 0f
+
+    /** How far the page rises with the keyboard for that field to stay above
+     *  it, and how high the keyboard comes, in the screen's pixels. */
+    private var lift = 0f
+    private var keyboardHeight = 0
 
     init {
         ViewCompat.setOnApplyWindowInsetsListener(holder) { view, insets ->
@@ -50,16 +60,40 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
                     }
                 }
 
+                override fun onStart(
+                    animation: WindowInsetsAnimationCompat,
+                    bounds: WindowInsetsAnimationCompat.BoundsCompat,
+                ): WindowInsetsAnimationCompat.BoundsCompat {
+                    if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0 && holder.paddingBottom == 0) {
+                        keyboardHeight = bounds.upperBound.bottom
+                        val density = activity.resources.displayMetrics.density
+                        val room = holder.height - keyboardHeight
+                        lift = ((fieldFoot + FIELD_AIR) * density - room).coerceIn(0f, keyboardHeight.toFloat())
+                    }
+                    return bounds
+                }
+
                 override fun onProgress(
                     insets: WindowInsetsCompat,
                     running: MutableList<WindowInsetsAnimationCompat>,
-                ) = insets
+                ): WindowInsetsCompat {
+                    if (lift > 0f && keyboardHeight > 0) {
+                        val risen = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                        page.translationY = -lift * risen / keyboardHeight
+                    }
+                    return insets
+                }
 
                 override fun onEnd(animation: WindowInsetsAnimationCompat) {
                     if (animation.typeMask and WindowInsetsCompat.Type.ime() != 0) {
                         keyboardMoving = false
-                        heardWhileMoving?.let { settle(holder, it) }
-                        heardWhileMoving = null
+                        val risen = lift
+                        lift = 0f
+                        if (risen > 0f) {
+                            handOver(risen)
+                        } else {
+                            arrived()
+                        }
                     }
                 }
             },
@@ -67,6 +101,29 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
         // Said once, by the page, from what it is told here: the web view
         // saying it again on its own would count every edge twice.
         ViewCompat.setOnApplyWindowInsetsListener(page) { _, _ -> WindowInsetsCompat.CONSUMED }
+    }
+
+    private fun arrived() {
+        heardWhileMoving?.let { settle(holder, it) }
+        heardWhileMoving = null
+    }
+
+    /**
+     * The page has been raised by moving the whole view: the page scrolls by
+     * as much itself, and the view goes back in the frame that shows it, so
+     * nothing moves. Left to itself, the web view would bring the field to the
+     * middle of what is left, a second movement after the keyboard's.
+     */
+    private fun handOver(risen: Float) {
+        val pixels = risen / activity.resources.displayMetrics.density
+        page.evaluateJavascript("window.melyxarRaise && window.melyxarRaise($pixels)") {
+            page.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
+                override fun onComplete(requestId: Long) {
+                    page.translationY = 0f
+                    arrived()
+                }
+            })
+        }
     }
 
     private fun settle(view: View, insets: WindowInsetsCompat) {
@@ -85,6 +142,7 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
                 bottom = if (keyboardShown) 0f else room.bottom / density,
                 left = room.left / density,
                 right = room.right / density,
+                keyboard = keyboardShown,
             ),
         )
         if (now != edges) {
@@ -95,8 +153,22 @@ class PageWindow(private val activity: ComponentActivity, holder: View, private 
 
     @JavascriptInterface
     fun edges(): String = edges
+
+    @JavascriptInterface
+    fun fieldAt(foot: Float) {
+        fieldFoot = foot
+    }
 }
+
+/** The air kept between a field and the keyboard, in the page's pixels. */
+private const val FIELD_AIR = 16f
 
 /** The room taken at each edge, in the page's pixels. */
 @Serializable
-private data class Edges(val top: Float, val bottom: Float, val left: Float, val right: Float)
+private data class Edges(
+    val top: Float,
+    val bottom: Float,
+    val left: Float,
+    val right: Float,
+    val keyboard: Boolean = false,
+)
