@@ -86,7 +86,9 @@ export function markTheEdgeRoom(): void {
     window.addEventListener("resize", measureTheScreen);
     document.addEventListener("focusin", ({ target }) => {
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        app.fieldAt?.(target.getBoundingClientRect().bottom);
+        // A window over the page gives way by itself once the keyboard is
+        // there: raised with it, it came down again before going back up.
+        app.fieldAt?.(target.closest('[role="dialog"]') ? 0 : target.getBoundingClientRect().bottom);
       }
     });
     return;
