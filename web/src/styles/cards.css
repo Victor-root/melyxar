@@ -176,6 +176,13 @@
   content-visibility: visible;
 }
 
+/* And in a block of a grid, which is skipped whole: asked of every card as
+   well, the browser watched all of a library's cards on every frame of a
+   scroll to learn what the blocks had already told it. */
+.grid-block > .card {
+  content-visibility: visible;
+}
+
 /* The whole card grows a little under the pointer, picture and words
    together, the way every button in this interface does. It used to be the
    picture alone that grew, inside a card that stayed where it was, which
