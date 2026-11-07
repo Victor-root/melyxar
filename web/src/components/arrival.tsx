@@ -76,9 +76,12 @@ export function Arrival({ children }: { children: ReactNode }) {
          hides, such as the wide picture of a tile that a desktop does not
          show, is never fetched and so never decoded, and waiting for it
          held the loader for the whole of the longest hold, every time. */
-      const pictures = Array.from(box.current?.querySelectorAll("img") ?? []).filter(
-        (picture) => picture.getClientRects().length > 0 && picture.getBoundingClientRect().top < reach,
-      );
+      /* Nor the ones further along a row, which a phone only reaches with a
+         swipe: its page waited on a dozen posters it did not show. */
+      const pictures = Array.from(box.current?.querySelectorAll("img") ?? []).filter((picture) => {
+        const { top, left } = picture.getBoundingClientRect();
+        return picture.getClientRects().length > 0 && top < reach && left < window.innerWidth;
+      });
       void Promise.allSettled(pictures.map((picture) => picture.decode())).then(show);
     });
     const late = setTimeout(show, Math.max(0, LONGEST_HOLD_MS - (performance.now() - (heldSince ?? 0))));
