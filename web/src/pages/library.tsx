@@ -4,7 +4,7 @@
 
 import { BrowseBubble } from "../components/browse-bubble";
 import { UploadButton } from "../components/upload-button";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Library } from "../api";
@@ -288,7 +288,9 @@ export function LibraryPage({
           <Picker
             value={view}
             options={LIBRARY_VIEWS.map((value) => [value, t(`library.view.${value}`)] as const)}
-            onPick={(value) => setLibraryView(opened, value)}
+            /* Drawn as time allows: every card is drawn again for another
+               layout, and drawn in one go it held the page still. */
+            onPick={(value) => startTransition(() => setLibraryView(opened, value))}
             label={t("library.view")}
           />
         </span>
