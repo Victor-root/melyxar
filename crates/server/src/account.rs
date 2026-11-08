@@ -79,6 +79,7 @@ pub fn router() -> Router<AppState> {
                 )),
         )
         .route("/api/v1/setup", axum::routing::post(set_this_server_up))
+        .route("/api/v1/public/sign-up", axum::routing::post(sign_up))
         .route("/api/v1/setup/first-steps", axum::routing::get(first_steps))
         .route(
             "/api/v1/setup/first-steps/done",
@@ -128,6 +129,7 @@ fn answers_to_anybody(path: &str) -> bool {
                 | "/api/v1/public/branding"
                 | "/api/v1/public/names"
                 | "/api/v1/session"
+                | "/api/v1/public/sign-up"
                 | "/api/v1/setup"
         )
 }
@@ -459,6 +461,38 @@ async fn sign_in(
             "no account answers to that pair",
         )),
         SignedInOrNot::HeldBack { seconds } => Err(held_back(seconds)),
+        SignedInOrNot::AwaitingApproval => Err(melyxar_app::accounts::Trouble::Refused(
+            melyxar_app::accounts::Refused::AwaitingApproval,
+        )
+        .into()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SignUpAsked {
+    name: String,
+    password: String,
+}
+
+/// Whether the account just made waits for an administrator.
+#[derive(Debug, Serialize)]
+struct SignedUpView {
+    awaiting_approval: bool,
+}
+
+/// Makes an account for whoever asks at the door, when the sign ups are
+/// open. Opens no session: an account let in at once signs in as any other,
+/// and one that waits has nothing to open.
+async fn sign_up(
+    State(state): State<AppState>,
+    Caller { address, .. }: Caller,
+    Json(asked): Json<SignUpAsked>,
+) -> Result<Json<SignedUpView>> {
+    match melyxar_app::accounts::sign_up(&state, &asked.name, &asked.password, address).await? {
+        melyxar_app::accounts::SignedUp::Made { awaiting } => {
+            Ok(Json(SignedUpView { awaiting_approval: awaiting }))
+        }
+        melyxar_app::accounts::SignedUp::HeldBack { seconds } => Err(held_back(seconds)),
     }
 }
 
@@ -724,6 +758,7 @@ mod tests {
             name: "victor".to_string(),
             avatar_path: None,
             face_picture: melyxar_core::face::FacePicture::default(),
+            awaiting_approval: false,
             permissions,
             preferences: Preferences::default(),
             created_at: melyxar_core::time::now(),

@@ -47,6 +47,10 @@ struct Inner {
     /// Wrong passwords, so that guessing one costs time rather than a
     /// processor.
     wrong_answers: crate::wrong_answers::WrongAnswers,
+    /// Accounts made at the door, counted by the same brake but apart from
+    /// the passwords: signing in to an account just made must not wipe out
+    /// how many were made from there.
+    sign_ups: crate::wrong_answers::WrongAnswers,
     /// Where passwords are hashed and checked, a few at a time.
     passwords: crate::passwords::Passwords,
     /// Profile pictures being made, a few at a time.
@@ -134,6 +138,7 @@ impl AppState {
                 counts: crate::counted::Counts::default(),
                 intakes: crate::held_back::Intakes::default(),
                 wrong_answers: crate::wrong_answers::WrongAnswers::default(),
+                sign_ups: crate::wrong_answers::WrongAnswers::default(),
                 passwords: crate::passwords::Passwords::default(),
                 avatar_making: crate::avatars::Making::default(),
                 access: crate::access::Current::default(),
@@ -219,6 +224,10 @@ impl AppState {
 
     pub(crate) fn wrong_answers(&self) -> &crate::wrong_answers::WrongAnswers {
         &self.inner.wrong_answers
+    }
+
+    pub(crate) fn sign_ups(&self) -> &crate::wrong_answers::WrongAnswers {
+        &self.inner.sign_ups
     }
 
     pub(crate) fn passwords(&self) -> &crate::passwords::Passwords {

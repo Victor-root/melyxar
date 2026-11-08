@@ -34,6 +34,8 @@ pub fn router() -> Router<AppState> {
                 )),
         )
         .route("/api/v1/accounts/{id}/password", put(put_a_password))
+        .route("/api/v1/accounts/{id}/approval", axum::routing::post(approve))
+        .route("/api/v1/sign-ups", get(sign_ups).put(set_sign_ups))
         .route(
             "/api/v1/accounts/{id}/sessions",
             delete(sign_out_everywhere),
@@ -113,6 +115,8 @@ struct ManagedAccountView {
     avatar: Option<String>,
     /// Which of Melyxar's pictures it wears without a photo of its own.
     face_picture: &'static str,
+    /// Made at the door and not let in yet.
+    awaiting_approval: bool,
     /// Whether this is the administrator looking at the page, which is what
     /// the page greys out the gestures refused on one's own account by.
     is_you: bool,
@@ -132,6 +136,7 @@ fn managed_view(listed: &Listed, you: UserId) -> ManagedAccountView {
         name: user.name.clone(),
         avatar: user.avatar_path.as_deref().map(crate::images::face_url),
         face_picture: user.face_picture.as_str(),
+        awaiting_approval: user.awaiting_approval,
         is_you: user.id == you,
         rights: RightsView::of(user),
         created_at: melyxar_core::time::to_text(user.created_at),
@@ -183,6 +188,48 @@ async fn create(
         melyxar_app::accounts::create_account(&state, &body.name, &body.password, &permissions)
             .await?;
     Ok(Json(one_view(made, who.id)))
+}
+
+/// Lets in an account made at the door.
+async fn approve(
+    _: Administrator,
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ManagedAccountView>> {
+    let target = parse_account(&id)?;
+    let approved = melyxar_app::accounts::approve(&state, &who, target).await?;
+    Ok(Json(one_view(approved, who.id)))
+}
+
+/// Whether somebody may make their own account at the door, and whether it
+/// then waits for an administrator.
+#[derive(Debug, Serialize, Deserialize)]
+struct SignUpsView {
+    open: bool,
+    held: bool,
+}
+
+async fn sign_ups(_: Administrator, State(state): State<AppState>) -> Result<Json<SignUpsView>> {
+    let sign_ups = melyxar_app::accounts::sign_ups(&state).await?;
+    Ok(Json(SignUpsView {
+        open: sign_ups.open,
+        held: sign_ups.held,
+    }))
+}
+
+async fn set_sign_ups(
+    _: Administrator,
+    Viewer(who): Viewer,
+    State(state): State<AppState>,
+    Json(body): Json<SignUpsView>,
+) -> Result<Json<SignUpsView>> {
+    let sign_ups = melyxar_app::accounts::SignUps {
+        open: body.open,
+        held: body.held,
+    };
+    melyxar_app::accounts::set_sign_ups(&state, &who, sign_ups).await?;
+    Ok(Json(body))
 }
 
 async fn set_rights(

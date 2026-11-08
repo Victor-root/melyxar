@@ -359,6 +359,7 @@ mod tests {
             name: "reader".to_string(),
             avatar_path: None,
             face_picture: melyxar_core::face::FacePicture::default(),
+            awaiting_approval: false,
             permissions: Permissions {
                 max_age_rating: limit,
                 ..Permissions::viewer()

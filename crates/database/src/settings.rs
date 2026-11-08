@@ -89,6 +89,15 @@ impl Upload {
     }
 }
 
+/// Whether somebody may make their own account at the door.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SignUps {
+    pub open: bool,
+    /// Whether each account made that way waits for an administrator before
+    /// it may sign in.
+    pub held: bool,
+}
+
 /// Everything the administrator can change about this server.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ServerSettings {
@@ -109,6 +118,8 @@ pub struct ServerSettings {
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
     pub show_user_picker: bool,
+    /// Whether somebody may make their own account at the door.
+    pub sign_ups: SignUps,
     /// Write companion metadata files next to a media file. Needs a writable
     /// root, which is checked before anything is attempted rather than failing
     /// file by file. Reading them is a setting of the work below.
@@ -281,7 +292,7 @@ impl Database {
                     show_user_picker, read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
-                    thumbnails_rows, updated_at
+                    thumbnails_rows, sign_ups_open, sign_ups_held, updated_at
              FROM server_settings WHERE id = 1",
         )
         .fetch_one(self.reader())
@@ -299,6 +310,10 @@ impl Database {
             global_custom_css: row.try_get("global_custom_css")?,
             default_theme: default_theme_of(&row.try_get::<String, _>("default_theme")?),
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
+            sign_ups: SignUps {
+                open: int_to_bool(row.try_get("sign_ups_open")?),
+                held: int_to_bool(row.try_get("sign_ups_held")?),
+            },
             write_companion_files: int_to_bool(row.try_get("write_companion_files")?),
             watched_threshold: row.try_get("watched_threshold")?,
             activity_retention_days: row.try_get("activity_retention_days")?,
@@ -624,6 +639,21 @@ impl Database {
 
     /// The line under the server's name on the sign in screen, or nothing for
     /// Melyxar's own.
+    /// Opens or closes the sign ups, and says whether each waits for an
+    /// administrator.
+    pub async fn set_sign_ups(&self, sign_ups: SignUps) -> Result<()> {
+        sqlx::query(
+            "UPDATE server_settings SET sign_ups_open = ?, sign_ups_held = ?, updated_at = ?
+              WHERE id = 1",
+        )
+        .bind(bool_to_int(sign_ups.open))
+        .bind(bool_to_int(sign_ups.held))
+        .bind(timestamp_to_text(now()))
+        .execute(self.writer())
+        .await?;
+        Ok(())
+    }
+
     pub async fn set_door_slogan(&self, slogan: Option<&str>) -> Result<()> {
         sqlx::query("UPDATE server_settings SET door_slogan = ?, updated_at = ? WHERE id = 1")
             .bind(slogan)
@@ -1017,6 +1047,18 @@ mod tests {
         // The accent colour lives in per-user preferences, not here, but the
         // default must match the one the domain declares.
         assert_eq!(DEFAULT_ACCENT_COLOR, "#c81e1e");
+    }
+
+    #[tokio::test]
+    async fn sign_ups_are_closed_and_held_until_the_administrator_says_otherwise() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(
+            database.server_settings().await.expect("read").sign_ups,
+            SignUps { open: false, held: true }
+        );
+        let wide_open = SignUps { open: true, held: false };
+        database.set_sign_ups(wide_open).await.expect("written");
+        assert_eq!(database.server_settings().await.expect("read").sign_ups, wide_open);
     }
 
     #[tokio::test]

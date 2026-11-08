@@ -30,6 +30,10 @@ pub enum Kind {
     Deletion,
     /// A title asked for, and what became of it.
     Request,
+    /// Somebody made their own account at the door. Told to the
+    /// administrators, who are the only ones who can let it in or give it
+    /// anything, so not one an account may switch off.
+    SignUp,
 }
 
 impl Kind {
@@ -40,6 +44,7 @@ impl Kind {
             Self::NewContent => "new_content",
             Self::Deletion => "deletion",
             Self::Request => "request",
+            Self::SignUp => "sign_up",
         }
     }
 
@@ -50,6 +55,7 @@ impl Kind {
             "new_content" => Some(Self::NewContent),
             "deletion" => Some(Self::Deletion),
             "request" => Some(Self::Request),
+            "sign_up" => Some(Self::SignUp),
             _ => None,
         }
     }
@@ -140,6 +146,11 @@ pub enum Said {
         poster: Option<String>,
         news: RequestNews,
     },
+    SignUp {
+        name: String,
+        /// Whether it waits for an administrator before it may sign in.
+        awaiting: bool,
+    },
 }
 
 impl Said {
@@ -150,6 +161,7 @@ impl Said {
             Self::NewContent { .. } => Kind::NewContent,
             Self::Deletion { .. } => Kind::Deletion,
             Self::Request { .. } => Kind::Request,
+            Self::SignUp { .. } => Kind::SignUp,
         }
     }
 }

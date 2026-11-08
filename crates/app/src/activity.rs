@@ -52,6 +52,16 @@ pub enum Event {
     PasswordChanged { user: UserId, user_name: String },
     AccountCreated { user: UserId, user_name: String },
     AccountRemoved { user_name: String },
+    /// Somebody made their own account at the door, from this address,
+    /// waiting for an administrator when `awaiting` says so.
+    SignedUp {
+        user: UserId,
+        user_name: String,
+        address: Option<String>,
+        awaiting: bool,
+    },
+    /// An administrator let in an account made at the door.
+    AccountApproved { user: UserId, user_name: String, by: String },
     AccountRenamed { user: UserId, from: String, to: String },
     /// An administrator changed what an account may do or see.
     RightsChanged { user: UserId, user_name: String, by: String },
@@ -158,6 +168,8 @@ impl Category {
                 PASSWORD_CHANGED,
                 ACCOUNT_CREATED,
                 ACCOUNT_REMOVED,
+                SIGNED_UP,
+                ACCOUNT_APPROVED,
                 ACCOUNT_RENAMED,
                 RIGHTS_CHANGED,
                 SIGNED_OUT_EVERYWHERE,
@@ -185,6 +197,8 @@ const SIGNED_OUT: &str = "signed_out";
 const PASSWORD_CHANGED: &str = "password_changed";
 const ACCOUNT_CREATED: &str = "account_created";
 const ACCOUNT_REMOVED: &str = "account_removed";
+const SIGNED_UP: &str = "signed_up";
+const ACCOUNT_APPROVED: &str = "account_approved";
 const ACCOUNT_RENAMED: &str = "account_renamed";
 const RIGHTS_CHANGED: &str = "rights_changed";
 const SIGNED_OUT_EVERYWHERE: &str = "signed_out_everywhere";
@@ -215,7 +229,7 @@ impl Level {
 
     fn of(kind: &str) -> Self {
         match kind {
-            SIGN_IN_REFUSED | MAINTENANCE_ON => Self::Attention,
+            SIGN_IN_REFUSED | MAINTENANCE_ON | SIGNED_UP => Self::Attention,
             SIGN_IN_HELD_BACK | TASK_FAILED => Self::Trouble,
             _ => Self::Information,
         }
@@ -358,6 +372,23 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
         Event::AccountRemoved { user_name } => {
             line(ACCOUNT_REMOVED, None, None, json!({ "user_name": user_name }))
         }
+        Event::SignedUp {
+            user,
+            user_name,
+            address,
+            awaiting,
+        } => line(
+            SIGNED_UP,
+            Some(user),
+            None,
+            json!({ "user_name": user_name, "address": address, "awaiting": awaiting }),
+        ),
+        Event::AccountApproved { user, user_name, by } => line(
+            ACCOUNT_APPROVED,
+            Some(user),
+            None,
+            json!({ "user_name": user_name, "by": by }),
+        ),
         Event::AccountRenamed { user, from, to } => line(
             ACCOUNT_RENAMED,
             Some(user),

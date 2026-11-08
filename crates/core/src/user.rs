@@ -87,6 +87,15 @@ impl Permissions {
         }
     }
 
+    /// Rights of an account somebody made for themselves at the door: none,
+    /// until an administrator gives it what it is to have.
+    pub fn nothing() -> Self {
+        Self {
+            sees_every_library: false,
+            ..Self::viewer()
+        }
+    }
+
     /// These rights as they are kept, whatever was asked.
     ///
     /// An administrator holds every right and sees every library: the
@@ -1032,6 +1041,9 @@ pub struct User {
     pub avatar_path: Option<String>,
     /// What it wears while it has no photo of its own.
     pub face_picture: FacePicture,
+    /// Made at the door and not let in yet by an administrator: it cannot
+    /// sign in.
+    pub awaiting_approval: bool,
     pub permissions: Permissions,
     pub preferences: Preferences,
     pub created_at: Timestamp,

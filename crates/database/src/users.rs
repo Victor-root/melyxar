@@ -51,7 +51,7 @@ pub enum KeptAnAdministrator {
 /// of them and forgotten in the others is a field that silently goes missing
 /// depending on which screen asked.
 const WHAT_AN_ACCOUNT_IS: &str =
-    "u.id, u.name, u.avatar_path, u.face_picture, u.is_administrator, u.sees_every_library,
+    "u.id, u.name, u.avatar_path, u.face_picture, u.awaiting_approval, u.is_administrator, u.sees_every_library,
      u.max_age_rating,
      u.may_download, u.may_manage_collections, u.may_delete, u.may_delete_from_disk, u.may_edit_tags, u.may_upload, u.max_sessions, u.created_at,
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
@@ -105,6 +105,53 @@ impl Database {
         let made = write_an_account(&mut transaction, name, password_hash, permissions).await?;
         transaction.commit().await?;
         Ok(made)
+    }
+
+    /// Creates an account somebody made for themselves at the door, with no
+    /// rights, waiting for an administrator when `held`. Nothing when `most`
+    /// accounts have already been made that way since `since`: counted and
+    /// written in one transaction, so a crowd arriving at once cannot slip
+    /// past the count together.
+    pub async fn sign_up_user(
+        &self,
+        name: &str,
+        password_hash: &str,
+        held: bool,
+        since: Timestamp,
+        most: i64,
+    ) -> Result<Option<User>> {
+        let mut transaction = self.begin().await?;
+        let made: i64 =
+            sqlx::query_scalar("SELECT count(*) FROM users WHERE signed_up_at >= ?")
+                .bind(timestamp_to_text(since))
+                .fetch_one(&mut *transaction)
+                .await?;
+        if made >= most {
+            return Ok(None);
+        }
+        let mut user =
+            write_an_account(&mut transaction, name, Some(password_hash), &Permissions::nothing())
+                .await?;
+        sqlx::query("UPDATE users SET signed_up_at = ?, awaiting_approval = ? WHERE id = ?")
+            .bind(timestamp_to_text(user.created_at))
+            .bind(bool_to_int(held))
+            .bind(user.id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        user.awaiting_approval = held;
+        Ok(Some(user))
+    }
+
+    /// Lets in an account that was waiting, and says whether one was.
+    pub async fn approve_user(&self, id: UserId) -> Result<bool> {
+        let done = sqlx::query(
+            "UPDATE users SET awaiting_approval = 0 WHERE id = ? AND awaiting_approval = 1",
+        )
+        .bind(id.to_db_string())
+        .execute(self.writer())
+        .await?;
+        Ok(done.rows_affected() > 0)
     }
 
     /// Creates the very first account of a server, and nothing if there is one.
@@ -218,7 +265,7 @@ impl Database {
             "SELECT u.name, u.avatar_path, u.face_picture
              FROM users u
              JOIN user_preferences p ON p.user_id = u.id
-             WHERE p.hidden_at_the_door = 0
+             WHERE p.hidden_at_the_door = 0 AND u.awaiting_approval = 0
              ORDER BY u.name COLLATE NOCASE",
         )
         .fetch_all(self.reader())
@@ -672,6 +719,7 @@ async fn write_an_account(
         name: name.to_string(),
         avatar_path: None,
         face_picture,
+        awaiting_approval: false,
         permissions: permissions.clone(),
         preferences,
         created_at,
@@ -725,6 +773,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
         avatar_path: row.try_get("avatar_path")?,
         face_picture: FacePicture::parse(&row.try_get::<String, _>("face_picture")?)
             .unwrap_or_default(),
+        awaiting_approval: int_to_bool(row.try_get("awaiting_approval")?),
         permissions: Permissions {
             is_administrator: int_to_bool(row.try_get("is_administrator")?),
             sees_every_library: int_to_bool(row.try_get("sees_every_library")?),
@@ -918,6 +967,71 @@ mod tests {
             without_a_photo.push(read.face_picture);
         }
         assert_eq!(without_a_photo, FacePicture::every().to_vec(), "in the order they were made");
+    }
+
+    #[tokio::test]
+    async fn an_account_made_at_the_door_has_no_rights_and_waits_off_the_door_until_let_in() {
+        let database = database().await;
+        let since = now() - time::Duration::days(1);
+        let made = database
+            .sign_up_user("Newcomer", "a stored form", true, since, 20)
+            .await
+            .expect("written")
+            .expect("under the most");
+        assert!(made.awaiting_approval);
+        assert_eq!(made.permissions, Permissions::nothing());
+        assert!(!made.permissions.sees_every_library && made.permissions.allowed_libraries.is_empty());
+
+        let (read, stored) = database
+            .user_by_name("Newcomer")
+            .await
+            .expect("lookup works")
+            .expect("account found");
+        assert!(read.awaiting_approval);
+        assert_eq!(read.permissions, Permissions::nothing());
+        assert_eq!(stored.as_deref(), Some("a stored form"));
+        assert!(database.names_at_the_door().await.expect("read").is_empty(), "not offered while it waits");
+
+        assert!(database.approve_user(made.id).await.expect("approved"));
+        assert!(!database.approve_user(made.id).await.expect("asked again"), "nothing left to approve");
+        let (read, _) = database.user_by_name("Newcomer").await.expect("lookup").expect("found");
+        assert!(!read.awaiting_approval);
+        assert_eq!(read.permissions, Permissions::nothing(), "let in, still with nothing");
+        assert_eq!(database.names_at_the_door().await.expect("read").len(), 1);
+
+        let free = database
+            .sign_up_user("Walk-in", "a stored form", false, since, 20)
+            .await
+            .expect("written")
+            .expect("under the most");
+        assert!(!free.awaiting_approval);
+    }
+
+    #[tokio::test]
+    async fn no_more_accounts_are_made_at_the_door_past_the_most_since_the_time_given() {
+        let database = database().await;
+        let since = now() - time::Duration::days(1);
+        for name in ["One", "Two"] {
+            assert!(database
+                .sign_up_user(name, "a stored form", true, since, 2)
+                .await
+                .expect("written")
+                .is_some());
+        }
+        assert!(database
+            .sign_up_user("Three", "a stored form", true, since, 2)
+            .await
+            .expect("asked")
+            .is_none());
+        database
+            .create_user("Made by hand", Some("a stored form"), &Permissions::viewer())
+            .await
+            .expect("the administration is not counted");
+        assert!(database
+            .sign_up_user("Tomorrow", "a stored form", true, now() + time::Duration::seconds(1), 2)
+            .await
+            .expect("asked")
+            .is_some(), "the ones before the time given are not counted");
     }
 
     #[tokio::test]

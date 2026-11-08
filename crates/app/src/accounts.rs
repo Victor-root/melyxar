@@ -78,6 +78,13 @@ pub enum Refused {
     NotYourself,
     /// A library that is not on this server was granted.
     NoSuchLibrary,
+    /// Nobody may make their own account here right now: the administrator
+    /// has not opened the sign ups, or the server is closed for maintenance.
+    SignUpsClosed,
+    /// As many accounts were made at the door today as this server takes.
+    TooManySignUps,
+    /// The account was made at the door and no administrator has let it in.
+    AwaitingApproval,
 }
 
 impl Refused {
@@ -92,6 +99,9 @@ impl Refused {
             Self::LastAdministrator => "last_administrator",
             Self::NotYourself => "not_yourself",
             Self::NoSuchLibrary => "no_such_library",
+            Self::SignUpsClosed => "sign_ups_closed",
+            Self::TooManySignUps => "too_many_sign_ups",
+            Self::AwaitingApproval => "awaiting_approval",
         }
     }
 }
@@ -261,6 +271,10 @@ pub enum SignedInOrNot {
     HeldBack {
         seconds: i64,
     },
+    /// The right password, for an account made at the door that no
+    /// administrator has let in yet. Said only to whoever has the password:
+    /// anybody else is told it is not a pair, as for every other name.
+    AwaitingApproval,
 }
 
 /// What became of an attempt to change a password.
@@ -326,6 +340,9 @@ pub async fn sign_in(
             None
         }
     };
+    if signing_in.as_ref().is_some_and(|user| user.awaiting_approval) {
+        return Ok(SignedInOrNot::AwaitingApproval);
+    }
     let Some(user) = signing_in else {
         record(
             state,
@@ -358,6 +375,11 @@ pub(crate) async fn open_a_session(
     remembered: Remembered,
     client: Option<&str>,
 ) -> Result<OpenedSession> {
+    // Every way in comes through here, a device let in from another as well
+    // as a password, so this is where an account still waiting is kept out.
+    if user.awaiting_approval {
+        return Err(melyxar_core::Error::forbidden("this account waits for an administrator").into());
+    }
     let token = SessionToken::new()?;
     let device_id = state
         .database()
@@ -843,6 +865,139 @@ pub async fn create_account(
     Ok(user)
 }
 
+pub use melyxar_database::settings::SignUps;
+
+/// How many accounts one address may make at the door in a row before it is
+/// held back, a minute and then twice as long each time: a household signing
+/// itself up does not reach it.
+const SIGN_UPS_IN_A_ROW: u32 = 3;
+
+/// The most accounts made at the door in a day, for the whole server: what a
+/// crowd of addresses could otherwise fill it with.
+pub const MOST_SIGN_UPS_A_DAY: i64 = 20;
+
+/// Whether somebody may make their own account at the door.
+pub async fn sign_ups(state: &AppState) -> Result<SignUps> {
+    Ok(state.database().server_settings().await?.sign_ups)
+}
+
+/// Opens or closes the sign ups.
+pub async fn set_sign_ups(state: &AppState, acting: &User, sign_ups: SignUps) -> Result<()> {
+    state.database().set_sign_ups(sign_ups).await?;
+    tracing::info!(
+        by = %acting.name,
+        open = sign_ups.open,
+        held = sign_ups.held,
+        "changed the sign ups"
+    );
+    Ok(())
+}
+
+/// What became of somebody making their own account at the door.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignedUp {
+    /// Made, with no rights, and waiting for an administrator when it says so.
+    Made { awaiting: bool },
+    /// Too many made from where this comes, so nothing is looked at for a
+    /// while.
+    HeldBack { seconds: i64 },
+}
+
+/// Makes an account for whoever asks at the door, when the administrator has
+/// opened the sign ups.
+///
+/// It holds no right at all, and waits for an administrator when the sign
+/// ups say so. Everything about the name and the password is what the
+/// administration applies. The brake is counted before anything costly, the
+/// password's hash first of all, and before the name is looked at, so asking
+/// which names are taken costs the same turns as making accounts.
+pub async fn sign_up(
+    state: &AppState,
+    name: &str,
+    password: &str,
+    address: Option<IpAddr>,
+) -> std::result::Result<SignedUp, Trouble> {
+    let settings = state.database().server_settings().await?;
+    if !settings.sign_ups.open
+        || still_to_be_set_up(state).await?
+        || crate::maintenance::shuts_out(state, None)
+    {
+        return Err(Trouble::Refused(Refused::SignUpsClosed));
+    }
+    let at = now();
+    match state.sign_ups().take_a_turn(Origin::of(address), SIGN_UPS_IN_A_ROW, at) {
+        Turn::HeldBack(left) => return Ok(SignedUp::HeldBack { seconds: seconds_of(left) }),
+        Turn::Checked { holds_back: true } => {
+            tracing::warn!(?address, "held back an address after too many sign ups");
+        }
+        Turn::Checked { holds_back: false } => {}
+    }
+
+    let name = name_of(name)?;
+    not_read_like_another(state, name, None).await?;
+    let hashed = stored_form_of(state, password).await?;
+    let held = settings.sign_ups.held;
+    let made = state
+        .database()
+        .sign_up_user(name, &hashed, held, at - time::Duration::days(1), MOST_SIGN_UPS_A_DAY)
+        .await;
+    let user = match made {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            tracing::warn!("refused a sign up: as many as a day takes were made");
+            return Err(Trouble::Refused(Refused::TooManySignUps));
+        }
+        Err(error) if error.is_a_duplicate() => return Err(Trouble::Refused(Refused::NameTaken)),
+        Err(error) => return Err(error.into()),
+    };
+
+    tracing::info!(account = %user.name, ?address, awaiting = held, "an account was made at the door");
+    record(
+        state,
+        Event::SignedUp {
+            user: user.id,
+            user_name: user.name.clone(),
+            address: address.map(|address| address.to_string()),
+            awaiting: held,
+        },
+    )
+    .await;
+    let told = crate::notifications::Outgoing::new(
+        crate::notifications::Said::SignUp {
+            name: user.name.clone(),
+            awaiting: held,
+        },
+        crate::notifications::Level::News,
+        crate::notifications::Audience::Administrators,
+    );
+    if let Err(error) = crate::notifications::send(state, told).await {
+        tracing::warn!(%error, "the administrators could not be told of a sign up");
+    }
+    Ok(SignedUp::Made { awaiting: held })
+}
+
+/// Lets in an account made at the door, which may then sign in. What it may
+/// see is still what an administrator gives it.
+pub async fn approve(state: &AppState, acting: &User, target: UserId) -> std::result::Result<User, Trouble> {
+    let before = account(state, target).await?;
+    if state.database().approve_user(target).await? {
+        tracing::info!(account = %before.name, by = %acting.name, "let in an account made at the door");
+        record(
+            state,
+            Event::AccountApproved {
+                user: target,
+                user_name: before.name.clone(),
+                by: acting.name.clone(),
+            },
+        )
+        .await;
+    }
+    Ok(User {
+        awaiting_approval: false,
+        ..before
+    })
+}
+
 /// What the administration decides about an account.
 ///
 /// The right to download and the age limit are not among them yet: neither
@@ -1240,6 +1395,7 @@ mod tests {
             SignedInOrNot::Opened(opened) => Some(*opened),
             SignedInOrNot::NotAPair => None,
             SignedInOrNot::HeldBack { seconds } => panic!("held back for {seconds} seconds"),
+            SignedInOrNot::AwaitingApproval => panic!("the account waits for an administrator"),
         }
     }
 
@@ -1249,6 +1405,122 @@ mod tests {
             .await
             .expect("first account created");
         (directory, state)
+    }
+
+    const FROM_AFAR: Option<IpAddr> = Some(IpAddr::V4(std::net::Ipv4Addr::new(203, 0, 113, 9)));
+
+    async fn with_sign_ups(state: &AppState, held: bool) {
+        state
+            .database()
+            .set_sign_ups(SignUps { open: true, held })
+            .await
+            .expect("opened");
+    }
+
+    #[tokio::test]
+    async fn nobody_signs_up_while_the_sign_ups_are_closed_or_on_a_server_not_set_up() {
+        let (_directory, state) = a_server().await;
+        with_sign_ups(&state, true).await;
+        assert!(matches!(
+            sign_up(&state, "early", "quiet harbour", FROM_AFAR).await,
+            Err(Trouble::Refused(Refused::SignUpsClosed))
+        ), "not before the first account");
+
+        create_the_first_account(&state, "victor", "quiet harbour", None)
+            .await
+            .expect("first account created");
+        state
+            .database()
+            .set_sign_ups(SignUps { open: false, held: true })
+            .await
+            .expect("closed");
+        assert!(matches!(
+            sign_up(&state, "stranger", "quiet harbour", FROM_AFAR).await,
+            Err(Trouble::Refused(Refused::SignUpsClosed))
+        ));
+        assert!(state.database().user_by_name("stranger").await.expect("read").is_none());
+    }
+
+    #[tokio::test]
+    async fn an_account_made_at_the_door_waits_with_nothing_until_an_administrator_lets_it_in() {
+        let (_directory, state) = a_server_with_an_account().await;
+        with_sign_ups(&state, true).await;
+        assert_eq!(
+            sign_up(&state, "newcomer", "quiet harbour", FROM_AFAR).await.expect("made"),
+            SignedUp::Made { awaiting: true }
+        );
+        let (made, _) = state.database().user_by_name("newcomer").await.expect("read").expect("there");
+        assert_eq!(made.permissions, Permissions::nothing());
+        assert!(!made.permissions.is_administrator);
+
+        let tried = sign_in(&state, "newcomer", "quiet harbour", "a browser", Remembered::Yes, None, FROM_AFAR)
+            .await
+            .expect("asked");
+        assert!(matches!(tried, SignedInOrNot::AwaitingApproval));
+        let wrong = sign_in(&state, "newcomer", "not this one", "a browser", Remembered::Yes, None, FROM_AFAR)
+            .await
+            .expect("asked");
+        assert!(matches!(wrong, SignedInOrNot::NotAPair), "the wrong password says nothing of the wait");
+        assert!(
+            open_a_session(&state, made.clone(), "a television", Remembered::Yes, None).await.is_err(),
+            "no other way in opens it either"
+        );
+        assert!(state.database().signed_in_devices(Some(made.id)).await.expect("read").is_empty());
+
+        let (victor, _) = state.database().user_by_name("victor").await.expect("read").expect("there");
+        let told = state.database().notifications_of(victor.id, None, 10).await.expect("read");
+        assert!(told.iter().any(|note| note.kind == "sign_up" && note.data.contains("newcomer")));
+
+        approve(&state, &victor, made.id).await.expect("let in");
+        let opened = a_session(&state, "newcomer", "quiet harbour", "a browser").await.expect("signed in");
+        assert_eq!(opened.user.permissions, Permissions::nothing(), "let in, it still sees nothing");
+    }
+
+    #[tokio::test]
+    async fn an_account_made_where_none_waits_signs_in_at_once_with_nothing() {
+        let (_directory, state) = a_server_with_an_account().await;
+        with_sign_ups(&state, false).await;
+        assert_eq!(
+            sign_up(&state, "walk-in", "quiet harbour", FROM_AFAR).await.expect("made"),
+            SignedUp::Made { awaiting: false }
+        );
+        let opened = a_session(&state, "walk-in", "quiet harbour", "a browser").await.expect("signed in");
+        assert_eq!(opened.user.permissions, Permissions::nothing());
+    }
+
+    #[tokio::test]
+    async fn the_door_takes_an_administrators_rules_for_names_and_passwords() {
+        let (_directory, state) = a_server_with_an_account().await;
+        with_sign_ups(&state, true).await;
+        let refused = |result: std::result::Result<SignedUp, Trouble>| match result {
+            Err(Trouble::Refused(refused)) => refused,
+            other => panic!("not refused: {other:?}"),
+        };
+        assert_eq!(refused(sign_up(&state, "Victor", "quiet harbour", FROM_AFAR).await), Refused::NameTaken);
+        assert_eq!(refused(sign_up(&state, "vіctor", "quiet harbour", Some("198.51.100.1".parse().expect("an address"))).await), Refused::NameLooksTaken);
+        assert_eq!(refused(sign_up(&state, "   ", "quiet harbour", Some("198.51.100.2".parse().expect("an address"))).await), Refused::NameNeeded);
+        assert_eq!(refused(sign_up(&state, "short", "abc", Some("198.51.100.3".parse().expect("an address"))).await), Refused::PasswordTooShort);
+    }
+
+    #[tokio::test]
+    async fn an_address_making_account_after_account_is_held_back_whatever_it_types() {
+        let (_directory, state) = a_server_with_an_account().await;
+        with_sign_ups(&state, true).await;
+        for name in ["one", "two", "three"] {
+            assert!(matches!(
+                sign_up(&state, name, "quiet harbour", FROM_AFAR).await,
+                Ok(SignedUp::Made { .. })
+            ));
+        }
+        assert!(matches!(
+            sign_up(&state, "four", "quiet harbour", FROM_AFAR).await,
+            Ok(SignedUp::HeldBack { .. })
+        ));
+        assert!(state.database().user_by_name("four").await.expect("read").is_none());
+        assert!(matches!(
+            sign_up(&state, "elsewhere", "quiet harbour", Some("198.51.100.4".parse().expect("an address"))).await,
+            Ok(SignedUp::Made { .. })
+        ), "another address is not held back with it");
     }
 
     #[tokio::test]

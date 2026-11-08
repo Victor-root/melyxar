@@ -115,6 +115,7 @@ pub(crate) fn an_ordinary_account(id: melyxar_core::id::UserId) -> melyxar_core:
         name: "somebody".to_string(),
         avatar_path: None,
         face_picture: melyxar_core::face::FacePicture::default(),
+        awaiting_approval: false,
         permissions: melyxar_core::user::Permissions::viewer(),
         preferences: melyxar_core::user::Preferences::default(),
         created_at: melyxar_core::time::now(),
