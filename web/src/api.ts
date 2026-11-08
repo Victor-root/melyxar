@@ -1795,6 +1795,11 @@ export interface PlaybackPlan {
   film: FilmHolds;
   /** What is done with the film's wide gamut colour, when it has any. */
   wide_gamut: WideGamutHandling | null;
+  /** How far the sound is moved against the picture in this answer, and how
+   *  far this account keeps the subtitles of this file moved, in seconds,
+   *  later when positive. */
+  sound_offset_seconds: number;
+  words_offset_seconds: number;
 }
 
 /** What is done with a film's wide gamut colour. */
@@ -2580,6 +2585,10 @@ export const api = {
     audio_track_id: string | null;
     subtitle_track_id: string | null;
   }) => post<{ remembered: boolean }>("/api/v1/playback/tracks", body),
+  /* How far this account moved the sound and subtitles of one file, kept for
+     it alone so the file starts back in step next time. */
+  keepInStep: (body: { source_id: string; sound_offset_seconds: number; words_offset_seconds: number }) =>
+    post<{ remembered: boolean }>("/api/v1/playback/sync", body),
   /* The activity journal, newest first, of the families asked for or of all
      of them, after the last line already shown when one is given. */
   activity: (

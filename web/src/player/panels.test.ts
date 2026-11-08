@@ -24,6 +24,15 @@ describe("a nudge of the words", () => {
     expect(nudged(1, -0.5)).toBe(0.5);
   });
 
+  it("lands on a tenth of a second exactly, step after step", () => {
+    let offset = 0;
+    for (let step = 0; step < 3; step++) {
+      offset = nudged(offset, 0.1);
+    }
+    expect(offset).toBe(0.3);
+    expect(nudged(0.3, -0.1)).toBe(0.2);
+  });
+
   it("never goes past either end", () => {
     expect(nudged(14.8, 0.5)).toBe(15);
     expect(nudged(-15, -0.5)).toBe(-15);

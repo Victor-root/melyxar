@@ -38,6 +38,7 @@ export type Panel =
   | "subtitles.height"
   | "subtitles.offset"
   | "audio"
+  | "audio.offset"
   | "settings"
   | "settings.speed"
   | "settings.quality"
@@ -60,8 +61,9 @@ export type Shape = (typeof SHAPES)[number];
 export const TURNS = [0, 90, 180, 270] as const;
 export type Turn = (typeof TURNS)[number];
 
-/** How far the words can be shifted, and by how much at a time, in seconds. */
-const OFFSET_STEP = 0.5;
+/** How far the words and the sound can be shifted, and by how much at a
+ *  time, in seconds. */
+const OFFSET_STEP = 0.1;
 const OFFSET_FURTHEST = 15;
 
 /** What can be done with a film's HDR for this film alone, the account's own
@@ -74,7 +76,10 @@ const WIDE_GAMUT_HERE: [WideGamutChoice | null, string][] = [
 
 /** The shift after one press of a nudge button, never past either end. */
 export function nudged(offset: number, by: number): number {
-  return Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, offset + by));
+  /* Held to the step by dividing rather than multiplying: three steps of a
+     tenth multiplied out are not quite three tenths. */
+  const held = Math.round((offset + by) / OFFSET_STEP) / Math.round(1 / OFFSET_STEP);
+  return Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, held));
 }
 
 /** A turn as a viewer reads it: nothing at all, or how far. */
@@ -351,17 +356,50 @@ function sheetFor(
     case "audio":
       return {
         title: t("work.audio"),
-        lines: plan.audio.map((track) => (
-          <Line
-            key={track.id}
-            label={naming(track)}
-            chosen={plan.chosen_audio_id === track.id}
-            onPick={() => {
-              playback.choose(track.id, playback.subtitleId);
-              shut();
-            }}
-          />
-        )),
+        lines: (
+          <>
+            {plan.audio.map((track) => (
+              <Line
+                key={track.id}
+                label={naming(track)}
+                chosen={plan.chosen_audio_id === track.id}
+                onPick={() => {
+                  playback.choose(track.id, playback.subtitleId);
+                  shut();
+                }}
+              />
+            ))}
+            <Line
+              label={t("player.sound_offset")}
+              value={offsetSaid(playback.soundOffset)}
+              changed={playback.soundOffset !== 0}
+              into
+              onPick={() => onPanel("audio.offset")}
+            />
+          </>
+        ),
+      };
+
+    case "audio.offset":
+      return {
+        title: t("player.sound_offset"),
+        from: "audio",
+        lines: (
+          <>
+            <OffsetSlider
+              label={t("player.sound_offset")}
+              seconds={playback.soundOffset}
+              furthest={OFFSET_FURTHEST}
+              step={OFFSET_STEP}
+              onCommit={playback.setSoundOffset}
+            />
+            <p className="player-menu-why">{t("player.sound_offset.why")}</p>
+            <Line
+              label={t("player.sound_offset.reset")}
+              onPick={() => playback.setSoundOffset(0)}
+            />
+          </>
+        ),
       };
 
     case "settings":

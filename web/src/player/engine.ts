@@ -43,6 +43,7 @@ import { watchStill } from "./sound-hole";
 import type { Watch } from "./sound-hole";
 import { sayHowItDecodes } from "./card";
 import { useLoading } from "./loading";
+import { useInStep } from "./in-step";
 import { useWords } from "./words";
 import type { Watching } from "./watch";
 import type { Picture, WordsHolder } from "./picture";
@@ -247,6 +248,10 @@ export interface Playback {
   /** How far the words are shifted, in seconds. Positive is later. */
   wordsOffset: number;
   setWordsOffset: (seconds: number) => void;
+  /** How far the sound is moved against the picture, in seconds. Positive is
+   *  later. Moved by the server once the hand stops. */
+  soundOffset: number;
+  setSoundOffset: (seconds: number) => void;
   /** Put on the element carrying the words, whenever there is one. */
   holdTheWords: (element: WordsHolder | null) => void;
   /** Puts the picture in a corner of the screen, where the browser allows it. */
@@ -329,7 +334,13 @@ export function usePlayback({
   wasPlaying.current = playing;
   const [muted, setMutedState] = useState(false);
   const [loudness, setLoudnessState] = useState(1);
-  const { words, shownWords, holdTheWords, wordsOffset, setWordsOffset } = useWords(video);
+  const { words, shownWords, holdTheWords, wordsOffset: shiftedBy, setWordsOffset: shiftTheWords } = useWords(video);
+  const { soundOffset, askedSoundOffset, setSoundOffset, wordsOffset, setWordsOffset } = useInStep(
+    sourceId,
+    plan,
+    shiftedBy,
+    shiftTheWords,
+  );
   /* Whether the film starts itself again when it ends. */
   const [repeat, setRepeatState] = useState(false);
   /* How many times the session has been opened again from nothing. Counted
@@ -451,6 +462,7 @@ export function usePlayback({
             subtitles_off: subtitlesOff,
             preferred_video_codec: requestedCodec(codec),
             wide_gamut: wideGamut,
+            sound_offset_seconds: askedSoundOffset,
             // This is the player about to show the film, which is what makes
             // it one being watched.
             watching: true,
@@ -480,7 +492,7 @@ export function usePlayback({
         }
       });
     return () => controller.abort();
-  }, [sourceId, workId, audioId, subtitleId, fromTheStart, startAt, asked, codec, wideGamut, choiceSerial]);
+  }, [sourceId, workId, audioId, subtitleId, fromTheStart, startAt, asked, codec, wideGamut, choiceSerial, askedSoundOffset]);
 
   const rebuilt = plan !== null && !canBePlayedAsItIs(plan);
   /* A subtitle made of pictures has to be painted into the picture, so the one
@@ -500,7 +512,7 @@ export function usePlayback({
      must not throw away a conversion already under way and make the viewer
      wait through it again. */
   const beingProduced = rebuilt
-    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${plan.wide_gamut?.converted ?? ""}:${planFor ?? ""}:${codecFor ?? ""}:${afresh}`
+    ? `${plan.method}:${audioId ?? ""}:${paintedIn ?? ""}:${plan.wide_gamut?.converted ?? ""}:${planFor ?? ""}:${codecFor ?? ""}:${plan.sound_offset_seconds}:${afresh}`
     : null;
   /* Which picture is on screen: the file itself, or one session of segments.
      A change here means a fresh element rather than a new address on the old
@@ -554,6 +566,7 @@ export function usePlayback({
           subtitles_off: paintedIn === null && subtitlesOff,
           preferred_video_codec: requestedCodec(codec),
           wide_gamut: wideGamut,
+          sound_offset_seconds: plan?.sound_offset_seconds,
           start_at_seconds: openedAt.current,
         }),
       )
@@ -1527,6 +1540,8 @@ export function usePlayback({
     setRepeat,
     wordsOffset,
     setWordsOffset,
+    soundOffset,
+    setSoundOffset,
     intoTheCorner,
   };
 }
