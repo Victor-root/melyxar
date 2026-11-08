@@ -152,25 +152,29 @@ const counted = new Map<GridShape, number>();
  * never show a row cut in two.
  */
 function useColumns(grid: RefObject<HTMLDivElement | null>, shape: GridShape): number | null {
-  const [columns, setColumns] = useState(() => counted.get(shape) ?? null);
+  const [read, setRead] = useState(() => ({ shape, columns: counted.get(shape) ?? null }));
   useLayoutEffect(() => {
     const element = grid.current;
     if (!element) {
       return;
     }
-    const read = () => {
+    const measure = () => {
       const tracks = getComputedStyle(element)
         .gridTemplateColumns.split(" ")
         .filter((track) => track.endsWith("px")).length;
       if (tracks > 0) {
         counted.set(shape, tracks);
-        setColumns(tracks);
+        setRead((was) => (was.shape === shape && was.columns === tracks ? was : { shape, columns: tracks }));
       }
     };
-    read();
-    const watcher = new ResizeObserver(() => flushSync(read));
+    measure();
+    const watcher = new ResizeObserver(() => flushSync(measure));
     watcher.observe(element);
     return () => watcher.disconnect();
   }, [grid, shape]);
-  return columns;
+  /* The grid laid out another way is cut by the columns last read for that
+     way from the render that changes it: cut by those of the way it was laid
+     out before, every card was made twice, once in blocks of the old size and
+     again in the new ones once they were read. */
+  return read.shape === shape ? read.columns : (counted.get(shape) ?? null);
 }
