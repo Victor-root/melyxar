@@ -332,6 +332,7 @@ export function Picker<T extends string>({
   icon,
   fieldWording,
   sheetOnAPhone,
+  asAMark,
 }: {
   value: T;
   /** Each option as it is kept, and as it is read. */
@@ -345,6 +346,9 @@ export function Picker<T extends string>({
   fieldWording?: string;
   /** Opens from the foot of the screen on a phone rather than under the field. */
   sheetOnAPhone?: boolean;
+  /** Drawn as a button wearing this class with this mark alone, the value
+   *  said only to whoever reads the page aloud and in the list it opens. */
+  asAMark?: { className: string; mark: ReactNode };
 }) {
   const asASheet = useMediaQuery(ON_A_PHONE) && sheetOnAPhone === true;
   const [open, setOpen] = useState(false);
@@ -468,7 +472,7 @@ export function Picker<T extends string>({
       <button
         ref={field}
         type="button"
-        className={`picker${open ? " picker-open" : ""}`}
+        className={asAMark ? asAMark.className : `picker${open ? " picker-open" : ""}`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -476,9 +480,15 @@ export function Picker<T extends string>({
         disabled={disabled}
         onClick={() => setOpen((was) => !was)}
       >
-        {icon}
-        <span className="picker-value">{shown}</span>
-        <ChevronDownIcon size={16} className="picker-arrow" />
+        {asAMark ? (
+          asAMark.mark
+        ) : (
+          <>
+            {icon}
+            <span className="picker-value">{shown}</span>
+            <ChevronDownIcon size={16} className="picker-arrow" />
+          </>
+        )}
       </button>
       {open && asASheet && (
         <BottomSheet title={label} onClose={() => setOpen(false)} ownsHistory={false}>

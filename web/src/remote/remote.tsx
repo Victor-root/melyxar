@@ -26,7 +26,7 @@ import { refusalKey } from "../i18n";
 import { PlayIcon, ScreenCastIcon } from "../icons";
 import { NextIcon, PreviousIcon, RepeatIcon, ShuffleIcon, StopIcon, VolumeIcon } from "../music/player/icons";
 import { useToast } from "../notifications/toasts";
-import { PauseIcon, StepBackIcon, StepOnIcon } from "../player/icons";
+import { AudioIcon, PauseIcon, StepBackIcon, StepOnIcon, SubtitlesIcon } from "../player/icons";
 import { trackName } from "../player/describe";
 import { whichEpisode } from "../readable";
 import { useSettings } from "../settings";
@@ -118,12 +118,16 @@ function TrackChoice({
   chosen,
   withNone,
   onPick,
+  mark,
 }: {
   label: string;
   tracks: PlaybackTrack[];
   chosen: string | null;
   withNone: boolean;
   onPick: (track: string | null) => void;
+  /** Drawn as a round button with this mark alone, its list rising from the
+   *  foot of the screen, rather than as a field under its name. */
+  mark?: ReactNode;
 }) {
   const { t, language } = useSettings();
   const NONE = "";
@@ -131,15 +135,23 @@ function TrackChoice({
     ...(withNone ? [[NONE, t("player.no_subtitle")] as [string, string]] : []),
     ...tracks.map((track) => [track.id, trackName(track, t, language)] as [string, string]),
   ];
+  const picker = (
+    <Picker
+      label={label}
+      value={chosen ?? NONE}
+      options={options}
+      onPick={(value) => onPick(value === NONE ? null : value)}
+      sheetOnAPhone={mark !== undefined}
+      asAMark={mark === undefined ? undefined : { className: "remote-button remote-button-small", mark }}
+    />
+  );
+  if (mark !== undefined) {
+    return picker;
+  }
   return (
     <label className="remote-track">
       <span>{label}</span>
-      <Picker
-        label={label}
-        value={chosen ?? NONE}
-        options={options}
-        onPick={(value) => onPick(value === NONE ? null : value)}
-      />
+      {picker}
     </label>
   );
 }
@@ -204,26 +216,23 @@ function Line({
   );
 }
 
-/** The ways a film is laid out on a telephone's remote, the roomiest first:
- *  its picture across the whole width with the words under it; the picture
- *  at the left with only the series beside it and the title and synopsis
- *  under it; the picture at the left with the words running on beside it and
- *  under it. Each with how wide the picture can be, as a share of the width:
- *  beside a column of words it stops short of leaving them a word a line. */
+/** The ways a film is laid out on a telephone's remote, the roomiest first,
+ *  its title and synopsis always under its picture: the picture across the
+ *  whole width; then at the left with only the series beside it, as wide as
+ *  the room allows from about half the width, as a share of it. */
 const FILM_WAYS: readonly Way[] = [
   { className: null, least: WHOLE_WIDTH, most: WHOLE_WIDTH },
   { className: "remote-now-title-under", least: 46, most: 70 },
-  { className: null, least: 46, most: 60 },
 ];
 
 /** What plays, with its picture and what it is about, as the card of the
  *  next episode shows one.
  *
  *  On a telephone a film fills what room the buttons leave and no more: its
- *  picture as large as the whole synopsis lets it be, the synopsis run on
- *  round it, and cut to the words that fit beside the smallest picture when
- *  even that leaves too little room. Every button stays on the one screen,
- *  on any telephone, with nothing left empty above them. */
+ *  picture as large as the whole synopsis under it lets it be, and the
+ *  synopsis cut to the words that fit under the smallest picture when even
+ *  that leaves too little room. Every button stays on the one screen, on any
+ *  telephone, with nothing left empty above them. */
 function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsTheScreen: boolean }) {
   const { t } = useSettings();
   const song = playing.kind === "song";
@@ -277,7 +286,8 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
      fifteen. A computer goes by any amount, said as a share. */
   const volumeSteps =
     device.volume_steps ?? (deviceKind(device.name, device.browser) !== "computer" ? ANDROID_STEPS : null);
-  const loudness =
+  /* The sound's line, with whatever stands at its right end after it. */
+  const loudness = (beside: ReactNode = null) =>
     volume === null ? null : (
       <Line
         label={t("player.loudness")}
@@ -296,7 +306,14 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
             <VolumeIcon size={20} off={device.muted === true} />
           </button>
         }
-        end={volumeSteps === null ? <span className="remote-volume-said">{`${Math.round(volume * 100)} %`}</span> : null}
+        end={
+          volumeSteps === null || beside !== null ? (
+            <>
+              {volumeSteps === null && <span className="remote-volume-said">{`${Math.round(volume * 100)} %`}</span>}
+              {beside}
+            </>
+          ) : null
+        }
       />
     );
 
@@ -304,7 +321,7 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
     return (
       <div className="remote-steering">
         <p className="remote-empty">{t("remote.nothing_here")}</p>
-        {loudness}
+        {loudness()}
       </div>
     );
   }
@@ -327,6 +344,35 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
     </button>
   );
   const left = length === null ? "" : `-${asClock(Math.max(0, length - position))}`;
+  const choices = (asMarks: boolean) => (
+    <>
+      {playing.audio.length > 1 && (
+        <TrackChoice
+          label={t("work.audio")}
+          tracks={playing.audio}
+          chosen={playing.chosen_audio_id}
+          withNone={false}
+          onPick={(track) => track !== null && send({ do: "audio", track })}
+          mark={asMarks ? <AudioIcon size={20} /> : undefined}
+        />
+      )}
+      {playing.subtitles.length > 0 && (
+        <TrackChoice
+          label={t("work.subtitles")}
+          tracks={playing.subtitles}
+          chosen={playing.chosen_subtitle_id}
+          withNone
+          onPick={(track) => send({ do: "subtitle", track })}
+          mark={asMarks ? <SubtitlesIcon size={20} /> : undefined}
+        />
+      )}
+    </>
+  );
+  const hasChoices = !song && (playing.audio.length > 1 || playing.subtitles.length > 0);
+  /* On a telephone a film's tracks are two round buttons at the end of the
+     sound's line, each opening its list from the foot of the screen, as the
+     player's own: the room they took as two fields goes to the film. */
+  const choicesBySound = onAPhone && hasChoices;
   return (
     <div className={song ? "remote-steering" : "remote-steering remote-steering-fits"}>
       <NowPlaying playing={playing} fitsTheScreen={onAPhone && !song} />
@@ -388,30 +434,10 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
           )}
           {!stopByTheLine && stop}
         </div>
-        {loudness}
+        {loudness(choicesBySound ? choices(true) : null)}
+        {choicesBySound && volume === null && <div className="remote-choice-marks">{choices(true)}</div>}
       </div>
-      {!song && (playing.audio.length > 1 || playing.subtitles.length > 0) && (
-        <div className="remote-tracks">
-          {playing.audio.length > 1 && (
-            <TrackChoice
-              label={t("work.audio")}
-              tracks={playing.audio}
-              chosen={playing.chosen_audio_id}
-              withNone={false}
-              onPick={(track) => track !== null && send({ do: "audio", track })}
-            />
-          )}
-          {playing.subtitles.length > 0 && (
-            <TrackChoice
-              label={t("work.subtitles")}
-              tracks={playing.subtitles}
-              chosen={playing.chosen_subtitle_id}
-              withNone
-              onPick={(track) => send({ do: "subtitle", track })}
-            />
-          )}
-        </div>
-      )}
+      {hasChoices && !choicesBySound && <div className="remote-tracks">{choices(false)}</div>}
       {queue && (
         <>
           <div className="remote-buttons">
