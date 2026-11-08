@@ -22,6 +22,7 @@ import { useTabPage } from "../tab-page";
 import { ArrowRightIcon, CloseIcon } from "../icons";
 import { landOn, scrollerOf } from "../landing";
 import { useLibraryVersion } from "../libraries";
+import { clearOfTheBar } from "../bar-room";
 import { howMany } from "../readable";
 import { useSettings } from "../settings";
 import { music } from "./api";
@@ -70,7 +71,7 @@ export function MusicLibraryPage({ library }: { library: Library }) {
   return (
     <main className={`page music-page${besideLetters ? " page-beside-letters" : ""}`}>
       <PageBackdrop />
-      <div className="browse-head">
+      <div className="browse-head" ref={clearOfTheBar}>
         <div className="section-head">
           <h1>{library.name}</h1>
         </div>

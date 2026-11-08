@@ -21,7 +21,7 @@ import { Selecting } from "../components/selection";
 import { WorkLine } from "../components/work-line";
 import { ArrowRightIcon, ChevronRightIcon, CloseIcon, IdentifyIcon } from "../icons";
 import { useMarks } from "../marks";
-import { barRoom } from "../bar-room";
+import { barRoom, clearOfTheBar } from "../bar-room";
 import { landOn, scrollerOf } from "../landing";
 import { firstBlockReaching, letterOfTheTopRow } from "../letters";
 import { cardShapeOf, nameOfKind } from "../libraries";
@@ -356,7 +356,7 @@ export function LibraryPage({
     <main className={`page library-page${keepsRoomForLetters ? " page-beside-letters" : ""}`}>
       {/* What the grid is and how it is read, which on a wide screen rise
           together into the band of the bar at the top. */}
-      <div className="browse-head">
+      <div className="browse-head" ref={clearOfTheBar}>
         <div className="section-head">
           {/* A grid narrowed to a kind is that category, and says so: reaching
               it from the band and being told "All" reads as a wrong turn. */}

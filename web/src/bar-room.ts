@@ -29,3 +29,44 @@ export function barRoom(): number {
   }
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--header-height")) || 0;
 }
+
+/** Where the piece at the left end of the bar stops and how wide the one at
+ *  the right end is, as the heads rising into its band read them. */
+interface PiecesEnd {
+  startEnd: string;
+  sideWidth: string;
+}
+
+let piecesEnd: PiecesEnd | null = null;
+const heads = new Set<HTMLElement>();
+
+function wear(head: HTMLElement): void {
+  if (piecesEnd) {
+    head.style.setProperty("--header-start-end", piecesEnd.startEnd);
+    head.style.setProperty("--header-side-width", piecesEnd.sideWidth);
+  } else {
+    head.style.removeProperty("--header-start-end");
+    head.style.removeProperty("--header-side-width");
+  }
+}
+
+/** Said by the bar each time its pieces change size, or null where nothing
+ *  rises into its band. Written on the heads alone: written on the root, it
+ *  had every element of the page styled again after each change of page. */
+export function sayWherePiecesEnd(said: PiecesEnd | null): void {
+  piecesEnd = said;
+  heads.forEach(wear);
+}
+
+/** Given as the ref of a head that rises into the band of the bar: it wears
+ *  where the pieces end from the moment it is drawn. */
+export function clearOfTheBar(head: HTMLElement | null): (() => void) | undefined {
+  if (!head) {
+    return undefined;
+  }
+  heads.add(head);
+  wear(head);
+  return () => {
+    heads.delete(head);
+  };
+}

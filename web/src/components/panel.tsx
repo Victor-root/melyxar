@@ -15,6 +15,7 @@ import { createPortal } from "react-dom";
 import { ChevronDownIcon, EditIcon, TickIcon } from "../icons";
 import type { IconProps } from "../icons";
 import { ON_A_PHONE, useMediaQuery } from "../media-query";
+import { clearOfTheBar } from "../bar-room";
 import { insideTheRange } from "../readable";
 import { useSettings } from "../settings";
 import { useSection } from "./sectioned";
@@ -39,7 +40,7 @@ export function PageHead({
   const SectionIcon = section.icon;
 
   return (
-    <header className="page-head">
+    <header className="page-head" ref={clearOfTheBar}>
       <div className="page-head-line">
         <span className="page-head-mark" aria-hidden="true">
           <SectionIcon size={24} />

@@ -6,6 +6,7 @@
  */
 
 import { useMemo } from "react";
+import { clearOfTheBar } from "../bar-room";
 import { PageBackdrop } from "../components/backdrop";
 import { TabsBar } from "../components/tabs-bar";
 import { useGoTo } from "../navigating";
@@ -45,7 +46,7 @@ export function RequestsPage({ view }: { view: "ask" | "mine" | "more" }) {
     <>
       <PageBackdrop />
       <main className="page requests-page">
-        <div className="browse-head">
+        <div className="browse-head" ref={clearOfTheBar}>
           <div className="section-head">
             <h1>{t("requests.title")}</h1>
           </div>

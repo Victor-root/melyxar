@@ -74,7 +74,7 @@ import {
   DashboardIcon,
 } from "../icons";
 import { ServerMark } from "./server-mark";
-import { sayTheBarIsOut } from "../bar-room";
+import { sayTheBarIsOut, sayWherePiecesEnd } from "../bar-room";
 import { useBackClosesIt } from "./back-closes";
 import { music } from "../music/api";
 import { useNowPlayingPage } from "../music/player/opening";
@@ -112,19 +112,11 @@ const QUICK_RESULTS = 6;
  *  word typed at speed is one question, not five. */
 const QUICK_DEBOUNCE_MS = 200;
 
-/** The heads of a page that rise into the band of the bar and keep clear of
- *  its two pieces: the only things that read where those end. */
-const HEADS_CLEAR_OF_THE_BAR = ".page-head, .browse-head";
-
 /** The widths at which something rises into the band beside the bar, and
  *  so reads where its pieces end. Narrower, nothing does, and writing it
  *  only had the whole page styled again at the end of every movement of
  *  the bar. */
 const HEADS_RISE_INTO_THE_BAND = "(min-width: 1280px)";
-
-/** How long the bar must stand still before the page as a whole is told where
- *  its pieces end. */
-const SETTLES_AFTER_MS = 150;
 
 /** The room the folded piece keeps before its arrow, as its own edge does. */
 const FOLDED_AIR = 5;
@@ -298,64 +290,38 @@ export function Header({
   }, []);
 
   /* Where the piece at the left end stops and how wide the one at the right
-     end is, written on the page: the first as wide as the server's name and
-     logo, the second as the account's name and the search field opened in
-     it. What rises into the band between them keeps clear of both rather
-     than sliding under either. */
+     end is, said to the heads of the page: the first as wide as the server's
+     name and logo, the second as the account's name and the search field
+     opened in it. What rises into the band between them keeps clear of both
+     rather than sliding under either. */
   useLayoutEffect(() => {
     const left = start.current;
     const right = side.current;
     if (!left || !right) {
       return;
     }
-    const root = document.documentElement;
     const wide = window.matchMedia(HEADS_RISE_INTO_THE_BAND);
-    const write = (target: HTMLElement, startEnd: string, sideWidth: string) => {
-      target.style.setProperty("--header-start-end", startEnd);
-      target.style.setProperty("--header-side-width", sideWidth);
-    };
-    /* Said to the heads that read it as the bar moves, and to the page as a
-       whole only once it has stopped. Written on the page at every step of the
-       search opening, it had every element of the screen styled again on
-       every frame: four tenths of a second of a second's animation, measured,
-       on a screen where nothing read it. */
-    let settle = 0;
-    const forget = () => {
-      window.clearTimeout(settle);
-      for (const target of [root, ...document.querySelectorAll<HTMLElement>(HEADS_CLEAR_OF_THE_BAR)]) {
-        target.style.removeProperty("--header-start-end");
-        target.style.removeProperty("--header-side-width");
-      }
-    };
     const measure = () => {
-      if (!wide.matches) {
-        return;
-      }
-      const startEnd = `${left.getBoundingClientRect().right}px`;
-      const sideWidth = `${right.getBoundingClientRect().width}px`;
-      document.querySelectorAll<HTMLElement>(HEADS_CLEAR_OF_THE_BAR).forEach((head) => write(head, startEnd, sideWidth));
-      window.clearTimeout(settle);
-      settle = window.setTimeout(() => write(root, startEnd, sideWidth), SETTLES_AFTER_MS);
+      sayWherePiecesEnd(
+        wide.matches
+          ? {
+              startEnd: `${left.getBoundingClientRect().right}px`,
+              sideWidth: `${right.getBoundingClientRect().width}px`,
+            }
+          : null,
+      );
     };
-    const reread = () => {
-      if (wide.matches) {
-        write(root, `${left.getBoundingClientRect().right}px`, `${right.getBoundingClientRect().width}px`);
-        measure();
-      } else {
-        forget();
-      }
-    };
-    reread();
+    measure();
     const watching = new ResizeObserver(measure);
     watching.observe(left);
     watching.observe(right);
     window.addEventListener("resize", measure);
-    wide.addEventListener("change", reread);
+    wide.addEventListener("change", measure);
     return () => {
       watching.disconnect();
       window.removeEventListener("resize", measure);
-      wide.removeEventListener("change", reread);
-      forget();
+      wide.removeEventListener("change", measure);
+      sayWherePiecesEnd(null);
     };
   }, []);
   /* The page of what is playing does not scroll the page under it, so the
