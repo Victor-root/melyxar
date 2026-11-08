@@ -462,18 +462,18 @@ export function Remote({ startOn, onClose }: { startOn: string | null; onClose: 
 }
 
 /** The choice of a device to play something on, the order sent to the one
- *  chosen, made the moment it is chosen. `after` is done once it was sent,
- *  the music leaving this device for the other one. */
+ *  chosen, made the moment it is chosen, and the remote opened on it ready to
+ *  steer what it was sent. `after` is done once it was sent, the music
+ *  leaving this device for the other one. */
 export function PlayOn({ order, onClose, after }: { order: () => RemoteOrder; onClose: () => void; after?: () => void }) {
   const { t } = useSettings();
-  const toast = useToast();
   const steer = useSteer();
   const { devices, cut } = useSteerableDevices();
   const choose = async (device: SteerableDevice) => {
     if (await steer(device.device, order())) {
-      toast({ state: "ok", title: t("remote.sent", { device: deviceName(device.name, t, device.browser) }) });
       after?.();
       onClose();
+      openTheRemote(device.device);
     }
   };
   return (
