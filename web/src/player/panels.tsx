@@ -82,6 +82,43 @@ export function nudged(offset: number, by: number): number {
   return Math.min(OFFSET_FURTHEST, Math.max(-OFFSET_FURTHEST, held));
 }
 
+/**
+ * A step either way for something moved against the picture: the bar moves
+ * it far, and a tenth of a second is narrower than a hand can aim at on it.
+ * With how far it stands between the two when the panel has no bar to say it.
+ */
+function Nudges({
+  seconds,
+  onChange,
+  t,
+  said,
+}: {
+  seconds: number;
+  onChange: (seconds: number) => void;
+  t: Wording;
+  said?: boolean;
+}) {
+  return (
+    <div className="player-menu-nudge">
+      <button
+        className="player-button"
+        aria-label={t("player.offset.earlier")}
+        onClick={() => onChange(nudged(seconds, -OFFSET_STEP))}
+      >
+        {"−"}
+      </button>
+      {said && <span className="player-menu-amount">{offsetSaid(seconds)}</span>}
+      <button
+        className="player-button"
+        aria-label={t("player.offset.later")}
+        onClick={() => onChange(nudged(seconds, OFFSET_STEP))}
+      >
+        {"+"}
+      </button>
+    </div>
+  );
+}
+
 /** A turn as a viewer reads it: nothing at all, or how far. */
 function turnName(turn: Turn, t: Wording): string {
   return turn === 0 ? t("player.turn.none") : t("player.turn.degrees", { degrees: turn });
@@ -344,6 +381,7 @@ function sheetFor(
               step={OFFSET_STEP}
               onCommit={playback.setWordsOffset}
             />
+            <Nudges seconds={playback.wordsOffset} onChange={playback.setWordsOffset} t={t} />
             <p className="player-menu-why">{t("player.words_offset.why")}</p>
             <Line
               label={t("player.words_offset.reset")}
@@ -393,6 +431,7 @@ function sheetFor(
               step={OFFSET_STEP}
               onCommit={playback.setSoundOffset}
             />
+            <Nudges seconds={playback.soundOffset} onChange={playback.setSoundOffset} t={t} />
             <p className="player-menu-why">{t("player.sound_offset.why")}</p>
             <Line
               label={t("player.sound_offset.reset")}
@@ -664,24 +703,13 @@ function sheetFor(
       };
 
     case "settings.words_offset": {
-      const move = (by: number) => playback.setWordsOffset(nudged(playback.wordsOffset, by));
       return {
         title: t("player.words_offset"),
         from: "settings",
         lines: (
           <>
             <p className="player-menu-why">{t("player.words_offset.why")}</p>
-            <div className="player-menu-nudge">
-              <button className="player-button" onClick={() => move(-OFFSET_STEP)}>
-                {"−"}
-              </button>
-              <span className="player-menu-amount">
-                {offsetSaid(playback.wordsOffset)}
-              </span>
-              <button className="player-button" onClick={() => move(OFFSET_STEP)}>
-                {"+"}
-              </button>
-            </div>
+            <Nudges seconds={playback.wordsOffset} onChange={playback.setWordsOffset} t={t} said />
             <Line
               label={t("player.words_offset.reset")}
               onPick={() => playback.setWordsOffset(0)}

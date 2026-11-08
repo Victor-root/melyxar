@@ -805,7 +805,8 @@ function One({ control, surroundings }: { control: Control; surroundings: Surrou
       );
 
     case "audio":
-      if (!plan || plan.audio.length < 2) {
+      /* Offered with a single soundtrack too, for its audio sync. */
+      if (!plan || plan.audio.length === 0) {
         return null;
       }
       return (
