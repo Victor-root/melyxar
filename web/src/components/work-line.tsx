@@ -4,10 +4,10 @@
  */
 
 import { memo } from "react";
-import { Link } from "react-router-dom";
 import type { Card as CardData } from "../api";
 import { StarIcon } from "../icons";
 import { useMarksOf } from "../marks";
+import { QuietLink } from "../navigating";
 import { howLong, howMany, outOfTen, whatIsLeft } from "../readable";
 import { useSettings } from "../settings";
 import { lengthOfAPlay } from "../watching";
@@ -35,9 +35,9 @@ export const WorkLine = memo(function WorkLine({
       <Card card={card} shape={shape} named={false} cornered={false} room={ROOM_IN_A_LINE[shape]} />
       <div className="work-line-words">
         <div className="work-line-head">
-          <Link className="work-line-name" to={`/work/${card.id}`}>
+          <QuietLink className="work-line-name" to={`/work/${card.id}`}>
             {card.title}
-          </Link>
+          </QuietLink>
           {card.watched_marks && <SeenButton card={card} small />}
         </div>
         <p className="work-facts work-line-facts">
