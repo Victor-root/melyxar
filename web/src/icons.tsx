@@ -224,10 +224,10 @@ export function SearchIcon(props: IconProps) {
 export function ScreenCastIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M3.4 8V6.6A2.2 2.2 0 0 1 5.6 4.4h12.8a2.2 2.2 0 0 1 2.2 2.2v10.8a2.2 2.2 0 0 1-2.2 2.2H14" />
-      <path d="M3.4 12.6a7 7 0 0 1 7 7" />
-      <path d="M3.4 16.8a2.8 2.8 0 0 1 2.8 2.8" />
-      <path d="M3.5 19.6v.1" strokeWidth={2.4} />
+      <path d="M3 19h.01" />
+      <path d="M7 19a4 4 0 0 0-4-4" />
+      <path d="M11 19a8 8 0 0 0-8-8" />
+      <path d="M15 19h3a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6a3 3 0 0 0-2.8 2" />
     </Icon>
   );
 }
