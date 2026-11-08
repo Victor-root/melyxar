@@ -233,6 +233,15 @@
   font-weight: 550;
 }
 
+/* Rimmed and lit in the accent under the pointer, as the round marks beside
+   them are. */
+.work-choice .picker:hover:not(:disabled) {
+  border-color: var(--accent-bright);
+  box-shadow:
+    0 0 6px color-mix(in srgb, var(--accent) 55%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 .work-actions {
   display: flex;
   flex-wrap: wrap;
