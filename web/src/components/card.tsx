@@ -114,9 +114,8 @@ export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
     let started = false;
     /* Standing aside while the page moves: every picture arriving then costs
        a frame of the scroll it was fetched to spare. */
-    let moving = 0;
     const askMore = () => {
-      if (moving) {
+      if (pageMoving) {
         return;
       }
       waiting ??= Array.from(holder.current?.querySelectorAll<HTMLImageElement>("img[loading=lazy]") ?? []);
@@ -165,19 +164,13 @@ export function useFetchingAhead(holder: RefObject<HTMLElement | null>): void {
       started = true;
       askMore();
     };
-    const moved = () => {
-      window.clearTimeout(moving);
-      moving = window.setTimeout(() => {
-        moving = 0;
-        if (started) {
-          askMore();
-        }
-      }, STILL_AFTER_MS);
-    };
-    window.addEventListener("scroll", moved, { capture: true, passive: true });
+    const stillAgain = whenStill(() => {
+      if (started) {
+        askMore();
+      }
+    });
     const stop = () => {
-      window.clearTimeout(moving);
-      window.removeEventListener("scroll", moved, { capture: true });
+      stillAgain();
       changed.disconnect();
     };
     // Safari has no idle moments to offer, so it is given a second instead.
@@ -202,6 +195,40 @@ const FETCHED_AHEAD_AT_ONCE = 8;
 
 /** How long a page stays still before fetching ahead goes on. */
 const STILL_AFTER_MS = 250;
+
+/** Whether the page is moving, and who goes on fetching once it stops. One
+ *  listener and one timer for all of them: a home page holds a dozen rows,
+ *  and each listening for itself set and cleared a timer of its own on every
+ *  step of every scroll. */
+let pageMoving = 0;
+const waitingForStill = new Set<() => void>();
+
+function pageMoved() {
+  window.clearTimeout(pageMoving);
+  pageMoving = window.setTimeout(() => {
+    pageMoving = 0;
+    for (const goOn of waitingForStill) {
+      goOn();
+    }
+  }, STILL_AFTER_MS);
+}
+
+/** Has `goOn` called each time the page stands still again, until the
+ *  returned function is called. */
+function whenStill(goOn: () => void): () => void {
+  if (waitingForStill.size === 0) {
+    window.addEventListener("scroll", pageMoved, { capture: true, passive: true });
+  }
+  waitingForStill.add(goOn);
+  return () => {
+    waitingForStill.delete(goOn);
+    if (waitingForStill.size === 0) {
+      window.removeEventListener("scroll", pageMoved, { capture: true });
+      window.clearTimeout(pageMoving);
+      pageMoving = 0;
+    }
+  };
+}
 
 export const Card = memo(function Card({
   card,
