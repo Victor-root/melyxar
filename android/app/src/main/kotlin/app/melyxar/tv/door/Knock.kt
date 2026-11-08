@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Account
 import app.melyxar.server.Api
+import app.melyxar.server.DoorName
 import app.melyxar.server.KeptSession
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.AboveKeyboard
@@ -58,7 +59,8 @@ import kotlinx.coroutines.launch
 fun Knock(
     api: Api,
     known: String?,
-    avatar: String?,
+    /** The account offered at the door under that name, for its picture. */
+    profile: DoorName?,
     client: String,
     onIn: (KeptSession, Account) -> Unit,
     /** Turns to signing in from a telephone instead of typing. */
@@ -110,7 +112,7 @@ fun Knock(
 
     DoorPanel(shake) {
         if (known != null) {
-            Face(known, avatar, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
+            Face(known, profile?.avatar, profile?.facePicture, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
             Text(
                 stringResource(R.string.tv_password_of, known),
                 fontSize = 19.sp,

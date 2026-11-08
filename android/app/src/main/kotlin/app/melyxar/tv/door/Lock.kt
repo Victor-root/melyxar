@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Api
+import app.melyxar.server.DoorName
 import app.melyxar.server.Refusal
 import app.melyxar.tv.look.LocalPalette
 import app.melyxar.tv.look.litBy
@@ -65,7 +66,7 @@ private val REMOTE_DIGITS = mapOf(
  * digits, and checked by the server once the four are in.
  */
 @Composable
-fun CodeLock(api: Api, name: String, avatar: String?, onOpen: () -> Unit, onClose: () -> Unit) {
+fun CodeLock(api: Api, name: String, profile: DoorName?, onOpen: () -> Unit, onClose: () -> Unit) {
     val palette = LocalPalette.current
     val resources = LocalResources.current
     var typed by remember { mutableStateOf("") }
@@ -110,7 +111,7 @@ fun CodeLock(api: Api, name: String, avatar: String?, onOpen: () -> Unit, onClos
     }
 
     DoorPanel(shake) {
-        Face(name, avatar, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
+        Face(name, profile?.avatar, profile?.facePicture, 72.dp, Modifier.clip(RoundedCornerShape(8.dp)))
         Text(
             stringResource(R.string.tv_code_of, name),
             fontSize = 19.sp,

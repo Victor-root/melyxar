@@ -14,6 +14,7 @@ function line(kind: string, details: Record<string, unknown>, device: string | n
     level: "information",
     user_id: null,
     user_avatar: null,
+    user_face_picture: null,
     work_id: null,
     device,
     details,

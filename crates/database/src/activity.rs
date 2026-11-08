@@ -5,6 +5,7 @@
 //! line says beyond its columns is a JSON object this crate does not look
 //! inside: the layer above writes it and reads it back.
 
+use melyxar_core::face::FacePicture;
 use melyxar_core::id::{ActivityId, DeviceId, UserId, WorkId};
 use melyxar_core::time::Timestamp;
 use sqlx::{AssertSqlSafe, Row};
@@ -36,6 +37,8 @@ pub struct Activity {
     /// line rather than written into it, so a changed picture shows on every
     /// line at once.
     pub user_avatar: Option<String>,
+    /// What the account wears without a photo, absent once it is gone.
+    pub user_face_picture: Option<FacePicture>,
     /// Absent once the work is gone.
     pub work_id: Option<WorkId>,
     pub device_name: Option<String>,
@@ -48,6 +51,7 @@ pub struct ActivityAccount {
     pub user_id: UserId,
     pub name: String,
     pub avatar: Option<String>,
+    pub face_picture: FacePicture,
     pub lines: i64,
 }
 
@@ -121,7 +125,7 @@ impl Database {
             false => format!("WHERE {}", conditions.join(" AND ")),
         };
         let sql = format!(
-            "SELECT a.id, a.occurred_at, a.user_id, u.avatar_path, a.kind, a.work_id,
+            "SELECT a.id, a.occurred_at, a.user_id, u.avatar_path, u.face_picture, a.kind, a.work_id,
                     a.device_name, a.details
                FROM activity_log a
                LEFT JOIN users u ON u.id = a.user_id
@@ -153,6 +157,9 @@ impl Database {
                         .map(parse_id)
                         .transpose()?,
                     user_avatar: row.try_get("avatar_path")?,
+                    user_face_picture: row
+                        .try_get::<Option<String>, _>("face_picture")?
+                        .map(|picture| FacePicture::parse(&picture).unwrap_or_default()),
                     work_id: row
                         .try_get::<Option<String>, _>("work_id")?
                         .as_deref()
@@ -174,7 +181,7 @@ impl Database {
             false => format!("WHERE a.kind IN ({})", placeholders(kinds.len())),
         };
         let sql = format!(
-            "SELECT a.user_id, u.name, u.avatar_path, count(*) AS lines
+            "SELECT a.user_id, u.name, u.avatar_path, u.face_picture, count(*) AS lines
                FROM activity_log a
                JOIN users u ON u.id = a.user_id
                {filter}
@@ -192,6 +199,8 @@ impl Database {
                     user_id: parse_id(&row.try_get::<String, _>("user_id")?)?,
                     name: row.try_get("name")?,
                     avatar: row.try_get("avatar_path")?,
+                    face_picture: FacePicture::parse(&row.try_get::<String, _>("face_picture")?)
+                        .unwrap_or_default(),
                     lines: row.try_get("lines")?,
                 })
             })

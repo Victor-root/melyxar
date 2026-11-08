@@ -419,6 +419,8 @@ struct AskerView {
     name: String,
     /// Where its profile picture is served, when it has one.
     avatar: Option<String>,
+    /// Which of Melyxar's pictures it wears without a photo of its own.
+    face_picture: &'static str,
     administrator: bool,
     may_ask: bool,
 }
@@ -454,6 +456,7 @@ async fn for_the_administrator(
                 id: asker.id.to_string(),
                 name: asker.name,
                 avatar: asker.avatar_path.as_deref().map(crate::images::face_url),
+                face_picture: asker.face_picture.as_str(),
                 administrator: asker.administrator,
                 may_ask: asker.may_ask,
             })

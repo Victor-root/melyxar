@@ -86,7 +86,7 @@ function ProfilePicture() {
   return (
     <Panel icon={ProfileIcon} title={t("settings.avatar")} lead={t("settings.avatar_why")}>
       <div className="profile-card">
-        <Face className="avatar profile-face" name={account.name} avatar={account.avatar} />
+        <Face className="avatar profile-face" avatar={account.avatar} picture={account.face_picture} />
         <div className="profile-words">
           <span className="profile-name">{account.name}</span>
           <span className="line-note">

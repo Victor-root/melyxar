@@ -197,6 +197,7 @@ mod tests {
             id: melyxar_core::id::UserId::new(),
             name: "victor".to_string(),
             avatar_path: None,
+            face_picture: melyxar_core::face::FacePicture::default(),
             permissions,
             preferences: Preferences::default(),
             created_at: melyxar_core::time::now(),

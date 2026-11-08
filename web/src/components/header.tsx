@@ -828,8 +828,8 @@ export function Header({
               <>
                 <Face
                   className="avatar"
-                  name={account?.name ?? t("nav.account")}
                   avatar={account?.avatar ?? null}
+                  picture={account?.face_picture ?? null}
                 />
                 <span className="header-who">{account?.name ?? t("nav.account")}</span>
               </>
@@ -838,8 +838,8 @@ export function Header({
             <TopSheetHead title={account?.name ?? t("nav.account")}>
               <Face
                 className="avatar"
-                name={account?.name ?? t("nav.account")}
                 avatar={account?.avatar ?? null}
+                picture={account?.face_picture ?? null}
               />
             </TopSheetHead>
             {/* What is not on the bar, in the same order as the bar, and

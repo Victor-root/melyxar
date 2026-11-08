@@ -36,6 +36,8 @@ struct DeviceView {
     user_name: String,
     /// Where the picture of the account is served, when it has one.
     user_avatar: Option<String>,
+    /// Which of Melyxar's pictures the account wears without a photo.
+    user_face_picture: &'static str,
     /// What the browser said it was when it signed in, which the page turns
     /// into "Firefox on Windows".
     name: String,
@@ -56,6 +58,7 @@ fn device_view(device: &SignedInDevice, this_one: DeviceId) -> DeviceView {
         user_id: device.user_id.to_string(),
         user_name: device.user_name.clone(),
         user_avatar: device.user_avatar.as_deref().map(crate::images::face_url),
+        user_face_picture: device.user_face_picture.as_str(),
         name: device.name.clone(),
         browser: device.browser.clone(),
         remembered: device.remembered == melyxar_app::accounts::Remembered::Yes,

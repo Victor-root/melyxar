@@ -8,6 +8,7 @@
 
 pub mod camera;
 pub mod error;
+pub mod face;
 pub mod fingerprint;
 pub mod id;
 pub mod job;

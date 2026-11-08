@@ -4,6 +4,7 @@
 //! single account: every progress row, favourite and preference hangs off a
 //! user, and retrofitting that would touch every table and every route.
 
+use melyxar_core::face::FacePicture;
 use melyxar_core::id::{LibraryId, UserId};
 use melyxar_core::library::LibraryKind;
 use melyxar_core::time::{now, Timestamp};
@@ -30,6 +31,7 @@ pub struct NameAtTheDoor {
     pub name: String,
     /// Where its picture is, under the folder of pictures.
     pub avatar_path: Option<String>,
+    pub face_picture: FacePicture,
 }
 
 /// What became of a change that could have left this server with nobody to
@@ -49,7 +51,7 @@ pub enum KeptAnAdministrator {
 /// of them and forgotten in the others is a field that silently goes missing
 /// depending on which screen asked.
 const WHAT_AN_ACCOUNT_IS: &str =
-    "u.id, u.name, u.avatar_path, u.is_administrator, u.sees_every_library,
+    "u.id, u.name, u.avatar_path, u.face_picture, u.is_administrator, u.sees_every_library,
      u.max_age_rating,
      u.may_download, u.may_manage_collections, u.may_delete, u.may_delete_from_disk, u.may_edit_tags, u.may_upload, u.max_sessions, u.created_at,
      p.interface_language, p.preferred_audio_language, p.preferred_subtitle_language,
@@ -212,8 +214,8 @@ impl Database {
     /// the name is typed rather than pressed, and the screen keeps the field
     /// for exactly that.
     pub async fn names_at_the_door(&self) -> Result<Vec<NameAtTheDoor>> {
-        let rows: Vec<(String, Option<String>)> = sqlx::query_as(
-            "SELECT u.name, u.avatar_path
+        let rows: Vec<(String, Option<String>, String)> = sqlx::query_as(
+            "SELECT u.name, u.avatar_path, u.face_picture
              FROM users u
              JOIN user_preferences p ON p.user_id = u.id
              WHERE p.hidden_at_the_door = 0
@@ -223,7 +225,11 @@ impl Database {
         .await?;
         Ok(rows
             .into_iter()
-            .map(|(name, avatar_path)| NameAtTheDoor { name, avatar_path })
+            .map(|(name, avatar_path, face_picture)| NameAtTheDoor {
+                name,
+                avatar_path,
+                face_picture: FacePicture::parse(&face_picture).unwrap_or_default(),
+            })
             .collect())
     }
 
@@ -573,16 +579,26 @@ async fn write_an_account(
     let id = UserId::new();
     let created_at = now();
     let preferences = Preferences::default();
+    let worn: Vec<String> =
+        sqlx::query_scalar("SELECT face_picture FROM users WHERE avatar_path IS NULL")
+            .fetch_all(&mut **transaction)
+            .await?;
+    let face_picture = FacePicture::least_worn(
+        name,
+        worn.iter().filter_map(|picture| FacePicture::parse(picture)),
+    );
 
     sqlx::query(
-        "INSERT INTO users (id, name, password_hash, is_administrator, sees_every_library,
-                            max_age_rating, may_download, may_manage_collections, may_delete,
-                            may_delete_from_disk, may_edit_tags, may_upload, max_sessions, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, name, password_hash, face_picture, is_administrator,
+                            sees_every_library, max_age_rating, may_download,
+                            may_manage_collections, may_delete, may_delete_from_disk,
+                            may_edit_tags, may_upload, max_sessions, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_db_string())
     .bind(name)
     .bind(password_hash)
+    .bind(face_picture.as_str())
     .bind(bool_to_int(permissions.is_administrator))
     .bind(bool_to_int(permissions.sees_every_library))
     .bind(permissions.max_age_rating)
@@ -655,6 +671,7 @@ async fn write_an_account(
         id,
         name: name.to_string(),
         avatar_path: None,
+        face_picture,
         permissions: permissions.clone(),
         preferences,
         created_at,
@@ -706,6 +723,8 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
         id: parse_id(&row.try_get::<String, _>("id")?)?,
         name: row.try_get("name")?,
         avatar_path: row.try_get("avatar_path")?,
+        face_picture: FacePicture::parse(&row.try_get::<String, _>("face_picture")?)
+            .unwrap_or_default(),
         permissions: Permissions {
             is_administrator: int_to_bool(row.try_get("is_administrator")?),
             sees_every_library: int_to_bool(row.try_get("sees_every_library")?),
@@ -821,6 +840,7 @@ mod tests {
             vec![NameAtTheDoor {
                 name: "Zoe".to_string(),
                 avatar_path: Some(picture.clone()),
+                face_picture: zoe.face_picture,
             }],
             "and the door shows it beside the name"
         );
@@ -834,6 +854,70 @@ mod tests {
             database.names_at_the_door().await.expect("read")[0].avatar_path,
             None
         );
+    }
+
+    #[tokio::test]
+    async fn accounts_without_a_photo_are_each_given_a_picture_of_their_own() {
+        let database = database().await;
+        let mut given = Vec::new();
+        for name in ["Ana", "Ben", "Cy", "Dee", "Eli", "Fay", "Gus", "Hal", "Ivy", "Jo"] {
+            let made = database
+                .create_user(name, None, &Permissions::viewer())
+                .await
+                .expect("account created");
+            let (read, _) = database
+                .user_by_name(name)
+                .await
+                .expect("lookup works")
+                .expect("account found");
+            assert_eq!(read.face_picture, made.face_picture, "kept with the account");
+            given.push(made.face_picture);
+        }
+        let mut different = given.clone();
+        different.sort_by_key(|picture| picture.as_str());
+        different.dedup();
+        assert_eq!(different.len(), 10);
+
+        let door = database.names_at_the_door().await.expect("read");
+        assert!(door.iter().all(|offered| given.contains(&offered.face_picture)));
+    }
+
+    #[tokio::test]
+    async fn the_accounts_already_there_are_given_different_pictures_photos_last() {
+        let database = database().await;
+        let mut made = Vec::new();
+        for name in ["Ana", "Ben", "Cy", "Dee", "Eli", "Fay", "Gus", "Hal", "Ivy", "Jo", "Kim"] {
+            made.push(
+                database
+                    .create_user(name, None, &Permissions::viewer())
+                    .await
+                    .expect("account created"),
+            );
+        }
+        database
+            .set_avatar(made[0].id, Some("users/ana/avatar.webp"))
+            .await
+            .expect("set");
+        sqlx::query("UPDATE users SET face_picture = 'comet'")
+            .execute(database.writer())
+            .await
+            .expect("as before the hand out");
+
+        sqlx::query(include_str!("../migrations/0133_hand_out_face_pictures.sql"))
+            .execute(database.writer())
+            .await
+            .expect("run");
+
+        let mut without_a_photo = Vec::new();
+        for account in &made[1..] {
+            let (read, _) = database
+                .user_by_name(&account.name)
+                .await
+                .expect("lookup works")
+                .expect("account found");
+            without_a_photo.push(read.face_picture);
+        }
+        assert_eq!(without_a_photo, FacePicture::every().to_vec(), "in the order they were made");
     }
 
     #[tokio::test]

@@ -24,7 +24,7 @@ import type { IconProps } from "../../icons";
 import { useJournalNews } from "../../live";
 import { useSettings } from "../../settings";
 import { Face } from "../../components/face";
-import { familyOf, sayLine, whenItHappened, whoOf } from "./activity";
+import { familyOf, sayLine, whenItHappened } from "./activity";
 
 const FAMILY_ICONS: Record<ActivityFamily, ComponentType<IconProps>> = {
   access: LockIcon,
@@ -149,8 +149,8 @@ export function ActivityLines({ lines }: { lines: ActivityLine[] }) {
             {line.user_id ? (
               <span className={`line-mark line-mark-face${state}`}>
                 <Face
-                  name={whoOf(line, t)}
                   avatar={line.user_avatar}
+                  picture={line.user_face_picture}
                   className="account-face"
                 />
               </span>
@@ -230,7 +230,7 @@ function AccountChips({
             aria-pressed={on}
             onClick={() => onTicked(on ? ticked.filter((id) => id !== account.id) : [...ticked, account.id])}
           >
-            <Face name={account.name} avatar={account.avatar} className="chip-face" />
+            <Face avatar={account.avatar} picture={account.face_picture} className="chip-face" />
             {account.name}
             <span className="chip-count">{account.lines}</span>
           </button>

@@ -162,7 +162,7 @@ export function AdminRequests() {
             <ul className="askers">
               {shown.askers.map((asker) => (
                 <li key={asker.id} className="asker">
-                  <Face name={asker.name} avatar={asker.avatar} className="asker-face" />
+                  <Face avatar={asker.avatar} picture={asker.face_picture} className="asker-face" />
                   <span className="asker-words">
                     <span className="asker-name">{asker.name}</span>
                     {asker.administrator && (

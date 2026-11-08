@@ -50,6 +50,9 @@ struct LineView {
     user_id: Option<String>,
     /// Where the account's picture is served, when it has one.
     user_avatar: Option<String>,
+    /// Which of Melyxar's pictures the account wears without a photo, absent
+    /// once it is gone.
+    user_face_picture: Option<&'static str>,
     work_id: Option<String>,
     /// What the browser said it was.
     device: Option<String>,
@@ -119,6 +122,7 @@ async fn activity(
                 level: line.level.as_str(),
                 user_id: line.user.map(|user| user.to_string()),
                 user_avatar: line.avatar.as_deref().map(crate::images::face_url),
+                user_face_picture: line.face_picture.map(|picture| picture.as_str()),
                 work_id: line.work.map(|work| work.to_string()),
                 device: line.device,
                 details: line.details,
@@ -139,6 +143,7 @@ struct AccountView {
     id: String,
     name: String,
     avatar: Option<String>,
+    face_picture: &'static str,
     lines: i64,
 }
 
@@ -158,6 +163,7 @@ async fn accounts(
                 id: account.user_id.to_string(),
                 name: account.name,
                 avatar: account.avatar.as_deref().map(crate::images::face_url),
+                face_picture: account.face_picture.as_str(),
                 lines: account.lines,
             })
             .collect(),

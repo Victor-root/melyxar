@@ -111,6 +111,8 @@ struct ManagedAccountView {
     name: String,
     /// Where its picture is served, when it has one.
     avatar: Option<String>,
+    /// Which of Melyxar's pictures it wears without a photo of its own.
+    face_picture: &'static str,
     /// Whether this is the administrator looking at the page, which is what
     /// the page greys out the gestures refused on one's own account by.
     is_you: bool,
@@ -129,6 +131,7 @@ fn managed_view(listed: &Listed, you: UserId) -> ManagedAccountView {
         id: user.id.to_string(),
         name: user.name.clone(),
         avatar: user.avatar_path.as_deref().map(crate::images::face_url),
+        face_picture: user.face_picture.as_str(),
         is_you: user.id == you,
         rights: RightsView::of(user),
         created_at: melyxar_core::time::to_text(user.created_at),

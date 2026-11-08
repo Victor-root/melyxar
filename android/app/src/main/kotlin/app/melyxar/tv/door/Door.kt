@@ -243,7 +243,7 @@ fun Door(
                     Knock(
                         api = api,
                         known = asking.ifEmpty { null },
-                        avatar = open.profiles.firstOrNull { it.name == asking }?.avatar,
+                        profile = open.profiles.firstOrNull { it.name == asking },
                         client = sessions.client,
                         onIn = { session, account -> signedIn(session, account, open.branding) },
                         onTelephone = {
@@ -266,7 +266,7 @@ fun Door(
                     CodeLock(
                         api = api.signedInAs(asked.session.token),
                         name = asked.session.name,
-                        avatar = open.profiles.firstOrNull { it.name == asked.session.name }?.avatar,
+                        profile = open.profiles.firstOrNull { it.name == asked.session.name },
                         onOpen = { signedIn(asked.session, asked.account, open.branding) },
                         onClose = { locked = null },
                     )
@@ -444,7 +444,7 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
                 .rim(shape, palette.text.copy(alpha = 0.1f), 1.dp) { 1f - lit }
                 .rim(shape, palette.accentBright, 2.dp) { lit },
         ) {
-            Face(profile.name, profile.avatar, TILE)
+            Face(profile.name, profile.avatar, profile.facePicture, TILE)
         }
         Text(
             profile.name,
@@ -459,14 +459,14 @@ private fun ProfileTile(profile: DoorName, arrivesAfterMs: Int, onPick: () -> Un
     }
 }
 
-/** An account's own picture, or the one of Melyxar's the web gives it. */
+/** An account's own picture, or the one of Melyxar's the server gave it. */
 @Composable
-fun Face(name: String, avatar: String?, across: Dp, modifier: Modifier = Modifier) {
+fun Face(name: String, avatar: String?, facePicture: String?, across: Dp, modifier: Modifier = Modifier) {
     if (avatar != null) {
         ServerPicture(listOf(Picture(avatar)), across, modifier.size(across))
     } else {
         Image(
-            painterResource(facePictureOf(name).drawing),
+            painterResource(facePictureOf(name, facePicture).drawing),
             contentDescription = null,
             modifier = modifier.size(across),
             contentScale = ContentScale.Crop,

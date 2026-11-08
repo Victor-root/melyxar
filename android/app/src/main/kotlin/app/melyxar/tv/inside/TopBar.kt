@@ -556,7 +556,7 @@ private fun Account(modifier: Modifier) {
                 Clock(palette.text, 14.sp, FontWeight.SemiBold)
             }
             Box(Modifier.clip(RoundedCornerShape(7.dp))) {
-                Face(chrome.account.name, chrome.account.avatar, 32.dp)
+                Face(chrome.account.name, chrome.account.avatar, chrome.account.facePicture, 32.dp)
             }
         }
         if (open) {

@@ -28,9 +28,10 @@ fun List<Picture>.fitting(pixelsAcross: Int): Picture? {
     return bySize.firstOrNull { (it.width ?: Int.MAX_VALUE) >= pixelsAcross } ?: bySize.lastOrNull()
 }
 
-/** An account offered at the door. */
+/** An account offered at the door, with Melyxar's picture the server gave it
+ *  for when it has no photo; absent from a server older than that. */
 @Serializable
-data class DoorName(val name: String, val avatar: String? = null)
+data class DoorName(val name: String, val avatar: String? = null, val facePicture: String? = null)
 
 @Serializable
 data class DoorNames(val names: List<DoorName> = emptyList())
@@ -41,6 +42,7 @@ data class Account(
     val name: String,
     val isAdministrator: Boolean = false,
     val avatar: String? = null,
+    val facePicture: String? = null,
 )
 
 /** The account's own choices that change how the application looks and

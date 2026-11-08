@@ -77,7 +77,7 @@ export function DeviceLines({
         <div className="line" key={device.id}>
           {withAccount ? (
             <span className="line-mark line-mark-face">
-              <Face name={device.user_name} avatar={device.user_avatar} className="account-face" />
+              <Face avatar={device.user_avatar} picture={device.user_face_picture} className="account-face" />
             </span>
           ) : (
             <span className="line-mark" aria-hidden="true">

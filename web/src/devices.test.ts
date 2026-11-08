@@ -112,6 +112,7 @@ describe("aboutDevice", () => {
     user_id: "u",
     user_name: "somebody",
     user_avatar: null,
+    user_face_picture: "comet",
     name: WINDOWS_CHROME,
     browser: null,
     remembered: false,

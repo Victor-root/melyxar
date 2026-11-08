@@ -95,6 +95,7 @@ export function Door({
       : { the: "form", forWhom: null });
   const onTheForm = showing.the === "form";
   const forWhom = showing.the === "form" ? showing.forWhom : null;
+  const chosen = door.names.find((offered) => offered.name === forWhom);
 
   // The cursor where the next word goes, every time the screen turns to the
   // form: the name for somebody typing their own, the password for somebody
@@ -233,8 +234,8 @@ export function Door({
                   >
                     <Face
                       className="door-who-face"
-                      name={offered.name}
                       avatar={offered.avatar}
+                      picture={offered.face_picture}
                     />
                     <span className="door-who-name">{offered.name}</span>
                   </button>
@@ -268,8 +269,8 @@ export function Door({
             <div className="door-forwhom">
               <Face
                 className="door-forwhom-face"
-                name={forWhom}
-                avatar={door.names.find((offered) => offered.name === forWhom)?.avatar ?? null}
+                avatar={chosen?.avatar ?? null}
+                picture={chosen?.face_picture ?? null}
               />
               <span className="door-forwhom-name">{forWhom}</span>
               {/* Out of sight and genuinely there: a password keeper fills the

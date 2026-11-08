@@ -4,6 +4,7 @@
 //! first migration: every sensitive feature hangs off them, and adding them
 //! later would mean touching every table and every route.
 
+use crate::face::FacePicture;
 use crate::id::{DeviceId, LibraryId, UserId};
 use crate::library::LibraryKind;
 use crate::time::Timestamp;
@@ -1029,6 +1030,8 @@ pub struct User {
     pub id: UserId,
     pub name: String,
     pub avatar_path: Option<String>,
+    /// What it wears while it has no photo of its own.
+    pub face_picture: FacePicture,
     pub permissions: Permissions,
     pub preferences: Preferences,
     pub created_at: Timestamp,

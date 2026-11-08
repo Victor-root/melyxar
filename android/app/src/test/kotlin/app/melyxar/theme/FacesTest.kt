@@ -5,8 +5,14 @@ import org.junit.jupiter.api.Test
 
 class FacesTest {
     @Test
-    fun picksThePictureTheWebPicks() {
-        // The names and answers of web/src/faces.test.ts.
+    fun wearsThePictureTheServerGave() {
+        assertEquals(FacePicture.Spiral, facePictureOf("Victor", "spiral"))
+        assertEquals(FacePicture.Verdant, facePictureOf("Bob", "verdant"))
+    }
+
+    @Test
+    fun picksByTheNameWhenTheServerGaveNone() {
+        // What these names wore on every screen before the server gave one.
         assertEquals(
             listOf(
                 FacePicture.Comet,
@@ -17,7 +23,8 @@ class FacesTest {
                 FacePicture.Rings,
                 FacePicture.Comet,
             ),
-            listOf("Victor", "Élodie", "Zoë", "Marie-Hélène", "Bob", "", "🎬 Cinéma").map(::facePictureOf),
+            listOf("Victor", "Élodie", "Zoë", "Marie-Hélène", "Bob", "", "🎬 Cinéma").map { facePictureOf(it, null) },
         )
+        assertEquals(FacePicture.Comet, facePictureOf("Victor", "a picture this application does not have"))
     }
 }

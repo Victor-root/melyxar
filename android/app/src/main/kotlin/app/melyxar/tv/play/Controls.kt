@@ -267,7 +267,7 @@ internal fun Who() {
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Clock(palette.text, fontSize = 26.sp, weight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.clip(RoundedCornerShape(5.dp))) { Face(account.name, account.avatar, 22.dp) }
+            Box(Modifier.clip(RoundedCornerShape(5.dp))) { Face(account.name, account.avatar, account.facePicture, 22.dp) }
             Text(account.name, fontSize = 15.sp, color = palette.textSoft, maxLines = 1)
         }
     }

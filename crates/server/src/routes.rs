@@ -407,6 +407,8 @@ struct NameAtTheDoor {
     name: String,
     /// Where its picture is served, when it has one.
     avatar: Option<String>,
+    /// Which of Melyxar's pictures it wears without a photo of its own.
+    face_picture: &'static str,
 }
 
 async fn names_at_the_door(State(state): State<AppState>) -> Result<Json<NamesAtTheDoor>> {
@@ -430,6 +432,7 @@ async fn names_at_the_door(State(state): State<AppState>) -> Result<Json<NamesAt
             .into_iter()
             .map(|offered| NameAtTheDoor {
                 avatar: offered.avatar_path.as_deref().map(crate::images::face_url),
+                face_picture: offered.face_picture.as_str(),
                 name: offered.name,
             })
             .collect(),

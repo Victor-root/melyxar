@@ -26,6 +26,7 @@ pub struct Asker {
     pub name: String,
     /// Its profile picture, when it chose one.
     pub avatar_path: Option<String>,
+    pub face_picture: melyxar_core::face::FacePicture,
     pub administrator: bool,
     pub may_ask: bool,
 }
@@ -102,6 +103,7 @@ pub async fn askers(state: &AppState) -> Result<Vec<Asker>> {
             id: user.id,
             name: user.name,
             avatar_path: user.avatar_path,
+            face_picture: user.face_picture,
         })
         .collect())
 }

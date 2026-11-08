@@ -571,6 +571,8 @@ pub struct Entry {
     pub user: Option<UserId>,
     /// Where the account's picture is stored, when it has one.
     pub avatar: Option<String>,
+    /// What the account wears without a photo, absent once it is gone.
+    pub face_picture: Option<melyxar_core::face::FacePicture>,
     pub work: Option<WorkId>,
     pub device: Option<String>,
     /// Everything else the line says, as it was written.
@@ -613,6 +615,7 @@ pub async fn page(
             kind: line.kind,
             user: line.user_id,
             avatar: line.user_avatar,
+            face_picture: line.user_face_picture,
             work: line.work_id,
             device: line.device_name,
         })

@@ -26,6 +26,7 @@
 
 use std::collections::HashMap;
 
+use melyxar_core::face::FacePicture;
 use melyxar_core::id::{DeviceId, UserId};
 use melyxar_core::time::Timestamp;
 use melyxar_core::user::User;
@@ -125,6 +126,7 @@ pub struct SignedInDevice {
     pub user_name: String,
     /// The picture of the account, under the folder of pictures.
     pub user_avatar: Option<String>,
+    pub user_face_picture: FacePicture,
     /// What the browser said it was when it signed in.
     pub name: String,
     /// The browser its own page found, when it has said.
@@ -304,7 +306,7 @@ impl Database {
     /// those of one account.
     pub async fn signed_in_devices(&self, of: Option<UserId>) -> Result<Vec<SignedInDevice>> {
         let rows = sqlx::query(
-            "SELECT d.id, d.user_id, u.name AS user_name, u.avatar_path, d.name, d.browser,
+            "SELECT d.id, d.user_id, u.name AS user_name, u.avatar_path, u.face_picture, d.name, d.browser,
                     d.remembered, d.created_at, d.last_seen_at
              FROM devices d
              JOIN users u ON u.id = d.user_id
@@ -321,6 +323,8 @@ impl Database {
                     user_id: parse_id(&row.try_get::<String, _>("user_id")?)?,
                     user_name: row.try_get("user_name")?,
                     user_avatar: row.try_get("avatar_path")?,
+                    user_face_picture: FacePicture::parse(&row.try_get::<String, _>("face_picture")?)
+                        .unwrap_or_default(),
                     name: row.try_get("name")?,
                     browser: row.try_get("browser")?,
                     remembered: Remembered::from_int(row.try_get("remembered")?),

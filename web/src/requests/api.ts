@@ -7,6 +7,7 @@
  */
 
 import { get, post, put, remove } from "../api";
+import type { FacePicture } from "../faces";
 
 export type Catalogue = "films" | "series";
 
@@ -118,6 +119,7 @@ export interface Asker {
   name: string;
   /** Where its profile picture is, when it chose one. */
   avatar: string | null;
+  face_picture: FacePicture;
   administrator: boolean;
   may_ask: boolean;
 }

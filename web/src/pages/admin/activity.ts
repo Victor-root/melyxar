@@ -72,7 +72,7 @@ function joined(parts: (string | null)[]): string | null {
 }
 
 /** Who a line is about, by the name written into it. */
-export function whoOf(line: ActivityLine, t: Wording): string {
+function whoOf(line: ActivityLine, t: Wording): string {
   return text(line.details, "user_name") ?? t("activity.someone");
 }
 

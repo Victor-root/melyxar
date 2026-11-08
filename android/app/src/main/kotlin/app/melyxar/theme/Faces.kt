@@ -4,12 +4,12 @@ import androidx.annotation.DrawableRes
 import app.melyxar.R
 
 /*
- * Which picture an account without one of its own wears: the web's sum
- * (`faces.ts`), so an account wears the same face on the television as on
- * the page.
+ * Which picture an account without one of its own wears: the one the server
+ * gave it, named as the server names it. A server older than that gives none,
+ * and the name decides, as it did on every screen then.
  */
 
-/** The pictures, in the web's order, which the name's hash picks from. */
+/** The pictures, in the order the name's hash picks from. */
 enum class FacePicture(@DrawableRes val drawing: Int) {
     Comet(R.drawable.face_comet),
     Rings(R.drawable.face_rings),
@@ -32,7 +32,8 @@ private fun hashOf(name: String): UInt {
     return hash
 }
 
-fun facePictureOf(name: String): FacePicture {
+fun facePictureOf(name: String, given: String?): FacePicture {
     val pictures = FacePicture.entries
-    return pictures[(hashOf(name) % pictures.size.toUInt()).toInt()]
+    return pictures.firstOrNull { it.name.lowercase() == given }
+        ?: pictures[(hashOf(name) % pictures.size.toUInt()).toInt()]
 }

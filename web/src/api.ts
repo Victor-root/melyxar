@@ -5,6 +5,7 @@
  * fails at compilation rather than at three in the morning on a screen.
  */
 
+import type { FacePicture } from "./faces";
 import type { Song } from "./music/api";
 
 /** An account, as the interface is told about it. */
@@ -24,6 +25,7 @@ export interface Account {
   may_upload: boolean;
   /** Where the picture it chose is served, when it chose one. */
   avatar: string | null;
+  face_picture: FacePicture;
 }
 
 /** What an account may do and see, as the administration shows and sends
@@ -52,6 +54,7 @@ export interface ManagedAccount {
   id: string;
   name: string;
   avatar: string | null;
+  face_picture: FacePicture;
   /** Whether this is the administrator looking at the page. */
   is_you: boolean;
   rights: Rights;
@@ -68,6 +71,7 @@ export interface SignedInDevice {
   user_id: string;
   user_name: string;
   user_avatar: string | null;
+  user_face_picture: FacePicture;
   /** What the browser said it was when it signed in. */
   name: string;
   /** The browser its page found, when it could tell better than the line. */
@@ -85,6 +89,7 @@ export interface SignedInDevice {
 export interface NameAtTheDoor {
   name: string;
   avatar: string | null;
+  face_picture: FacePicture;
 }
 
 /**
@@ -2096,6 +2101,7 @@ export interface ActivityLine {
   user_id: string | null;
   /** Where the account's picture is served, when it has one. */
   user_avatar: string | null;
+  user_face_picture: FacePicture | null;
   work_id: string | null;
   /** What the browser said it was. */
   device: string | null;
@@ -2113,6 +2119,7 @@ export interface ActivityAccount {
   id: string;
   name: string;
   avatar: string | null;
+  face_picture: FacePicture;
   lines: number;
 }
 

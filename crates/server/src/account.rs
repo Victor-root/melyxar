@@ -411,6 +411,8 @@ struct AccountView {
     may_upload: bool,
     /// Where its picture is served, when it has one.
     avatar: Option<String>,
+    /// Which of Melyxar's pictures it wears without a photo of its own.
+    face_picture: &'static str,
 }
 
 impl From<&User> for AccountView {
@@ -426,6 +428,7 @@ impl From<&User> for AccountView {
             may_edit_tags: user.permissions.may_edit_tags,
             may_upload: user.permissions.may_upload,
             avatar: user.avatar_path.as_deref().map(crate::images::face_url),
+            face_picture: user.face_picture.as_str(),
         }
     }
 }
@@ -720,6 +723,7 @@ mod tests {
             id: UserId::new(),
             name: "victor".to_string(),
             avatar_path: None,
+            face_picture: melyxar_core::face::FacePicture::default(),
             permissions,
             preferences: Preferences::default(),
             created_at: melyxar_core::time::now(),

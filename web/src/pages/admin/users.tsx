@@ -117,8 +117,8 @@ function faceOf(account: ManagedAccount) {
   return function AccountFace(_: IconProps) {
     return (
       <Face
-        name={account.name}
         avatar={account.avatar}
+        picture={account.face_picture}
         className="account-face"
       />
     );
