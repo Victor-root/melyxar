@@ -323,13 +323,15 @@
     justify-self: center;
   }
 
-  /* A film: what plays takes no more than the room the buttons leave, the
-     picture at the top left and the words running on beside it and under
-     it, the synopsis cut by the page to the words that fit. Everything below
-     follows it with its full height, and what room is left over stays at the
-     foot of the screen rather than between them. */
+  /* A film: what plays takes no more than the room the buttons leave, its
+     picture as large as the page finds room for, the words running on
+     beside it and under it, the synopsis cut by the page to the words that
+     fit. Everything below keeps its full height, and the little room a
+     picture could not take up is shared out evenly between the blocks, so
+     the screen is filled to its foot with no hole anywhere. */
   .remote-steering-fits {
     height: 100%;
+    justify-content: space-between;
   }
 
   .remote-steering-fits > * {

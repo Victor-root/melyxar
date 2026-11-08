@@ -16,7 +16,7 @@ import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
-import { useWordsThatFit } from "../fitting";
+import { pictureShare, useFilledRoom } from "../fitting";
 import { PHONE, useMediaQuery } from "../media-query";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
@@ -203,12 +203,19 @@ function Line({
   );
 }
 
+/** How wide a film's picture is drawn beside its words on a telephone's
+ *  remote, as a share of the width, smallest and largest. */
+const SMALLEST_PICTURE = 46;
+const LARGEST_PICTURE_BESIDE = 60;
+
 /** What plays, with its picture and what it is about, as the card of the
  *  next episode shows one.
  *
- *  On a telephone a film's synopsis takes what room the buttons leave, run on
- *  round its picture and cut to the words that fit there: every button stays
- *  on the one screen, and the synopsis is all there whenever it can be. */
+ *  On a telephone a film fills what room the buttons leave and no more: its
+ *  picture as large as the whole synopsis lets it be, the synopsis run on
+ *  round it, and cut to the words that fit beside the smallest picture when
+ *  even that leaves too little room. Every button stays on the one screen,
+ *  on any telephone, with nothing left empty above them. */
 function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsTheScreen: boolean }) {
   const { t } = useSettings();
   const song = playing.kind === "song";
@@ -219,14 +226,29 @@ function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsT
   const caption = captionOf(playing, t);
   const box = useRef<HTMLDivElement>(null);
   const overview = about?.overview ?? null;
-  const cut = useWordsThatFit(box, overview, ".remote-overview", fitsTheScreen);
+  const filled = useFilledRoom(
+    box,
+    overview,
+    ".remote-overview",
+    ".remote-picture",
+    SMALLEST_PICTURE,
+    LARGEST_PICTURE_BESIDE,
+    fitsTheScreen,
+  );
   return (
     <div ref={box} className={song ? "remote-now remote-now-song" : "remote-now"}>
-      {playing.picture && <img className="remote-picture" src={playing.picture} alt="" />}
+      {playing.picture && (
+        <img
+          className="remote-picture"
+          src={playing.picture}
+          alt=""
+          style={filled ? pictureShare(filled.share) : undefined}
+        />
+      )}
       <div className="remote-now-words">
         {caption && <span className="remote-caption">{caption}</span>}
         <span className="remote-title">{playing.title}</span>
-        {overview && <p className="remote-overview">{cut ?? overview}</p>}
+        {overview && <p className="remote-overview">{filled?.words ?? overview}</p>}
       </div>
     </div>
   );

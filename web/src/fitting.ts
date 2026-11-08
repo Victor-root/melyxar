@@ -143,28 +143,43 @@ export function wordsThatFit(text: string, fits: (shown: string) => boolean): st
   return fitting === 0 ? "" : cutAfter(fitting);
 }
 
+/** How a box standing in a column fills the room the others leave it. */
+export interface FilledRoom {
+  /** How wide its picture is, as a share of the box. */
+  share: number;
+  /** The words of its text that fit, or nothing when the whole text does. */
+  words: string | null;
+}
+
 /**
- * The words of `text` that fit in `box`, one of the blocks of `box`'s parent
- * standing in a column, given whatever height of the parent the others leave
- * and no more, cut again whenever the parent changes size. The cutting is
- * measured on an unseen copy of the box, the page's own being React's to
- * draw. Null when the whole text fits, or when `enabled` is off.
+ * Fills the room the other blocks of `box`'s parent leave it, the parent
+ * standing in a column: the picture in `pictureIn` across the whole width
+ * with the whole of `text` under it when there is room for that, otherwise
+ * beside the text as wide as it can be from `least` to `most`; and when the
+ * whole text does not fit even beside the smallest picture, the words of it
+ * that do. Nothing in between: a picture wider than `most` leaves the words
+ * beside it a column a word wide. Measured again whenever the parent
+ * changes size, on an unseen copy of the box, the page's own being React's to
+ * draw. Null when `enabled` is off.
  */
-export function useWordsThatFit(
+export function useFilledRoom(
   box: React.RefObject<HTMLElement | null>,
   text: string | null,
   wordsIn: string,
+  pictureIn: string,
+  least: number,
+  most: number,
   enabled: boolean,
-): string | null {
-  const [shown, setShown] = useState<string | null>(null);
+): FilledRoom | null {
+  const [filled, setFilled] = useState<FilledRoom | null>(null);
   useLayoutEffect(() => {
     const own = box.current;
     const column = own?.parentElement;
-    if (!enabled || !text || !own || !column) {
-      setShown(null);
+    if (!enabled || !own || !column) {
+      setFilled(null);
       return;
     }
-    const cut = () => {
+    const fill = () => {
       const others = [...column.children].filter((child) => child !== own);
       const gap = parseFloat(getComputedStyle(column).rowGap) || 0;
       const room =
@@ -172,10 +187,9 @@ export function useWordsThatFit(
         others.reduce((taken, other) => taken + (other as HTMLElement).offsetHeight, 0) -
         gap * others.length;
       const copy = own.cloneNode(true) as HTMLElement;
+      copy.dataset.measuring = "";
       const words = copy.querySelector(wordsIn);
-      if (!words) {
-        return;
-      }
+      const picture = copy.querySelector<HTMLElement>(pictureIn);
       Object.assign(copy.style, {
         position: "absolute",
         visibility: "hidden",
@@ -183,16 +197,77 @@ export function useWordsThatFit(
         height: "auto",
       });
       own.after(copy);
-      const fitted = wordsThatFit(text, (candidate) => {
-        words.textContent = candidate;
+      const fits = (share: number, shown: string | null) => {
+        if (picture) {
+          Object.assign(picture.style, pictureShare(share));
+        }
+        if (words && shown !== null) {
+          words.textContent = shown;
+        }
         return copy.offsetHeight <= room + SLACK;
-      });
+      };
+      let found: FilledRoom;
+      if (fits(WHOLE_WIDTH, text)) {
+        found = { share: WHOLE_WIDTH, words: null };
+      } else if (!fits(least, text)) {
+        found = {
+          share: least,
+          words: text && words ? wordsThatFit(text, (candidate) => fits(least, candidate)) : null,
+        };
+      } else {
+        let fitting = least;
+        let tooWide = most + 1;
+        while (tooWide - fitting > 1) {
+          const middle = Math.floor((fitting + tooWide) / 2);
+          if (fits(middle, text)) {
+            fitting = middle;
+          } else {
+            tooWide = middle;
+          }
+        }
+        found = { share: fitting, words: null };
+      }
       copy.remove();
-      setShown(fitted === text ? null : fitted);
+      setFilled((was) => (was?.share === found.share && was.words === found.words ? was : found));
     };
-    const watcher = new ResizeObserver(cut);
-    watcher.observe(column);
-    return () => watcher.disconnect();
-  }, [box, text, wordsIn, enabled]);
-  return shown;
+    /* The room changes with the column and with every other block in it,
+       some of which come in after the box does: the lists of tracks once
+       the device has said what it plays. The unseen copy coming and going
+       is no change at all. */
+    const sizes = new ResizeObserver(fill);
+    const watch = () => {
+      sizes.disconnect();
+      sizes.observe(column);
+      for (const child of column.children) {
+        if (child !== own) {
+          sizes.observe(child);
+        }
+      }
+    };
+    const blocks = new MutationObserver((changes) => {
+      const isTheCopy = (node: Node) => node instanceof HTMLElement && "measuring" in node.dataset;
+      if (changes.some((change) => ![...change.addedNodes, ...change.removedNodes].every(isTheCopy))) {
+        watch();
+      }
+    });
+    watch();
+    blocks.observe(column, { childList: true });
+    // The words take their true room only once their face has come.
+    document.fonts.addEventListener("loadingdone", fill);
+    return () => {
+      sizes.disconnect();
+      blocks.disconnect();
+      document.fonts.removeEventListener("loadingdone", fill);
+    };
+  }, [box, text, wordsIn, pictureIn, least, most, enabled]);
+  return filled;
+}
+
+/** The share of a box a picture takes when it takes all of it. */
+const WHOLE_WIDTH = 100;
+
+/** How a picture is drawn at this share of its box: across the whole of it,
+ *  with no room kept beside it for words that go under it instead. */
+export function pictureShare(share: number): { width: string; marginRight: string } {
+  return share === WHOLE_WIDTH ? { width: "100%", marginRight: "0" } : { width: `${share}%`, marginRight: "" };
 }
