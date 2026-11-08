@@ -145,7 +145,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     }
     DisposableEffect(playback) { onDispose { playback?.leave() } }
     if (playback == null) {
-        CannotPlay(onDone)
+        CannotPlay(notReadyYet = false, onDone)
         return
     }
 
@@ -449,7 +449,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
             }
             if (playback.failed) {
-                CannotPlay(onDone)
+                CannotPlay(playback.notReadyYet, onDone)
             }
         }
     }
@@ -510,7 +510,7 @@ private fun Skip(stretch: Segment, onSkip: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun CannotPlay(onDone: () -> Unit) {
+private fun CannotPlay(notReadyYet: Boolean, onDone: () -> Unit) {
     val palette = LocalPalette.current
     val back = remember { FocusRequester() }
     Column(
@@ -518,7 +518,8 @@ private fun CannotPlay(onDone: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
     ) {
-        Text(stringResource(R.string.tv_cannot_play), fontSize = 18.sp, fontWeight = FontWeight.Medium, color = palette.text)
+        val said = if (notReadyYet) R.string.tv_not_ready else R.string.tv_cannot_play
+        Text(stringResource(said), fontSize = 18.sp, fontWeight = FontWeight.Medium, color = palette.text)
         AccentButton(stringResource(R.string.tv_back), onDone, Modifier.focusRequester(back), icon = null)
     }
     LaunchedEffect(Unit) { back.requestFocus() }

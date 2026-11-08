@@ -86,6 +86,7 @@
     <string name="tv_skip_intro">Skip the opening</string>
     <string name="tv_skip_outro">Skip the credits</string>
     <string name="tv_cannot_play">This film cannot be played here.</string>
+    <string name="tv_not_ready">This title has just been added and is still being prepared. Try again in a few moments.</string>
     <string name="tv_track_unnamed">Track %1$d</string>
     <string name="tv_settings">Settings</string>
     <string name="tv_speed">Speed</string>

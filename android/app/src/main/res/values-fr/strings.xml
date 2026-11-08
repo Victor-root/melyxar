@@ -87,6 +87,7 @@
     <string name="tv_skip_intro">Passer le générique</string>
     <string name="tv_skip_outro">Passer le générique de fin</string>
     <string name="tv_cannot_play">Ce film ne peut pas être lu ici.</string>
+    <string name="tv_not_ready">Ce titre vient d’être ajouté et est encore en préparation. Réessayez dans quelques instants.</string>
     <string name="tv_track_unnamed">Piste %1$d</string>
     <string name="tv_settings">Paramètres</string>
     <string name="tv_speed">Vitesse</string>

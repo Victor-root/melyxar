@@ -142,6 +142,11 @@ class Playback(
     var failed by mutableStateOf(false)
         private set
 
+    /** Whether the server said the film has only just arrived and is still
+     *  being prepared, which a moment later it no longer is. */
+    var notReadyYet by mutableStateOf(false)
+        private set
+
     /** What the picture is held to, as the account last chose. */
     var quality by mutableStateOf(startingQuality)
         private set
@@ -264,6 +269,9 @@ class Playback(
                 audio = first.chosenAudioId
                 subtitle = first.chosenSubtitleId
                 open(first, from ?: first.resumeFromSeconds ?: 0.0)
+            } catch (refused: Refusal) {
+                notReadyYet = refused.code == "not_ready"
+                failed = true
             } catch (_: IOException) {
                 failed = true
             }
