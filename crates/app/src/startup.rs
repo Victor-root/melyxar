@@ -50,6 +50,22 @@ pub async fn close_what_a_previous_run_left(state: &AppState) -> Result<Vec<Job>
     Ok(state.jobs().close_interrupted().await?)
 }
 
+/// Marks forced the subtitles of files analysed before their title was read.
+///
+/// Only the server calls this, before it serves anything. A failure is said
+/// and nothing more: those subtitles are simply not offered as forced yet.
+pub async fn mark_subtitles_titled_forced(state: &AppState) {
+    match state.database().mark_subtitles_titled_forced().await {
+        Ok(0) => {}
+        Ok(marked) => {
+            tracing::info!(marked, "subtitles whose title says forced are now taken for forced");
+        }
+        Err(error) => {
+            tracing::warn!(%error, "the subtitles whose title says forced could not be marked");
+        }
+    }
+}
+
 /// Starts again what a restart cut short, and says how many that was.
 ///
 /// Only the server calls this, and only for a job a restart ended: one that

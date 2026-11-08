@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use melyxar_core::id::{ChapterId, LibraryId, LibraryRootId, MediaSourceId, TrackId};
 use melyxar_core::media::{
-    AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins, SubtitleDetails,
-    SubtitleLayout, Track, TrackKind, VideoDetails,
+    title_says_forced, AudioDetails, Chapter, ColorInfo, HdrFormat, Loudness, Margins,
+    SubtitleDetails, SubtitleLayout, Track, TrackKind, VideoDetails,
 };
 use melyxar_core::time::{now, Millis};
 use sqlx::Row;
@@ -183,6 +183,36 @@ impl Database {
         .await?;
 
         rows.iter().map(track_from_row).collect()
+    }
+
+    /// Marks forced every subtitle whose title says so, and says how many.
+    ///
+    /// The analysis reads the title since it learnt to, but a file analysed
+    /// before kept the track it had, and is not opened again unless it changes
+    /// on disk. Only the titles are read here, never the files.
+    pub async fn mark_subtitles_titled_forced(&self) -> Result<u64> {
+        // Every word that says forced holds these letters, which a title
+        // seldom does otherwise: the rule itself is applied below.
+        let rows = sqlx::query(
+            "SELECT id, title FROM tracks
+              WHERE kind = 'subtitle' AND is_forced = 0 AND title LIKE '%forc%'",
+        )
+        .fetch_all(self.reader())
+        .await?;
+        let mut transaction = self.begin().await?;
+        let mut marked = 0;
+        for row in &rows {
+            let title: String = row.try_get("title")?;
+            if title_says_forced(&title) {
+                marked += sqlx::query("UPDATE tracks SET is_forced = 1 WHERE id = ?")
+                    .bind(row.try_get::<String, _>("id")?)
+                    .execute(&mut *transaction)
+                    .await?
+                    .rows_affected();
+            }
+        }
+        transaction.commit().await?;
+        Ok(marked)
     }
 
     /// Chapters of one source, in order.
@@ -618,6 +648,45 @@ mod tests {
                 downloaded_file: None,
             }),
         }
+    }
+
+    #[tokio::test]
+    async fn a_subtitle_titled_forced_is_marked_forced_once() {
+        let (database, library_id, root_id) = library().await;
+        let (_, source_id) =
+            work_with_source(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let titled = |stream_index, title: &str| Track {
+            stream_index,
+            title: Some(title.to_string()),
+            is_forced: false,
+            ..subtitle_track(source_id)
+        };
+        let tracks = vec![
+            titled(2, "French (Forced Narrative)"),
+            titled(3, "Français FORCÉS"),
+            titled(4, "Reinforced commentary"),
+            titled(5, "Français"),
+            Track {
+                title: Some("Forced".to_string()),
+                ..audio_track(source_id)
+            },
+        ];
+        database
+            .store_analysis(source_id, &SourceAnalysis::default(), &tracks, &[])
+            .await
+            .unwrap();
+
+        assert_eq!(database.mark_subtitles_titled_forced().await.unwrap(), 2);
+        assert_eq!(database.mark_subtitles_titled_forced().await.unwrap(), 0);
+        let forced: Vec<i32> = database
+            .tracks_of_source(source_id)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|track| track.is_forced)
+            .map(|track| track.stream_index)
+            .collect();
+        assert_eq!(forced, vec![2, 3]);
     }
 
     #[tokio::test]
