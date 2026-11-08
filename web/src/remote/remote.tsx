@@ -16,6 +16,7 @@ import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
+import { useWordsThatFit } from "../fitting";
 import { PHONE, useMediaQuery } from "../media-query";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
@@ -203,8 +204,12 @@ function Line({
 }
 
 /** What plays, with its picture and what it is about, as the card of the
- *  next episode shows one. */
-function NowPlaying({ playing }: { playing: SteeredPlaying }) {
+ *  next episode shows one.
+ *
+ *  On a telephone a film's synopsis takes what room the buttons leave, run on
+ *  round its picture and cut to the words that fit there: every button stays
+ *  on the one screen, and the synopsis is all there whenever it can be. */
+function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsTheScreen: boolean }) {
   const { t } = useSettings();
   const song = playing.kind === "song";
   const about = useAsked((signal) => (song ? Promise.resolve(null) : api.work(playing.work_id, signal)), [
@@ -212,13 +217,16 @@ function NowPlaying({ playing }: { playing: SteeredPlaying }) {
     song,
   ]).answer;
   const caption = captionOf(playing, t);
+  const box = useRef<HTMLDivElement>(null);
+  const overview = about?.overview ?? null;
+  const cut = useWordsThatFit(box, overview, ".remote-overview", fitsTheScreen);
   return (
-    <div className={song ? "remote-now remote-now-song" : "remote-now"}>
+    <div ref={box} className={song ? "remote-now remote-now-song" : "remote-now"}>
       {playing.picture && <img className="remote-picture" src={playing.picture} alt="" />}
       <div className="remote-now-words">
         {caption && <span className="remote-caption">{caption}</span>}
         <span className="remote-title">{playing.title}</span>
-        {about?.overview && <p className="remote-overview">{about.overview}</p>}
+        {overview && <p className="remote-overview">{cut ?? overview}</p>}
       </div>
     </div>
   );
@@ -297,8 +305,8 @@ function Steering({ device, heardAt }: { device: SteerableDevice; heardAt: numbe
   );
   const left = length === null ? "" : `-${asClock(Math.max(0, length - position))}`;
   return (
-    <div className="remote-steering">
-      <NowPlaying playing={playing} />
+    <div className={song ? "remote-steering" : "remote-steering remote-steering-fits"}>
+      <NowPlaying playing={playing} fitsTheScreen={onAPhone && !song} />
       {length !== null && (
         <Line
           label={t("player.position")}
