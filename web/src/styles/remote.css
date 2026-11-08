@@ -359,6 +359,11 @@
     margin-top: 4px;
   }
 
+  /* Only the series beside the picture, the title and the synopsis under it. */
+  .remote-steering-fits .remote-now-title-under .remote-title {
+    clear: left;
+  }
+
   .remote-steering-fits .remote-overview {
     display: block;
     overflow: visible;

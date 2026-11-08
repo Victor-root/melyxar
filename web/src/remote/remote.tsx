@@ -16,7 +16,8 @@ import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
-import { pictureShare, useFilledRoom } from "../fitting";
+import { pictureShare, useFilledRoom, WHOLE_WIDTH } from "../fitting";
+import type { Way } from "../fitting";
 import { PHONE, useMediaQuery } from "../media-query";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
@@ -203,10 +204,17 @@ function Line({
   );
 }
 
-/** How wide a film's picture is drawn beside its words on a telephone's
- *  remote, as a share of the width, smallest and largest. */
-const SMALLEST_PICTURE = 46;
-const LARGEST_PICTURE_BESIDE = 60;
+/** The ways a film is laid out on a telephone's remote, the roomiest first:
+ *  its picture across the whole width with the words under it; the picture
+ *  at the left with only the series beside it and the title and synopsis
+ *  under it; the picture at the left with the words running on beside it and
+ *  under it. Each with how wide the picture can be, as a share of the width:
+ *  beside a column of words it stops short of leaving them a word a line. */
+const FILM_WAYS: readonly Way[] = [
+  { className: null, least: WHOLE_WIDTH, most: WHOLE_WIDTH },
+  { className: "remote-now-title-under", least: 46, most: 70 },
+  { className: null, least: 46, most: 60 },
+];
 
 /** What plays, with its picture and what it is about, as the card of the
  *  next episode shows one.
@@ -226,17 +234,10 @@ function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsT
   const caption = captionOf(playing, t);
   const box = useRef<HTMLDivElement>(null);
   const overview = about?.overview ?? null;
-  const filled = useFilledRoom(
-    box,
-    overview,
-    ".remote-overview",
-    ".remote-picture",
-    SMALLEST_PICTURE,
-    LARGEST_PICTURE_BESIDE,
-    fitsTheScreen,
-  );
+  const filled = useFilledRoom(box, overview, ".remote-overview", ".remote-picture", FILM_WAYS, fitsTheScreen);
+  const way = filled ? FILM_WAYS[filled.way].className : null;
   return (
-    <div ref={box} className={song ? "remote-now remote-now-song" : "remote-now"}>
+    <div ref={box} className={song ? "remote-now remote-now-song" : way ? `remote-now ${way}` : "remote-now"}>
       {playing.picture && (
         <img
           className="remote-picture"

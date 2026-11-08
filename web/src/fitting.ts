@@ -143,8 +143,18 @@ export function wordsThatFit(text: string, fits: (shown: string) => boolean): st
   return fitting === 0 ? "" : cutAfter(fitting);
 }
 
+/** One way a box can be laid out: a class it wears, and how wide its
+ *  picture can be that way, as a share of the box. */
+export interface Way {
+  className: string | null;
+  least: number;
+  most: number;
+}
+
 /** How a box standing in a column fills the room the others leave it. */
 export interface FilledRoom {
+  /** Which of the ways it is laid out. */
+  way: number;
   /** How wide its picture is, as a share of the box. */
   share: number;
   /** The words of its text that fit, or nothing when the whole text does. */
@@ -153,29 +163,26 @@ export interface FilledRoom {
 
 /**
  * Fills the room the other blocks of `box`'s parent leave it, the parent
- * standing in a column: the picture in `pictureIn` across the whole width
- * with the whole of `text` under it when there is room for that, otherwise
- * beside the text as wide as it can be from `least` to `most`; and when the
- * whole text does not fit even beside the smallest picture, the words of it
- * that do. Nothing in between: a picture wider than `most` leaves the words
- * beside it a column a word wide. Measured again whenever the parent
- * changes size, on an unseen copy of the box, the page's own being React's to
- * draw. Null when `enabled` is off.
+ * standing in a column: the first of `ways` the whole of `text` fits in,
+ * with its picture (`pictureIn`) as wide as that way lets it be and the
+ * room still allows; and when the whole text fits no way at all, the last
+ * way with the smallest picture and the words of the text that do fit.
+ * Measured again whenever the room changes, on an unseen copy of the box,
+ * the page's own being React's to draw. Null when `enabled` is off.
  */
 export function useFilledRoom(
   box: React.RefObject<HTMLElement | null>,
   text: string | null,
   wordsIn: string,
   pictureIn: string,
-  least: number,
-  most: number,
+  ways: readonly Way[],
   enabled: boolean,
 ): FilledRoom | null {
   const [filled, setFilled] = useState<FilledRoom | null>(null);
   useLayoutEffect(() => {
     const own = box.current;
     const column = own?.parentElement;
-    if (!enabled || !own || !column) {
+    if (!enabled || !own || !column || ways.length === 0) {
       setFilled(null);
       return;
     }
@@ -197,7 +204,12 @@ export function useFilledRoom(
         height: "auto",
       });
       own.after(copy);
-      const fits = (share: number, shown: string | null) => {
+      const fits = (way: Way, share: number, shown: string | null) => {
+        for (const other of ways) {
+          if (other.className) {
+            copy.classList.toggle(other.className, other === way);
+          }
+        }
         if (picture) {
           Object.assign(picture.style, pictureShare(share));
         }
@@ -206,29 +218,38 @@ export function useFilledRoom(
         }
         return copy.offsetHeight <= room + SLACK;
       };
-      let found: FilledRoom;
-      if (fits(WHOLE_WIDTH, text)) {
-        found = { share: WHOLE_WIDTH, words: null };
-      } else if (!fits(least, text)) {
-        found = {
-          share: least,
-          words: text && words ? wordsThatFit(text, (candidate) => fits(least, candidate)) : null,
-        };
-      } else {
-        let fitting = least;
-        let tooWide = most + 1;
+      let found: FilledRoom | null = null;
+      for (const [at, way] of ways.entries()) {
+        if (!fits(way, way.least, text)) {
+          continue;
+        }
+        let fitting = way.least;
+        let tooWide = way.most + 1;
         while (tooWide - fitting > 1) {
           const middle = Math.floor((fitting + tooWide) / 2);
-          if (fits(middle, text)) {
+          if (fits(way, middle, text)) {
             fitting = middle;
           } else {
             tooWide = middle;
           }
         }
-        found = { share: fitting, words: null };
+        found = { way: at, share: fitting, words: null };
+        break;
+      }
+      if (!found) {
+        const at = ways.length - 1;
+        const last = ways[at];
+        found = {
+          way: at,
+          share: last.least,
+          words: text && words ? wordsThatFit(text, (candidate) => fits(last, last.least, candidate)) : null,
+        };
       }
       copy.remove();
-      setFilled((was) => (was?.share === found.share && was.words === found.words ? was : found));
+      const settled = found;
+      setFilled((was) =>
+        was?.way === settled.way && was.share === settled.share && was.words === settled.words ? was : settled,
+      );
     };
     /* The room changes with the column and with every other block in it,
        some of which come in after the box does: the lists of tracks once
@@ -259,12 +280,12 @@ export function useFilledRoom(
       blocks.disconnect();
       document.fonts.removeEventListener("loadingdone", fill);
     };
-  }, [box, text, wordsIn, pictureIn, least, most, enabled]);
+  }, [box, text, wordsIn, pictureIn, ways, enabled]);
   return filled;
 }
 
 /** The share of a box a picture takes when it takes all of it. */
-const WHOLE_WIDTH = 100;
+export const WHOLE_WIDTH = 100;
 
 /** How a picture is drawn at this share of its box: across the whole of it,
  *  with no room kept beside it for words that go under it instead. */
