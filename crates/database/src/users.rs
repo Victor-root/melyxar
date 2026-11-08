@@ -121,11 +121,10 @@ impl Database {
         most: i64,
     ) -> Result<Option<User>> {
         let mut transaction = self.begin().await?;
-        let made: i64 =
-            sqlx::query_scalar("SELECT count(*) FROM users WHERE signed_up_at >= ?")
-                .bind(timestamp_to_text(since))
-                .fetch_one(&mut *transaction)
-                .await?;
+        let made: i64 = sqlx::query_scalar(SIGNED_UP_SINCE)
+            .bind(timestamp_to_text(since))
+            .fetch_one(&mut *transaction)
+            .await?;
         if made >= most {
             return Ok(None);
         }
@@ -141,6 +140,14 @@ impl Database {
         transaction.commit().await?;
         user.awaiting_approval = held;
         Ok(Some(user))
+    }
+
+    /// How many accounts were made at the door since then.
+    pub async fn signed_up_since(&self, since: Timestamp) -> Result<i64> {
+        Ok(sqlx::query_scalar(SIGNED_UP_SINCE)
+            .bind(timestamp_to_text(since))
+            .fetch_one(self.reader())
+            .await?)
     }
 
     /// Lets in an account that was waiting, and says whether one was.
@@ -613,6 +620,8 @@ fn read_views(stored: &str) -> Vec<(LibraryId, LibraryView)> {
         .collect()
 }
 
+const SIGNED_UP_SINCE: &str = "SELECT count(*) FROM users WHERE signed_up_at >= ?";
+
 /// Writes an account, its preferences and its grants, inside one transaction.
 ///
 /// Shared by the two that make one, which differ only in what they look at
@@ -1027,6 +1036,7 @@ mod tests {
             .create_user("Made by hand", Some("a stored form"), &Permissions::viewer())
             .await
             .expect("the administration is not counted");
+        assert_eq!(database.signed_up_since(since).await.expect("counted"), 2);
         assert!(database
             .sign_up_user("Tomorrow", "a stored form", true, now() + time::Duration::seconds(1), 2)
             .await

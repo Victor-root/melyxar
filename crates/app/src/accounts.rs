@@ -933,13 +933,19 @@ pub async fn sign_up(
         Turn::Checked { holds_back: false } => {}
     }
 
+    // Asked before the hash as well as with the writing: past the most, a
+    // crowd of addresses would otherwise still have every password hashed.
+    let since = at - time::Duration::days(1);
+    if state.database().signed_up_since(since).await? >= MOST_SIGN_UPS_A_DAY {
+        return Err(Trouble::Refused(Refused::TooManySignUps));
+    }
     let name = name_of(name)?;
     not_read_like_another(state, name, None).await?;
     let hashed = stored_form_of(state, password).await?;
     let held = settings.sign_ups.held;
     let made = state
         .database()
-        .sign_up_user(name, &hashed, held, at - time::Duration::days(1), MOST_SIGN_UPS_A_DAY)
+        .sign_up_user(name, &hashed, held, since, MOST_SIGN_UPS_A_DAY)
         .await;
     let user = match made {
         Ok(Some(user)) => user,

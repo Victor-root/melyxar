@@ -233,10 +233,15 @@ pub async fn let_in(state: &AppState, who: &User, code: &str, on: Option<UserId>
             if !who.permissions.is_administrator {
                 return Err(melyxar_core::Error::forbidden("only an administrator opens another's profile").into());
             }
-            if state.database().user(other).await?.is_none() {
-                return Err(melyxar_core::Error::not_found("no such account").into());
+            match state.database().user(other).await? {
+                None => return Err(melyxar_core::Error::not_found("no such account").into()),
+                // Said here rather than once the device asks: it would find
+                // nothing opened for it while this was told it had been.
+                Some(user) if user.awaiting_approval => {
+                    return Err(melyxar_core::Error::forbidden("this account waits for an administrator").into());
+                }
+                Some(_) => other,
             }
-            other
         }
         _ => who.id,
     };
@@ -311,6 +316,18 @@ mod tests {
             panic!("the device is let in");
         };
         assert_eq!(opened.user.id, viewer.id);
+
+        let waiting = state
+            .database()
+            .sign_up_user("newcomer", "a stored form", true, melyxar_core::time::now(), 20)
+            .await
+            .expect("written")
+            .expect("made");
+        let for_it = ask(&state, "Melyxar", None, HERE).expect("asked");
+        assert!(
+            let_in(&state, &keeper, &for_it.code, Some(waiting.id)).await.is_err(),
+            "not even an administrator opens an account still waiting"
+        );
 
         let other = ask(&state, "Melyxar", None, HERE).expect("asked");
         let wrong = if other.code == "000000" { "000001" } else { "000000" };

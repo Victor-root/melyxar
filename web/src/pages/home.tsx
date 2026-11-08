@@ -27,6 +27,7 @@ import { refusalKey } from "../i18n";
 import { whatIsLeft, whichEpisode } from "../readable";
 import { cardShapeOf } from "../libraries";
 import { useSettings } from "../settings";
+import { useAccount } from "../account";
 import { BinocularsIcon, CameraIcon, EyeIcon, KindIcon } from "../icons";
 import { lengthOfAPlay } from "../watching";
 import { Arrival, ArrivalLoader, stillArriving } from "../components/arrival";
@@ -40,6 +41,7 @@ const EVERYTHING_NEWEST = "/search?order=added_at&descending=true";
 
 export function HomePage({ libraries }: { libraries: Library[] }) {
   const { t, bannerShown } = useSettings();
+  const { account } = useAccount();
   const { home, moved, failed, again, jobs, scan, lookUp, refused } = useHomeScreen(libraries);
   const newestAlbums = useNewestAlbums(libraries, moved);
 
@@ -80,6 +82,21 @@ export function HomePage({ libraries }: { libraries: Library[] }) {
       (sum, library) => sum + (library.kind === "music" || library.kind === "cameras" ? library.works : 0),
       0,
     );
+  /* An account given no library yet, which an account made at the door is
+     until an administrator gives it some: nothing it can do here but wait. */
+  if (held === 0 && libraries.length === 0 && !account?.is_administrator) {
+    return (
+      <>
+        <PageBackdrop />
+        <main className="page">
+          <section className="empty">
+            <h1>{t("home.no_access.title")}</h1>
+            <p>{t("home.no_access.body")}</p>
+          </section>
+        </main>
+      </>
+    );
+  }
   if (held === 0) {
     return (
       <>

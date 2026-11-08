@@ -324,6 +324,8 @@ const en: Dictionary = {
   "link.refused.forbidden": "Only an administrator can open another account.",
 
   "home.recently_added": "Recently added",
+  "home.no_access.title": "No library yet",
+  "home.no_access.body": "An administrator has not given your account access to a library yet.",
   "home.empty.title": "No media yet",
   "home.empty.body": "Add a folder to a library and scan it to see your media here.",
   "home.awaiting": "{count} awaiting identification",
@@ -2739,6 +2741,8 @@ const fr: Dictionary = {
   "link.refused.forbidden": "Seul un administrateur peut ouvrir un autre compte.",
 
   "home.recently_added": "Récemment ajoutés",
+  "home.no_access.title": "Aucune médiathèque pour le moment",
+  "home.no_access.body": "Un administrateur n’a pas encore donné à votre compte l’accès à une médiathèque.",
   "home.empty.title": "Aucun média pour le moment",
   "home.empty.body":
     "Ajoutez un dossier à une médiathèque, puis lancez une analyse pour afficher vos médias ici.",
