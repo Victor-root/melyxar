@@ -14,7 +14,7 @@ export type Level = "ok" | "attention" | "trouble" | "news";
 /** The kinds an account chooses about. */
 export type ChoosableKind = "new_content" | "message" | "deletion" | "request";
 
-export type Kind = ChoosableKind | "maintenance";
+export type Kind = ChoosableKind | "maintenance" | "sign_up";
 
 /** One series some episodes arrived in. */
 export interface SeriesArrived {
@@ -45,7 +45,10 @@ export type Said =
       /** A small copy of the poster, at the provider. */
       poster: string | null;
       news: RequestNews;
-    };
+    }
+  /** Somebody made their own account at the door, told to the
+   *  administrators. */
+  | { kind: "sign_up"; name: string; awaiting: boolean };
 
 /** What happened to a title asked for. */
 export type RequestNews =

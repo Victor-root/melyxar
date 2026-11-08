@@ -55,6 +55,8 @@ export interface ManagedAccount {
   name: string;
   avatar: string | null;
   face_picture: FacePicture;
+  /** Made at the door and not let in yet: it cannot sign in. */
+  awaiting_approval: boolean;
   /** Whether this is the administrator looking at the page. */
   is_you: boolean;
   rights: Rights;
@@ -151,6 +153,15 @@ export interface Branding {
   /** False on a brand new server, which asks for a first account instead of a
       password. */
   setup_complete: boolean;
+  /** Whether somebody may make their own account here. */
+  sign_ups_open: boolean;
+}
+
+/** Whether somebody may make their own account at the door, and whether it
+ *  then waits for an administrator. */
+export interface SignUps {
+  open: boolean;
+  held: boolean;
 }
 
 export interface Picture {
@@ -2730,6 +2741,10 @@ export const api = {
    *  administrator, on the one chosen. */
   letIn: (code: string, account: string | null) =>
     post<{ let_in: boolean }>(`/api/v1/link/${encodeURIComponent(code)}`, { account }),
+  /* An account made at the door, with no rights. Opens no session: one that
+     does not wait signs in as any other. */
+  signUp: (name: string, password: string) =>
+    post<{ awaiting_approval: boolean }>("/api/v1/public/sign-up", { name, password }),
   /* The first account of a brand new server, which is an administrator and is
      signed in straight away. Refused once there is one. */
   setUp: (name: string, password: string, remember: boolean, client: string, language: string) =>
@@ -2776,6 +2791,11 @@ export const api = {
     remove<{ signed_out: number }>(`/api/v1/accounts/${account}/sessions`),
   removeAccount: (account: string) =>
     remove<{ removed: boolean }>(`/api/v1/accounts/${account}`),
+  /* Lets in an account made at the door. */
+  approveAccount: (account: string) =>
+    post<ManagedAccount>(`/api/v1/accounts/${account}/approval`),
+  signUps: (signal?: AbortSignal) => get<SignUps>("/api/v1/sign-ups", signal),
+  setSignUps: (signUps: SignUps) => put<SignUps>("/api/v1/sign-ups", signUps),
   /* Every device of every account, for the administration; one's own for
      everybody. Signing one out stops whatever it was playing. */
   devices: (signal?: AbortSignal) => get<SignedInDevice[]>("/api/v1/devices", signal),

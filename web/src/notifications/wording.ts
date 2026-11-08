@@ -139,6 +139,13 @@ export function sayNote(note: Note, t: Wording, language: string): NoteSaid {
           };
     case "request":
       return sayRequest(said, work, t);
+    case "sign_up":
+      return {
+        title: t(said.awaiting ? "notes.sign_up_waiting" : "notes.sign_up_made", { name: said.name }),
+        detail: t("notes.sign_up_detail"),
+        to: "/admin/users",
+        named: said.name,
+      };
     default:
       return { title: t("notes.unreadable"), detail: null, to: null };
   }

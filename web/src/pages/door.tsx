@@ -57,7 +57,9 @@ type Showing =
   | { the: "accounts" }
   | { the: "form"; forWhom: string | null }
   /* A code shown, for an account signed in elsewhere to let this browser in. */
-  | { the: "telephone" };
+  | { the: "telephone" }
+  /* The form that makes an account, where the server lets anybody make one. */
+  | { the: "sign_up" };
 
 export function Door({
   branding,
@@ -94,6 +96,12 @@ export function Door({
       ? { the: "accounts" }
       : { the: "form", forWhom: null });
   const onTheForm = showing.the === "form";
+  const signingUp = showing.the === "sign_up";
+  /* The fields, for signing in or for making an account. */
+  const withFields = (onTheForm || signingUp) && !door.awaitingApproval;
+  /* An account being made, which takes its password twice: a typo there is an
+     account nobody can get into. */
+  const making = door.brandNew || signingUp;
   const forWhom = showing.the === "form" ? showing.forWhom : null;
   const chosen = door.names.find((offered) => offered.name === forWhom);
 
@@ -103,11 +111,11 @@ export function Door({
   // where it would raise the keyboard before anybody asked to type.
   const touch = useMediaQuery(COARSE);
   useEffect(() => {
-    if (!door.asked || !onTheForm || touch) {
+    if (!door.asked || !withFields || touch) {
       return;
     }
     (forWhom === null ? first : passwordField).current?.focus();
-  }, [door.asked, onTheForm, forWhom, touch]);
+  }, [door.asked, withFields, forWhom, touch]);
 
   const refusal = twiceDiffers
     ? { key: "door.refused.not_the_same", values: {} }
@@ -115,12 +123,12 @@ export function Door({
 
   const send = (event: React.FormEvent) => {
     event.preventDefault();
-    if (door.brandNew && password !== again) {
+    if (making && password !== again) {
       setTwiceDiffers(true);
       return;
     }
     setTwiceDiffers(false);
-    void door.knock(name.trim(), password, remember);
+    void (signingUp ? door.signUp : door.knock)(name.trim(), password, remember);
   };
 
   // Typing again is somebody answering the refusal, so it goes.
@@ -139,6 +147,7 @@ export function Door({
     door.forget();
     setName(next.the === "form" ? (next.forWhom ?? "") : "");
     setPassword("");
+    setAgain("");
     setTurnedTo(next);
   };
 
@@ -153,6 +162,12 @@ export function Door({
   const toTheTelephone = () => {
     setCameFrom(showing);
     turnTo({ the: "telephone" });
+  };
+  /* Making an account is a step on from wherever it was asked from too. */
+  const leaveTheSignUp = useBackClosesIt(() => turnTo(cameFrom), signingUp);
+  const toTheSignUp = () => {
+    setCameFrom(showing);
+    turnTo({ the: "sign_up" });
   };
 
   return (
@@ -173,6 +188,17 @@ export function Door({
           aria-label={t("door.back")}
           title={t("door.back")}
           onClick={() => leaveTheForm(backToTheAccounts)}
+        >
+          <BackIcon size={20} />
+        </button>
+      )}
+      {signingUp && (
+        <button
+          type="button"
+          className="door-back"
+          aria-label={t("door.back")}
+          title={t("door.back")}
+          onClick={() => leaveTheSignUp(() => turnTo(cameFrom))}
         >
           <BackIcon size={20} />
         </button>
@@ -201,9 +227,24 @@ export function Door({
                   ? t("door.pick")
                   : showing.the === "telephone"
                     ? t("door.link.invitation")
-                    : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
+                    : signingUp
+                      ? t(door.awaitingApproval ? "door.sign_up.waiting" : "door.sign_up.invitation")
+                      : t(door.brandNew ? "door.first.invitation" : "door.invitation")}
               </p>
             </div>
+          )}
+
+          {/* Made, and waiting for an administrator: nothing left to type
+              here, only the way back. */}
+          {signingUp && door.awaitingApproval && (
+            <button
+              type="button"
+              className="door-by-hand door-by-hand-accent"
+              onClick={() => leaveTheSignUp(() => turnTo(cameFrom))}
+            >
+              <BackIcon size={18} />
+              {t("door.back")}
+            </button>
           )}
 
           {/* Who is on this server, for whoever is not typing their own name for
@@ -257,6 +298,12 @@ export function Door({
                 <DeviceIcon size={18} />
                 {t("door.link.go")}
               </button>
+              {door.signUpsOpen && (
+                <button type="button" className="door-by-hand" onClick={toTheSignUp}>
+                  <AccountAddIcon size={18} />
+                  {t("door.create")}
+                </button>
+              )}
             </>
           )}
 
@@ -288,7 +335,7 @@ export function Door({
             </div>
           )}
 
-          {onTheForm && (
+          {withFields && (
             <>
               {forWhom === null && (
                 <>
@@ -328,7 +375,7 @@ export function Door({
                   onChange={(event) => typing(setPassword)(event.target.value)}
                   placeholder={t("door.password")}
                   autoComplete={
-                    door.brandNew ? "new-password" : "current-password"
+                    making ? "new-password" : "current-password"
                   }
                   required
                 />
@@ -349,7 +396,7 @@ export function Door({
                 </button>
               </div>
 
-              {door.brandNew && (
+              {making && (
                 <>
                   <label className="door-label" htmlFor="door-again">
                     {t("door.password_again")}
@@ -394,7 +441,7 @@ export function Door({
                     from this screen, and the one that exists is a command on the
                     server itself. Drawn all the same, and turned off until there
                     is something for it to do. */}
-                {!door.brandNew && (
+                {!making && (
                   <button
                     type="button"
                     className="door-forgot"
@@ -429,14 +476,17 @@ export function Door({
                     ? "door.asking"
                     : door.brandNew
                       ? "door.first.go"
-                      : "door.go",
+                      : signingUp
+                        ? "door.sign_up.go"
+                        : "door.go",
                 )}
               </button>
 
-              {/* On a brand new server the button above is the one that makes an
-                  account, so a second one offering the same thing would be two
-                  doors into one room. */}
-              {!door.brandNew && (
+              {/* Where an account is being made, the button above is the one
+                  that makes it, so a second one offering the same thing would
+                  be two doors into one room. Making one's own account is only
+                  offered where the administrator lets anybody. */}
+              {!making && (
                 <>
                   <div className="door-or">
                     <span>{t("door.or")}</span>
@@ -445,19 +495,12 @@ export function Door({
                     <DeviceIcon size={20} />
                     {t("door.link.go")}
                   </button>
-                  {/* Nothing behind this one either: accounts on this server are
-                      made by whoever runs it. Turned off rather than left out,
-                      so the day the screen for it exists there is a place for
-                      it. */}
-                  <button
-                    type="button"
-                    className="button button-large door-make"
-                    disabled
-                    title={t("door.create_why")}
-                  >
-                    <AccountAddIcon size={20} />
-                    {t("door.create")}
-                  </button>
+                  {door.signUpsOpen && (
+                    <button type="button" className="button button-large door-make" onClick={toTheSignUp}>
+                      <AccountAddIcon size={20} />
+                      {t("door.create")}
+                    </button>
+                  )}
                 </>
               )}
             </>

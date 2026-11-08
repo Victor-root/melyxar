@@ -20,7 +20,7 @@ data class SeriesArrived(val id: String, val title: String, val episodes: Int = 
 data class RequestNews(val what: String, val by: String = "", val seasons: List<Int> = emptyList(), val answer: String = "")
 
 /** What a notification says, the fields of its [kind] filled: message,
- *  maintenance, new_content, deletion or request. */
+ *  maintenance, new_content, deletion, request or sign_up. */
 @Serializable
 data class Said(
     val kind: String = "",
@@ -38,6 +38,10 @@ data class Said(
     val overview: String? = null,
     val poster: String? = null,
     val news: RequestNews? = null,
+    /** For a sign up: who made the account, and whether it waits to be let
+     *  in. */
+    val name: String = "",
+    val awaiting: Boolean = false,
 )
 
 /** One notification kept for this account. */

@@ -93,6 +93,12 @@ fun Wording.say(note: Note): NoteSaid {
             else -> NoteSaid(said(R.string.tv_notes_removed_disk), counted(R.plurals.tv_notes_removed_disk_checked, gone, gone), null, poster)
         }
         "request" -> request(told, work, poster)
+        "sign_up" -> NoteSaid(
+            said(if (told.awaiting) R.string.tv_notes_sign_up_waiting else R.string.tv_notes_sign_up_made, told.name),
+            said(R.string.tv_notes_sign_up_detail),
+            null,
+            poster,
+        )
         else -> NoteSaid(said(R.string.tv_notes_unreadable), null, null, poster)
     }
 }

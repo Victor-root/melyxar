@@ -359,6 +359,9 @@ export const FINDABLE: FindableSection[] = [
       ["users.new", "users.new_why"],
       ["users.password"],
       ["users.password_again"],
+      ["users.sign_ups", "users.sign_ups_lead"],
+      ["users.sign_ups_open", "users.sign_ups_open_why"],
+      ["users.sign_ups_held", "users.sign_ups_held_why"],
     ],
   },
   {

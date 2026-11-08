@@ -41,6 +41,13 @@ export interface DoorScreen {
    *  Remembering says whether the browser is to hold on to the session once
    *  it is closed, which is the one thing about it somebody chooses. */
   knock: (name: string, password: string, remember: boolean) => Promise<void>;
+  /** Whether somebody may make their own account here. */
+  signUpsOpen: boolean;
+  /** Makes an account at the door, and signs it in when it does not have to
+   *  wait for an administrator. Never throws, like knocking. */
+  signUp: (name: string, password: string, remember: boolean) => Promise<void>;
+  /** An account was just made here and waits for an administrator. */
+  awaitingApproval: boolean;
   /** Whether the names have been asked for and answered, so the card is only
    *  drawn once it can show the view it opens on. True at once on a new server,
    *  which asks for nothing. */
@@ -49,7 +56,8 @@ export interface DoorScreen {
   asking: boolean;
   /** Why it said no, or nothing. */
   refused: Refusal | null;
-  /** Put the refusal aside, which is what typing again does. */
+  /** Put the refusal aside, and an account said to wait, which is what typing
+   *  again or turning the screen does. */
   forget: () => void;
 }
 
@@ -62,6 +70,7 @@ export function useDoorScreen(
   const [refused, setRefused] = useState<Refusal | null>(null);
   const [names, setNames] = useState<NameAtTheDoor[]>([]);
   const [answered, setAnswered] = useState(false);
+  const [awaitingApproval, setAwaitingApproval] = useState(false);
   const brandNew = !branding.setup_complete;
 
   // Asked for once, and never on a server that has no accounts yet: the only
@@ -105,15 +114,41 @@ export function useDoorScreen(
     [brandNew, cameIn, language],
   );
 
+  const signUp = useCallback(
+    async (name: string, password: string, remember: boolean) => {
+      setAsking(true);
+      setRefused(null);
+      try {
+        const made = await api.signUp(name, password);
+        if (made.awaiting_approval) {
+          setAwaitingApproval(true);
+          setAsking(false);
+          return;
+        }
+        cameIn(await api.signIn(name, password, remember, deviceIdentity()));
+      } catch (error) {
+        setRefused(whatTheServerSaid(error));
+        setAsking(false);
+      }
+    },
+    [cameIn],
+  );
+
   return {
     brandNew,
     names,
+    signUpsOpen: !brandNew && branding.sign_ups_open,
+    signUp,
+    awaitingApproval,
     asked: brandNew || answered,
     serverName: branding.server_name,
     knock,
     asking,
     refused,
-    forget: useCallback(() => setRefused(null), []),
+    forget: useCallback(() => {
+      setRefused(null);
+      setAwaitingApproval(false);
+    }, []),
   };
 }
 

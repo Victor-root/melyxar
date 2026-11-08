@@ -79,6 +79,7 @@ fun Knock(
 
     val wrong = stringResource(R.string.tv_refused_wrong)
     val generic = stringResource(R.string.tv_refused_generic)
+    val awaiting = stringResource(R.string.tv_refused_awaiting_approval)
     val resources = LocalResources.current
 
     fun signIn() {
@@ -98,6 +99,7 @@ fun Knock(
                     refused.waitSeconds != null ->
                         resources.getQuantityString(R.plurals.tv_refused_held_back, refused.waitSeconds, refused.waitSeconds)
                     refused.signedOut -> wrong
+                    refused.reason == "awaiting_approval" -> awaiting
                     else -> generic
                 }
                 password.clearText()

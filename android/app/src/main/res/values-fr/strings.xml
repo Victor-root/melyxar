@@ -24,6 +24,7 @@
     <string name="tv_sign_in">Se connecter</string>
     <string name="tv_signing_in">Connexion en cours…</string>
     <string name="tv_refused_wrong">Nom d’utilisateur ou mot de passe incorrect.</string>
+    <string name="tv_refused_awaiting_approval">Votre compte attend qu’un administrateur l’accepte.</string>
     <plurals name="tv_refused_held_back">
         <item quantity="one">Trop de tentatives de connexion. Réessayez dans %d seconde.</item>
         <item quantity="many">Trop de tentatives de connexion. Réessayez dans %d de secondes.</item>
@@ -403,6 +404,9 @@
     <string name="tv_notes_request_accepted">Votre demande de %1$s a été acceptée</string>
     <string name="tv_notes_request_refused">Votre demande de %1$s a été refusée</string>
     <string name="tv_notes_request_added">%1$s est maintenant disponible pour la lecture</string>
+    <string name="tv_notes_sign_up_waiting">%1$s a créé un compte et attend votre accord</string>
+    <string name="tv_notes_sign_up_made">%1$s a créé un compte</string>
+    <string name="tv_notes_sign_up_detail">Il ne voit aucune médiathèque tant que vous ne lui en donnez pas l’accès.</string>
     <string name="tv_notes_removed_library">Retiré de la médiathèque</string>
     <string name="tv_notes_removed_library_why">Les fichiers restent sur le disque.</string>
     <string name="tv_notes_removed_disk">Supprimé de la médiathèque et du disque</string>

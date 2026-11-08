@@ -43,6 +43,8 @@ class Refusal(
     val code: String?,
     /** How long the server asks to wait before trying again, when it does. */
     val waitSeconds: Int? = null,
+    /** The word saying what was refused, when the server gives one. */
+    val reason: String? = null,
 ) : IOException("$status $code") {
     /** The session this was asked with is over. */
     val signedOut get() = status == 401
@@ -117,7 +119,7 @@ private data class SignIn(val name: String, val password: String, val remember: 
 private data class Failure(val code: String? = null, val details: Details? = null)
 
 @Serializable
-private data class Details(val seconds: Int? = null)
+private data class Details(val seconds: Int? = null, val reason: String? = null)
 
 /** Where [path] is asked, with what [also] adds to its query. */
 internal fun Api.asking(path: String, also: HttpUrl.Builder.() -> Unit = {}): String =
@@ -559,7 +561,7 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
             } catch (_: SerializationException) {
                 null
             }
-            throw Refusal(answer.code, failure?.code, failure?.details?.seconds)
+            throw Refusal(answer.code, failure?.code, failure?.details?.seconds, failure?.details?.reason)
         }
         return try {
             serverJson.decodeFromString(reading, text)

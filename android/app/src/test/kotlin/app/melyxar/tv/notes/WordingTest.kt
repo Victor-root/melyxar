@@ -30,6 +30,8 @@ class WordingTest {
         R.string.tv_notes_request_asked -> "request_asked"
         R.string.tv_notes_maintenance_at -> "maintenance_at"
         R.string.tv_season -> "season"
+        R.string.tv_notes_sign_up_waiting -> "sign_up_waiting"
+        R.string.tv_notes_sign_up_detail -> "sign_up_detail"
         else -> id.toString()
     }
 
@@ -66,6 +68,14 @@ class WordingTest {
         )
         assertEquals("new_many|3|Tout", said.title)
         assertEquals("Orbit, Dawn", said.detail)
+    }
+
+    @Test
+    fun aSignUpTellsWhoWaits() {
+        val said = words.say(note(Said(kind = "sign_up", name = "Newcomer", awaiting = true)))
+        assertEquals("sign_up_waiting|Newcomer", said.title)
+        assertEquals("sign_up_detail", said.detail)
+        assertNull(said.leads)
     }
 
     @Test

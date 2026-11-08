@@ -25,6 +25,7 @@
     <string name="tv_sign_in">Sign in</string>
     <string name="tv_signing_in">Signing in…</string>
     <string name="tv_refused_wrong">Incorrect username or password.</string>
+    <string name="tv_refused_awaiting_approval">Your account is waiting for an administrator to approve it.</string>
     <plurals name="tv_refused_held_back">
         <item quantity="one">Too many failed attempts. Try again in %d second.</item>
         <item quantity="other">Too many failed attempts. Try again in %d seconds.</item>
@@ -393,6 +394,9 @@
     <string name="tv_notes_request_accepted">Your request for %1$s was accepted</string>
     <string name="tv_notes_request_refused">Your request for %1$s was declined</string>
     <string name="tv_notes_request_added">%1$s is now available to watch</string>
+    <string name="tv_notes_sign_up_waiting">%1$s created an account and is waiting for your approval</string>
+    <string name="tv_notes_sign_up_made">%1$s created an account</string>
+    <string name="tv_notes_sign_up_detail">It sees no library until you give it access.</string>
     <string name="tv_notes_removed_library">Removed from library</string>
     <string name="tv_notes_removed_library_why">Files remain on disk.</string>
     <string name="tv_notes_removed_disk">Deleted from library and disk</string>

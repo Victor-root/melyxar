@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { api, ApiError } from "../../api";
-import type { Library, ManagedAccount, Rights } from "../../api";
+import type { Library, ManagedAccount, Rights, SignUps } from "../../api";
 import { useAccount } from "../../account";
 import { figuresOf, useAsked, useTold } from "../../asking";
 import { Face } from "../../components/face";
@@ -87,6 +87,8 @@ export function AdminUsers() {
       {said && <p className="panel-notice panel-notice-ok">{said}</p>}
 
       <div className="panels">
+        <SignUpsPanel />
+
         {adding && (
           <NewAccount
             libraries={libraries}
@@ -98,7 +100,8 @@ export function AdminUsers() {
           />
         )}
 
-        {(accounts.answer ?? []).map((account) => (
+        {/* The ones waiting first: they are what there is to do here. */}
+        {waitingFirst(accounts.answer ?? []).map((account) => (
           <AccountPanel
             key={account.id}
             account={account}
@@ -109,6 +112,64 @@ export function AdminUsers() {
         ))}
       </div>
     </>
+  );
+}
+
+/** The accounts waiting to be let in, then the others, each in the order
+ *  the server listed them. */
+function waitingFirst(accounts: ManagedAccount[]): ManagedAccount[] {
+  return [
+    ...accounts.filter((account) => account.awaiting_approval),
+    ...accounts.filter((account) => !account.awaiting_approval),
+  ];
+}
+
+/**
+ * Whether people may make their own account at the door, and whether each
+ * then waits to be let in. Shown switched the moment it is pressed, and put
+ * back if the server refuses.
+ */
+function SignUpsPanel() {
+  const { t } = useSettings();
+  const asked = useAsked((signal) => api.signUps(signal));
+  const [shown, setShown] = useState<SignUps | null>(null);
+  const signUps = shown ?? asked.answer;
+  const save = useTold(async (wanted: SignUps, before: SignUps) => {
+    setShown(wanted);
+    try {
+      setShown(await api.setSignUps(wanted));
+    } catch (error) {
+      setShown(before);
+      throw error;
+    }
+  });
+
+  return (
+    <Panel icon={AccountAddIcon} title={t("users.sign_ups")} lead={t("users.sign_ups_lead")}>
+      {signUps && (
+        <>
+          <Setting label={t("users.sign_ups_open")} why={t("users.sign_ups_open_why")}>
+            <Toggle
+              label={t("users.sign_ups_open")}
+              checked={signUps.open}
+              disabled={save.busy}
+              onChange={(open) => void save.tell({ ...signUps, open }, signUps)}
+            />
+          </Setting>
+          <Setting label={t("users.sign_ups_held")} why={t("users.sign_ups_held_why")}>
+            <Toggle
+              label={t("users.sign_ups_held")}
+              checked={signUps.held}
+              disabled={save.busy || !signUps.open}
+              onChange={(held) => void save.tell({ ...signUps, held }, signUps)}
+            />
+          </Setting>
+        </>
+      )}
+      {(asked.failure || save.failure) && (
+        <p className="panel-notice panel-notice-trouble">{t("users.failed")}</p>
+      )}
+    </Panel>
   );
 }
 
@@ -147,6 +208,9 @@ function leadOf(
   const role = rights.is_administrator
     ? t("users.role.administrator")
     : `${t("users.role.member")} · ${reachOf(rights, libraries, t)}`;
+  if (account.awaiting_approval) {
+    return `${t("users.awaiting")} · ${role}`;
+  }
   const where =
     account.devices === 0 || account.last_seen_at === null
       ? t("users.nowhere")
@@ -167,7 +231,7 @@ function AccountPanel({
 }) {
   const { t } = useSettings();
   const { cameIn } = useAccount();
-  const [asking, setAsking] = useState<"sign_out" | "remove" | null>(null);
+  const [asking, setAsking] = useState<"sign_out" | "remove" | "refuse" | null>(null);
   const [choosingPassword, setChoosingPassword] = useState(false);
   /* Its rights folded away at first: a server with many accounts was a page
      of rights to scroll through to reach one. A refusal or a password being
@@ -201,8 +265,12 @@ function AccountPanel({
   });
   const remove = useTold(async () => {
     await api.removeAccount(account.id);
+    onDone(t(asking === "refuse" ? "users.refused" : "users.removed", { name: account.name }));
     setAsking(null);
-    onDone(t("users.removed", { name: account.name }));
+  });
+  const approve = useTold(async () => {
+    await api.approveAccount(account.id);
+    onDone(t("users.approved", { name: account.name }));
   });
 
   const pictureKey = pictureRefusalKey(picture.failure);
@@ -212,7 +280,8 @@ function AccountPanel({
     refusalOf(rename.failure, t) ??
     pictureRefusal ??
     refusalOf(signOut.failure, t) ??
-    refusalOf(remove.failure, t);
+    refusalOf(remove.failure, t) ??
+    refusalOf(approve.failure, t);
 
   useEffect(() => {
     if (refusal) {
@@ -239,6 +308,23 @@ function AccountPanel({
         onSettled: (name) => void rename.tell(name),
       }}
     >
+      {account.awaiting_approval && (
+        <div className="account-actions">
+          <button
+            className="button button-small button-accent"
+            disabled={approve.busy}
+            onClick={() => void approve.tell()}
+          >
+            {t("users.approve")}
+          </button>
+          <button
+            className="button button-small button-danger"
+            onClick={() => setAsking(asking === "refuse" ? null : "refuse")}
+          >
+            {t("users.refuse")}
+          </button>
+        </div>
+      )}
       <div className="account-actions">
         <PictureButtons account={account} told={picture} />
         {!account.is_you && (
@@ -287,7 +373,11 @@ function AccountPanel({
         <div className="removal-box">
           <p className="removal-ask">
             {t(
-              asking === "remove" ? "users.remove_asks" : "users.sign_out_asks",
+              asking === "refuse"
+                ? "users.refuse_asks"
+                : asking === "remove"
+                  ? "users.remove_asks"
+                  : "users.sign_out_asks",
               {
                 name: account.name,
               },
@@ -304,10 +394,16 @@ function AccountPanel({
               className="button button-small button-danger-full"
               disabled={signOut.busy || remove.busy}
               onClick={() =>
-                asking === "remove" ? remove.tell() : signOut.tell()
+                asking === "sign_out" ? signOut.tell() : remove.tell()
               }
             >
-              {t(asking === "remove" ? "users.remove" : "users.sign_out")}
+              {t(
+                asking === "refuse"
+                  ? "users.refuse"
+                  : asking === "remove"
+                    ? "users.remove"
+                    : "users.sign_out",
+              )}
             </button>
           </div>
         </div>

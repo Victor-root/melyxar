@@ -110,6 +110,15 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
     case "account_created":
     case "account_removed":
       return { title: t(`activity.${line.kind}`, { user }), note: null };
+    case "signed_up":
+      return {
+        title: t("activity.signed_up", { user }),
+        note: joined([
+          text(details, "address"),
+          details.awaiting === true ? t("activity.signed_up_waiting") : null,
+        ]),
+      };
+    case "account_approved":
     case "rights_changed":
     case "signed_out_everywhere":
       return {

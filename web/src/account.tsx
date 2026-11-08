@@ -117,6 +117,7 @@ export function useWhoIsThere(): Who {
           door_slogan: null,
           default_theme: "system",
           setup_complete: true,
+          sign_ups_open: false,
         });
       });
     return () => controller.abort();

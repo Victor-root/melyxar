@@ -82,6 +82,18 @@ describe("what a notification says", () => {
     expect(deleted(4).detail).toBe('delete.done_disk_checked {"count":4}');
   });
 
+  it("tells the administrators who made an account, whether it waits, and takes them to the accounts", () => {
+    expect(sayNote(a({ kind: "sign_up", name: "Newcomer", awaiting: true }), t, "en")).toEqual({
+      title: 'notes.sign_up_waiting {"name":"Newcomer"}',
+      detail: "notes.sign_up_detail",
+      to: "/admin/users",
+      named: "Newcomer",
+    });
+    expect(sayNote(a({ kind: "sign_up", name: "Newcomer", awaiting: false }), t, "en").title).toBe(
+      'notes.sign_up_made {"name":"Newcomer"}',
+    );
+  });
+
   it("keeps the administrator's words as written", () => {
     expect(sayNote(a({ kind: "message", title: "Hello", text: "" }), t, "en")).toEqual({
       title: "Hello",
