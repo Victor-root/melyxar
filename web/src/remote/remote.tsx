@@ -16,8 +16,7 @@ import { refusalOf, useAsked } from "../asking";
 import { asClock } from "../clock";
 import { useBackClosesIt } from "../components/back-closes";
 import { Modal } from "../components/modal";
-import { pictureShare, useFilledRoom, WHOLE_WIDTH } from "../fitting";
-import type { Way } from "../fitting";
+import { pictureHeld, useFilledRoom } from "../fitting";
 import { PHONE, useMediaQuery } from "../media-query";
 import { Picker } from "../components/panel";
 import { DeviceKindIcon } from "../components/device-lines";
@@ -216,23 +215,19 @@ function Line({
   );
 }
 
-/** The ways a film is laid out on a telephone's remote, the roomiest first,
- *  its title and synopsis always under its picture: the picture across the
- *  whole width; then at the left with only the series beside it, as wide as
- *  the room allows from about half the width, as a share of it. */
-const FILM_WAYS: readonly Way[] = [
-  { className: null, least: WHOLE_WIDTH, most: WHOLE_WIDTH },
-  { className: "remote-now-title-under", least: 46, most: 70 },
-];
+/** The shapes a film's picture can be cut to on a telephone's remote, width
+ *  over height, the widest and the tallest: a film's own is between them. */
+const WIDEST_PICTURE = 2.4;
+const TALLEST_PICTURE = 4 / 3;
 
 /** What plays, with its picture and what it is about, as the card of the
  *  next episode shows one.
  *
  *  On a telephone a film fills what room the buttons leave and no more: its
- *  picture as large as the whole synopsis under it lets it be, and the
- *  synopsis cut to the words that fit under the smallest picture when even
- *  that leaves too little room. Every button stays on the one screen, on any
- *  telephone, with nothing left empty above them. */
+ *  picture across the whole width, cut as tall as the whole synopsis under
+ *  it lets it be, and the synopsis cut to the words that fit under the
+ *  lowest picture when even that leaves too little room. Every button stays
+ *  on the one screen, on any telephone. */
 function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsTheScreen: boolean }) {
   const { t } = useSettings();
   const song = playing.kind === "song";
@@ -243,16 +238,23 @@ function NowPlaying({ playing, fitsTheScreen }: { playing: SteeredPlaying; fitsT
   const caption = captionOf(playing, t);
   const box = useRef<HTMLDivElement>(null);
   const overview = about?.overview ?? null;
-  const filled = useFilledRoom(box, overview, ".remote-overview", ".remote-picture", FILM_WAYS, fitsTheScreen);
-  const way = filled ? FILM_WAYS[filled.way].className : null;
+  const filled = useFilledRoom(
+    box,
+    overview,
+    ".remote-overview",
+    ".remote-picture",
+    WIDEST_PICTURE,
+    TALLEST_PICTURE,
+    fitsTheScreen,
+  );
   return (
-    <div ref={box} className={song ? "remote-now remote-now-song" : way ? `remote-now ${way}` : "remote-now"}>
+    <div ref={box} className={song ? "remote-now remote-now-song" : "remote-now"}>
       {playing.picture && (
         <img
           className="remote-picture"
           src={playing.picture}
           alt=""
-          style={filled ? pictureShare(filled.share) : undefined}
+          style={filled ? pictureHeld(filled.pictureHeight) : undefined}
         />
       )}
       <div className="remote-now-words">

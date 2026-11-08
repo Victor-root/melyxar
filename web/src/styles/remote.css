@@ -324,39 +324,16 @@
   }
 
   /* A film: what plays takes no more than the room the buttons leave, its
-     picture as large as the page finds room for, the words running on
-     beside it and under it, the synopsis cut by the page to the words that
-     fit. Everything below keeps its full height, and the little room a
-     picture could not take up is shared out evenly between the blocks, so
-     the screen is filled to its foot with no hole anywhere. */
+     picture cut by the page to the height that leaves room for the whole
+     synopsis, the synopsis cut by the page when even the lowest picture
+     leaves too little. Everything below keeps its full height and its own
+     spacing, and what room is left over stays between the film and them. */
   .remote-steering-fits {
     height: 100%;
-    justify-content: space-between;
   }
 
   .remote-steering-fits > * {
     flex-shrink: 0;
-  }
-
-  .remote-steering-fits > .remote-now {
-    display: flow-root;
-    margin-bottom: 0;
-  }
-
-  .remote-steering-fits .remote-picture {
-    float: left;
-    width: 46%;
-    margin: 0 var(--gap) var(--gap-tight) 0;
-  }
-
-  .remote-steering-fits .remote-now-words,
-  .remote-steering-fits .remote-caption,
-  .remote-steering-fits .remote-title {
-    display: block;
-  }
-
-  .remote-steering-fits .remote-title {
-    margin-top: 4px;
   }
 
   /* A film's tracks as round buttons on a line of their own, for a device
@@ -365,11 +342,6 @@
     display: flex;
     justify-content: flex-end;
     gap: 4px;
-  }
-
-  /* Only the series beside the picture, the title and the synopsis under it. */
-  .remote-steering-fits .remote-now-title-under .remote-title {
-    clear: left;
   }
 
   .remote-steering-fits .remote-overview {
