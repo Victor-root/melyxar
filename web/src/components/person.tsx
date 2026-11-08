@@ -7,8 +7,8 @@
  * person's own page.
  */
 
-import { Link } from "react-router-dom";
 import type { Credit } from "../api";
+import { QuietLink } from "../navigating";
 import { useShownPicture } from "./picture";
 
 export function PersonCard({ credit }: { credit: Credit }) {
@@ -35,14 +35,14 @@ export function PersonCard({ credit }: { credit: Credit }) {
             {credit.name.slice(0, 1)}
           </span>
         )}
-        <Link
+        <QuietLink
           className="card-open"
           to={`/person/${credit.person_id}`}
           title={credit.name}
           draggable={false}
         >
           <span className="visually-hidden">{credit.name}</span>
-        </Link>
+        </QuietLink>
       </div>
       <span className="card-line">
         <span className="card-title">{credit.name}</span>
