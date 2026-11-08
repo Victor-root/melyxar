@@ -10,7 +10,7 @@
  * like it, and at the very end what the files hold.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import type { Card as CardData, Child, PlaybackPlan, RemoteOrder, Version, Work } from "../api";
@@ -657,7 +657,7 @@ function Marks({
  *  guest stars of an episode. Nothing when there is nobody. */
 /** The cast, and the guest stars of an episode after them in the same row,
  *  each run under its own title with a hairline between the two. */
-function CastRow({ cast, guests }: { cast: Work["cast"]; guests: Work["guest_stars"] }) {
+const CastRow = memo(function CastRow({ cast, guests }: { cast: Work["cast"]; guests: Work["guest_stars"] }) {
   const { t } = useSettings();
   const faces = (credits: Work["cast"]) =>
     credits.map((credit, index) => <PersonCard key={`${credit.person_id}-${index}`} credit={credit} />);
@@ -688,7 +688,7 @@ function CastRow({ cast, guests }: { cast: Work["cast"]; guests: Work["guest_sta
       </Row>
     </section>
   );
-}
+});
 
 /** How far in it already is, under the buttons that carry on with it: the
  *  bar, and what is left of it. */
