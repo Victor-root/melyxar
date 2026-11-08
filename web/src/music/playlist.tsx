@@ -9,7 +9,7 @@
  */
 
 import { PageBackdrop } from "../components/backdrop";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { refusalOf } from "../asking";
 import { Modal } from "../components/modal";
@@ -57,6 +57,31 @@ export function MusicPlaylistPage() {
      renaming and deleting go into the playlist's menu, as an album's tools
      do into its own. */
   const phone = useMediaQuery(PHONE);
+  /* What the lines are handed, the same from one drawing to the next, what
+     they do read when they are pressed: made anew in each drawing, they had
+     every line of the playlist drawn again at each step of a line being
+     dragged, at each heart pressed and at each listen counted. */
+  const linesNow = useRef(lines);
+  linesNow.current = lines;
+  const play = useCallback((at: number) => player.play(linesNow.current.map((line) => line.song), at), [player]);
+  const takeOut = useRef<(line: Line) => void>(() => {});
+  const extras = useMemo(
+    () =>
+      new Map(
+        lines.map((line) => [
+          line.key,
+          [
+            {
+              key: "take_out",
+              said: t("music.take_out_of_playlist"),
+              mark: <DeleteIcon size={17} />,
+              act: () => takeOut.current(line),
+            },
+          ],
+        ]),
+      ),
+    [lines, t],
+  );
 
   useEffect(() => {
     const stop = new AbortController();
@@ -107,7 +132,7 @@ export function MusicPlaylistPage() {
       setRefused(refusalOf(error));
     }
   };
-  const play = (at: number) => player.play(songs, at);
+  takeOut.current = (line) => void change(lines.filter((one) => one !== line));
   const inTheMenu: MenuLine[] = phone
     ? [
         ...(renaming === null
@@ -236,14 +261,7 @@ export function MusicPlaylistPage() {
                 inline={0}
                 onPlay={play}
                 inItsOwnLine
-                extra={[
-                  {
-                    key: "take_out",
-                    said: t("music.take_out_of_playlist"),
-                    mark: <DeleteIcon size={17} />,
-                    act: () => void change(lines.filter((one) => one !== line)),
-                  },
-                ]}
+                extra={extras.get(line.key)}
               />
             )}
           </Sortable>
