@@ -320,28 +320,45 @@ pub async fn plan(
     // turned off included. Only a film nobody said anything about is left to
     // the account's mode.
     let by_id = |wanted: TrackId| tracks.iter().find(|track| track.id == wanted);
-    let subtitle = match request.subtitle {
-        SubtitleAsked::Track(id) => by_id(id),
-        SubtitleAsked::Off => None,
+    let mode = preferences
+        .as_ref()
+        .map(|values| values.subtitle_mode)
+        .unwrap_or_default();
+    let read = preferences
+        .as_ref()
+        .and_then(|values| values.preferred_subtitle_language.as_deref());
+    let left_on = remembered
+        .as_ref()
+        .and_then(|stored| stored.subtitle_track_id)
+        .and_then(by_id);
+    let (subtitle, why) = match request.subtitle {
+        SubtitleAsked::Track(id) => (by_id(id), "asked for now"),
+        SubtitleAsked::Off => (None, "turned off now"),
         SubtitleAsked::Unsaid => match &remembered {
-            Some(stored) if stored.subtitles_off => None,
-            _ => remembered
-                .as_ref()
-                .and_then(|stored| stored.subtitle_track_id)
-                .and_then(by_id)
-                .or_else(|| {
-                    let chosen = preferences.as_ref();
-                    melyxar_playback::subtitle_by_mode(
-                        &media,
-                        audio,
-                        chosen
-                            .map(|values| values.subtitle_mode)
-                            .unwrap_or_default(),
-                        chosen.and_then(|values| values.preferred_subtitle_language.as_deref()),
-                    )
-                }),
+            Some(stored) if stored.subtitles_off => (None, "left off for this film"),
+            _ if left_on.is_some() => (left_on, "left on for this film"),
+            _ => (
+                melyxar_playback::subtitle_by_mode(&media, audio, mode, read),
+                "the account's mode",
+            ),
         },
     };
+    tracing::debug!(
+        account = %who.name,
+        file = %file_name_of(&source.path),
+        why,
+        mode = mode.as_str(),
+        read = read.unwrap_or("-"),
+        heard = audio.and_then(|track| track.language.as_deref()).unwrap_or("-"),
+        chosen = subtitle.map(subtitle_said).unwrap_or_else(|| "none".to_string()),
+        offered = %tracks
+            .iter()
+            .filter(|track| matches!(track.kind, TrackKind::Subtitle(_)))
+            .map(subtitle_said)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        "a subtitle was settled on"
+    );
     let downmix = preferences
         .as_ref()
         .map(|values| values.downmix_method)
@@ -500,6 +517,17 @@ pub async fn plan(
         corrected_segments: stretches.corrected,
         sync,
     })
+}
+
+/// A subtitle track as the journal tells it apart: its language, its title
+/// and whether it is held for a forced one.
+fn subtitle_said(track: &Track) -> String {
+    format!(
+        "{} {:?} forced={}",
+        track.language.as_deref().unwrap_or("-"),
+        track.title.as_deref().unwrap_or(""),
+        track.is_forced
+    )
 }
 
 /// Picks a soundtrack, in the order a viewer would expect.
