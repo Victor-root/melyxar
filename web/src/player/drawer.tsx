@@ -12,7 +12,7 @@
  * already on the page is a second of black while somebody waits.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
 import { pictureSet } from "../api";
 import { useDragToScroll } from "../dragging";
@@ -251,7 +251,7 @@ export function Drawer({
           ref={panel}
         >
           {showing === "info" && (
-            <About work={work} plan={plan} playback={playback} language={language} t={t} />
+            <About work={work} plan={plan} goTo={playback.goTo} language={language} t={t} />
           )}
           {showing === "chapters" && (
             <Chapters plan={plan} playback={playback} across={sizes.card} t={t} />
@@ -272,14 +272,15 @@ export function Drawer({
   );
 }
 
-/** What the film is: its poster, what it is rated, and what it is about. */
-function About({
+/** What the film is: its poster, what it is rated, and what it is about. Drawn
+ *  again only when one of those changes, not with every step of the film. */
+const About = memo(function About({
   work,
   plan,
-  playback,
+  goTo,
   language,
   t,
-}: Pick<Props, "work" | "plan" | "playback" | "language" | "t">) {
+}: Pick<Props, "work" | "plan" | "language" | "t"> & { goTo: Playback["goTo"] }) {
   const poster = pictureSet(work.poster);
   const playing = whatIsPlaying(plan, language, t);
   return (
@@ -318,13 +319,13 @@ function About({
         {work.overview && <p className="player-drawer-overview">{work.overview}</p>}
       </div>
 
-      <button className="player-drawer-again" onClick={() => playback.goTo(0)}>
+      <button className="player-drawer-again" onClick={() => goTo(0)}>
         <PlayIcon size={18} />
         {t("player.from_the_start")}
       </button>
     </div>
   );
-}
+});
 
 /** Where the film changes scene, as a row of cards a hand can run along. */
 function Chapters({
@@ -405,7 +406,7 @@ function everyFewMinutes(length: number): PlaybackChapter[] {
 
 /** Who is in it and who made it, faces first, the guest stars of an
  *  episode right after its cast. */
-function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
+const Cast = memo(function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
   const everyone: Credit[] = [...work.cast, ...work.guest_stars, ...work.crew];
   if (everyone.length === 0) {
     return <p className="player-drawer-nothing">{t("player.nobody_named")}</p>;
@@ -443,7 +444,7 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
       })}
     </Strip>
   );
-}
+});
 
 /**
  * Every episode of the season this one belongs to, in order, with the one
@@ -452,7 +453,7 @@ function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number 
  * The episodes sitting beside this one travel with its own description, so
  * the sheet has them the moment it opens and asks nothing of its own.
  */
-function Episodes({
+const Episodes = memo(function Episodes({
   work,
   across,
   onSelectEpisode,
@@ -521,7 +522,7 @@ function Episodes({
       })}
     </Strip>
   );
-}
+});
 
 /**
  * A row that runs off the side, with an arrow at whichever end has more.
