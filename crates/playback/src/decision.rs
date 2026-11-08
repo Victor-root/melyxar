@@ -13,6 +13,7 @@ use melyxar_core::id::TrackId;
 use melyxar_core::media::{
     AudioDetails, HdrFormat, MediaSource, SubtitleDetails, Track, TrackKind, VideoDetails,
 };
+use melyxar_core::time::Millis;
 use melyxar_core::user::{DownmixMethod, WideGamutChoice};
 use serde::{Deserialize, Serialize};
 
@@ -115,6 +116,10 @@ pub enum Reason {
     },
     /// Levelling the loudness means touching the audio.
     LoudnessLevellingRequested,
+    /// The viewer moved the sound against the picture, for a file whose own
+    /// sound runs early or late. Only a sound rebuilt by the server can be
+    /// moved either way: a browser can at most hold a sound back.
+    SoundShifted,
     /// Picture subtitles can only be burnt into the video.
     SubtitleMustBeBurnedIn {
         codec: String,
@@ -225,6 +230,9 @@ pub struct PlaybackRequest<'a> {
     /// What the viewer wants done with wide gamut colour, for a picture that
     /// could otherwise be carried over as it is.
     pub wide_gamut: WideGamutChoice,
+    /// How far the viewer moved the sound against the picture, later when
+    /// positive. Zero leaves it where the file has it.
+    pub sound_shift: Millis,
 }
 
 /// Decides how a source reaches a client.
@@ -643,6 +651,11 @@ fn decide_audio(
         must_rebuild = true;
     }
 
+    if request.sound_shift != Millis::ZERO {
+        reasons.push(Reason::SoundShifted);
+        must_rebuild = true;
+    }
+
     if must_rebuild {
         StreamAction::Transcode
     } else {
@@ -807,6 +820,7 @@ mod tests {
             level_loudness: false,
             never_tone_map: false,
             wide_gamut: WideGamutChoice::Automatic,
+            sound_shift: Millis::ZERO,
         }
     }
 
@@ -1839,6 +1853,35 @@ mod tests {
 
         let decision = decide(&source, &request(&profile));
         assert_eq!(decision.audio_stream_index, Some(1));
+    }
+
+    #[test]
+    fn a_sound_moved_against_the_picture_is_rebuilt_and_the_picture_is_not() {
+        let mut profile = ClientProfile::conservative_browser();
+        profile.containers.push("matroska".into());
+        let film = source(
+            "matroska,webm",
+            vec![video_track(0, "h264", 1080, None), audio_track(1, "aac", 2, true)],
+        );
+
+        let untouched = decide(&film, &request(&profile));
+        assert_eq!(untouched.method, PlaybackMethod::DirectPlay);
+
+        for shift in [Millis::new(1_500), Millis::new(-300)] {
+            let decision = decide(
+                &film,
+                &PlaybackRequest {
+                    sound_shift: shift,
+                    ..request(&profile)
+                },
+            );
+            assert_eq!(decision.method, PlaybackMethod::TranscodeAudio);
+            assert_eq!(decision.video, StreamAction::Copy);
+            assert!(decision
+                .reasons
+                .iter()
+                .any(|reason| matches!(reason, Reason::SoundShifted)));
+        }
     }
 
     #[test]

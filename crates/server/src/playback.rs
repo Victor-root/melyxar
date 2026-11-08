@@ -46,6 +46,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::post(remember_tracks),
         )
         .route(
+            "/api/v1/playback/sync",
+            axum::routing::post(remember_sync),
+        )
+        .route(
             "/api/v1/playback/watching",
             axum::routing::post(still_playing),
         )
@@ -139,6 +143,10 @@ struct PlanBody {
     /// only where it would resume: what is being watched starts here.
     #[serde(default)]
     watching: bool,
+    /// How far to move the sound against the picture, later when positive.
+    /// Absent leaves it where this account last put it for this file.
+    #[serde(default)]
+    sound_offset_seconds: Option<f64>,
 }
 
 impl PlanBody {
@@ -173,6 +181,10 @@ impl PlanBody {
                         )
                     })
                 })
+                .transpose()?,
+            sound_offset: self
+                .sound_offset_seconds
+                .map(melyxar_app::playback::sync_offset)
                 .transpose()?,
         })
     }
@@ -243,6 +255,11 @@ struct PlanView {
     film: FilmView,
     /// What is done with the film's wide gamut colour, when it has any.
     wide_gamut: Option<WideGamutView>,
+    /// How far the sound is moved against the picture in this answer, and
+    /// how far this account keeps the subtitles of this file moved, which the
+    /// player applies itself. Later when positive.
+    sound_offset_seconds: f64,
+    words_offset_seconds: f64,
 }
 
 /// What is done with a film's wide gamut colour.
@@ -520,6 +537,8 @@ fn plan_view(plan: &PlayPlan) -> PlanView {
                 follows_choice: plan.decision.wide_gamut_follows_choice,
             }),
         film,
+        sound_offset_seconds: plan.sync.sound.as_seconds_f64(),
+        words_offset_seconds: plan.sync.words.as_seconds_f64(),
     }
 }
 
@@ -1580,6 +1599,29 @@ struct TracksBody {
     subtitle_track_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct SyncBody {
+    source_id: String,
+    sound_offset_seconds: f64,
+    words_offset_seconds: f64,
+}
+
+/// Keeps how far a viewer moved the sound and subtitles of one file, so it
+/// starts back in step next time, for this account alone.
+async fn remember_sync(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Json(body): Json<SyncBody>,
+) -> Result<Json<serde_json::Value>> {
+    let source_id = parse_source(&body.source_id)?;
+    let offsets = melyxar_app::playback::SyncOffsets {
+        sound: melyxar_app::playback::sync_offset(body.sound_offset_seconds)?,
+        words: melyxar_app::playback::sync_offset(body.words_offset_seconds)?,
+    };
+    melyxar_app::playback::remember_sync_offsets(&state, &who, source_id, offsets).await?;
+    Ok(Json(serde_json::json!({ "remembered": true })))
+}
+
 /// Remembers what a viewer chose, so the next time starts the same way.
 async fn remember_tracks(
     State(state): State<AppState>,
@@ -1606,6 +1648,26 @@ async fn remember_tracks(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sound_moved_further_than_fifteen_seconds_is_refused() {
+        let asked = |seconds: f64| {
+            serde_json::from_value::<PlanBody>(
+                serde_json::json!({ "sound_offset_seconds": seconds }),
+            )
+            .expect("a body")
+            .asked_for(MediaSourceId::new())
+        };
+        assert_eq!(
+            asked(-0.3).ok().and_then(|request| request.sound_offset),
+            Some(melyxar_core::time::Millis::new(-300))
+        );
+        assert!(asked(16.0).is_err());
+        let unsaid: PlanBody = serde_json::from_value(serde_json::json!({})).expect("a body");
+        assert!(unsaid
+            .asked_for(MediaSourceId::new())
+            .is_ok_and(|request| request.sound_offset.is_none()));
+    }
 
     #[test]
     fn a_download_is_kept_under_the_name_the_file_has() {
@@ -1767,6 +1829,7 @@ mod tests {
         PlayPlan {
             segments: Vec::new(),
             corrected_segments: Vec::new(),
+            sync: Default::default(),
             source_id,
             work_id: WorkId::new(),
             path: "Quiet.Harbour.2019.mkv".into(),

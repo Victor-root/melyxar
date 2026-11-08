@@ -20,6 +20,8 @@ use melyxar_core::time::Millis;
 use melyxar_core::user::{DownmixMethod, WideGamutChoice};
 use melyxar_playback::decision::{decide, PlaybackRequest};
 
+pub use melyxar_database::sync_offsets::SyncOffsets;
+
 use crate::{AppError, AppState, Result};
 
 /// What a client says it can open, and the shape of the answer.
@@ -67,6 +69,9 @@ pub struct PlayRequest {
     /// What to do with wide gamut colour for this playback alone, over the
     /// account's own choice. Absent leaves it to that choice.
     pub wide_gamut: Option<WideGamutChoice>,
+    /// How far to move the sound against the picture, later when positive.
+    /// Absent means where this account last put it for this file.
+    pub sound_offset: Option<Millis>,
 }
 
 /// Which subtitle a viewer asked for.
@@ -135,6 +140,10 @@ pub struct PlayPlan {
     /// The kinds of stretch a person corrected by hand in this file, which
     /// the window that corrects them offers to take back.
     pub corrected_segments: Vec<melyxar_core::segments::SegmentKind>,
+    /// How far the sound is moved against the picture in this answer, and how
+    /// far this account keeps the subtitles of this file moved, which the
+    /// player applies itself.
+    pub sync: SyncOffsets,
 }
 
 /// How the picture is rebuilt, when it is.
@@ -279,6 +288,11 @@ pub async fn plan(
 
     let preferences = database.user(user_id).await?.map(|user| user.preferences);
     let remembered = database.playback_progress(user_id, source.work_id).await?;
+    let kept_in_step = database.sync_offsets(user_id, source.id).await?;
+    let sync = SyncOffsets {
+        sound: request.sound_offset.unwrap_or(kept_in_step.sound),
+        ..kept_in_step
+    };
 
     // What the viewer asked for now, otherwise what they chose last time for
     // this very film, otherwise, for an episode, the one they last chose in
@@ -358,6 +372,7 @@ pub async fn plan(
             level_loudness: false,
             never_tone_map,
             wide_gamut,
+            sound_shift: sync.sound,
         },
     );
 
@@ -483,6 +498,7 @@ pub async fn plan(
         chapters,
         segments: stretches.skipped,
         corrected_segments: stretches.corrected,
+        sync,
     })
 }
 
@@ -549,6 +565,42 @@ async fn soundtrack_from_the_series(
         "a soundtrack was chosen in another episode of the series"
     );
     Ok(found.map(|track| track.id))
+}
+
+/// The furthest the sound or the subtitles can be moved either way.
+pub const FURTHEST_SYNC_OFFSET: Millis = Millis::new(15_000);
+
+/// The smallest step either is moved by.
+const SYNC_STEP_MS: i64 = 100;
+
+/// A number of seconds a viewer moved the sound or the subtitles by, held to
+/// the step and refused beyond the furthest.
+pub fn sync_offset(seconds: f64) -> Result<Millis> {
+    let steps = (seconds * 1000.0 / SYNC_STEP_MS as f64).round();
+    let furthest = (FURTHEST_SYNC_OFFSET.get() / SYNC_STEP_MS) as f64;
+    if !steps.is_finite() || steps.abs() > furthest {
+        return Err(AppError::Domain(melyxar_core::Error::invalid_input(
+            "the sound and the subtitles move fifteen seconds at most either way",
+        )));
+    }
+    Ok(Millis::new(steps as i64 * SYNC_STEP_MS))
+}
+
+/// Keeps how far a viewer moved the sound and the subtitles of one file,
+/// for this account alone, so the file starts back in step next time.
+pub async fn remember_sync_offsets(
+    state: &AppState,
+    who: &melyxar_core::user::User,
+    source_id: MediaSourceId,
+    offsets: SyncOffsets,
+) -> Result<()> {
+    crate::reach::may_read_the_copy(state, who, source_id).await?;
+    let database = state.database();
+    if database.playable_source(source_id).await?.is_none() {
+        return Err(AppError::Domain(melyxar_core::Error::not_found("media source")));
+    }
+    database.record_sync_offsets(who.id, source_id, offsets).await?;
+    Ok(())
 }
 
 /// Remembers the tracks a viewer chose, and the languages they were in.
@@ -1174,6 +1226,7 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
             // How wide the track really is, so that nothing is folded that is
             // not wider than what comes out of it.
             encode.source_channels = channels_of_the_chosen_track(plan);
+            encode.shift = plan.sync.sound;
             AudioOutput::Encode(encode)
         }
     };
@@ -1528,6 +1581,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -1595,6 +1649,7 @@ mod tests {
                     subtitle: SubtitleAsked::Unsaid,
                     preferred_video_codec: None,
                     wide_gamut: None,
+                    sound_offset: None,
                 },
             )
             .await
@@ -1723,6 +1778,7 @@ mod tests {
             subtitle: SubtitleAsked::Unsaid,
             preferred_video_codec: None,
             wide_gamut: None,
+            sound_offset: None,
         };
 
         let before = plan(&state, &crate::an_ordinary_account(user_id), &request).await.expect("a plan");
@@ -1762,6 +1818,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -1812,6 +1869,7 @@ mod tests {
                 subtitle: SubtitleAsked::Track(chosen.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -1848,6 +1906,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -1988,6 +2047,7 @@ mod tests {
                         subtitle: SubtitleAsked::Unsaid,
                         preferred_video_codec: None,
                         wide_gamut: None,
+                        sound_offset: None,
                     },
                 )
                 .await
@@ -2177,6 +2237,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2209,6 +2270,7 @@ mod tests {
                         subtitle,
                         preferred_video_codec: None,
                         wide_gamut: None,
+                        sound_offset: None,
                     },
                 )
                 .await
@@ -2262,6 +2324,7 @@ mod tests {
             subtitle: SubtitleAsked::Unsaid,
             preferred_video_codec: None,
             wide_gamut: None,
+            sound_offset: None,
         };
 
         // A server nobody has configured already folds the sound its own way
@@ -2354,6 +2417,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2395,6 +2459,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2408,6 +2473,70 @@ mod tests {
         );
         assert!(matches!(recipe.audio, AudioOutput::Encode(_)));
         assert_eq!(recipe.duration, Millis::new(7_200_000));
+    }
+
+    #[test]
+    fn a_sync_offset_is_held_to_its_step_and_to_fifteen_seconds() {
+        assert_eq!(sync_offset(1.24).expect("in range"), Millis::new(1_200));
+        assert_eq!(sync_offset(-0.25).expect("in range"), Millis::new(-300));
+        assert_eq!(sync_offset(15.0).expect("in range"), FURTHEST_SYNC_OFFSET);
+        assert!(sync_offset(15.2).is_err());
+        assert!(sync_offset(f64::NAN).is_err());
+        assert!(sync_offset(f64::INFINITY).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_file_starts_where_this_account_put_its_sound_and_subtitles() {
+        use melyxar_ffmpeg::command::AudioOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mkv", "matroska,webm", |id| {
+                vec![video(id, "h264", 1080), audio(id, "aac", 2, true)]
+            })
+            .await;
+        let who = crate::an_ordinary_account(user_id);
+        let kept = SyncOffsets {
+            sound: Millis::new(-400),
+            words: Millis::new(1_500),
+        };
+        remember_sync_offsets(&state, &who, source_id, kept)
+            .await
+            .expect("kept");
+        let asked = |sound_offset| PlayRequest {
+            source_id,
+            profile: None,
+            audio_track_id: None,
+            subtitle: SubtitleAsked::Unsaid,
+            preferred_video_codec: None,
+            wide_gamut: None,
+            sound_offset,
+        };
+
+        let remembered = plan(&state, &who, &asked(None)).await.expect("a plan");
+        assert_eq!(remembered.sync, kept);
+        assert_eq!(remembered.decision.method, PlaybackMethod::TranscodeAudio);
+        let recipe = recipe_for(&remembered, &capabilities_of_a_usual_tool()).expect("a recipe");
+        let AudioOutput::Encode(encode) = recipe.audio else {
+            panic!("a moved sound is rebuilt");
+        };
+        assert_eq!(encode.shift, Millis::new(-400));
+
+        let put_back = plan(&state, &who, &asked(Some(Millis::ZERO)))
+            .await
+            .expect("a plan");
+        assert_eq!(put_back.sync.sound, Millis::ZERO, "what is asked now wins");
+        assert_eq!(put_back.sync.words, kept.words);
+
+        let somebody_else = crate::an_ordinary_account(UserId::new());
+        assert_eq!(
+            state
+                .database()
+                .sync_offsets(somebody_else.id, source_id)
+                .await
+                .expect("read"),
+            SyncOffsets::default(),
+            "another account watches the file as it is"
+        );
     }
 
     #[tokio::test]
@@ -2432,6 +2561,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2481,6 +2611,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2535,6 +2666,7 @@ mod tests {
                 subtitle: SubtitleAsked::Track(words.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2589,6 +2721,7 @@ mod tests {
                 subtitle: SubtitleAsked::Track(words.id),
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2623,6 +2756,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -2826,6 +2960,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await;
@@ -3249,6 +3384,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -3349,6 +3485,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -3503,6 +3640,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await;
@@ -3552,6 +3690,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -3591,6 +3730,7 @@ mod tests {
                     subtitle: SubtitleAsked::Unsaid,
                     preferred_video_codec: None,
                     wide_gamut: None,
+                    sound_offset: None,
                 },
             )
             .await
@@ -3711,6 +3851,7 @@ mod tests {
                     subtitle: SubtitleAsked::Unsaid,
                     preferred_video_codec: None,
                     wide_gamut: None,
+                    sound_offset: None,
                 },
             )
             .await
@@ -3785,6 +3926,7 @@ mod tests {
                     subtitle: SubtitleAsked::Unsaid,
                     preferred_video_codec: None,
                     wide_gamut: None,
+                    sound_offset: None,
                 },
             )
             .await
@@ -3865,6 +4007,7 @@ mod tests {
                 subtitle: SubtitleAsked::Unsaid,
                 preferred_video_codec: None,
                 wide_gamut: None,
+                sound_offset: None,
             },
         )
         .await
@@ -3897,6 +4040,7 @@ mod tests {
             subtitle: SubtitleAsked::Unsaid,
             preferred_video_codec: None,
             wide_gamut: None,
+            sound_offset: None,
         };
 
         mark_watched(&state, &who, work_id, true).await.expect("marked");

@@ -311,6 +311,10 @@ pub struct AudioEncode {
     /// was already mastered loud. Set high enough to stay inaudible, because a
     /// limiter that keeps engaging sounds worse than the problem it prevents.
     pub limiter: bool,
+    /// How far the sound is moved against the picture, later when positive,
+    /// for a file whose own sound runs early or late. Zero leaves it where
+    /// the file has it.
+    pub shift: Millis,
 }
 
 impl AudioEncode {
@@ -325,6 +329,7 @@ impl AudioEncode {
             downmix_gain: melyxar_core::user::DEFAULT_DOWNMIX_GAIN,
             loudness_gain_db: None,
             limiter: true,
+            shift: Millis::ZERO,
         }
     }
 }
@@ -486,6 +491,37 @@ impl Command {
         self
     }
 
+    /// How far the sound is moved against the picture, when it is: only a
+    /// sound being rebuilt into segments.
+    fn sound_shift(&self) -> Option<Millis> {
+        match (&self.audio, &self.output) {
+            (AudioOutput::Encode(encode), Output::Segments { .. })
+                if encode.shift != Millis::ZERO =>
+            {
+                Some(encode.shift)
+            }
+            _ => None,
+        }
+    }
+
+    fn shifts_the_sound(&self) -> bool {
+        self.sound_shift().is_some()
+    }
+
+    /// Where the sound of this run has to begin: with its first picture.
+    fn sound_begins_at(&self) -> Millis {
+        self.sound_from.or(self.input.start_at).unwrap_or(Millis::ZERO)
+    }
+
+    /// The silence put in front of a sound moved later than the film has
+    /// sound for: a run begun in the first seconds of a film whose sound is
+    /// held back further than that.
+    fn silence_before_the_shifted_sound(&self) -> Millis {
+        self.sound_shift().map_or(Millis::ZERO, |shift| {
+            Millis::new((shift.get() - self.sound_begins_at().get()).max(0))
+        })
+    }
+
     /// The filter that leaves out the sound from before [`Self::sound_from`],
     /// in segments only, its comma escaped as in a chain of them.
     fn sound_before_left_out(&self) -> Option<String> {
@@ -537,8 +573,14 @@ impl Command {
     /// other up and everything read meanwhile piles up. Measured on a real 4K
     /// film: gigabytes in seconds and not one picture out, where the same
     /// command with the sound read on its own ran at seven times real time.
+    ///
+    /// And whenever the sound is moved against the picture: read on its own,
+    /// it is read from where its moved moment lies rather than from where the
+    /// picture's does, which for a sound held back lies before the point the
+    /// picture was read from.
     pub(crate) fn reads_the_sound_apart(&self) -> bool {
-        self.painted_subtitle().is_some() && !matches!(self.audio, AudioOutput::None)
+        (self.painted_subtitle().is_some() && !matches!(self.audio, AudioOutput::None))
+            || self.shifts_the_sound()
     }
 
     /// The filter graph that paints a subtitle onto every frame, when one is
@@ -666,6 +708,15 @@ impl Command {
         args.push(self.input.path.clone().into_os_string());
 
         let sound_input = match self.reads_the_sound_apart() {
+            true if self.shifts_the_sound() => {
+                for argument in self.shifted_sound_opening() {
+                    push!(&argument);
+                }
+                guard_the_input!();
+                push!("-i");
+                args.push(self.input.path.clone().into_os_string());
+                1
+            }
             true => {
                 if let Some(start) = self.input.start_at {
                     push!("-ss");
@@ -954,11 +1005,55 @@ impl Command {
     /// front included.
     fn sound_filters(&self, encode: &AudioEncode) -> Option<String> {
         let mut stages: Vec<String> = Vec::new();
+        let silence = self.silence_before_the_shifted_sound();
+        if silence > Millis::ZERO {
+            stages.push(format!("adelay=delays={}:all=1", silence.get()));
+        }
         if self.fills_the_hole_before_the_sound() {
             stages.push(SILENCE_UP_TO_THE_PICTURE.to_string());
         }
         stages.extend(audio_filter_chain(encode));
         (!stages.is_empty()).then(|| stages.join(","))
+    }
+
+    /// How the second opening of the file, the one the moved sound is read
+    /// from, is placed: read from the moment that lands where the run begins
+    /// once moved, then moved.
+    ///
+    /// With the film's own clock kept, as in a run begun part way through,
+    /// the opening is moved by the whole shift, less the silence put in front
+    /// when there is not that much sound before. Without it, the opening's
+    /// clock starts again from where it was read, so reading it later is
+    /// already what moves it earlier, and a sound held back is moved by the
+    /// silence alone.
+    ///
+    /// Not trimmed to the second asked for when the clock is kept: trimmed,
+    /// the tool started that sound's clock from nothing. It begins instead
+    /// at whatever was stored just before, and what comes before the picture
+    /// is left out on the way out.
+    fn shifted_sound_opening(&self) -> Vec<String> {
+        let shift = self.sound_shift().unwrap_or(Millis::ZERO).get();
+        let begins_at = self.sound_begins_at().get();
+        let read_from = Millis::new((begins_at - shift).max(0));
+        let keeps_its_clock = self.input.start_at.is_some();
+        let moved_by = match keeps_its_clock {
+            true => Millis::new(shift - self.silence_before_the_shifted_sound().get()),
+            false => Millis::ZERO,
+        };
+
+        let mut arguments = Vec::new();
+        if read_from > Millis::ZERO {
+            if keeps_its_clock {
+                arguments.push("-noaccurate_seek".to_string());
+            }
+            arguments.push("-ss".to_string());
+            arguments.push(format_seconds(read_from));
+        }
+        if moved_by != Millis::ZERO {
+            arguments.push("-itsoffset".to_string());
+            arguments.push(format_seconds(moved_by));
+        }
+        arguments
     }
 
     /// Whether the sound is to be padded up to where the picture begins.
@@ -2552,5 +2647,90 @@ mod tests {
         let args = arguments(&command);
         assert!(args.contains(&"-an".to_string()));
         assert!(args.contains(&"-frames:v".to_string()));
+    }
+
+    /// What places the second opening of the file, the one a sound read on
+    /// its own comes from: everything between the two openings but the guard
+    /// every opening carries.
+    fn sound_opening(command: &Command) -> Vec<String> {
+        let args = arguments(command);
+        let first = position(&args, "-i").expect("the file is opened");
+        let second = args[first + 1..]
+            .iter()
+            .position(|value| value == "-i")
+            .map(|at| first + 1 + at)
+            .expect("the sound is read from a second opening");
+        let guarded = args[first + 2..second]
+            .iter()
+            .position(|value| value == "-format_whitelist")
+            .map_or(second, |at| first + 2 + at);
+        args[first + 2..guarded].to_vec()
+    }
+
+    #[test]
+    fn a_sound_held_back_from_the_start_of_the_film_begins_with_silence() {
+        let command = segments_of(Input::new("/media/film.mkv")).with_audio(shifted(1_500));
+        assert!(sound_opening(&command).is_empty(), "read from the first moment of the film");
+        let filters = sound_filters(&command).expect("the sound is filtered");
+        assert!(filters.starts_with("adelay=delays=1500:all=1,"), "{filters}");
+    }
+
+    #[test]
+    fn a_sound_brought_forward_from_the_start_of_the_film_is_read_later() {
+        let command = segments_of(Input::new("/media/film.mkv")).with_audio(shifted(-1_500));
+        assert_eq!(sound_opening(&command), ["-ss", "1.500"]);
+        let filters = sound_filters(&command).expect("the sound is filtered");
+        assert!(!filters.contains("adelay"), "{filters}");
+    }
+
+    #[test]
+    fn a_sound_moved_in_a_run_begun_part_way_is_read_from_its_moved_moment() {
+        let part_way = |shift: i64| {
+            segments_of(Input::new("/media/film.mkv").starting_at(Millis::new(17_000)))
+                .with_video(VideoOutput::Copy)
+                .with_sound_from(Millis::new(16_000))
+                .with_audio(shifted(shift))
+        };
+
+        assert_eq!(
+            sound_opening(&part_way(1_500)),
+            ["-noaccurate_seek", "-ss", "14.500", "-itsoffset", "1.500"]
+        );
+        assert_eq!(
+            sound_opening(&part_way(-1_500)),
+            ["-noaccurate_seek", "-ss", "17.500", "-itsoffset", "-1.500"]
+        );
+        assert!(!sound_filters(&part_way(1_500)).unwrap_or_default().contains("adelay"));
+    }
+
+    #[test]
+    fn a_sound_held_back_further_than_the_run_has_sound_before_it_is_padded() {
+        let early = segments_of(Input::new("/media/film.mkv").starting_at(Millis::new(5_000)))
+            .with_video(VideoOutput::Copy)
+            .with_sound_from(Millis::new(4_000))
+            .with_audio(shifted(12_000));
+        assert_eq!(sound_opening(&early), ["-itsoffset", "4.000"]);
+        let filters = sound_filters(&early).expect("the sound is filtered");
+        assert!(filters.starts_with("adelay=delays=8000:all=1"), "{filters}");
+    }
+
+    #[test]
+    fn only_a_sound_cut_in_segments_is_moved() {
+        let whole = Command::new(
+            Input::new("/media/film.mkv"),
+            Output::File(PathBuf::from("/tmp/out.mp4")),
+        )
+        .with_audio(shifted(1_500));
+        let args = arguments(&whole);
+        assert_eq!(args.iter().filter(|value| *value == "-i").count(), 1);
+        assert!(!args.contains(&"-itsoffset".to_string()));
+    }
+
+    /// A sound rebuilt for a browser, moved this many milliseconds.
+    fn shifted(milliseconds: i64) -> AudioOutput {
+        AudioOutput::Encode(AudioEncode {
+            shift: Millis::new(milliseconds),
+            ..AudioEncode::browser_stereo("aac")
+        })
     }
 }

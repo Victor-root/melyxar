@@ -58,6 +58,7 @@ pub mod requests;
 pub mod sessions;
 pub mod schedule;
 pub mod settings;
+pub mod sync_offsets;
 pub mod synthetic;
 pub mod taste;
 pub mod upkeep;
