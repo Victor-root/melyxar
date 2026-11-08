@@ -2,7 +2,7 @@
  * A QR code as the server made it, a row of squares at a time, drawn as one
  * shape: dark squares on a light ground with the quiet margin a reader needs
  * around them, whatever the theme, since a camera reads contrast and not
- * colours.
+ * colours. Its size is the stylesheet's, so it can follow the room.
  */
 
 /** The squares of empty margin a reader needs around the code. */
@@ -26,13 +26,11 @@ export function pathOf(squares: string[]): string {
   return parts.join("");
 }
 
-export function QrSquares({ squares, size, label }: { squares: string[]; size: number; label: string }) {
+export function QrSquares({ squares, label }: { squares: string[]; label: string }) {
   const across = squares.length + 2 * MARGIN;
   return (
     <svg
       className="qr-squares"
-      width={size}
-      height={size}
       viewBox={`0 0 ${across} ${across}`}
       shapeRendering="crispEdges"
       role="img"

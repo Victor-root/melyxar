@@ -22,11 +22,17 @@
   max-height: calc(100dvh - var(--keyboard-rise));
   overflow-y: auto;
   overflow-x: hidden;
+  /* What is left between the bars of the screen, and how far short of a
+     full height screen that falls. Each piece below gives up a share of the
+     shortfall, so a short window shows every step whole without a scroll,
+     and a tall one stands as it always has. */
+  --door-room: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--keyboard-rise));
+  --door-short: max(0px, 1080px - var(--door-room));
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto;
   justify-items: center;
-  gap: var(--gap-wide);
+  gap: max(var(--gap), calc(var(--gap-wide) - var(--door-short) * 0.035));
   padding: calc(clamp(18px, 2.6vw, 40px) + var(--safe-top)) calc(clamp(18px, 3vw, 56px) + var(--safe-right)) calc(clamp(16px, 2.4vw, 36px) + var(--safe-bottom)) calc(clamp(18px, 3vw, 56px) + var(--safe-left));
   /* Its own background rather than the page's: this screen is the only one
      with nothing else on it, so the surface it sits on is part of it. */
@@ -350,7 +356,7 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding-bottom: clamp(0px, 4vh, 48px);
+  padding-bottom: max(0px, calc(clamp(0px, 4vh, 48px) - var(--door-short) * 0.1));
 }
 
 /* Whatever turns up in the middle rises into place, which is also what the
@@ -370,17 +376,17 @@
 
 .door-greeting {
   max-width: 760px;
-  margin-bottom: clamp(30px, 6.5vh, 68px);
+  margin-bottom: max(16px, calc(clamp(30px, 6.5vh, 68px) - var(--door-short) * 0.075));
   text-align: center;
 }
 
 /* The server's mark, over the greeting that says its name. */
 .door-greeting-mark {
-  --door-mark: clamp(96px, 14vh, 140px);
+  --door-mark: max(64px, calc(clamp(96px, 14vh, 140px) - var(--door-short) * 0.09));
   display: block;
   width: var(--door-mark);
   height: var(--door-mark);
-  margin: 0 auto clamp(16px, 2.6vh, 28px);
+  margin: 0 auto max(8px, calc(clamp(16px, 2.6vh, 28px) - var(--door-short) * 0.025));
   object-fit: contain;
   filter: drop-shadow(0 8px 24px var(--accent-glow));
 }
@@ -395,7 +401,7 @@ img.door-greeting-mark {
 .door-welcome {
   margin: 0;
   font-family: "Melyxar Display", "Inter", sans-serif;
-  font-size: clamp(30px, min(3.4vw, 6vh), 54px);
+  font-size: max(28px, calc(clamp(30px, min(3.4vw, 6vh), 54px) - var(--door-short) * 0.025));
   font-weight: 700;
   line-height: 1.12;
   letter-spacing: -0.01em;
@@ -566,7 +572,7 @@ img.door-greeting-mark {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--gap);
+  gap: max(var(--gap-tight), calc(var(--gap) - var(--door-short) * 0.012));
   max-width: 460px;
   text-align: center;
 }
@@ -579,7 +585,7 @@ img.door-greeting-mark {
 
 .door-link-code {
   font-family: "Melyxar Display", "Inter", sans-serif;
-  font-size: clamp(38px, 6vh, 56px);
+  font-size: max(34px, calc(clamp(38px, 6vh, 56px) - var(--door-short) * 0.02));
   font-weight: 700;
   letter-spacing: 0.12em;
   font-variant-numeric: tabular-nums;
@@ -595,6 +601,13 @@ img.door-greeting-mark {
   flex-direction: column;
   align-items: center;
   gap: var(--gap-tight);
+}
+
+/* Smaller on a short window, never below what a phone reads at a glance. */
+.door-link-qr .qr-squares {
+  --door-qr: max(152px, calc(200px - var(--door-short) * 0.14));
+  width: var(--door-qr);
+  height: var(--door-qr);
 }
 
 .door-link-actions {
@@ -1154,10 +1167,9 @@ img.door-greeting-mark {
    the sides go, since on a screen this narrow there are no sides. */
 @media (max-width: 760px) {
   .door {
-    /* What is left between the bars of the phone: everything below follows
-       it, so that a short screen shows the whole door without a scroll, and
-       a tall one stands as it always has. */
-    --door-room: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--keyboard-rise));
+    /* Everything below follows the room itself rather than the shortfall
+       above, which is drawn for a computer. */
+    --door-short: 0px;
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(6px, calc(var(--door-room) * 0.016), var(--gap));
     padding: calc(12px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));

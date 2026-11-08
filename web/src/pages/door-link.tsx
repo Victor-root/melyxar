@@ -98,7 +98,7 @@ export function LinkAtTheDoor({ cameIn, onBack }: { cameIn: (who: Account) => vo
           {asked && <span className="door-link-left">{t("door.link.left", { time: asClock(left) })}</span>}
           {asked && qrShown && (
             <div className="door-link-qr">
-              <QrSquares squares={asked.squares} size={200} label={t("door.link.qr")} />
+              <QrSquares squares={asked.squares} label={t("door.link.qr")} />
               <span className="door-link-left">{t("door.link.qr_how")}</span>
             </div>
           )}
