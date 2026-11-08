@@ -644,7 +644,7 @@ function Marks({
         aria-label={t("card.more")}
         title={t("card.more")}
         aria-expanded={menu.open}
-        onClick={() => menu.toggle(kebab.current)}
+        onClick={() => menu.toggle(kebab.current, kebab.current)}
       >
         <ToolIcon size={22} />
       </button>
