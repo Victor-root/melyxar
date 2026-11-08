@@ -53,9 +53,11 @@
 
 /* A page walked back to, kept out of sight for the moment it takes to stand
    where it was left again: seen growing into its place, it flashed higher up
-   and then jumped. */
+   and then jumped. Clipped to nothing, which no press reaches either, rather
+   than hidden: hiding is inherited, and every element of the page was styled
+   again on the way in and on the way out. */
 .shell-scroll[data-putting-back] {
-  visibility: hidden;
+  clip-path: inset(50%);
 }
 
 /*
