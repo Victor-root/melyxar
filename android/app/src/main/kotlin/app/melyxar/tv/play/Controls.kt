@@ -200,7 +200,8 @@ fun Controls(
                 if (hasChapters) {
                     PlayerButton(Icons.Chapters, onClick = { onMenu(Menu.Chapters) }, modifier = Modifier.remembered(memory, "chapters"))
                 }
-                if ((playback.plan?.audio?.size ?: 0) > 1) {
+                // Offered with a single soundtrack too, for its audio sync.
+                if (playback.plan?.audio?.isNotEmpty() == true) {
                     PlayerButton(Icons.Audio, onClick = { onMenu(Menu.Audio) }, modifier = Modifier.remembered(memory, "audio"))
                 }
                 if (playback.plan?.subtitles?.isNotEmpty() == true) {
