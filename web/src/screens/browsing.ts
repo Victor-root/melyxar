@@ -371,11 +371,20 @@ export function useBrowsing(wide: boolean): Browsing {
     [parameters, setParameters],
   );
 
+  /* What these choices are shown with: what was gathered for them, or what
+     was kept for them, from the very render they change in rather than from
+     the next one. Waiting for that to be put in place drew the grid empty
+     first, and then every card of it again outside the change of address,
+     in one go rather than as time allows: measured on sixteen hundred films
+     slowed four times, the page stood still for half a second whenever an
+     order or a filter already read was chosen again. */
+  const shown = gathered.choices === choices ? gathered : recall<Gathered>(choices)?.value;
+
   return {
     narrowing,
     choose,
-    cards: gathered.choices === choices ? gathered.cards : [],
-    more: gathered.next !== null,
+    cards: shown?.cards ?? [],
+    more: shown !== undefined && shown.next !== null,
     loadMore,
     reach,
     loading,
