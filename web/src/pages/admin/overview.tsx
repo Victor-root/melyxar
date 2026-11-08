@@ -13,7 +13,7 @@ import { Link } from "react-router-dom";
 import { api } from "../../api";
 import type { ActivityFamily, Job, Library, Overview } from "../../api";
 import { useAsked } from "../../asking";
-import { PageHead, Panel, Soon, Stat, StatePill } from "../../components/panel";
+import { PageHead, Panel, Stat, StatePill } from "../../components/panel";
 import type { State } from "../../components/panel";
 import {
   ArrowRightIcon,
@@ -319,7 +319,6 @@ function LibrariesPanel() {
   const { all: libraries } = useLibraries();
   const { jobs } = useRunning();
   const scanning = jobs.find((job) => job.kind === "scan");
-  const hasMusic = libraries.some((library) => library.kind === "music");
 
   return (
     <Panel
@@ -334,19 +333,6 @@ function LibrariesPanel() {
         {libraries.map((library) => (
           <LibraryLine key={library.id} library={library} language={language} />
         ))}
-        {!hasMusic && (
-          <div className="line line-asleep">
-            <span className="line-mark" aria-hidden="true">
-              <KindIcon kind="music" size={18} />
-            </span>
-            <span className="line-words">
-              <span className="line-name">{t("kind.music")}</span>
-            </span>
-            <span className="line-end">
-              <Soon />
-            </span>
-          </div>
-        )}
       </div>
 
       {scanning && <WorkUnderWay job={scanning} />}

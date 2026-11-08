@@ -135,11 +135,6 @@
   white-space: nowrap;
 }
 
-/* A line that stands for something not there yet. */
-.line-asleep {
-  opacity: 0.55;
-}
-
 /* A piece of work, its name and share over its bar. */
 .under-way {
   display: flex;
