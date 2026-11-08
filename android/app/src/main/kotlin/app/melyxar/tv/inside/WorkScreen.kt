@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
-import app.melyxar.server.Card
 import app.melyxar.server.Child
 import app.melyxar.server.Credit
 import app.melyxar.server.Picture
@@ -459,8 +458,8 @@ private fun SeasonTab(name: String, active: Boolean, onChoose: () -> Unit, modif
     )
 }
 
-/** A season's episodes lying down, each played at once from where it was
- *  left. */
+/** A season's episodes lying down, each opening its own page, from which it
+ *  is played. */
 @Composable
 private fun Episodes(
     title: String?,
@@ -468,10 +467,8 @@ private fun Episodes(
     memory: FocusMemory,
     /** The episode the row opens on, at its left edge. */
     startsOn: Int = 0,
-    onChoose: ((Card) -> Unit)? = null,
 ) {
     val chrome = LocalChrome.current
-    val marks = LocalMarks.current
     CardRow(title, null, episodes, key = { it.card.id }, startsOn = startsOn) { episode ->
         val card = episode.card
         WorkCard(
@@ -479,7 +476,7 @@ private fun Episodes(
             lying = true,
             title = listOfNotNull(episode.number?.let { "$it." }, episode.title ?: card.title).joinToString(" "),
             note = card.runtimeMinutes?.takeIf { it > 0 }?.let { howLong(it) },
-            onClick = { onChoose?.invoke(card) ?: chrome.play(Play(card.id, card.source, marks.whereabouts(card).resume?.toDouble())) },
+            onClick = { chrome.go(Place.Opened(card.id)) },
             modifier = Modifier.remembered(memory, "episode/${card.id}"),
         )
     }
@@ -513,20 +510,17 @@ private fun headingOf(work: Work): String {
     return if (work.hasOwnName) "$numbered · ${work.title}" else numbered
 }
 
-/** Under an episode, the other episodes of its season, each opening its
- *  own page, as the web gives them. */
+/** Under an episode, the other episodes of its season, as the web gives
+ *  them. */
 private fun LazyListScope.theRestOfTheSeason(work: Work, memory: FocusMemory) {
     val season = work.ancestry.firstOrNull { it.kind == "season" }
     if (work.siblings.size > 1) {
         item("season-episodes") {
-            val chrome = LocalChrome.current
             val name = season?.title ?: season?.number?.let { stringResource(R.string.tv_season, it) }
             // Opened on the episode this page is about, the ones before it a
             // press to the left.
             val here = work.siblings.indexOfFirst { it.card.id == work.id }.coerceAtLeast(0)
-            Episodes(name ?: stringResource(R.string.tv_episodes), work.siblings, memory, startsOn = here) { card ->
-                chrome.go(Place.Opened(card.id))
-            }
+            Episodes(name ?: stringResource(R.string.tv_episodes), work.siblings, memory, startsOn = here)
         }
     }
 }
