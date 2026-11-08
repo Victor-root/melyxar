@@ -1,6 +1,7 @@
 package app.melyxar.tv.play
 
 import app.melyxar.tv.inside.Order
+import kotlin.math.roundToInt
 
 /**
  * The film on the television, steered from another device of the account
@@ -18,7 +19,7 @@ fun obeyFilm(order: Order, playback: Playback, leave: () -> Unit, next: (() -> U
         "resume" -> playback.play()
         "stop" -> leave()
         "seek" -> order.seconds?.let(playback::goTo)
-        "step" -> order.seconds?.let { playback.goTo(playback.seconds + it) }
+        "step" -> order.seconds?.let { playback.withStep(it.roundToInt()) }
         "next" -> next?.invoke()
         "audio" -> playback.plan?.audio?.firstOrNull { it.id == order.track }?.let(playback::chooseAudio)
         "subtitle" -> playback.chooseSubtitle(playback.plan?.subtitles?.firstOrNull { it.id == order.track })

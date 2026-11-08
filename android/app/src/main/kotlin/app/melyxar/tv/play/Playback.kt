@@ -69,6 +69,14 @@ private const val STILL_HERE_EVERY_MS = 30_000L
  *  its sound. */
 private const val LOOKED_FOR_A_HOLE_EVERY_MS = 500L
 
+/** How long after the last of a run of steps the film is taken where they
+ *  lead. Taken there at every press, a film the server rebuilds was asked for
+ *  one piece after another, each given up for the next before it came: seen on
+ *  a television walking back ten seconds at a time, the player then threw away
+ *  the piece it had asked for last as soon as it came, and stood still on it
+ *  for good. */
+private const val STEPS_SETTLE_MS = 350L
+
 /** A segment smaller than this arrives too fast to be timed fairly. */
 private const val TIMED_FROM_BYTES = 64 * 1024
 
@@ -355,8 +363,14 @@ class Playback(
         return player
     }
 
-    /** Where the film is, in seconds. */
-    val seconds: Double get() = player.currentPosition / 1000.0
+    /** Where a run of steps still being pressed leads, in milliseconds: shown
+     *  at once, the film taken there once the steps stop. */
+    private var aimedAt: Long? = null
+    private var stepping: Job? = null
+
+    /** Where the film is, or where the steps being pressed lead it, in
+     *  seconds. */
+    val seconds: Double get() = (aimedAt ?: player.currentPosition) / 1000.0
 
     /** How long the film lasts, as the server knows it, the player's own
      *  count of a film still being rebuilt being only what is made so far. */
@@ -848,13 +862,34 @@ class Playback(
         }
     }
 
-    fun withStep(seconds: Int) = goTo(this.seconds + seconds)
+    /** Takes the film [seconds] further on, or back, once the steps being
+     *  pressed stop. */
+    fun withStep(seconds: Int) {
+        val to = within(this.seconds + seconds)
+        aimedAt = to
+        stepping?.cancel()
+        stepping = scope.launch {
+            delay(STEPS_SETTLE_MS)
+            moveTo(to)
+        }
+    }
 
-    /** Takes the film to [seconds], never before its start nor past its end. */
+    /** Takes the film to [seconds] now, never before its start nor past its
+     *  end, over any steps still being pressed. */
     fun goTo(seconds: Double) {
+        stepping?.cancel()
+        moveTo(within(seconds))
+    }
+
+    private fun within(seconds: Double): Long {
         val to = seconds.coerceAtLeast(0.0)
+        return (length?.let { to.coerceAtMost(it) } ?: to).times(1000).toLong()
+    }
+
+    private fun moveTo(milliseconds: Long) {
+        aimedAt = null
         journal.moving("a_step")
-        player.seekTo((length?.let { to.coerceAtMost(it) } ?: to).times(1000).toLong())
+        player.seekTo(milliseconds)
     }
 
     fun toggle() {
