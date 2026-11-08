@@ -9,7 +9,7 @@
  * when it is let go. The arrow keys on the grip move it a place at a time.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent } from "react";
 import { asClock } from "../../clock";
 import { CloseIcon, GripIcon, PlayIcon } from "../../icons";
@@ -19,6 +19,7 @@ import { PlayingBars } from "../playing-bars";
 import { Cover } from "../songs";
 import { keeping, linesAround, linesShown } from "./lines-shown";
 import type { Shown } from "./lines-shown";
+import type { Song } from "../api";
 import { useMusic } from "./player";
 
 /** How far from the top or foot of the list the pointer sets it scrolling. */
@@ -60,7 +61,6 @@ interface Taken {
 const between = (value: number, least: number, most: number) => Math.min(Math.max(value, least), most);
 
 export function QueuePanel() {
-  const { t } = useSettings();
   const music = useMusic();
   const { queue, playing } = music;
   const list = useRef<HTMLOListElement>(null);
@@ -300,6 +300,23 @@ export function QueuePanel() {
     music.move(at, to);
   };
 
+  /* What a line's buttons do, the same from one drawing to the next and read
+     when pressed: a line is then drawn again only when what it shows changes,
+     not each time the lines made move along with the scroll. */
+  const doing = useRef({ music, press, moved, release, step });
+  doing.current = { music, press, moved, release, step };
+  const hands = useMemo<Hands>(
+    () => ({
+      play: (at, here) => (here ? doing.current.music.toggle() : doing.current.music.jump(at)),
+      remove: (at) => doing.current.music.remove(at),
+      step: (event, at) => doing.current.step(event, at),
+      press: (event, at) => doing.current.press(event, at),
+      moved: (event) => doing.current.moved(event),
+      release: (landed) => doing.current.release(landed),
+    }),
+    [],
+  );
+
   return (
     <ol
       ref={list}
@@ -310,10 +327,7 @@ export function QueuePanel() {
     >
       {queue.order.slice(shown.from, shown.to).map((place, index) => {
         const at = shown.from + index;
-        const one = queue.songs[place];
         const here = at === queue.at;
-        const label = here ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: one.title });
-        const play = () => (here ? music.toggle() : music.jump(at));
         /* The lines the one held passes make room for it. */
         const makesRoom =
           drag && drag.from < drag.to && at > drag.from && at <= drag.to
@@ -322,51 +336,100 @@ export function QueuePanel() {
               ? " music-queue-room-after"
               : "";
         return (
-          <li
+          <QueueLine
             key={place}
-            className={`music-song music-song-full music-queue-line${here ? " music-song-playing" : ""}${at < queue.at ? " music-queue-played" : ""}${drag?.from === at ? " music-queue-lifted" : ""}${makesRoom}`}
-          >
-            <span className="music-song-lead">
-              <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
-                {here && playing ? <PlayingBars /> : <PlayIcon size={20} />}
-              </button>
-            </span>
-            <span className="music-song-number">{at + 1}</span>
-            <Cover song={one} />
-            <button type="button" className="music-queue-song" onClick={play} aria-current={here ? "true" : undefined}>
-              <span className="music-song-title">{one.title}</span>
-              <span className="music-song-artists">{one.artists.map((artist) => artist.name).join(", ")}</span>
-            </button>
-            <span className="music-song-length">{one.seconds === null ? "" : asClock(one.seconds)}</span>
-            {at > queue.at ? (
-              <button
-                type="button"
-                className="player-button player-button-small music-queue-remove"
-                onClick={() => music.remove(at)}
-                aria-label={t("music.take_out", { title: one.title })}
-                title={t("music.take_out", { title: one.title })}
-              >
-                <CloseIcon size={14} />
-              </button>
-            ) : (
-              <span className="music-queue-remove" />
-            )}
-            <button
-              type="button"
-              className="music-queue-grip"
-              aria-label={t("music.move_song", { title: one.title })}
-              title={t("music.move_song", { title: one.title })}
-              onKeyDown={(event) => step(event, at)}
-              onPointerDown={(event) => press(event, at)}
-              onPointerMove={moved}
-              onPointerUp={() => release(true)}
-              onPointerCancel={() => release(false)}
-            >
-              <GripIcon size={18} />
-            </button>
-          </li>
+            at={at}
+            song={queue.songs[place]}
+            here={here}
+            playing={here && playing}
+            played={at < queue.at}
+            removable={at > queue.at}
+            lifted={drag?.from === at}
+            makesRoom={makesRoom}
+            hands={hands}
+          />
         );
       })}
     </ol>
   );
 }
+
+/** What the lines of the queue do when pressed. */
+interface Hands {
+  play: (at: number, here: boolean) => void;
+  remove: (at: number) => void;
+  step: (event: KeyboardEvent<HTMLButtonElement>, at: number) => void;
+  press: (event: PointerEvent<HTMLButtonElement>, at: number) => void;
+  moved: (event: PointerEvent<HTMLButtonElement>) => void;
+  release: (landed: boolean) => void;
+}
+
+const QueueLine = memo(function QueueLine({
+  at,
+  song,
+  here,
+  playing,
+  played,
+  removable,
+  lifted,
+  makesRoom,
+  hands,
+}: {
+  at: number;
+  song: Song;
+  here: boolean;
+  playing: boolean;
+  played: boolean;
+  removable: boolean;
+  lifted: boolean;
+  makesRoom: string;
+  hands: Hands;
+}) {
+  const { t } = useSettings();
+  const label = here ? t(playing ? "music.pause" : "music.play") : t("music.play_song", { title: song.title });
+  const play = () => hands.play(at, here);
+  return (
+    <li
+      className={`music-song music-song-full music-queue-line${here ? " music-song-playing" : ""}${played ? " music-queue-played" : ""}${lifted ? " music-queue-lifted" : ""}${makesRoom}`}
+    >
+      <span className="music-song-lead">
+        <button type="button" className="music-song-toggle" aria-label={label} title={label} onClick={play}>
+          {playing ? <PlayingBars /> : <PlayIcon size={20} />}
+        </button>
+      </span>
+      <span className="music-song-number">{at + 1}</span>
+      <Cover song={song} />
+      <button type="button" className="music-queue-song" onClick={play} aria-current={here ? "true" : undefined}>
+        <span className="music-song-title">{song.title}</span>
+        <span className="music-song-artists">{song.artists.map((artist) => artist.name).join(", ")}</span>
+      </button>
+      <span className="music-song-length">{song.seconds === null ? "" : asClock(song.seconds)}</span>
+      {removable ? (
+        <button
+          type="button"
+          className="player-button player-button-small music-queue-remove"
+          onClick={() => hands.remove(at)}
+          aria-label={t("music.take_out", { title: song.title })}
+          title={t("music.take_out", { title: song.title })}
+        >
+          <CloseIcon size={14} />
+        </button>
+      ) : (
+        <span className="music-queue-remove" />
+      )}
+      <button
+        type="button"
+        className="music-queue-grip"
+        aria-label={t("music.move_song", { title: song.title })}
+        title={t("music.move_song", { title: song.title })}
+        onKeyDown={(event) => hands.step(event, at)}
+        onPointerDown={(event) => hands.press(event, at)}
+        onPointerMove={hands.moved}
+        onPointerUp={() => hands.release(true)}
+        onPointerCancel={() => hands.release(false)}
+      >
+        <GripIcon size={18} />
+      </button>
+    </li>
+  );
+});
