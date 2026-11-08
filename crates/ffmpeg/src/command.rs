@@ -265,6 +265,11 @@ pub(crate) fn rebuilt_size(picture: (i32, i32), height: Option<i32>) -> (i32, i3
 pub enum AudioOutput {
     None,
     Copy,
+    /// AAC carried over untouched. A transport stream frames each of its
+    /// pieces with a header of its own, which the segment writer does not
+    /// take off by itself: left on, the header segment described the sound as
+    /// nothing a browser knows, and the whole film was refused.
+    CopyAac,
     Encode(AudioEncode),
 }
 
@@ -833,15 +838,21 @@ impl Command {
 
         match &self.audio {
             AudioOutput::None => {}
-            AudioOutput::Copy => {
+            AudioOutput::Copy | AudioOutput::CopyAac => {
                 push!("-c:a");
                 push!("copy");
                 if matches!(self.output, Output::Segments { .. }) {
+                    // Untouched by the filter when the sound has no such
+                    // header, as in a Matroska or an MP4 film.
+                    let unframed = matches!(self.audio, AudioOutput::CopyAac)
+                        .then(|| "aac_adtstoasc".to_string());
+                    let chain: Vec<String> = unframed
+                        .into_iter()
+                        .chain(self.sound_before_left_out())
+                        .chain([COPIED_LASTS_UNTIL_THE_NEXT.to_string()])
+                        .collect();
                     push!("-bsf:a");
-                    match self.sound_before_left_out() {
-                        Some(left_out) => push!(&format!("{left_out},{COPIED_LASTS_UNTIL_THE_NEXT}")),
-                        None => push!(COPIED_LASTS_UNTIL_THE_NEXT),
-                    }
+                    push!(&chain.join(","));
                 }
             }
             AudioOutput::Encode(encode) => {
@@ -2426,6 +2437,42 @@ mod tests {
         let rebuilt = Command::new(Input::new("/media/film.mkv"), segments())
             .with_audio(AudioOutput::Encode(AudioEncode::browser_stereo("aac")));
         assert_eq!(filter(&rebuilt), None, "an encoder gives its sound its true length");
+    }
+
+    #[test]
+    fn a_copied_aac_in_segments_loses_the_header_of_a_transport_stream_first() {
+        let segments = || Output::Segments {
+            pattern: PathBuf::from("/tmp/session/segment-%d.m4s"),
+            initialisation: PathBuf::from("/tmp/session/init.mp4"),
+            tool_playlist: PathBuf::from("/tmp/session/tool.m3u8"),
+            cut: WhereToCut::AtEveryKeyFrame,
+            start_number: 0,
+        };
+        let filter = |command: &Command| {
+            let args = arguments(command);
+            position(&args, "-bsf:a").map(|at| args[at + 1].clone())
+        };
+        let recording = || Input::new("/media/recording.ts");
+
+        let copied = Command::new(recording(), segments()).with_audio(AudioOutput::CopyAac);
+        assert_eq!(
+            filter(&copied),
+            Some(format!("aac_adtstoasc,{COPIED_LASTS_UNTIL_THE_NEXT}"))
+        );
+
+        let taken_up = Command::new(recording(), segments())
+            .with_audio(AudioOutput::CopyAac)
+            .with_sound_from(Millis::new(180_080));
+        assert_eq!(
+            filter(&taken_up),
+            Some(format!(
+                r"aac_adtstoasc,noise=drop=lt(pts*tb\,180.080),{COPIED_LASTS_UNTIL_THE_NEXT}"
+            ))
+        );
+
+        let to_a_file = Command::new(recording(), Output::File(PathBuf::from("/tmp/out.mp4")))
+            .with_audio(AudioOutput::CopyAac);
+        assert_eq!(filter(&to_a_file), None, "a whole file has the header taken off by its writer");
     }
 
     #[test]

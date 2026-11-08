@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use melyxar_core::id::{MediaSourceId, TrackId, WorkId};
-use melyxar_core::media::{Chapter, Track, TrackKind};
+use melyxar_core::media::{AudioDetails, Chapter, Track, TrackKind};
 use melyxar_core::media_log::file_name_of;
 use melyxar_core::segments::MediaSegment;
 use melyxar_core::thumbnails::Thumbnails;
@@ -1076,9 +1076,13 @@ fn read_by_the_processor(
 /// Nothing at all when the track cannot be found or was never described,
 /// which reads as a width nobody knows rather than as a narrow one.
 fn channels_of_the_chosen_track(plan: &PlayPlan) -> Option<i32> {
+    the_chosen_sound(plan).map(|details| details.channels)
+}
+
+fn the_chosen_sound(plan: &PlayPlan) -> Option<&AudioDetails> {
     let chosen = plan.decision.audio_stream_index?;
     plan.tracks.iter().find_map(|track| match &track.kind {
-        TrackKind::Audio(details) if track.stream_index == chosen => Some(details.channels),
+        TrackKind::Audio(details) if track.stream_index == chosen => Some(details),
         _ => None,
     })
 }
@@ -1148,6 +1152,11 @@ fn recipe_for(plan: &PlayPlan, capabilities: &melyxar_ffmpeg::Capabilities) -> R
 
     let audio = match plan.decision.audio {
         StreamAction::Drop => AudioOutput::None,
+        StreamAction::Copy
+            if the_chosen_sound(plan).is_some_and(|details| details.codec == "aac") =>
+        {
+            AudioOutput::CopyAac
+        }
         StreamAction::Copy => AudioOutput::Copy,
         StreamAction::Transcode => {
             let encoder = capabilities.audio_encoder().ok_or_else(|| {
@@ -2399,6 +2408,38 @@ mod tests {
         );
         assert!(matches!(recipe.audio, AudioOutput::Encode(_)));
         assert_eq!(recipe.duration, Millis::new(7_200_000));
+    }
+
+    #[tokio::test]
+    async fn the_aac_of_a_transport_stream_is_copied_as_aac() {
+        // Copied as any other sound, the header segment of a recording named
+        // .mpeg described a sound no browser knows, and the film never began.
+        use melyxar_ffmpeg::command::AudioOutput;
+
+        let (_directory, state, user_id, source_id) =
+            state_with_film("Quiet.Harbour.2019.mpeg", "mpegts", |id| {
+                vec![video(id, "h264", 720), audio(id, "aac", 2, true)]
+            })
+            .await;
+
+        let plan = plan(
+            &state,
+            &crate::an_ordinary_account(user_id),
+            &PlayRequest {
+                source_id,
+                profile: None,
+                audio_track_id: None,
+                subtitle: SubtitleAsked::Unsaid,
+                preferred_video_codec: None,
+                wide_gamut: None,
+            },
+        )
+        .await
+        .expect("a plan");
+        assert_eq!(plan.decision.method, PlaybackMethod::Remux);
+
+        let recipe = recipe_for(&plan, &capabilities_of_a_usual_tool()).expect("a recipe");
+        assert_eq!(recipe.audio, AudioOutput::CopyAac);
     }
 
     #[tokio::test]
