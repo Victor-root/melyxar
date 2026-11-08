@@ -5,12 +5,14 @@ import { App } from "./app";
 import { GoToProvider } from "./navigating";
 import { setUpMeasuring } from "./measure";
 import { markTheEdgeRoom } from "./edge-room";
+import { keepRingsForTheKeyboard } from "./keyboard-rings";
 import { SettingsProvider } from "./settings";
 import "./styles/index.css";
 
 // First, so that an armed recorder sees the page from its very start.
 setUpMeasuring();
 markTheEdgeRoom();
+keepRingsForTheKeyboard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
