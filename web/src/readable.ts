@@ -159,7 +159,7 @@ export function readableDate(value: string, language: string): string | null {
   const when = new Date(value);
   return Number.isNaN(when.getTime())
     ? null
-    : when.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
+    : writtenMoment(when, language, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** A day written year, month and day, as a provider writes a birthday. */

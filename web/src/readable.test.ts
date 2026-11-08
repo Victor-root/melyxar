@@ -34,6 +34,7 @@ import {
   percentOf,
   howManyVoted,
   readableBitrate,
+  readableDate,
   readableSize,
   readableDay,
   releaseOf,
@@ -393,5 +394,17 @@ describe("soundName", () => {
     expect(soundName("eac3")).toBe("Dolby Digital+");
     expect(soundName("pcm_s16le")).toBe("PCM");
     expect(soundName("unknown")).toBe("unknown");
+  });
+});
+
+describe("readableDate", () => {
+  it("writes an instant as the language does, day and time", () => {
+    const instant = "2026-11-08T03:51:50.140Z";
+    for (const language of ["en", "fr"]) {
+      expect(readableDate(instant, language)).toBe(
+        new Date(instant).toLocaleString(language, { dateStyle: "medium", timeStyle: "short" }),
+      );
+    }
+    expect(readableDate("not a date", "en")).toBeNull();
   });
 });
