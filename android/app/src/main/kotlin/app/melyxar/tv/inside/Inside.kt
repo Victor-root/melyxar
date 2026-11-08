@@ -45,6 +45,7 @@ import app.melyxar.server.Library
 import app.melyxar.server.Preferences
 import app.melyxar.server.Sessions
 import app.melyxar.theme.USUAL_ACCENT
+import app.melyxar.theme.accentWorn
 import app.melyxar.theme.paletteOf
 import app.melyxar.theme.parseHex
 import app.melyxar.theme.wantsLight
@@ -352,8 +353,8 @@ fun Inside(
             listening.readPreferences()
         }
         val deviceIsDark = isSystemInDarkTheme()
-        val chosenAccent = chosen?.accentColor?.let(::parseHex) ?: USUAL_ACCENT
-        val palette = remember(chosen, branding.defaultTheme, deviceIsDark) {
+        val chosenAccent = parseHex(accentWorn(chosen?.accentColor, branding.defaultAccent)) ?: USUAL_ACCENT
+        val palette = remember(chosen, branding.defaultTheme, branding.defaultAccent, deviceIsDark) {
             paletteOf(
                 accent = chosenAccent,
                 light = wantsLight(chosen?.themeMode ?: "server", branding.defaultTheme, deviceIsDark),

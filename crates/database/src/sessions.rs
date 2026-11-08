@@ -739,7 +739,7 @@ mod tests {
         // The rights and the preferences come with it, because every request
         // that asks who is there asks in order to decide something.
         assert!(signed_in.user.permissions.is_administrator);
-        assert_eq!(signed_in.user.preferences.accent_color, "#c81e1e");
+        assert_eq!(signed_in.user.preferences.accent_color, "server");
     }
 
     #[tokio::test]

@@ -36,6 +36,7 @@ import {
 } from "../../icons";
 import { putOnTheClipboard } from "../../clipboard";
 import { HourField } from "../../components/hour-field";
+import { AccentSwatches } from "../../components/accent-swatches";
 import { UNNAMED } from "../../components/maintenance";
 import { hourOfDayOf, maintenanceHeard, nextAt, useMaintenance } from "../../maintenance";
 import { serverChanged, useBranding } from "../../player/logo";
@@ -296,6 +297,9 @@ const LONGEST_NAME = 15;
 /** What the server answers a request carrying more than it takes. */
 const TOO_LARGE = 413;
 
+/** How long after the last colour picked the server's accent is sent. */
+const ACCENT_SETTLES_MS = 400;
+
 /** What the server is called and the logo it wears. */
 export function ServerPanel() {
   const { t } = useSettings();
@@ -384,6 +388,29 @@ export function ServerPanel() {
       .finally(() => setSending(false));
   };
 
+  /* Shown the moment it is picked, and sent once the hand stops: a colour
+     dragged across the picker answers at every step of the way. Put back as
+     the server holds it if it refuses. */
+  const accentTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(accentTimer.current), []);
+  const changeAccent = (colour: string) => {
+    setServer((was) => (was ? { ...was, default_accent: colour } : was));
+    window.clearTimeout(accentTimer.current);
+    accentTimer.current = window.setTimeout(() => {
+      api
+        .setDefaultAccent(colour)
+        .then(kept)
+        .catch((error) => {
+          api.server().then(setServer).catch(() => {});
+          toast({
+            state: "trouble",
+            title: t("admin.accent_failed"),
+            detail: t(refusalAbout(error, "server")),
+          });
+        });
+    }, ACCENT_SETTLES_MS);
+  };
+
   return (
     <Panel
       icon={ServerIcon}
@@ -460,6 +487,11 @@ export function ServerPanel() {
               ["light", t("theme.light")],
             ]}
           />
+        )}
+      </Setting>
+      <Setting label={t("admin.accent")} why={t("admin.accent_why")}>
+        {server && (
+          <AccentSwatches colour={server.default_accent} onPick={changeAccent} label={t("admin.accent")} />
         )}
       </Setting>
       <Setting label={t("admin.logo")} why={t("admin.logo_why")}>

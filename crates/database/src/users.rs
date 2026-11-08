@@ -1045,6 +1045,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn accounts_left_on_the_first_red_follow_the_server_and_a_chosen_colour_stays() {
+        let database = database().await;
+        let mut kept = Vec::new();
+        for (name, colour) in [("Red", "#c81e1e"), ("Shouting", "#C81E1E"), ("Teal", "#0c8599")] {
+            let mut user = database
+                .create_user(name, None, &Permissions::viewer())
+                .await
+                .expect("account created");
+            user.preferences.accent_color = colour.to_string();
+            database
+                .save_preferences(user.id, &user.preferences)
+                .await
+                .expect("saved");
+            kept.push(user.id);
+        }
+
+        sqlx::query(include_str!("../migrations/0136_accents_follow_the_server.sql"))
+            .execute(database.writer())
+            .await
+            .expect("run");
+
+        let mut now = Vec::new();
+        for id in kept {
+            now.push(database.user(id).await.expect("read").expect("there").preferences.accent_color);
+        }
+        assert_eq!(now, ["server", "server", "#0c8599"]);
+    }
+
+    #[tokio::test]
     async fn an_account_takes_a_new_name_unless_another_one_has_it() {
         let database = database().await;
         let zoe = database
@@ -1187,7 +1216,7 @@ mod tests {
 
         assert_eq!(loaded.name, "victor");
         assert!(loaded.permissions.is_administrator);
-        assert_eq!(loaded.preferences.accent_color, "#c81e1e");
+        assert_eq!(loaded.preferences.accent_color, "server");
         assert_eq!(loaded.preferences.theme_mode, ThemeMode::Server);
         assert_eq!(
             loaded.preferences.downmix_method,

@@ -116,6 +116,7 @@ export function useWhoIsThere(): Who {
           login_background_style: "abstract",
           door_slogan: null,
           default_theme: "system",
+          default_accent: "#c81e1e",
           setup_complete: true,
           sign_ups_open: false,
         });

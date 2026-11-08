@@ -435,6 +435,7 @@ export const FINDABLE: FindableSection[] = [
       ["admin.server", "admin.server_lead"],
       ["admin.server_name"],
       ["admin.theme", "admin.theme_why"],
+      ["admin.accent", "admin.accent_why"],
       ["admin.logo", "admin.logo_why"],
       ["admin.door", "admin.door_lead"],
       ["admin.door_background", "admin.door_background_why"],

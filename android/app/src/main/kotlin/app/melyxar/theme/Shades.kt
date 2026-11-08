@@ -70,6 +70,11 @@ fun parseHex(written: String): Int? {
     return digits.toLongOrNull(16)?.let { (it or 0xFF000000L).toInt() }
 }
 
+/** The accent an account wears, as `#rrggbb`: the one it chose, or the
+ *  server's while it chose none, Melyxar's red when neither is a colour. */
+fun accentWorn(chosen: String?, ofTheServer: String): String =
+    listOfNotNull(chosen, ofTheServer).firstOrNull { parseHex(it) != null }?.trim()?.lowercase() ?: "#c81e1e"
+
 /** `color-mix(in srgb, a share, b)`, opaque. */
 fun mix(a: Int, b: Int, share: Float): Int {
     fun channel(shift: Int) = ((a shr shift and 0xFF) * share + (b shr shift and 0xFF) * (1 - share)).roundToInt()

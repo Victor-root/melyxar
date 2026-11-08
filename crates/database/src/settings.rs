@@ -115,6 +115,8 @@ pub struct ServerSettings {
     pub global_custom_css: Option<String>,
     /// The theme of whoever has not chosen one: light, dark or the device's.
     pub default_theme: ThemeMode,
+    /// The accent of whoever has not chosen one.
+    pub default_accent: String,
     /// Shows the account list before a password is typed. A deliberate
     /// disclosure, so it can be turned off.
     pub show_user_picker: bool,
@@ -289,6 +291,7 @@ impl Database {
         let row = sqlx::query(
             "SELECT server_name, logo_path, splash_path, login_background_path,
                     login_background_style, door_slogan, global_custom_css, default_theme,
+                    default_accent,
                     show_user_picker, read_companion_files, write_companion_files, watched_threshold,
                     activity_retention_days, check_for_updates, tone_mapping_disabled,
                     thumbnails_every_seconds, thumbnails_height, thumbnails_columns,
@@ -309,6 +312,7 @@ impl Database {
             door_slogan: row.try_get("door_slogan")?,
             global_custom_css: row.try_get("global_custom_css")?,
             default_theme: default_theme_of(&row.try_get::<String, _>("default_theme")?),
+            default_accent: row.try_get("default_accent")?,
             show_user_picker: int_to_bool(row.try_get("show_user_picker")?),
             sign_ups: SignUps {
                 open: int_to_bool(row.try_get("sign_ups_open")?),
@@ -628,6 +632,16 @@ impl Database {
     }
 
     /// The theme of whoever has not chosen one.
+    /// The accent of whoever has not chosen one, a colour already checked.
+    pub async fn set_default_accent(&self, colour: &str) -> Result<()> {
+        sqlx::query("UPDATE server_settings SET default_accent = ?, updated_at = ? WHERE id = 1")
+            .bind(colour)
+            .bind(timestamp_to_text(now()))
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
     pub async fn set_default_theme(&self, theme: ThemeMode) -> Result<()> {
         sqlx::query("UPDATE server_settings SET default_theme = ?, updated_at = ? WHERE id = 1")
             .bind(theme.as_str())
@@ -637,8 +651,6 @@ impl Database {
         Ok(())
     }
 
-    /// The line under the server's name on the sign in screen, or nothing for
-    /// Melyxar's own.
     /// Opens or closes the sign ups, and says whether each waits for an
     /// administrator.
     pub async fn set_sign_ups(&self, sign_ups: SignUps) -> Result<()> {
@@ -654,6 +666,8 @@ impl Database {
         Ok(())
     }
 
+    /// The line under the server's name on the sign in screen, or nothing for
+    /// Melyxar's own.
     pub async fn set_door_slogan(&self, slogan: Option<&str>) -> Result<()> {
         sqlx::query("UPDATE server_settings SET door_slogan = ?, updated_at = ? WHERE id = 1")
             .bind(slogan)
@@ -1047,6 +1061,14 @@ mod tests {
         // The accent colour lives in per-user preferences, not here, but the
         // default must match the one the domain declares.
         assert_eq!(DEFAULT_ACCENT_COLOR, "#c81e1e");
+    }
+
+    #[tokio::test]
+    async fn the_server_wears_melyxars_red_until_its_administrator_chooses_another() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        assert_eq!(database.server_settings().await.expect("read").default_accent, "#c81e1e");
+        database.set_default_accent("#0c8599").await.expect("written");
+        assert_eq!(database.server_settings().await.expect("read").default_accent, "#0c8599");
     }
 
     #[tokio::test]

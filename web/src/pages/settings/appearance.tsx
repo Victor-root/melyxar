@@ -12,7 +12,7 @@ import { appIcon } from "../../app-icon";
 import type { AppIcon, LauncherGround } from "../../app-icon";
 import { LanguagePicker } from "../../components/language-picker";
 import { Modal } from "../../components/modal";
-import { ColourPicker } from "../../components/colour-picker";
+import { AccentSwatches } from "../../components/accent-swatches";
 import { useFrameRateShown } from "../../components/frame-rate";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
@@ -36,16 +36,14 @@ import {
   ScreenCastIcon,
   SearchIcon,
   SlidersIcon,
-  TickIcon,
 } from "../../icons";
 import { useRequests } from "../../requests/store";
-import { OFFERED_ACCENTS, useSettings } from "../../settings";
+import { useSettings } from "../../settings";
 import { reorderedAmong } from "../../sorting";
 import type { PhoneTheme, ThemeChoice } from "../../settings";
 
 export function MyAppearance() {
   const { t, theme, setTheme, accent, setAccent } = useSettings();
-  const ownClass = `swatch swatch-own${OFFERED_ACCENTS.includes(accent) ? "" : " swatch-on"}`;
 
   return (
     <>
@@ -70,26 +68,7 @@ export function MyAppearance() {
         {/* A handful at a press, and any other by hand: the colour is what
             every active and pressable thing in the interface wears. */}
         <Setting label={t("me.accent")} why={t("me.accent_why")}>
-          <div className="swatches" role="radiogroup" aria-label={t("me.accent")}>
-            {OFFERED_ACCENTS.map((colour) => {
-              const chosen = colour === accent;
-              return (
-                <button
-                  key={colour}
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen}
-                  aria-label={colour}
-                  className={`swatch${chosen ? " swatch-on" : ""}`}
-                  style={{ ["--swatch" as string]: colour }}
-                  onClick={() => setAccent(colour)}
-                >
-                  {chosen && <TickIcon size={14} />}
-                </button>
-              );
-            })}
-            <ColourPicker colour={accent} onPick={setAccent} className={ownClass} />
-          </div>
+          <AccentSwatches colour={accent} onPick={setAccent} label={t("me.accent")} />
         </Setting>
         <BackdropChoice />
         <FrameRateChoice />

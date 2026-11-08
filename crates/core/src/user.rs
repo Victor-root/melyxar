@@ -672,11 +672,16 @@ impl ThemeMode {
     }
 }
 
-/// Default accent colour: the red picked by the maintainer.
+/// Default accent colour: the red picked by the maintainer, the server's own
+/// until its administrator chooses another.
 ///
 /// Used as a fill with white text on it, in both themes. A lighter variant is
 /// derived for links and small coloured text on a dark background.
 pub const DEFAULT_ACCENT_COLOR: &str = "#c81e1e";
+
+/// What an account holds while it has chosen no accent: whatever the server
+/// wears for everybody.
+pub const ACCENT_OF_THE_SERVER: &str = "server";
 
 /// Whether this is a colour this server will keep.
 ///
@@ -734,6 +739,7 @@ pub struct Preferences {
     /// When a film starts with subtitles nobody picked for it.
     pub subtitle_mode: SubtitleMode,
     pub theme_mode: ThemeMode,
+    /// A colour it chose, or [`ACCENT_OF_THE_SERVER`].
     pub accent_color: String,
     /// Stylesheet applied to this person only.
     pub custom_css: Option<String>,
@@ -830,7 +836,7 @@ impl Default for Preferences {
             preferred_subtitle_language: None,
             subtitle_mode: SubtitleMode::default(),
             theme_mode: ThemeMode::default(),
-            accent_color: DEFAULT_ACCENT_COLOR.to_string(),
+            accent_color: ACCENT_OF_THE_SERVER.to_string(),
             custom_css: None,
             volume: 1.0,
             downmix_method: DownmixMethod::default(),
@@ -908,7 +914,7 @@ impl Preferences {
         views.reverse();
         self.library_views = views;
         if !is_an_accent_colour(&self.accent_color) {
-            self.accent_color = DEFAULT_ACCENT_COLOR.to_string();
+            self.accent_color = ACCENT_OF_THE_SERVER.to_string();
         }
         if !is_an_interface_language(&self.interface_language) {
             self.interface_language = AUTOMATIC_LANGUAGE.to_string();
@@ -1551,7 +1557,7 @@ mod tests {
             ..Preferences::default()
         }
         .normalised();
-        assert_eq!(wild.accent_color, DEFAULT_ACCENT_COLOR);
+        assert_eq!(wild.accent_color, ACCENT_OF_THE_SERVER);
         assert_eq!(wild.interface_language, AUTOMATIC_LANGUAGE);
     }
 

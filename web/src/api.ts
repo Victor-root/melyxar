@@ -114,7 +114,10 @@ export type LoginBackgroundStyle = "abstract" | "library" | "picture";
  *  the server ships with is a fallback the screen holds, never something the
  *  screen assumes. */
 /** What the server is called and where its logo is, when it was given one. */
-export type ServerIdentity = Pick<Branding, "server_name" | "logo" | "logo_icon" | "default_theme">;
+export type ServerIdentity = Pick<
+  Branding,
+  "server_name" | "logo" | "logo_icon" | "default_theme" | "default_accent"
+>;
 
 /** A theme the administrator can make the server's own. */
 export type ServerTheme = "dark" | "light" | "system";
@@ -150,6 +153,8 @@ export interface Branding {
   door_slogan: string | null;
   /** The theme of whoever has not chosen one. */
   default_theme: ServerTheme;
+  /** The accent of whoever has not chosen one, a hash and six digits. */
+  default_accent: string;
   /** False on a brand new server, which asks for a first account instead of a
       password. */
   setup_complete: boolean;
@@ -1974,7 +1979,8 @@ export interface ViewerPreferences {
   interface_language: string;
   /** light, dark or system. */
   theme_mode: string;
-  /** The colour everything active is drawn in, as a hash and six digits. */
+  /** The colour everything active is drawn in, as a hash and six digits, or
+   *  "server" for the server's own while the account has chosen none. */
   accent_color: string;
   /** Three letter code, or null for no preference: the file then decides. */
   preferred_audio_language: string | null;
@@ -2666,6 +2672,8 @@ export const api = {
     put<ServerSettings>("/api/v1/settings/server/door/picture", image),
   setDefaultTheme: (default_theme: ServerTheme) =>
     put<ServerSettings>("/api/v1/settings/server/theme", { default_theme }),
+  setDefaultAccent: (default_accent: string) =>
+    put<ServerSettings>("/api/v1/settings/server/accent", { default_accent }),
   setDoorSlogan: (door_slogan: string) =>
     put<ServerSettings>("/api/v1/settings/server/door/slogan", { door_slogan }),
   removeDoorPicture: () => remove<ServerSettings>("/api/v1/settings/server/door/picture"),

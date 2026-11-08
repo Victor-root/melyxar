@@ -75,7 +75,9 @@ import app.melyxar.server.Sessions
 import app.melyxar.server.who
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.theme.facePictureOf
+import app.melyxar.theme.USUAL_ACCENT
 import app.melyxar.theme.paletteOf
+import app.melyxar.theme.parseHex
 import app.melyxar.theme.wantsLight
 import app.melyxar.tv.look.AccentButton
 import app.melyxar.tv.look.BoxShadow
@@ -208,8 +210,11 @@ fun Door(
 
     val open = answer as? Answer.Open
     val deviceIsDark = isSystemInDarkTheme()
-    val palette = remember(open?.branding?.defaultTheme, deviceIsDark) {
-        paletteOf(light = wantsLight("server", open?.branding?.defaultTheme ?: "dark", deviceIsDark))
+    val palette = remember(open?.branding?.defaultTheme, open?.branding?.defaultAccent, deviceIsDark) {
+        paletteOf(
+            accent = open?.branding?.defaultAccent?.let(::parseHex) ?: USUAL_ACCENT,
+            light = wantsLight("server", open?.branding?.defaultTheme ?: "dark", deviceIsDark),
+        )
     }
     TvLook(palette) {
         if (hidden) {

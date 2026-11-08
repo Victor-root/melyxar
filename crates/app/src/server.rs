@@ -29,6 +29,8 @@ pub enum Refused {
     NotAPicture,
     /// It looked like an image and still could not be read as one.
     CouldNotBeRead,
+    /// A colour is a hash and six hexadecimal digits.
+    NotAColour,
 }
 
 impl Refused {
@@ -39,16 +41,18 @@ impl Refused {
             Self::SloganTooLong => "slogan_too_long",
             Self::NotAPicture => "not_a_picture",
             Self::CouldNotBeRead => "could_not_be_read",
+            Self::NotAColour => "not_a_colour",
         }
     }
 
     /// Every one of them, so a test can check each has words on the screen.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::NameNeeded,
         Self::NameTooLong,
         Self::SloganTooLong,
         Self::NotAPicture,
         Self::CouldNotBeRead,
+        Self::NotAColour,
     ];
 }
 
@@ -160,6 +164,23 @@ pub async fn default_theme(state: &AppState) -> Result<ThemeMode, AppError> {
 /// themes themselves: "the server's" is what an account holds until it picks.
 pub async fn set_default_theme(state: &AppState, theme: ThemeMode) -> Result<(), AppError> {
     state.database().set_default_theme(theme).await?;
+    crate::looks::server_moved(state);
+    Ok(())
+}
+
+/// The accent of whoever has not chosen one.
+pub async fn default_accent(state: &AppState) -> Result<String, AppError> {
+    Ok(state.database().server_settings().await?.default_accent)
+}
+
+/// Chooses the accent of whoever has not chosen one, and tells every open
+/// page. Only a colour written as one is kept: it ends up in a stylesheet
+/// read by everybody, the door included.
+pub async fn set_default_accent(state: &AppState, colour: &str) -> Result<(), Trouble> {
+    if !melyxar_core::user::is_an_accent_colour(colour) {
+        return Err(Trouble::Refused(Refused::NotAColour));
+    }
+    state.database().set_default_accent(&colour.to_lowercase()).await?;
     crate::looks::server_moved(state);
     Ok(())
 }
@@ -395,6 +416,24 @@ mod tests {
         ));
         set_door_slogan(&state, "   ").await.expect("given back");
         assert_eq!(door(&state).await.expect("read").slogan, None);
+    }
+
+    #[tokio::test]
+    async fn the_server_keeps_an_accent_only_when_it_is_a_colour_and_tells_every_page() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let state = AppState::new(Config::default(), database, None, Default::default());
+        let mut told = crate::looks::follow(&state);
+
+        set_default_accent(&state, "#0C8599").await.expect("kept");
+        assert_eq!(default_accent(&state).await.expect("read"), "#0c8599");
+        assert_eq!(told.try_recv().expect("told"), crate::looks::Moved::Server);
+        for nonsense in ["teal", "#0c859", "#0c8599; content: url(x)", "server"] {
+            assert!(matches!(
+                set_default_accent(&state, nonsense).await,
+                Err(Trouble::Refused(Refused::NotAColour))
+            ), "{nonsense}");
+        }
+        assert_eq!(default_accent(&state).await.expect("read"), "#0c8599");
     }
 
     #[tokio::test]

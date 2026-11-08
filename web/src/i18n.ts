@@ -949,6 +949,7 @@ const en: Dictionary = {
   "refused.server.slogan_too_long": "The slogan is too long.",
   "refused.server.not_a_picture": "Unsupported image format. Choose a JPEG, PNG, WebP or GIF file.",
   "refused.server.could_not_be_read": "Could not read this image. It may be damaged; try another file.",
+  "refused.server.not_a_colour": "A color is a hash followed by six hexadecimal digits.",
   "refused.server.too_large": "Image exceeds 20 MB. Choose a smaller file.",
   "delete.title": "Delete {title}",
   "delete.title_many": "Delete {count} items",
@@ -2265,6 +2266,10 @@ const en: Dictionary = {
   "admin.theme_why":
     "The theme everyone sees until they choose their own, a first visit to the sign-in screen included. Anyone can still change it for themselves.",
   "admin.theme_failed": "The default theme could not be changed",
+  "admin.accent": "Default color",
+  "admin.accent_why":
+    "The color everyone sees until they choose their own, on the sign-in screen and on the TV too. Anyone can still change it for themselves.",
+  "admin.accent_failed": "The default color could not be changed",
   "admin.door_lead": "Choose what stands behind the sign-in screen.",
   "admin.door_background": "Background",
   "admin.door_background.abstract": "Light and particles",
@@ -3359,6 +3364,7 @@ const fr: Dictionary = {
   "refused.server.slogan_too_long": "Le slogan est trop long.",
   "refused.server.not_a_picture": "Format d’image non pris en charge. Choisissez un fichier JPEG, PNG, WebP ou GIF.",
   "refused.server.could_not_be_read": "Impossible de lire cette image. Elle est peut-être endommagée ; essayez un autre fichier.",
+  "refused.server.not_a_colour": "Une couleur s’écrit avec un dièse suivi de six chiffres hexadécimaux.",
   "refused.server.too_large": "L’image dépasse 20 Mo. Choisissez un fichier plus petit.",
   "delete.title": "Supprimer {title}",
   "delete.title_many": "Supprimer {count} éléments",
@@ -4678,6 +4684,10 @@ const fr: Dictionary = {
   "admin.theme_why":
     "Le thème que chacun voit tant qu’il n’a pas choisi le sien, dès la première visite sur l’écran de connexion. Chacun peut toujours le changer pour lui.",
   "admin.theme_failed": "Impossible de changer le thème par défaut",
+  "admin.accent": "Couleur par défaut",
+  "admin.accent_why":
+    "La couleur que chacun voit tant qu’il n’a pas choisi la sienne, sur l’écran de connexion et sur la TV aussi. Chacun peut toujours la changer pour lui.",
+  "admin.accent_failed": "Impossible de changer la couleur par défaut",
   "admin.door_lead": "Choisissez ce qui se trouve derrière l’écran de connexion.",
   "admin.door_background": "Arrière-plan",
   "admin.door_background.abstract": "Lumière et particules",

@@ -19,6 +19,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useAccount } from "./account";
+import { serverMoved } from "./player/logo";
 import { api } from "./api";
 import type { Maintenance, RemoteOrder, SteerableDevice, Watched } from "./api";
 import { askAboutMaintenance, maintenanceHeard } from "./maintenance";
@@ -156,6 +157,13 @@ export function LiveLine({ children }: { children: ReactNode }) {
         );
       }
       line.addEventListener("requests", toRequests);
+      /* What the server wears for everybody moved: its name, logo, theme or
+         accent. An account's own choices are read where it changes them. */
+      line.addEventListener("looks", (event) => {
+        if ((event as MessageEvent<string>).data === "server") {
+          serverMoved();
+        }
+      });
       line.addEventListener("libraries", toLibraries);
       line.addEventListener("activity", toJournal);
       line.addEventListener("maintenance", (event) =>

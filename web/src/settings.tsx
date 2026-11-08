@@ -60,6 +60,7 @@ const STORED_SERVER_THEME = "melyxar.theme.server";
 const STORED_THEME_PHONE = "melyxar.theme.phone";
 const STORED_START_LIBRARY_PHONE = "melyxar.start.phone";
 const STORED_ACCENT = "melyxar.accent";
+const STORED_SERVER_ACCENT = "melyxar.accent.server";
 const STORED_BANNER_HEIGHT = "melyxar.banner.height";
 const STORED_BANNER_CUT = "melyxar.banner.cut";
 const STORED_BANNER_WHOLE = "melyxar.banner.whole";
@@ -198,8 +199,22 @@ function serverThemeOf(word: string | null | undefined): ThemeChoice {
   return word === "dark" || word === "light" ? word : "system";
 }
 
-function initialAccent(): string {
-  return safeRead(STORED_ACCENT) ?? THE_USUAL_ACCENT;
+/** What an account holds: a colour it chose, or nothing chosen yet, which
+ *  follows the server's. */
+type HeldAccent = string | "server";
+
+/** A colour written as one, a hash and six hexadecimal digits. */
+function isAColour(word: string | null | undefined): word is string {
+  return typeof word === "string" && /^#[0-9a-fA-F]{6}$/.test(word);
+}
+
+function heldAccentOf(word: string | null | undefined): HeldAccent {
+  return isAColour(word) ? word : "server";
+}
+
+/** The server's accent, Melyxar's red for anything that is not a colour. */
+function serverAccentOf(word: string | null | undefined): string {
+  return isAColour(word) ? word : THE_USUAL_ACCENT;
 }
 
 /** A list this browser kept, its names parted by commas. */
@@ -247,7 +262,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       safeWrite(STORED_SERVER_THEME, serverThemeOf(branding.default_theme));
     }
   }, [branding]);
-  const [accent, setAccentState] = useState<string>(initialAccent);
+  const [heldAccent, setHeldAccentState] = useState<HeldAccent>(() =>
+    heldAccentOf(safeRead(STORED_ACCENT)),
+  );
+  const serverAccent = serverAccentOf(branding?.default_accent ?? safeRead(STORED_SERVER_ACCENT));
+  const accent = heldAccent === "server" ? serverAccent : heldAccent;
+  useEffect(() => {
+    if (branding) {
+      safeWrite(STORED_SERVER_ACCENT, serverAccentOf(branding.default_accent));
+    }
+  }, [branding]);
   const [bannerHeight, setBannerHeightState] = useState(() =>
     initialNumber(STORED_BANNER_HEIGHT, THE_USUAL_BANNER.height),
   );
@@ -388,7 +412,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setAccent = useCallback((chosen: string) => {
     safeWrite(STORED_ACCENT, chosen);
-    setAccentState(chosen);
+    setHeldAccentState(chosen);
     // A colour picked by hand is dragged across a field, answering at every
     // step of the way.
     tellTheServerOnceTheHandStops({ accent_color: chosen });
@@ -511,8 +535,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     safeWrite(STORED_START_LIBRARY_PHONE, chosen.start_library_phone ?? "");
     setStartLibraryOnPhoneState(chosen.start_library_phone);
 
-    safeWrite(STORED_ACCENT, chosen.accent_color);
-    setAccentState(chosen.accent_color);
+    const accentHeld = heldAccentOf(chosen.accent_color);
+    safeWrite(STORED_ACCENT, accentHeld);
+    setHeldAccentState(accentHeld);
 
     safeWrite(STORED_BANNER_HEIGHT, String(chosen.banner_height));
     setBannerHeightState(chosen.banner_height);

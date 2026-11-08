@@ -69,4 +69,12 @@ class ShadesTest {
         assertEquals("#1c7ed6", nearestOffered(parseHex("#2f7cf6")!!))
         assertEquals("#c81e1e", nearestOffered(parseHex("#ff0000")!!))
     }
+
+    @Test
+    fun anAccountWearsItsOwnColourOrTheServersWhileItChoseNone() {
+        assertEquals("#0c8599", accentWorn("#0C8599", "#2f9e44"))
+        assertEquals("#2f9e44", accentWorn("server", "#2f9e44"))
+        assertEquals("#2f9e44", accentWorn(null, "#2F9E44"))
+        assertEquals("#c81e1e", accentWorn("server", "not a colour"))
+    }
 }

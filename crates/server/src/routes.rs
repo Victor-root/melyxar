@@ -351,6 +351,8 @@ struct PublicBranding {
     door_slogan: Option<String>,
     /// The theme of whoever has not chosen one, so a first visit is drawn in it.
     default_theme: &'static str,
+    /// The accent of whoever has not chosen one, the door's included.
+    default_accent: String,
     setup_complete: bool,
     /// Whether somebody may make their own account here, without which the
     /// door does not offer it at all.
@@ -378,6 +380,7 @@ async fn public_branding(State(state): State<AppState>) -> Result<Json<PublicBra
         login_background_style: settings.login_background.as_str(),
         door_slogan: settings.door_slogan,
         default_theme: settings.default_theme.as_str(),
+        default_accent: settings.default_accent,
         setup_complete: !melyxar_app::accounts::still_to_be_set_up(&state).await?,
         sign_ups_open: settings.sign_ups.open,
     }))

@@ -48,6 +48,7 @@ import app.melyxar.R
 import app.melyxar.server.Opening
 import app.melyxar.server.Sessions
 import app.melyxar.theme.OFFERED_ACCENTS
+import app.melyxar.theme.accentWorn
 import app.melyxar.theme.parseHex
 import app.melyxar.tv.door.Banners
 import app.melyxar.tv.languageName
@@ -285,7 +286,7 @@ fun SettingsScreen(sessions: Sessions) {
                     group("accent", null, null, Modifier.head(head, "accent")) {
                         val names = ACCENT_NAMES.map { stringResource(it) }
                         val title = stringResource(R.string.tv_setting_accent)
-                        val now = chosen.accentColor.lowercase()
+                        val now = accentWorn(chosen.accentColor, LocalChrome.current.branding.defaultAccent)
                         Line("accent", title, names.getOrNull(OFFERED_ACCENTS.indexOf(now)) ?: stringResource(R.string.tv_accent_own), memory, swatch = parseHex(now)?.let(::Color)) {
                             ask(title, OFFERED_ACCENTS, names, now, OFFERED_ACCENTS.mapNotNull { hex -> parseHex(hex)?.let(::Color) }) { colour ->
                                 preferences.change({ it.copy(accentColor = colour) }, buildJsonObject { put("accent_color", colour) })
@@ -508,11 +509,12 @@ fun SettingsScreen(sessions: Sessions) {
                         val now = names[ways.indexOf(follows)]
                         // An accent changed since keeps the banner as it was until
                         // it is chosen again, since changing it can close Melyxar.
-                        val shown = if (banners.differs(follows, chosen.accentColor)) stringResource(R.string.tv_banner_to_apply, now) else now
+                        val worn = accentWorn(chosen.accentColor, LocalChrome.current.branding.defaultAccent)
+                        val shown = if (banners.differs(follows, worn)) stringResource(R.string.tv_banner_to_apply, now) else now
                         Line("banner", stringResource(R.string.tv_setting_banner), shown, memory) {
                             ask(resources.getString(R.string.tv_banner_closes), ways, names, follows) { wanted ->
                                 follows = wanted
-                                banners.choose(wanted, chosen.accentColor)
+                                banners.choose(wanted, worn)
                             }
                         }
                     }

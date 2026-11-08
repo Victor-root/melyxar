@@ -52,7 +52,8 @@ data class Preferences(
     val interfaceLanguage: String = "auto",
     /** "dark", "light", "system" or "server". */
     val themeMode: String = "server",
-    val accentColor: String = "#c81e1e",
+    /** A colour the account chose, or "server" for the server's. */
+    val accentColor: String = "server",
     val homeSections: List<String> = emptyList(),
     val hiddenHomeSections: List<String> = emptyList(),
     val stepBackSeconds: Int = 10,

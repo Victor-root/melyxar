@@ -84,6 +84,13 @@ export function serverChanged(server: ServerIdentity): void {
   for (const follower of following) follower(server);
 }
 
+/** The server said what it wears moved, from this page or another: read it
+ *  again, and every screen showing it follows. */
+export function serverMoved(): void {
+  known = null;
+  ask();
+}
+
 /**
  * Asks the server once, and again shortly for as long as a screen still wants
  * the answer when it went unanswered: a connection dropped by whatever carries

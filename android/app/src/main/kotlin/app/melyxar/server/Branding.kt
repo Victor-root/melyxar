@@ -20,6 +20,8 @@ data class Branding(
     /** "dark", "light" or "system": the theme of an account that follows
      *  the server's. */
     @SerialName("default_theme") val defaultTheme: String = "dark",
+    /** The accent of an account that follows the server's, as `#rrggbb`. */
+    @SerialName("default_accent") val defaultAccent: String = "#c81e1e",
     @SerialName("setup_complete") val setupComplete: Boolean = true,
 )
 

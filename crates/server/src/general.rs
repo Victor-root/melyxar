@@ -51,6 +51,10 @@ pub fn router() -> Router<AppState> {
             axum::routing::put(choose_default_theme),
         )
         .route(
+            "/api/v1/settings/server/accent",
+            axum::routing::put(choose_default_accent),
+        )
+        .route(
             "/api/v1/settings/server/door/slogan",
             axum::routing::put(write_door_slogan),
         )
@@ -88,6 +92,8 @@ struct ServerView {
     longest_slogan: usize,
     /// The theme of whoever has not chosen one.
     default_theme: &'static str,
+    /// The accent of whoever has not chosen one.
+    default_accent: String,
 }
 
 impl ServerView {
@@ -107,6 +113,7 @@ impl ServerView {
             door_slogan: door.slogan,
             longest_slogan: melyxar_app::server::LONGEST_SLOGAN,
             default_theme: melyxar_app::server::default_theme(state).await?.as_str(),
+            default_accent: melyxar_app::server::default_accent(state).await?,
         }))
     }
 }
@@ -196,6 +203,21 @@ async fn choose_default_theme(
         .filter(|theme| *theme != melyxar_core::user::ThemeMode::Server)
         .ok_or_else(|| crate::error::ServerError::invalid_input("no theme goes by that name"))?;
     melyxar_app::server::set_default_theme(&state, theme).await?;
+    ServerView::of(&state).await
+}
+
+#[derive(Debug, Deserialize)]
+struct AccentAsked {
+    default_accent: String,
+}
+
+/// Chooses the accent of whoever has not chosen one.
+async fn choose_default_accent(
+    State(state): State<AppState>,
+    _: crate::account::Administrator,
+    Json(asked): Json<AccentAsked>,
+) -> Result<Json<ServerView>> {
+    melyxar_app::server::set_default_accent(&state, &asked.default_accent).await?;
     ServerView::of(&state).await
 }
 
