@@ -219,15 +219,19 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
-/** Sending what is playing to another screen. Not to be confused with the
- *  player's own icon of that name, which is about who is in a film. */
+/** Sending what is playing to another screen, drawn as the remote that
+ *  drives it. Not to be confused with the player's own icon of that name,
+ *  which is about who is in a film. */
 export function ScreenCastIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M3 19h.01" />
-      <path d="M7 19a4 4 0 0 0-4-4" />
-      <path d="M11 19a8 8 0 0 0-8-8" />
-      <path d="M15 19h3a3 3 0 0 0 3-3V8a3 3 0 0 0-3-3H6a3 3 0 0 0-2.8 2" />
+      <path d="M10 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0" />
+      <path d="M7 5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5" />
+      <path d="M12 3v2" />
+      <path d="M10 15v.01" />
+      <path d="M10 18v.01" />
+      <path d="M14 18v.01" />
+      <path d="M14 15v.01" />
     </Icon>
   );
 }
