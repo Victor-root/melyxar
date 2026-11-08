@@ -1809,12 +1809,29 @@
   display: block;
 }
 
+/* Not handed down to the lines: set on the list each time the lines made
+   move, inherited they had every line of it styled again, a thousand
+   elements for a step of ten lines. Its two rooms take them explicitly. */
+@property --queue-room-before {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --queue-room-after {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 .music-queue::before {
-  height: var(--queue-room-before, 0);
+  --queue-room-before: inherit;
+  height: var(--queue-room-before);
 }
 
 .music-queue::after {
-  height: var(--queue-room-after, 0);
+  --queue-room-after: inherit;
+  height: var(--queue-room-after);
 }
 
 /* A line of the queue is a line of a list of songs, with the cross that takes
