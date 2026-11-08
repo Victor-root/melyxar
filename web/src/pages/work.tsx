@@ -44,7 +44,7 @@ import {
   TrailerIcon,
 } from "../icons";
 import { languageName } from "../languages";
-import { useMarks } from "../marks";
+import { useMarks, useMarksOf } from "../marks";
 import {
   containerName,
   howLong,
@@ -855,7 +855,7 @@ function Chapters({ plan, onPlay }: { plan: PlaybackPlan; onPlay: (at: number) =
  * the order somebody reads when something is wrong with a file: where it is
  * first, then what is inside.
  */
-function Versions({
+const Versions = memo(function Versions({
   version,
   separable,
   onChanged,
@@ -993,7 +993,7 @@ function Versions({
       </div>
     </section>
   );
-}
+});
 
 /** One line of a panel, left out entirely when the analysis found nothing. */
 function Fact({
@@ -1083,7 +1083,7 @@ function ReadCopyAgain({ copy, onRead }: { copy: string; onRead: () => void }) {
  * Both are drawn with the card every row draws, so they grow, light up, play
  * and open their menu exactly as every other card does.
  */
-function WhatHangsUnder({ work }: { work: Work }) {
+const WhatHangsUnder = memo(function WhatHangsUnder({ work }: { work: Work }) {
   const { t } = useSettings();
   const seasons = work.kind === "series";
 
@@ -1121,15 +1121,14 @@ function WhatHangsUnder({ work }: { work: Work }) {
       )}
     </section>
   );
-}
+});
 
 /** One episode of a season's list: its still, and beside it what it is
  *  called, how it is rated, how long it runs and what it is about. */
 function EpisodeLine({ child }: { child: Child }) {
   const { t } = useSettings();
-  const marks = useMarks();
   const { card } = child;
-  const resume = marks.resumeOf(card);
+  const { resume } = useMarksOf(card);
   const left = resume !== null ? whatIsLeft(resume, lengthOfAPlay(card), t) : undefined;
 
   return (
@@ -1164,7 +1163,7 @@ function EpisodeLine({ child }: { child: Child }) {
  * season. The row opens where this one is, and its heading leads to the
  * season itself.
  */
-function TheRestOfTheSeason({ work }: { work: Work }) {
+const TheRestOfTheSeason = memo(function TheRestOfTheSeason({ work }: { work: Work }) {
   const { t } = useSettings();
   const season = work.ancestry.find((up) => up.kind === "season");
   /* A season of one episode is this page again, as a row of one card. */
@@ -1198,7 +1197,7 @@ function TheRestOfTheSeason({ work }: { work: Work }) {
       </InOrder>
     </section>
   );
-}
+});
 
 /** What one season or episode is called: its number in the language being
  *  read, and its own name when it has one the number does not say. */
