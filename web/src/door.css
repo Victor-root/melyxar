@@ -352,6 +352,8 @@
   align-self: center;
   position: relative;
   z-index: 1;
+  /* The faces size themselves on its width. */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -429,20 +431,53 @@ img.door-greeting-mark {
  * large enough to be aimed at from a sofa.
  *
  * Wrapped rather than scrolled: a household is a handful of names, and a row
- * that scrolls sideways hides the very thing it is there to offer. Five at
- * most across, so a big household reads as rows rather than as a ribbon. A
- * server with a great many accounts turns the whole list off, which is what
- * that switch is for.
+ * that scrolls sideways hides the very thing it is there to offer. On one
+ * line as long as the width holds them all, then on as few lines of even
+ * length as it takes, each line a little smaller so the buttons under them
+ * stay on the screen. A server with a great many accounts turns the whole
+ * list off, which is what that switch is for.
  */
 .door-who {
+  /* How many a line holds before the faces would be too small to aim at,
+     raised with the width of the window below. */
+  --door-line: 5;
+  --door-rows: round(up, var(--door-count) / var(--door-line), 1);
+  --door-across: round(up, var(--door-count) / var(--door-rows), 1);
+  --door-tile: clamp(
+    72px,
+    min(
+      max(112px, 10vw),
+      calc(34vh / (var(--door-rows) + 0.8)),
+      calc((100cqw - (var(--door-across) - 1) * var(--door-tile-gap)) / var(--door-across))
+    ),
+    184px
+  );
   position: relative;
   isolation: isolate;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: clamp(26px, 4vh, 40px) var(--door-tile-gap);
-  max-width: calc(5 * var(--door-tile) + 4 * var(--door-tile-gap));
+  max-width: calc(var(--door-across) * var(--door-tile) + (var(--door-across) - 1) * var(--door-tile-gap));
   margin-bottom: clamp(30px, 6vh, 60px);
+}
+
+@media (min-width: 1000px) {
+  .door-who {
+    --door-line: 8;
+  }
+}
+
+@media (min-width: 1300px) {
+  .door-who {
+    --door-line: 9;
+  }
+}
+
+@media (min-width: 1700px) {
+  .door-who {
+    --door-line: 10;
+  }
 }
 
 /* The floor the first row stands on: a pool of the accent. */

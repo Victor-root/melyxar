@@ -213,7 +213,12 @@ export function Door({
             <>
               <div
                 className="door-who"
-                style={{ "--door-columns": columnsOfFaces(door.names.length) } as React.CSSProperties}
+                style={
+                  {
+                    "--door-count": door.names.length,
+                    "--door-columns": columnsOfFaces(door.names.length),
+                  } as React.CSSProperties
+                }
               >
                 {door.names.map((offered, at) => (
                   <button
