@@ -20,7 +20,7 @@ import { useIsAFilmOnScreen } from "../../on-screen";
 import { useSettings } from "../../settings";
 import { namesOf } from "../tiles";
 import { LyricsShiftButton } from "./lyrics-offset";
-import { HeartButton, PlayButton, QueueButton, Rail, Transport, Ways, Volume } from "./controls";
+import { HeartButton, PlayButton, Rail, Transport, Ways, Volume } from "./controls";
 import { useLeaving } from "./leaving";
 import { useNowPlayingPage } from "./opening";
 import { BAR_LEAVES_MS, useMusic } from "./player";
@@ -106,7 +106,6 @@ export function MusicBar() {
           <HeartButton id={song.id} />
           <Volume music={music} />
           <Ways music={music} />
-          <QueueButton />
         </div>
       </div>
     </div>

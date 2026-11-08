@@ -23,8 +23,7 @@ import { PlayOn } from "../../remote/remote";
 import { toldQueue } from "../../remote/told";
 import { useSettings } from "../../settings";
 import { useLiking } from "../marks";
-import { QueueIcon, RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
-import { useNowPlayingPage } from "./opening";
+import { RepeatIcon, ShuffleIcon, StopIcon } from "./icons";
 import { currentMusicClock, useMusicTime } from "./player";
 import type { Music } from "./player";
 import { canStepBack, canStepOn } from "./queue";
@@ -267,21 +266,6 @@ export function ListenOnButton({ music }: { music: Music }) {
         />
       )}
     </>
-  );
-}
-
-export function QueueButton({ lit = false }: { lit?: boolean }) {
-  const { t } = useSettings();
-  const nowPlaying = useNowPlayingPage();
-  return (
-    <button
-      type="button"
-      className={`player-button${lit ? " player-button-open" : ""}`}
-      onClick={nowPlaying.open}
-      aria-label={t("music.queue")}
-    >
-      <QueueIcon size={ICON} />
-    </button>
   );
 }
 
