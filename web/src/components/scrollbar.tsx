@@ -17,8 +17,13 @@
  *
  * Nothing here holds a position in React state. A bar redrawn through a
  * render on every frame of a scroll is a page doing the work of a scroll
- * twice, so the mark is moved by writing to it directly, once per frame at
- * most. The one thing that goes through state is whether there is anything to
+ * twice. Where the browser can tie an animation to a scroll, the mark is one
+ * running from the top of the track to its foot over the length of the page,
+ * moved by the graphics card with the scroll itself. Moved by writing to it
+ * on every frame instead, as a browser without that has it done, each frame
+ * of every scroll had the whole page sorted into layers again: measured on a
+ * library slowed four times, a quarter of what the page did while it moved.
+ * The one thing that goes through state is whether there is anything to
  * scroll at all, which changes when a page does and not while one is read.
  */
 
@@ -49,6 +54,9 @@ export function ScrollBar({
      here that costs anything would have been costing it sixty times a
      second for nothing. */
   const drawn = useRef(-1);
+  /* The mark running with the scroll, where the browser has that, and how far
+     down the track it runs, written again only when that changes. */
+  const following = useRef<{ effect: KeyframeEffect; reach: number } | null>(null);
   /* Whether there is more page than screen. Drawn nowhere at all when there
      is not: a bar as long as its own track says nothing and is one more thing
      on a screen that does not scroll. */
@@ -77,7 +85,13 @@ export function ScrollBar({
       drawn.current = long;
       it.style.height = `${long}px`;
     }
-    it.style.transform = `translateY(${(box.scrollTop / over) * (room - long)}px)`;
+    const along = following.current;
+    if (!along) {
+      it.style.transform = `translateY(${(box.scrollTop / over) * (room - long)}px)`;
+    } else if (along.reach !== room - long) {
+      along.reach = room - long;
+      along.effect.setKeyframes(runningDown(along.reach));
+    }
   }, [holder]);
 
   /*
@@ -123,6 +137,15 @@ export function ScrollBar({
       leaves = window.setTimeout(() => track.current?.removeAttribute("data-active"), STAYS_MS);
     };
 
+    const it = mark.current;
+    let running: Animation | null = null;
+    if (it && typeof ScrollTimeline === "function") {
+      const effect = new KeyframeEffect(it, runningDown(0), { fill: "both" });
+      running = new Animation(effect, new ScrollTimeline({ source: box }));
+      running.play();
+      following.current = { effect, reach: 0 };
+    }
+
     const sizes = new ResizeObserver(draw);
     const watch = () => {
       sizes.disconnect();
@@ -146,6 +169,8 @@ export function ScrollBar({
       if (asked) {
         cancelAnimationFrame(asked);
       }
+      running?.cancel();
+      following.current = null;
     };
   }, [holder, draw]);
 
@@ -207,4 +232,10 @@ export function ScrollBar({
       <div className="scrollbar-mark" ref={mark} onPointerDown={take} />
     </div>
   );
+}
+
+/** The mark from the top of the track to `reach` points down it, over the
+ *  whole length of the page. */
+function runningDown(reach: number): Keyframe[] {
+  return [{ transform: "translateY(0px)" }, { transform: `translateY(${reach}px)` }];
 }
