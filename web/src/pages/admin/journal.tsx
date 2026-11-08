@@ -8,13 +8,13 @@
  * becomes the three lines that matter.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { ActivityFamily, JournalLine } from "../../api";
+import type { ActivityFamily } from "../../api";
 import { PageHead, Panel } from "../../components/panel";
 import { HistoryIcon, JournalIcon, SearchIcon } from "../../icons";
 import { timeOfDay } from "../../readable";
-import { useJournalScreen } from "../../screens/journal";
+import { lineKeys, useJournalScreen } from "../../screens/journal";
 import { useSettings } from "../../settings";
 import { ActivityJournal, FAMILIES } from "./activity-list";
 
@@ -54,6 +54,7 @@ export function TechnicalJournal({ bare = false }: { bare?: boolean }) {
      answer is where the question was asked. */
   const [thrownAway, setThrownAway] = useState("");
   const selectable = useRef<HTMLTextAreaElement>(null);
+  const keys = lineKeys(journal.lines);
 
   /* Handed a box to select from, it is selected: nobody means "find the text
      and highlight it yourself" by copy. */
@@ -148,7 +149,13 @@ export function TechnicalJournal({ bare = false }: { bare?: boolean }) {
       ) : (
         <div className="log">
           {journal.lines.map((line, index) => (
-            <Line key={`${line.at}-${index}`} line={line} />
+            <Line
+              key={keys[index]}
+              at={line.at}
+              level={line.level}
+              tag={line.tag}
+              message={line.message}
+            />
           ))}
         </div>
       )}
@@ -229,13 +236,26 @@ function ActivityPanel() {
   );
 }
 
-function Line({ line }: { line: JournalLine }) {
+/** One line, drawn again only when what it says changes: the screen looks
+ *  again every two seconds and nearly every line it gets back is one it
+ *  already shows. */
+const Line = memo(function Line({
+  at,
+  level,
+  tag,
+  message,
+}: {
+  at: string;
+  level: string;
+  tag: string;
+  message: string;
+}) {
   return (
-    <div className={`log-line log-${line.level}`}>
-      <span className="log-at">{timeOfDay(line.at)}</span>
-      <span className="log-level">{line.level}</span>
-      <span className="log-tag">{line.tag}</span>
-      <span className="log-said">{line.message}</span>
+    <div className={`log-line log-${level}`}>
+      <span className="log-at">{timeOfDay(at)}</span>
+      <span className="log-level">{level}</span>
+      <span className="log-tag">{tag}</span>
+      <span className="log-said">{message}</span>
     </div>
   );
-}
+});

@@ -14,13 +14,31 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
-import type { Journal } from "../api";
+import type { Journal, JournalLine } from "../api";
 import { useAsked } from "../asking";
 import { handOver } from "../copying";
 import { lookWhileSeen } from "../polling";
 
 /** How often the screen looks again while it is open. */
 const EVERY_MS = 2_000;
+
+/**
+ * What tells each line apart from one read to the next: the instant it was
+ * written, and how many lines before it in the list share that instant.
+ *
+ * Its place in the list would not do: the list is the last lines written, so
+ * one more line moves every other one up a place, and each line told apart by
+ * its place was drawn again from nothing, the whole list every time the
+ * screen looked again.
+ */
+export function lineKeys(lines: readonly JournalLine[]): string[] {
+  const seen = new Map<string, number>();
+  return lines.map((line) => {
+    const before = seen.get(line.at) ?? 0;
+    seen.set(line.at, before + 1);
+    return `${line.at}#${before}`;
+  });
+}
 
 /** Everything the journal screen is handed to draw itself and be driven by. */
 export interface JournalScreen {
