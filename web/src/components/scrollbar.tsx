@@ -129,10 +129,14 @@ export function ScrollBar({
     /* Said on the bar for as long as the page is moving and a moment after:
        a phone shows it that way and nowhere else, which is a matter for the
        style sheet, so every screen keeps it up to date at the cost of one
-       timer. */
+       timer. Put on once rather than on every movement: written again, it
+       had the bar styled again on every frame of a scroll, and the page with
+       it by whatever read it next. */
     let leaves = 0;
     const lit = () => {
-      track.current?.setAttribute("data-active", "");
+      if (!track.current?.hasAttribute("data-active")) {
+        track.current?.setAttribute("data-active", "");
+      }
       window.clearTimeout(leaves);
       leaves = window.setTimeout(() => track.current?.removeAttribute("data-active"), STAYS_MS);
     };
