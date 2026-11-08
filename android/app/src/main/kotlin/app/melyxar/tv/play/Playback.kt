@@ -203,6 +203,16 @@ class Playback(
     var wordsOffset by mutableFloatStateOf(0f)
         private set
 
+    /** How many seconds later the sound comes than the file says, earlier
+     *  below nought, as the web's audio sync. Moved by the server, which
+     *  rebuilds the sound. */
+    var soundOffset by mutableFloatStateOf(0f)
+        private set
+
+    /** What the server is asked to move the sound by, once a viewer has said;
+     *  until then it moves it where this account last put it for this file. */
+    private var soundAsked: Float? = null
+
     /** Where the words shown were read from. */
     private var wordsFrom: String? = null
     private var reading: Job? = null
@@ -359,11 +369,15 @@ class Playback(
     /** The subtitle the server paints into the film, if any. */
     private val paintedChoice: TrackChoice get() = painted?.let { TrackChoice.Painted(it.id) } ?: TrackChoice.Unsaid
 
-    private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, held), audio, subtitle, wideGamut)
+    private suspend fun asked(subtitle: TrackChoice) = Asked(profileOf(context, held), audio, subtitle, wideGamut, soundAsked)
 
     /** Plays a plan from [at] seconds: the file itself, or a film rebuilt
      *  from there, paused unless [going]. */
     private suspend fun open(plan: Plan, at: Double, going: Boolean = true) {
+        // The words where this account left them for this file, from the
+        // first answer only: a later one can predate a move not yet kept.
+        if (this.plan == null) wordsOffset = plan.wordsOffsetSeconds
+        soundOffset = plan.soundOffsetSeconds
         this.plan = plan
         if (BuildConfig.TRACES) {
             Log.d(SOUND_LOG, "plan: ${plan.method}, audio ${plan.audio.firstOrNull { it.id == plan.chosenAudioId }?.codec}")
@@ -574,6 +588,29 @@ class Playback(
 
     fun chooseWordsOffset(seconds: Float) {
         wordsOffset = seconds
+        keepInStep()
+    }
+
+    /** Moves the sound and plays on from where the film is, the server
+     *  rebuilding it moved. */
+    fun chooseSoundOffset(seconds: Float) {
+        if (seconds == soundOffset) {
+            return
+        }
+        soundAsked = seconds
+        soundOffset = seconds
+        keepInStep()
+        again(paintedChoice)
+    }
+
+    private fun keepInStep() {
+        scope.launch {
+            try {
+                api.keepInStep(source, soundOffset, wordsOffset)
+            } catch (_: IOException) {
+                // Still moved for this sitting, which is the part being watched.
+            }
+        }
     }
 
     private fun remember() {

@@ -105,6 +105,9 @@ data class Asked(
     val subtitle: TrackChoice,
     /** automatic, always_convert or never_convert. */
     val wideGamut: String?,
+    /** How far to move the sound against the picture, later when positive;
+     *  null leaves it where this account last put it for this file. */
+    val soundOffset: Float? = null,
 )
 
 @Serializable
@@ -406,6 +409,20 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         return post("/api/v1/playback/watching", body, Heard.serializer())
     }
 
+    /** Keeps how far this account moved the sound and subtitles of one file,
+     *  for it alone, so the file starts back in step next time. */
+    suspend fun keepInStep(source: String, sound: Float, words: Float) {
+        send(
+            "POST",
+            "/api/v1/playback/sync",
+            buildJsonObject {
+                put("source_id", source)
+                put("sound_offset_seconds", sound)
+                put("words_offset_seconds", words)
+            },
+        )
+    }
+
     /** Remembers the tracks chosen, so the next time starts the same way. */
     suspend fun rememberTracks(work: String, source: String, audio: String?, subtitle: String?) {
         send(
@@ -431,6 +448,7 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
                 TrackChoice.Unsaid -> Unit
             }
             asked.wideGamut?.let { put("wide_gamut", it) }
+            asked.soundOffset?.let { put("sound_offset_seconds", it) }
         }
 
     private suspend fun <T> post(path: String, body: JsonObject, answer: DeserializationStrategy<T>): T =

@@ -241,6 +241,7 @@ private fun reasonName(code: String): String = when (code) {
     "too_many_audio_channels" -> stringResource(R.string.tv_reason_too_many_audio_channels)
     "downmix_requested" -> stringResource(R.string.tv_reason_downmix_requested)
     "loudness_levelling_requested" -> stringResource(R.string.tv_reason_loudness_levelling_requested)
+    "sound_shifted" -> stringResource(R.string.tv_reason_sound_shifted)
     "subtitle_must_be_burned_in" -> stringResource(R.string.tv_reason_subtitle_must_be_burned_in)
     "subtitle_format_not_drawn_by_client" -> stringResource(R.string.tv_reason_subtitle_format_not_drawn_by_client)
     "non_default_track_selected" -> stringResource(R.string.tv_reason_non_default_track_selected)

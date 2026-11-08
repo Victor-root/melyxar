@@ -106,6 +106,8 @@
     <string name="tv_wide_gamut_imposed_kept">Kept whatever is chosen here: the server is set never to convert HDR.</string>
     <string name="tv_words_offset">Subtitle sync</string>
     <string name="tv_words_offset_why">Adjust subtitle timing if it is ahead of or behind the video.</string>
+    <string name="tv_sound_offset">Audio sync</string>
+    <string name="tv_sound_offset_why">Adjust audio timing if it is ahead of or behind the video. Playback picks up where it is.</string>
     <string name="tv_subtitle_size">Subtitle size</string>
     <string name="tv_subtitle_size_small">Small</string>
     <string name="tv_subtitle_size_normal">Normal</string>
@@ -502,6 +504,7 @@
     <string name="tv_reason_too_many_audio_channels">the audio has more channels than this device supports</string>
     <string name="tv_reason_downmix_requested">stereo downmix is enabled</string>
     <string name="tv_reason_loudness_levelling_requested">loudness normalisation is enabled</string>
+    <string name="tv_reason_sound_shifted">the audio sync is adjusted</string>
     <string name="tv_reason_subtitle_must_be_burned_in">the selected subtitles must be burned into the video</string>
     <string name="tv_reason_subtitle_format_not_drawn_by_client">this device cannot display the available subtitle formats</string>
     <string name="tv_reason_non_default_track_selected">a non-default track was selected</string>

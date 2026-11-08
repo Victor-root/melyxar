@@ -414,6 +414,11 @@ data class Plan(
     val rebuild: PictureRebuild? = null,
     /** What the file itself holds, beside what is made of it. */
     val film: FilmHolds? = null,
+    /** How far the sound is moved against the picture in this answer, and
+     *  how far this account keeps the subtitles of this file moved, in
+     *  seconds, later when positive. */
+    val soundOffsetSeconds: Float = 0f,
+    val wordsOffsetSeconds: Float = 0f,
 )
 
 /** What rebuilds the picture: card or processor. */

@@ -107,6 +107,8 @@
     <string name="tv_wide_gamut_imposed_kept">Conservé quel que soit le choix fait ici : le serveur est réglé pour ne jamais convertir le HDR.</string>
     <string name="tv_words_offset">Synchronisation des sous-titres</string>
     <string name="tv_words_offset_why">Ajustez le décalage des sous-titres s’ils sont en avance ou en retard sur la vidéo.</string>
+    <string name="tv_sound_offset">Synchronisation du son</string>
+    <string name="tv_sound_offset_why">Ajustez le décalage du son s’il est en avance ou en retard sur la vidéo. La lecture reprend au même endroit.</string>
     <string name="tv_subtitle_size">Taille des sous-titres</string>
     <string name="tv_subtitle_size_small">Petite</string>
     <string name="tv_subtitle_size_normal">Normale</string>
@@ -515,6 +517,7 @@
     <string name="tv_reason_too_many_audio_channels">l’audio comporte plus de canaux que cet appareil ne peut en gérer</string>
     <string name="tv_reason_downmix_requested">le mixage en stéréo est activé</string>
     <string name="tv_reason_loudness_levelling_requested">la normalisation du niveau sonore est activée</string>
+    <string name="tv_reason_sound_shifted">la synchronisation du son est ajustée</string>
     <string name="tv_reason_subtitle_must_be_burned_in">les sous-titres sélectionnés doivent être incrustés dans la vidéo</string>
     <string name="tv_reason_subtitle_format_not_drawn_by_client">cet appareil ne peut pas afficher les formats de sous-titres disponibles</string>
     <string name="tv_reason_non_default_track_selected">une piste différente de la piste par défaut a été sélectionnée</string>

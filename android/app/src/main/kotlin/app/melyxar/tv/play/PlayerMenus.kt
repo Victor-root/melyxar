@@ -36,6 +36,7 @@ enum class Menu(val from: Menu? = null) {
     Brightness(Settings),
     Contrast(Settings),
     WordsOffset(Settings),
+    SoundOffset(Audio),
     /** How the words look, opened from the list of subtitles as the web's. */
     SubtitleSize(Subtitles),
     SubtitleColour(Subtitles),
@@ -48,9 +49,9 @@ enum class Menu(val from: Menu? = null) {
     Diagnostics(Settings),
 }
 
-/** How far the words can be moved, half a second at a time, as the web
- *  moves them. */
-private val OFFSETS = (-30..30).map { it * 0.5f }
+/** How far the words and the sound can be moved, a tenth of a second at a
+ *  time, as the web moves them. */
+private val OFFSETS = (-150..150).map { it / 10f }
 
 /** What can be done with a film's HDR for this film alone, the account's
  *  own choice first, as the web offers it. */
@@ -76,14 +77,30 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
     val adaptiveShort = stringResource(R.string.tv_quality_adaptive_short)
     val originalShort = stringResource(R.string.tv_quality_original_short)
     when (menu) {
-        Menu.Audio -> ChoiceList(
-            title = stringResource(R.string.tv_audio),
-            choices = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) },
-            chosen = plan.audio.indexOfFirst { it.id == playback.audio }.takeIf { it >= 0 },
-            onChoose = { playback.chooseAudio(plan.audio[it]) },
-            onClose = back,
-            modifier = placed,
-        )
+        Menu.Audio -> {
+            // The soundtracks, and below them how far the sound is moved,
+            // as the list of subtitles carries how far the words are.
+            val tracks = plan.audio.mapIndexed { at, track -> trackName(track, at, withSound = true) }
+            val chosen = plan.audio.indexOfFirst { it.id == playback.audio }.takeIf { it >= 0 }
+            ChoiceList(
+                title = stringResource(R.string.tv_audio),
+                choices = tracks + settingName(Menu.SoundOffset),
+                chosen = chosen,
+                onChoose = { at ->
+                    if (at < tracks.size) {
+                        playback.chooseAudio(plan.audio[at])
+                        back()
+                    } else {
+                        onMenu(Menu.SoundOffset)
+                    }
+                },
+                onClose = back,
+                modifier = placed,
+                values = List(tracks.size) { null } + offsetName(playback.soundOffset),
+                startAt = if (left == Menu.SoundOffset) tracks.size else chosen ?: 0,
+                leadsOn = true,
+            )
+        }
         Menu.Subtitles -> {
             val tracks = listOf(stringResource(R.string.tv_subtitles_off)) +
                 plan.subtitles.mapIndexed { at, track -> trackName(track, at, withSound = false) }
@@ -176,7 +193,15 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
                 leadsOn = true,
             )
         }
-        Menu.SubtitleOffset -> offsetList(menu, playback, back, placed)
+        Menu.SubtitleOffset -> wordsOffsetList(menu, playback, back, placed)
+        Menu.SoundOffset -> offsetList(
+            menu,
+            now = playback.soundOffset,
+            onChoose = playback::chooseSoundOffset,
+            note = stringResource(R.string.tv_sound_offset_why),
+            back = back,
+            placed = placed,
+        )
         Menu.Chapters -> ChapterStrip(playback, onClose = back, modifier = modifier.fillMaxWidth())
         Menu.Info, Menu.Cast, Menu.Diagnostics -> Unit
         Menu.Settings -> {
@@ -240,7 +265,7 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
             onClose = back,
             modifier = placed,
         )
-        Menu.WordsOffset -> offsetList(menu, playback, back, placed)
+        Menu.WordsOffset -> wordsOffsetList(menu, playback, back, placed)
         Menu.WideGamut -> {
             val handling = plan.wideGamut
             if (handling != null && !handling.followsChoice) {
@@ -275,14 +300,27 @@ fun PlayerMenu(menu: Menu, left: Menu?, playback: Playback, onMenu: (Menu?) -> U
 /** How far the words are moved, opened from the settings and from the list
  *  of subtitles alike. */
 @Composable
-private fun offsetList(menu: Menu, playback: Playback, back: () -> Unit, placed: Modifier) = ChoiceList(
+private fun wordsOffsetList(menu: Menu, playback: Playback, back: () -> Unit, placed: Modifier) = offsetList(
+    menu,
+    now = playback.wordsOffset,
+    onChoose = playback::chooseWordsOffset,
+    note = stringResource(R.string.tv_words_offset_why),
+    back = back,
+    placed = placed,
+)
+
+/** How far something is moved against the picture, a tenth of a second at a
+ *  time, opened on where it stands now so the next step either way is one
+ *  press away. */
+@Composable
+private fun offsetList(menu: Menu, now: Float, onChoose: (Float) -> Unit, note: String, back: () -> Unit, placed: Modifier) = ChoiceList(
     title = settingName(menu),
     choices = OFFSETS.map(::offsetName),
-    chosen = OFFSETS.indexOf(playback.wordsOffset),
-    onChoose = { playback.chooseWordsOffset(OFFSETS[it]) },
+    chosen = OFFSETS.indexOfFirst { abs(it - now) < 0.05f },
+    onChoose = { onChoose(OFFSETS[it]) },
     onClose = back,
     modifier = placed,
-    note = stringResource(R.string.tv_words_offset_why),
+    note = note,
 )
 
 /** One of the lists of how the words look, the one in force ticked. */
@@ -320,6 +358,7 @@ private fun settingName(menu: Menu): String = stringResource(
         Menu.SubtitleBackground -> R.string.tv_subtitle_background
         Menu.SubtitleHeight -> R.string.tv_subtitle_height
         Menu.SubtitleOffset -> R.string.tv_words_offset
+        Menu.SoundOffset -> R.string.tv_sound_offset
         else -> R.string.tv_speed
     },
 )
