@@ -7,16 +7,19 @@
  */
 
 import aurora from "./face-pictures/aurora.webp";
+import binary from "./face-pictures/binary.webp";
 import comet from "./face-pictures/comet.webp";
 import crescent from "./face-pictures/crescent.webp";
 import crystal from "./face-pictures/crystal.webp";
 import eclipse from "./face-pictures/eclipse.webp";
 import orbits from "./face-pictures/orbits.webp";
 import rings from "./face-pictures/rings.webp";
+import spiral from "./face-pictures/spiral.webp";
+import verdant from "./face-pictures/verdant.webp";
 
 /** The pictures, in the order the name's hash picks from, which the
  *  television's list follows too. */
-export const FACE_PICTURES = ["comet", "rings", "orbits", "crystal", "eclipse", "aurora", "crescent"] as const;
+export const FACE_PICTURES = ["comet", "rings", "orbits", "crystal", "eclipse", "aurora", "crescent", "spiral", "binary", "verdant"] as const;
 
 export type FacePicture = (typeof FACE_PICTURES)[number];
 
@@ -30,6 +33,9 @@ export const FACE_ADDRESSES: Record<FacePicture, string> = {
   eclipse,
   aurora,
   crescent,
+  spiral,
+  binary,
+  verdant,
 };
 
 /** FNV-1a over the name's code points: small, fast and well spread. */
