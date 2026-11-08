@@ -144,10 +144,11 @@ export function wordsThatFit(text: string, fits: (shown: string) => boolean): st
 }
 
 /**
- * The words of `text` that fit in `box`, a box given all the room it may take
- * and no more, cut again whenever that room changes. The cutting is measured
- * on an unseen copy of the box, the page's own being React's to draw. Null
- * when the whole text fits, or when `enabled` is off.
+ * The words of `text` that fit in `box`, one of the blocks of `box`'s parent
+ * standing in a column, given whatever height of the parent the others leave
+ * and no more, cut again whenever the parent changes size. The cutting is
+ * measured on an unseen copy of the box, the page's own being React's to
+ * draw. Null when the whole text fits, or when `enabled` is off.
  */
 export function useWordsThatFit(
   box: React.RefObject<HTMLElement | null>,
@@ -157,13 +158,20 @@ export function useWordsThatFit(
 ): string | null {
   const [shown, setShown] = useState<string | null>(null);
   useLayoutEffect(() => {
-    const room = box.current;
-    if (!enabled || !text || !room) {
+    const own = box.current;
+    const column = own?.parentElement;
+    if (!enabled || !text || !own || !column) {
       setShown(null);
       return;
     }
     const cut = () => {
-      const copy = room.cloneNode(true) as HTMLElement;
+      const others = [...column.children].filter((child) => child !== own);
+      const gap = parseFloat(getComputedStyle(column).rowGap) || 0;
+      const room =
+        column.clientHeight -
+        others.reduce((taken, other) => taken + (other as HTMLElement).offsetHeight, 0) -
+        gap * others.length;
+      const copy = own.cloneNode(true) as HTMLElement;
       const words = copy.querySelector(wordsIn);
       if (!words) {
         return;
@@ -171,20 +179,19 @@ export function useWordsThatFit(
       Object.assign(copy.style, {
         position: "absolute",
         visibility: "hidden",
-        width: `${room.clientWidth}px`,
-        height: `${room.clientHeight}px`,
-        flex: "none",
+        width: `${own.clientWidth}px`,
+        height: "auto",
       });
-      room.after(copy);
+      own.after(copy);
       const fitted = wordsThatFit(text, (candidate) => {
         words.textContent = candidate;
-        return copy.scrollHeight <= copy.clientHeight + SLACK;
+        return copy.offsetHeight <= room + SLACK;
       });
       copy.remove();
       setShown(fitted === text ? null : fitted);
     };
     const watcher = new ResizeObserver(cut);
-    watcher.observe(room);
+    watcher.observe(column);
     return () => watcher.disconnect();
   }, [box, text, wordsIn, enabled]);
   return shown;

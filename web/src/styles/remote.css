@@ -323,10 +323,11 @@
     justify-self: center;
   }
 
-  /* A film: what plays takes the room the buttons leave and no more, the
+  /* A film: what plays takes no more than the room the buttons leave, the
      picture at the top left and the words running on beside it and under
      it, the synopsis cut by the page to the words that fit. Everything below
-     keeps its full height. */
+     follows it with its full height, and what room is left over stays at the
+     foot of the screen rather than between them. */
   .remote-steering-fits {
     height: 100%;
   }
@@ -336,11 +337,8 @@
   }
 
   .remote-steering-fits > .remote-now {
-    display: block;
-    flex: 1 1 0;
-    min-height: 0;
+    display: flow-root;
     margin-bottom: 0;
-    overflow: hidden;
   }
 
   .remote-steering-fits .remote-picture {
