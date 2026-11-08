@@ -8,7 +8,7 @@
  * next look up gives the field back to the provider.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { api } from "../api";
 import type { DetailField, WrittenCredit, WrittenDetails } from "../api";
@@ -46,14 +46,20 @@ export function DetailsDialog({
   }, [held.answer, written]);
 
   /** Changes one field and locks it, since what was typed is what is wanted. */
-  const change = <K extends DetailField>(field: K, value: WrittenDetails[K]) =>
-    setWritten((before) =>
-      before && {
-        ...before,
-        [field]: value,
-        locked: before.locked.includes(field) ? before.locked : [...before.locked, field],
-      },
-    );
+  const change = useCallback(
+    <K extends DetailField>(field: K, value: WrittenDetails[K]) =>
+      setWritten((before) =>
+        before && {
+          ...before,
+          [field]: value,
+          locked: before.locked.includes(field) ? before.locked : [...before.locked, field],
+        },
+      ),
+    [],
+  );
+  /* The same function from one letter typed to the next, so the list of
+     everybody credited is not drawn again for a letter typed anywhere else. */
+  const changeCredits = useCallback((credits: WrittenCredit[]) => change("credits", credits), [change]);
 
   const keep = async () => {
     if (!written) {
@@ -203,7 +209,7 @@ export function DetailsDialog({
             <Credits
               credits={written.credits}
               roles={written.roles}
-              onChange={(credits) => change("credits", credits)}
+              onChange={changeCredits}
             />
           </Field>
 
@@ -253,7 +259,7 @@ function Lock({ locked, onToggle }: { locked: boolean; onToggle: () => void }) {
  * when they act, and a button taking them off. Dragged by the line, or moved
  * by its grip from the keyboard, into the order the page shows them in.
  */
-function Credits({
+const Credits = memo(function Credits({
   credits,
   roles,
   onChange,
@@ -348,7 +354,7 @@ function Credits({
       </button>
     </div>
   );
-}
+});
 
 /** A list of names, each taken off by its cross, and one more typed in. */
 function Names({
