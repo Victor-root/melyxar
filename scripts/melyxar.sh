@@ -594,8 +594,8 @@ en|security_tool_unknown|%s: its version could not be identified, not checked.
 fr|security_tool_unknown|%s : sa version n’a pas pu être identifiée, non vérifié.
 en|security_tool_not_here|%s is not installed on this machine.
 fr|security_tool_not_here|%s n’est pas installé sur cette machine.
-en|security_fixed_later|Fixed in %s.
-fr|security_fixed_later|Corrigée dans %s.
+en|security_fixed_later|Fixed in %s %s.
+fr|security_fixed_later|Corrigée dans %s %s.
 en|security_node_latest|Node %s, no security release since.
 fr|security_node_latest|Node %s, aucune version de sécurité sortie depuis.
 en|security_node_behind|Node %s: a security release is out (%s). To do: run Melyxar’s update, which installs the newest Node %s.
@@ -2732,9 +2732,14 @@ security_system() {
     return 0
   fi
 
-  fixable="$(grep -c 'fixed' <<<"$report" || true)"
-  urgent="$(grep 'fixed' <<<"$report" | grep -c -e 'high urgency' -e 'remotely exploitable' || true)"
-  unfixed="$(grep -c -v -e 'fixed' -e '^$' <<<"$report" || true)"
+  # One line for each package a flaw touches: a flaw of OpenSSL is a line for
+  # openssl, another for libssl3t64 and another for libssl-dev. Flaws are
+  # counted once each.
+  fixable="$({ grep 'fixed' <<<"$report" || true; } | awk 'NF { print $1 }' | sort -u | wc -l)"
+  urgent="$({ grep 'fixed' <<<"$report" || true; } | { grep -e 'high urgency' -e 'remotely exploitable' || true; } |
+    awk 'NF { print $1 }' | sort -u | wc -l)"
+  unfixed="$({ grep -v 'fixed' <<<"$report" || true; } | awk 'NF { print $1 }' | sort -u |
+    { grep -v -x -F -f <({ grep 'fixed' <<<"$report" || true; } | awk 'NF { print $1 }' | sort -u) || true; } | wc -l)"
   if ((fixable > 0)); then
     SECURITY_SYSTEM="$fixable"
     packages="$(grep 'fixed' <<<"$report" | awk '{ print $2 }' | sort -u | paste -sd ' ' -)"
