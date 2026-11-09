@@ -92,6 +92,20 @@ pub struct WorkDetail {
     pub saga: Option<SagaRow>,
 }
 
+impl WorkDetail {
+    /// How long it is, as a page says it: its longest copy once one has been
+    /// analysed, the provider's until then. The file is what will play, and a
+    /// provider can be wrong about it; the longest, so that a work held in
+    /// several versions shows one number.
+    pub fn length(&self) -> Option<Millis> {
+        self.versions
+            .iter()
+            .filter_map(|version| version.duration)
+            .max()
+            .or(self.work.runtime)
+    }
+}
+
 /// The episode a page offers to play next, and where in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CarryOn {
@@ -1032,6 +1046,57 @@ mod tests {
             Some((None, vec![rising, falling, reunion, solo, gather])),
             "alone of its saga here, a film leads on from its own cast like one in no saga"
         );
+    }
+
+    #[tokio::test]
+    async fn a_page_says_its_file_s_length_once_measured_and_the_provider_s_until_then() {
+        let (database, work_id) = two_libraries().await;
+        sqlx::query("UPDATE works SET runtime_ms = ? WHERE id = ?")
+            .bind(42 * 60_000_i64)
+            .bind(work_id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("the provider's length");
+        let root: String = sqlx::query_scalar(
+            "SELECT r.id FROM library_roots r JOIN works w ON w.library_id = r.library_id
+              WHERE w.id = ?",
+        )
+        .bind(work_id.to_db_string())
+        .fetch_one(database.reader())
+        .await
+        .expect("root read");
+        database
+            .insert_source(
+                work_id,
+                root.parse().expect("an identifier"),
+                std::path::Path::new("Quiet.Harbour.2019.mkv"),
+                900,
+                melyxar_core::time::now(),
+            )
+            .await
+            .expect("copy recorded");
+        let viewer = database
+            .create_user("Viewer", None, &melyxar_core::user::Permissions::viewer())
+            .await
+            .expect("account created")
+            .id;
+        let state = AppState::new(melyxar_config::Config::default(), database, None, None);
+        let length = async || {
+            work_detail(&state, &crate::an_ordinary_account(viewer), work_id)
+                .await
+                .expect("read")
+                .expect("present")
+                .length()
+        };
+
+        assert_eq!(length().await, Some(Millis::new(42 * 60_000)), "nothing measured yet");
+        sqlx::query("UPDATE media_sources SET duration_ms = ? WHERE work_id = ?")
+            .bind(20 * 60_000_i64)
+            .bind(work_id.to_db_string())
+            .execute(state.database().writer())
+            .await
+            .expect("the copy measured");
+        assert_eq!(length().await, Some(Millis::new(20 * 60_000)), "what will play");
     }
 
     #[tokio::test]

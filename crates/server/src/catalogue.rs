@@ -1221,10 +1221,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         year: detail.work.release_year,
         release_date: detail.release_date.clone(),
         end_date: detail.end_date.clone(),
-        // The runtime of the film, not the length of any one copy of it. A
-        // file a few seconds short is still that film, and a page that shows
-        // the file length shows a different number for each version.
-        runtime_minutes: detail.work.runtime.map(whole_minutes),
+        runtime_minutes: detail.length().map(whole_minutes),
         rating: detail.work.community_rating,
         age_rating: detail.work.age_rating_label.clone(),
         identification: detail.work.identification.as_str(),

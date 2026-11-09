@@ -422,8 +422,6 @@ impl Database {
         let shown = held.work_shown_at("w", "?3");
         let mut query = sqlx::query(AssertSqlSafe(format!(
             "SELECT {WHAT_A_CARD_IS}, w.ordinal, w.child_count,
-                    (SELECT max(s.duration_ms) FROM media_sources s WHERE s.work_id = w.id)
-                        AS longest_ms,
                     coalesce(asked.overview, english.overview) AS overview
              FROM works w
              LEFT JOIN work_translations asked
@@ -443,11 +441,7 @@ impl Database {
         let mut cards = Vec::with_capacity(rows.len());
         let mut places = Vec::with_capacity(rows.len());
         for row in &rows {
-            let mut card = card_from_row(row)?;
-            card.runtime = card
-                .runtime
-                .or(row.try_get::<Option<i64>, _>("longest_ms")?.map(Millis::new));
-            cards.push(card);
+            cards.push(card_from_row(row)?);
             places.push((
                 row.try_get("ordinal")?,
                 row.try_get("child_count")?,
