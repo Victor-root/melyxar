@@ -348,7 +348,7 @@
 
 /* The server's mark, over the greeting that says its name. */
 .door-greeting-mark {
-  --door-mark: max(64px, calc(clamp(96px, 14vh, 140px) - var(--door-short) * 0.09));
+  --door-mark: max(72px, calc(clamp(120px, 19vh, 180px) - var(--door-short) * 0.09));
   display: block;
   width: var(--door-mark);
   height: var(--door-mark);
@@ -1178,7 +1178,7 @@ img.door-greeting-mark {
   }
 
   .door-greeting-mark {
-    --door-mark: clamp(44px, min(24vw, calc(var(--door-room) * 0.105)), 104px);
+    --door-mark: clamp(52px, min(30vw, calc(var(--door-room) * 0.13)), 128px);
     margin-bottom: clamp(4px, calc(var(--door-room) * 0.016), 16px);
   }
 
