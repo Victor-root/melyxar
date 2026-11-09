@@ -61,8 +61,8 @@ pub fn draw(relief: &[u8], colour: Colour, ground: Option<Colour>) -> Result<Vec
     let shades = &read[..frame.buffer_size()];
 
     let mut drawn = Vec::with_capacity(shades.len() * 2);
-    for pair in shades.chunks_exact(2) {
-        drawn.extend_from_slice(&pixel(pair[0], pair[1], colour, ground));
+    for [shade, cover] in shades.as_chunks::<2>().0 {
+        drawn.extend_from_slice(&pixel(*shade, *cover, colour, ground));
     }
 
     written(frame.width, frame.height, &drawn)
@@ -78,7 +78,7 @@ pub fn laid_on(icon: &[u8], ground: Colour) -> Result<Vec<u8>, MarkError> {
         return Err(MarkError::NotAnIcon);
     }
     let mut laid = read[..frame.buffer_size()].to_vec();
-    for pixel in laid.chunks_exact_mut(4) {
+    for pixel in laid.as_chunks_mut::<4>().0 {
         let cover = f32::from(pixel[3]) / 255.0;
         for (index, channel) in ground.0.into_iter().enumerate() {
             let over = f32::from(pixel[index]) / 255.0;

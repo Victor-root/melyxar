@@ -23,7 +23,7 @@ pub enum Sound {
     AsItIs(PathBuf),
     /// Converted from where it was asked, into what the browser plays.
     Converted {
-        song: ConvertedSong,
+        song: Box<ConvertedSong>,
         into: Converted,
     },
 }
@@ -91,5 +91,8 @@ pub async fn sound_of(
         "a song is converted on the way"
     );
     let song = convert(tools, &file.path, start, into, kbps)?;
-    Ok(Some(Sound::Converted { song, into }))
+    Ok(Some(Sound::Converted {
+        song: Box::new(song),
+        into,
+    }))
 }

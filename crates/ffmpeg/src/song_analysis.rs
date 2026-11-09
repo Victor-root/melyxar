@@ -84,9 +84,9 @@ fn samples_of(cut_in_two: &mut Option<u8>, mut bytes: &[u8]) -> Vec<i16> {
             None => *cut_in_two = Some(first),
         }
     }
-    let mut pairs = bytes.chunks_exact(2);
-    samples.extend(pairs.by_ref().map(|pair| i16::from_le_bytes([pair[0], pair[1]])));
-    if let Some(last) = pairs.remainder().first() {
+    let (pairs, rest) = bytes.as_chunks::<2>();
+    samples.extend(pairs.iter().map(|pair| i16::from_le_bytes(*pair)));
+    if let Some(last) = rest.first() {
         *cut_in_two = Some(*last);
     }
     samples

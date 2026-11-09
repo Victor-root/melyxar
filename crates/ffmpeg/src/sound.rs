@@ -96,11 +96,8 @@ pub async fn samples_of(
         return Err(FfmpegError::from_output("ffmpeg", &output));
     }
 
-    Ok(output
-        .stdout
-        .chunks_exact(2)
-        .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
-        .collect())
+    let (pairs, _) = output.stdout.as_chunks::<2>();
+    Ok(pairs.iter().map(|pair| i16::from_le_bytes(*pair)).collect())
 }
 
 /// A moment written the way the tool reads one.

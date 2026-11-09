@@ -98,9 +98,9 @@ fn runs(reader: &mut Reader, table: Span, may_be_negative: bool) -> Option<Vec<(
     let signed = may_be_negative && version >= 1;
     let bytes = reader.bytes((how_many as usize).checked_mul(8)?)?;
     let mut entries = Vec::with_capacity(how_many as usize);
-    for entry in bytes.chunks_exact(8) {
-        let count = u32::from_be_bytes(entry[..4].try_into().ok()?);
-        let value = u32::from_be_bytes(entry[4..].try_into().ok()?);
+    for [count, value] in bytes.as_chunks::<4>().0.as_chunks::<2>().0 {
+        let count = u32::from_be_bytes(*count);
+        let value = u32::from_be_bytes(*value);
         let value = match signed {
             true => i64::from(value as i32),
             false => i64::from(value),
@@ -114,10 +114,13 @@ fn runs(reader: &mut Reader, table: Span, may_be_negative: bool) -> Option<Vec<(
 fn sync_samples(reader: &mut Reader, table: Span) -> Option<Vec<u32>> {
     let (_, how_many) = table_header(reader, table)?;
     let bytes = reader.bytes((how_many as usize).checked_mul(4)?)?;
-    bytes
-        .chunks_exact(4)
-        .map(|number| Some(u32::from_be_bytes(number.try_into().ok()?)))
-        .collect()
+    let (numbers, _) = bytes.as_chunks::<4>();
+    Some(
+        numbers
+            .iter()
+            .map(|number| u32::from_be_bytes(*number))
+            .collect(),
+    )
 }
 
 /// By how much the montage list of a track shifts the whole film.

@@ -91,11 +91,11 @@ impl SpectrumReading {
             self.pending = frame;
             self.pending.clear();
         }
-        let mut frames = samples.chunks_exact(FRAME);
-        for frame in &mut frames {
+        let (frames, rest) = samples.as_chunks::<FRAME>();
+        for frame in frames {
             self.read(frame);
         }
-        self.pending.extend_from_slice(frames.remainder());
+        self.pending.extend_from_slice(rest);
     }
 
     /// The levels of the whole song: `SPECTRUM_BANDS` bytes for each reading,

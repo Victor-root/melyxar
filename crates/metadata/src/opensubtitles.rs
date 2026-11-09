@@ -33,8 +33,9 @@ pub const FINGERPRINT_CHUNK: usize = 64 * 1024;
 /// one, which is how a subtitle timed on this very file is recognised.
 pub fn fingerprint(size: u64, head: &[u8], tail: &[u8]) -> String {
     let words = |bytes: &[u8]| {
-        bytes.chunks_exact(8).fold(0u64, |sum, word| {
-            sum.wrapping_add(u64::from_le_bytes(word.try_into().expect("eight bytes")))
+        let (words, _) = bytes.as_chunks::<8>();
+        words.iter().fold(0u64, |sum, word| {
+            sum.wrapping_add(u64::from_le_bytes(*word))
         })
     };
     format!("{:016x}", size.wrapping_add(words(head)).wrapping_add(words(tail)))
