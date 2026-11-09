@@ -77,6 +77,7 @@ class WebActivity : ComponentActivity() {
     private lateinit var page: WebView
     private lateinit var server: KnownServer
     private lateinit var notice: ComposeView
+    private lateinit var outdated: ComposeView
     private lateinit var film: FilmPlayer
     private lateinit var pageWindow: PageWindow
     private lateinit var barShades: BarShades
@@ -125,6 +126,10 @@ class WebActivity : ComponentActivity() {
     /** What the page put into full screen, a video, while it is there. */
     private var fullScreen: View? = null
 
+    /** Whether somebody chose to go on with an engine too old to draw the
+     *  interface well, for as long as this screen is open. */
+    private var engineAccepted = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         server = KnownServer(
@@ -169,6 +174,24 @@ class WebActivity : ComponentActivity() {
             }
         }
         holder.addView(notice, FrameLayout.LayoutParams(MATCH, MATCH))
+        val engine = WebEngine.majorVersion(this)
+        outdated = ComposeView(this).apply {
+            visibility = View.GONE
+            setContent {
+                MelyxarTheme {
+                    OldEngine(
+                        version = engine ?: 0,
+                        onUpdate = ::openTheEnginesPage,
+                        onContinue = {
+                            engineAccepted = true
+                            visibility = View.GONE
+                            loadTheInterface(null)
+                        },
+                    )
+                }
+            }
+        }
+        holder.addView(outdated, FrameLayout.LayoutParams(MATCH, MATCH))
         setContentView(holder)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -186,8 +209,30 @@ class WebActivity : ComponentActivity() {
             }
         })
 
+        engineAccepted = savedInstanceState?.getBoolean(ENGINE_ACCEPTED) == true
+        if (WebEngine.isTooOld(engine) && !engineAccepted) {
+            outdated.visibility = View.VISIBLE
+        } else {
+            loadTheInterface(savedInstanceState)
+        }
+    }
+
+    private fun loadTheInterface(savedInstanceState: Bundle?) {
         if (savedInstanceState == null || page.restoreState(savedInstanceState) == null) {
             page.loadUrl(server.origin + intent.getStringExtra(PATH).orEmpty())
+        }
+    }
+
+    private fun openTheEnginesPage() {
+        try {
+            startActivity(WebEngine.storePage())
+        } catch (_: ActivityNotFoundException) {
+            try {
+                startActivity(WebEngine.webStorePage())
+            } catch (_: ActivityNotFoundException) {
+                // No store and no browser: the words on the screen say what
+                // to bring up to date, which is all left to do.
+            }
         }
     }
 
@@ -230,6 +275,7 @@ class WebActivity : ComponentActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         page.saveState(outState)
+        outState.putBoolean(ENGINE_ACCEPTED, engineAccepted)
     }
 
     override fun onUserLeaveHint() {
@@ -345,6 +391,7 @@ class WebActivity : ComponentActivity() {
     companion object {
         private const val ORIGIN = "origin"
         private const val NAME = "name"
+        private const val ENGINE_ACCEPTED = "engine_accepted"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
 
         /** The page of the server a shortcut opens, from its root. */
@@ -360,6 +407,33 @@ class WebActivity : ComponentActivity() {
 /** In place of the interface, when its server does not answer. */
 @Composable
 private fun Unreachable(name: String, onRetry: () -> Unit, onChange: () -> Unit) {
+    Notice(
+        title = stringResource(R.string.unreachable_title),
+        lead = stringResource(R.string.unreachable_lead, name),
+        action = stringResource(R.string.unreachable_retry),
+        onAction = onRetry,
+        other = stringResource(R.string.unreachable_change),
+        onOther = onChange,
+    )
+}
+
+/** In place of the interface, when the device's engine is too old to draw it. */
+@Composable
+private fun OldEngine(version: Int, onUpdate: () -> Unit, onContinue: () -> Unit) {
+    Notice(
+        title = stringResource(R.string.old_engine_title),
+        lead = stringResource(R.string.old_engine_lead, version, WebEngine.OLDEST_DRAWING_IT),
+        action = stringResource(R.string.old_engine_update),
+        onAction = onUpdate,
+        other = stringResource(R.string.old_engine_continue),
+        onOther = onContinue,
+    )
+}
+
+/** A screen of its own in place of the interface: what is wrong, what to do
+ *  about it, and the other way out. */
+@Composable
+private fun Notice(title: String, lead: String, action: String, onAction: () -> Unit, other: String, onOther: () -> Unit) {
     Surface(modifier = Modifier.fillMaxSize(), color = Melyxar.ground) {
         Column(
             modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
@@ -367,21 +441,22 @@ private fun Unreachable(name: String, onRetry: () -> Unit, onChange: () -> Unit)
             verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
         ) {
             Text(
-                text = stringResource(R.string.unreachable_title),
+                text = title,
                 color = Melyxar.text,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(R.string.unreachable_lead, name),
+                text = lead,
                 color = Melyxar.textSoft,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.widthIn(max = 420.dp),
             )
-            Button(onClick = onRetry) { Text(stringResource(R.string.unreachable_retry)) }
-            TextButton(onClick = onChange) {
-                Text(stringResource(R.string.unreachable_change), color = Melyxar.textSoft)
+            Button(onClick = onAction) { Text(action) }
+            TextButton(onClick = onOther) {
+                Text(other, color = Melyxar.textSoft)
             }
         }
     }

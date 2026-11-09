@@ -14,6 +14,10 @@
     <string name="unreachable_lead">%1$s ne répond pas. Vérifiez qu’il est allumé et que cet appareil est sur le bon réseau.</string>
     <string name="unreachable_retry">Réessayer</string>
     <string name="unreachable_change">Changer de serveur</string>
+    <string name="old_engine_title">Le moteur web de cet appareil est trop ancien</string>
+    <string name="old_engine_lead">Melyxar affiche son interface avec Android System WebView, et celui de cet appareil (version %1$d) ne peut pas l’afficher correctement : il faut la version %2$d ou plus récente. Mettez à jour Android System WebView depuis la boutique, puis rouvrez Melyxar.</string>
+    <string name="old_engine_update">Le mettre à jour</string>
+    <string name="old_engine_continue">Continuer quand même</string>
     <string name="tv_welcome_before">"Bienvenue sur "</string>
     <string name="tv_pick">Choisissez votre profil pour continuer</string>
     <string name="tv_by_hand">Saisir un nom d’utilisateur</string>
