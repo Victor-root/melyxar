@@ -1530,9 +1530,24 @@
 }
 
 /* Once it covers the whole screen, what is under it is hidden: out of sight
-   already, it is then no longer drawn nor composed behind it. */
-:root[data-now-playing-covers] .shell > :not(.music-now),
-:root[data-now-playing-covers] .shell > :not(.music-now) .music-tabs-track,
+   already, it is then no longer drawn nor composed behind it.
+
+   Made see-through rather than invisible, and each part of the shell named:
+   visibility is passed on to every element of the page, and a rule that
+   picks the shell's parts by what they are not has every element looked at
+   again when the mark comes and goes. Measured on the phone emulator over the home
+   page, the page stood still for a fifth of a second each time it opened
+   and closed; a tenth of a millisecond this way. What reads the screen
+   aloud already keeps to the page, which says it is modal. */
+:root[data-now-playing-covers] .shell > .header,
+:root[data-now-playing-covers] .shell > .shell-view,
+:root[data-now-playing-covers] .shell > .scrollbar,
+:root[data-now-playing-covers] .shell > .music-bar-dock {
+  opacity: 0;
+}
+
+/* Its opacity is the one its fade leaves it at, so it is hidden instead: it
+   holds next to nothing to pass that on to. */
 :root[data-now-playing-covers] body > .home-backdrop {
   visibility: hidden;
 }
