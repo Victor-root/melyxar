@@ -147,13 +147,25 @@ export function LibraryPage({
       return;
     }
     const { work, letter } = landing;
-    const target = holder.current?.querySelector<HTMLElement>(
-      `[data-starts="${CSS.escape(work)}"], [data-card="${CSS.escape(work)}"]`,
-    );
-    // Not drawn yet: the cards that hold it are on their way to the screen,
-    // and this runs again when they arrive.
+    const grid = holder.current;
+    const find = () =>
+      grid?.querySelector<HTMLElement>(`[data-starts="${CSS.escape(work)}"], [data-card="${CSS.escape(work)}"]`);
+    const target = find();
+    /* Not made yet: the cards that hold it are on their way to the screen,
+       fetched, or made by the grid a few blocks at a time. Looked for again
+       as they arrive. */
     if (!target) {
-      return;
+      if (!grid) {
+        return;
+      }
+      const arriving = new MutationObserver(() => {
+        if (find()) {
+          arriving.disconnect();
+          setLanding({ work, letter });
+        }
+      });
+      arriving.observe(grid, { childList: true, subtree: true });
+      return () => arriving.disconnect();
     }
     const box = scrollerOf(target);
     if (!box) {

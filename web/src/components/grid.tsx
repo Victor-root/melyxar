@@ -16,9 +16,15 @@
  * of a scroll, and a tenth of that once in blocks. A block is cut from whole
  * rows, so the rows read on from one block to the next as they did in one
  * grid.
+ *
+ * Only the first few blocks are made with the grid; the others follow in a
+ * handful of steps, each made without holding the screen. Made all at once,
+ * a library of sixteen hundred films held a slow phone for three seconds
+ * before its first card showed, nearly all of it spent making cards a long
+ * way below the screen.
  */
 
-import { Children, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Children, startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { flushSync } from "react-dom";
 import { useFetchingAhead } from "./card";
@@ -27,6 +33,9 @@ import { useReachEnd } from "./reach-end";
 
 /** How many rows of cards a block holds: about a screen of them. */
 const ROWS_A_BLOCK = 3;
+
+/** How many blocks the grid is first made with: a few screens of cards. */
+const BLOCKS_FIRST = 3;
 
 /** How a grid is laid out: by the shape of the cards it holds, smaller
  *  posters than a card has, or one work to a line. */
@@ -70,6 +79,7 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
     }
     return cut;
   }, [items, columns, shape]);
+  const made = useBlocksMade(blocks.length, items[0]);
 
   useFetchingAhead(grid);
 
@@ -131,11 +141,36 @@ export function Grid({ children, onReachEnd, hasMore, shape = "standing" }: Grid
   return (
     <div>
       <div className={`grid grid-${shape}`} ref={grid} onKeyDown={onKeyDown}>
-        {blocks}
+        {blocks.slice(0, made)}
       </div>
       <div ref={sentinel} aria-hidden="true" />
     </div>
   );
+}
+
+/**
+ * How many of the grid's blocks are made: the first few, then twice as many
+ * at each step until all of them are, so the thousands of a library take a
+ * handful of steps. A step is made as a transition, which the browser breaks
+ * up so that a finger on the screen is answered meanwhile, and the next
+ * waits for a frame to have been drawn. A grid given cards of its own, rather
+ * than more of the same, starts again from the first few; cards fetched as
+ * the page nears the end of the grid are made as they come.
+ */
+function useBlocksMade(count: number, first: ReactNode): number {
+  const key = first !== null && typeof first === "object" && "key" in first ? first.key : null;
+  const [made, setMade] = useState({ key, blocks: BLOCKS_FIRST });
+  const blocks = made.key === key ? made.blocks : BLOCKS_FIRST;
+  useEffect(() => {
+    if (blocks >= count) {
+      return;
+    }
+    const frame = requestAnimationFrame(() =>
+      startTransition(() => setMade({ key, blocks: blocks * 2 })),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [blocks, count, key]);
+  return Math.min(blocks, count);
 }
 
 /** The columns last read for each shape of card, so a grid opened again is
