@@ -184,6 +184,10 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.zxing.core)
+    constraints {
+        // Brought by Media3 at a version with a known flaw: raised to a fixed one.
+        implementation(libs.guava)
+    }
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

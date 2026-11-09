@@ -16,6 +16,7 @@ okhttp = "5.5.0"
 coil = "3.6.3"
 camerax = "1.6.2"
 zxing = "3.5.4"
+guava = "33.8.0-android"
 
 [libraries]
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "core" }
@@ -42,6 +43,7 @@ camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "ca
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 camerax-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }

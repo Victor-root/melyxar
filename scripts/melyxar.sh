@@ -68,8 +68,8 @@ NODE_PREFIX="/opt/node"
 # values and nothing else. The server finds the tool at this fixed place; the
 # speech models are fetched by the server itself.
 WHISPER_URL="https://github.com/ggml-org/whisper.cpp.git"
-WHISPER_TAG="v1.9.4"
-WHISPER_COMMIT="927cfce34f31707e17f2bff35c349632fb9e2c3a"
+WHISPER_TAG="v1.9.5"
+WHISPER_COMMIT="d1be6fde11ac6e0407606b4e42fe72d34add8037"
 WHISPER_DIR="/opt/melyxar/whisper"
 # The deadline given to the download and, separately, to the build.
 WHISPER_MINUTES="30"
