@@ -512,6 +512,136 @@ en|err_not_installed|Melyxar is not installed. Install it first.
 fr|err_not_installed|Melyxar n’est pas installé. Lancez d’abord l’installation.
 en|err_no_terminal|No interactive terminal is available. Specify an action: install, update, status, backup, restore or uninstall.
 fr|err_no_terminal|Aucun terminal interactif disponible. Indiquez une action : install, update, status, backup, restore ou uninstall.
+en|menu_security|Check for known security flaws
+fr|menu_security|Vérifier les failles de sécurité connues
+en|section_security|Security check
+fr|section_security|Vérification de sécurité
+en|security_what|Everything Melyxar is built with is compared with the public databases of reported flaws. Nothing is changed.
+fr|security_what|Tout ce dont Melyxar est fait est comparé aux bases publiques des failles signalées. Rien n’est modifié.
+en|security_from|Melyxar installed from version %s of its source.
+fr|security_from|Melyxar installé depuis la version %s de son code.
+en|step_security_tools|Installing the tools the check needs (jq, debsecan)
+fr|step_security_tools|Installation des outils de la vérification (jq, debsecan)
+en|step_security_ask|Asking the vulnerability database about %s
+fr|step_security_ask|Interrogation de la base des failles pour %s
+en|security_offline|The vulnerability database (osv.dev) could not be reached: this part was not checked.
+fr|security_offline|La base des failles (osv.dev) est injoignable : cette partie n’a pas été vérifiée.
+en|security_part_server|Server: %s Rust libraries
+fr|security_part_server|Serveur : %s bibliothèques Rust
+en|security_part_web|Web interface: %s npm packages
+fr|security_part_web|Interface web : %s paquets npm
+en|security_part_android|Android and TV application: %s libraries
+fr|security_part_android|Application Android et TV : %s bibliothèques
+en|security_part_tools|Media tools built from source
+fr|security_part_tools|Outils multimédias compilés depuis leurs sources
+en|security_part_build|Build tools
+fr|security_part_build|Outils de compilation
+en|security_part_system|System (Debian packages)
+fr|security_part_system|Système (paquets Debian)
+en|security_clean|No known flaw.
+fr|security_clean|Aucune faille connue.
+en|security_missing_list|No list of them in this version of the source: not checked.
+fr|security_missing_list|Aucune liste dans cette version du code : non vérifié.
+en|security_git_deps|%s Rust libraries come from Git rather than crates.io and could not be checked: %s
+fr|security_git_deps|%s bibliothèques Rust viennent de Git plutôt que de crates.io et n’ont pas pu être vérifiées : %s
+en|security_flaw|%s %s: %s
+fr|security_flaw|%s %s : %s
+en|security_severity|Severity: %s
+fr|security_severity|Gravité : %s
+en|security_sev_critical|critical
+fr|security_sev_critical|critique
+en|security_sev_high|high
+fr|security_sev_high|élevée
+en|security_sev_moderate|moderate
+fr|security_sev_moderate|moyenne
+en|security_sev_low|low
+fr|security_sev_low|faible
+en|security_sev_unrated|not rated
+fr|security_sev_unrated|non évaluée
+en|security_aliases|Also known as %s
+fr|security_aliases|Aussi connue sous %s
+en|security_details|Details: %s
+fr|security_details|Détails : %s
+en|security_fix_in|Fixed in version %s.
+fr|security_fix_in|Corrigée dans la version %s.
+en|security_no_fix|No fixed version has been published yet: keep an eye on it.
+fr|security_no_fix|Aucune version corrigée n’a encore été publiée : à surveiller.
+en|security_do_source|To do: move %s to a fixed version in Melyxar’s source, then update the server.
+fr|security_do_source|À faire : passer %s à une version corrigée dans le code de Melyxar, puis mettre à jour le serveur.
+en|security_do_android|To do: move %s to a fixed version in the application’s source, then build and install the application again.
+fr|security_do_android|À faire : passer %s à une version corrigée dans le code de l’application, puis la recompiler et la réinstaller.
+en|security_do_tool|To do: move %s to a fixed release in Melyxar’s build recipe, then update the server.
+fr|security_do_tool|À faire : passer %s à une version corrigée dans la recette de compilation de Melyxar, puis mettre à jour le serveur.
+en|security_notice|%s %s: notice (%s), not a known flaw: %s
+fr|security_notice|%s %s : avis (%s), pas une faille connue : %s
+en|security_kind_unmaintained|no longer maintained
+fr|security_kind_unmaintained|plus maintenue
+en|security_kind_unsound|a use of it can be unsafe
+fr|security_kind_unsound|un de ses usages peut être dangereux
+en|security_kind_notice|notice
+fr|security_kind_notice|information
+en|security_build_side|Only in the tools that build the application, never in the application installed on a device.
+fr|security_build_side|Seulement dans les outils qui compilent l’application, jamais dans l’application installée sur un appareil.
+en|security_do_android_build|To do: move the application’s build tools to a release that brings a fixed version of %s.
+fr|security_do_android_build|À faire : passer les outils de compilation de l’application à une version qui apporte une version corrigée de %s.
+en|security_notice_do|To do: replace %s by a maintained library when possible.
+fr|security_notice_do|À faire : remplacer %s par une bibliothèque maintenue quand c’est possible.
+en|security_tool_latest|%s %s, the latest release.
+fr|security_tool_latest|%s %s, la dernière version.
+en|security_tool_behind|%s %s, latest release %s.
+fr|security_tool_behind|%s %s, dernière version %s.
+en|security_tool_unknown|%s: its version could not be identified, not checked.
+fr|security_tool_unknown|%s : sa version n’a pas pu être identifiée, non vérifié.
+en|security_tool_not_here|%s is not installed on this machine.
+fr|security_tool_not_here|%s n’est pas installé sur cette machine.
+en|security_fixed_later|Fixed in %s.
+fr|security_fixed_later|Corrigée dans %s.
+en|security_node_latest|Node %s, no security release since.
+fr|security_node_latest|Node %s, aucune version de sécurité sortie depuis.
+en|security_node_behind|Node %s: a security release is out (%s). To do: run Melyxar’s update, which installs the newest Node %s.
+fr|security_node_behind|Node %s : une version de sécurité est sortie (%s). À faire : lancer la mise à jour de Melyxar, qui installe le dernier Node %s.
+en|security_node_unknown|Node: its releases could not be read, not checked.
+fr|security_node_unknown|Node : ses versions n’ont pas pu être lues, non vérifié.
+en|security_rust_latest|Rust %s, the latest stable release.
+fr|security_rust_latest|Rust %s, la dernière version stable.
+en|security_rust_behind|Rust %s, latest stable %s. To do: rustup update
+fr|security_rust_behind|Rust %s, dernière version stable %s. À faire : rustup update
+en|security_rust_unknown|Rust: its latest release could not be read, not checked.
+fr|security_rust_unknown|Rust : sa dernière version n’a pas pu être lue, non vérifié.
+en|security_build_only|Used only to build Melyxar, never by the running server.
+fr|security_build_only|Utilisés uniquement pour compiler Melyxar, jamais par le serveur en marche.
+en|security_debian_fixable|%s known flaws are fixed by Debian updates already published, in: %s
+fr|security_debian_fixable|%s failles connues sont corrigées par des mises à jour Debian déjà publiées, dans : %s
+en|security_debian_urgent|Of these, %s are rated urgent or reachable over the network.
+fr|security_debian_urgent|Dont %s jugées urgentes ou exploitables à distance.
+en|security_debian_do|To do: apt update && apt upgrade
+fr|security_debian_do|À faire : apt update && apt upgrade
+en|security_debian_clean|Every fix Debian has published is installed.
+fr|security_debian_clean|Tous les correctifs publiés par Debian sont installés.
+en|security_debian_unfixed|%s other known flaws have no fix published by Debian yet, most of them minor: they go away as Debian publishes fixes.
+fr|security_debian_unfixed|%s autres failles connues n’ont pas encore de correctif publié par Debian, la plupart mineures : elles disparaissent au fil des correctifs de Debian.
+en|security_debian_auto_on|Debian’s security updates are installed automatically.
+fr|security_debian_auto_on|Les mises à jour de sécurité de Debian s’installent automatiquement.
+en|security_debian_auto_off|Debian’s security updates are not installed automatically. To do: apt install unattended-upgrades
+fr|security_debian_auto_off|Les mises à jour de sécurité de Debian ne s’installent pas automatiquement. À faire : apt install unattended-upgrades
+en|security_debian_offline|The Debian security tracker could not be reached: the system was not checked.
+fr|security_debian_offline|Le suivi de sécurité de Debian est injoignable : le système n’a pas été vérifié.
+en|security_not_debian|Not a Debian system: its packages were not checked.
+fr|security_not_debian|Ce n’est pas un système Debian : ses paquets n’ont pas été vérifiés.
+en|section_security_total|Summary
+fr|section_security_total|Bilan
+en|security_total_clean|No known flaw in anything Melyxar is made of.
+fr|security_total_clean|Aucune faille connue dans tout ce dont Melyxar est fait.
+en|security_total_clean_partial|No known flaw in what could be checked, but not everything could be.
+fr|security_total_clean_partial|Aucune faille connue dans ce qui a pu être vérifié, mais tout n’a pas pu l’être.
+en|security_total|%s known flaws in Melyxar’s own parts (%s with a fixed version published), %s notices.
+fr|security_total|%s failles connues dans les éléments propres à Melyxar (%s avec une version corrigée publiée), %s avis.
+en|security_total_system|System: %s flaws fixed by Debian updates waiting to be installed.
+fr|security_total_system|Système : %s failles corrigées par des mises à jour Debian en attente d’installation.
+en|security_unchecked|Some parts could not be checked: see above.
+fr|security_unchecked|Certaines parties n’ont pas pu être vérifiées : voir plus haut.
+en|security_limits|Only flaws already reported publicly are found: one nobody has reported yet, or a mistake in Melyxar’s own code, cannot be found this way.
+fr|security_limits|Seules les failles déjà signalées publiquement sont trouvées : une faille que personne n’a encore signalée, ou une erreur dans le code de Melyxar lui-même, ne peut pas être trouvée ainsi.
 en|cancelled|Cancelled
 fr|cancelled|Annulé
 I18N_DATA
@@ -2195,6 +2325,517 @@ action_uninstall() {
   success "$(tr_msg uninstall_done)"
 }
 
+# ── Security check ────────────────────────────────────────────────────────────
+# Everything Melyxar is made of, compared with what has been reported about
+# it. It reads and says, and changes nothing: what to do about a flaw is the
+# decision of whoever runs it.
+#
+# What Melyxar's own parts are made of is read from the source it was built
+# from: the Rust libraries of the server (Cargo.lock), the npm packages of the
+# interface (web/package-lock.json), the libraries of the Android application
+# (the gradle.lockfile files, written by Gradle for this very check), and the
+# media tools built from source, pinned to a release and a commit. All of it
+# is asked of OSV (osv.dev), the open database that gathers the advisories of
+# RustSec, GitHub, npm, Maven and the CVEs of projects named by their Git
+# history. The system is asked of the Debian security tracker, through
+# debsecan, Debian's own tool. Nothing is downloaded and run but jq and
+# debsecan, from the distribution.
+
+OSV_API="https://api.osv.dev/v1"
+FFMPEG_REPO="https://github.com/FFmpeg/FFmpeg.git"
+LIBPLACEBO_REPO="https://code.videolan.org/videolan/libplacebo.git"
+# How many packages one question to OSV carries, under the thousand it takes.
+SECURITY_AT_ONCE="500"
+
+# What was found, for the summary.
+SECURITY_FLAWS=0
+SECURITY_FIXABLE=0
+SECURITY_NOTICES=0
+SECURITY_SYSTEM=0
+SECURITY_UNCHECKED=0
+
+# The libraries of the server, from crates.io. One from Git has no version
+# OSV can be asked about, and is named rather than left out silently.
+security_crates() {
+  awk '
+    /^\[\[package\]\]/ { name = ""; version = "" }
+    /^name = /         { name = $3; gsub(/"/, "", name) }
+    /^version = /      { version = $3; gsub(/"/, "", version) }
+    /^source = "registry\+https:\/\/github.com\/rust-lang\/crates.io-index"/ { print name "\t" version }
+  ' "$1" | sort -u
+}
+
+security_git_crates() {
+  awk '
+    /^\[\[package\]\]/ { name = "" }
+    /^name = /         { name = $3; gsub(/"/, "", name) }
+    /^source = "git\+/ { print name }
+  ' "$1" | sort -u
+}
+
+# The packages of the interface, everything installed and not only what it
+# names itself.
+security_npm() {
+  jq -r '.packages | to_entries[]
+    | select(.key | startswith("node_modules/"))
+    | select(.value.link | not)
+    | select(.value.version != null)
+    | [(.value.name // (.key | sub(".*node_modules/"; ""))), .value.version]
+    | @tsv' "$1" | sort -u
+}
+
+# The libraries of the application, from the lists Gradle writes down: the
+# application's own, then the build's. A third column says whether a library
+# goes into the application installed on a device, which is what the release
+# build's runtime holds; the rest only builds or tests it.
+security_gradle() {
+  local app="$1" build="$2"
+  {
+    [[ -f "$app" ]] && awk -F'[:=]' '!/^#/ && NF == 4 {
+      print $1 ":" $2 "\t" $3 "\t" ($4 ~ /(^|,)releaseRuntimeClasspath(,|$)/ ? "app" : "build")
+    }' "$app"
+    [[ -f "$build" ]] && awk -F'[:=]' '!/^#/ && NF == 4 { print $1 ":" $2 "\t" $3 "\tbuild" }' "$build"
+    true
+  } | sort -u
+}
+
+# Asks OSV about every package of a list, and answers each flaw on a line:
+# the package, its version and the flaw's identifier. Fails when OSV cannot be
+# reached, so a part never reads as clean when it was not checked.
+security_ask() {
+  local ecosystem="$1" list="$2" work="$3"
+  local chunk asked answer token name version pages
+
+  rm -f "${work}/chunk."*
+  split -l "$SECURITY_AT_ONCE" "$list" "${work}/chunk."
+  for chunk in "${work}/chunk."*; do
+    [[ -s "$chunk" ]] || continue
+    asked="${chunk}.asked"
+    answer="${chunk}.answer"
+    jq -R -s --arg ecosystem "$ecosystem" '
+      { queries: (split("\n") | map(select(length > 0) | split("\t")
+        | { package: { name: .[0], ecosystem: $ecosystem }, version: .[1] })) }
+    ' "$chunk" >"$asked"
+    curl -fs --retry 2 --max-time 120 -H 'Content-Type: application/json' \
+      --data-binary "@${asked}" "${OSV_API}/querybatch" -o "$answer" || return 1
+    jq -r --slurpfile asked "$asked" '
+      .results | to_entries[] | .key as $at
+      | (.value.vulns // [])[]
+      | [$asked[0].queries[$at].package.name, $asked[0].queries[$at].version, .id] | @tsv
+    ' "$answer"
+    # A package with more flaws than one answer holds is asked again on its
+    # own, page after page.
+    while IFS=$'\t' read -r name version token; do
+      pages="${chunk}.pages"
+      while [[ -n "$token" ]]; do
+        jq -n --arg name "$name" --arg ecosystem "$ecosystem" --arg version "$version" --arg token "$token" \
+          '{ package: { name: $name, ecosystem: $ecosystem }, version: $version, page_token: $token }' |
+          curl -fs --retry 2 --max-time 120 -H 'Content-Type: application/json' \
+            --data-binary @- "${OSV_API}/query" -o "$pages" || return 1
+        jq -r --arg name "$name" --arg version "$version" \
+          '(.vulns // [])[] | [$name, $version, .id] | @tsv' "$pages"
+        token="$(jq -r '.next_page_token // ""' "$pages")"
+      done
+    done < <(jq -r --slurpfile asked "$asked" '
+      .results | to_entries[] | select(.value.next_page_token)
+      | [$asked[0].queries[.key].package.name, $asked[0].queries[.key].version, .value.next_page_token] | @tsv
+    ' "$answer")
+  done
+}
+
+# The flaws OSV holds for one commit of a project, one identifier a line.
+security_ask_commit() {
+  local commit="$1" token="" page
+  page="$(mktemp)"
+  while :; do
+    jq -n --arg commit "$commit" --arg token "$token" \
+      '{ commit: $commit } + (if $token == "" then {} else { page_token: $token } end)' |
+      curl -fs --retry 2 --max-time 120 -H 'Content-Type: application/json' \
+        --data-binary @- "${OSV_API}/query" -o "$page" || { rm -f "$page"; return 1; }
+    jq -r '(.vulns // [])[].id' "$page"
+    token="$(jq -r '.next_page_token // ""' "$page")"
+    [[ -n "$token" ]] || break
+  done
+  rm -f "$page"
+}
+
+# The whole record of one flaw, fetched once and kept for the run.
+security_record() {
+  local id="$1" work="$2"
+  local file="${work}/records/${id}.json"
+  if [[ ! -s "$file" ]]; then
+    curl -fs --retry 2 --max-time 60 "${OSV_API}/vulns/${id}" -o "$file" || return 1
+  fi
+  printf '%s\n' "$file"
+}
+
+# A severity in words, from what the record says of it, or failing that from
+# what GitHub's record of the same flaw says: RustSec rarely rates its own.
+security_severity() {
+  local record="$1" work="$2" word alias
+  local rated='(.database_specific.severity // ([.affected[]?.ecosystem_specific.severity // empty] | first) // "") | ascii_upcase'
+  word="$(jq -r "$rated" "$record")"
+  if [[ -z "$word" ]]; then
+    alias="$(jq -r '[.aliases[]? | select(startswith("GHSA-"))] | first // ""' "$record")"
+    if [[ -n "$alias" ]] && alias="$(security_record "$alias" "$work")"; then
+      word="$(jq -r "$rated" "$alias")"
+    fi
+  fi
+  case "$word" in
+    CRITICAL) tr_msg security_sev_critical ;;
+    HIGH) tr_msg security_sev_high ;;
+    MODERATE | MEDIUM) tr_msg security_sev_moderate ;;
+    LOW) tr_msg security_sev_low ;;
+    *) tr_msg security_sev_unrated ;;
+  esac
+}
+
+# The first version after the one installed that the record says is fixed.
+security_fix_for() {
+  local record="$1" name="$2" ecosystem="$3" installed="$4" fixed
+  while IFS= read -r fixed; do
+    [[ "$fixed" == "$installed" ]] && continue
+    if [[ "$(printf '%s\n%s\n' "$installed" "$fixed" | sort -V | head -n 1)" == "$installed" ]]; then
+      printf '%s\n' "$fixed"
+      return 0
+    fi
+  done < <(jq -r --arg name "$name" --arg ecosystem "$ecosystem" '
+    .affected[]? | select(.package.name == $name and .package.ecosystem == $ecosystem)
+    | .ranges[]?.events[]? | .fixed // empty' "$record" | sort -uV)
+}
+
+security_say_record() {
+  local record="$1"
+  local summary aliases
+  summary="$(jq -r '(.summary // (.details // "" | split("\n")[0])) | .[0:160]' "$record")"
+  aliases="$(jq -r '[.aliases[]? | select(startswith("CVE-"))] | join(", ")' "$record")"
+  printf '%s\n' "$summary"
+  [[ -n "$aliases" ]] && printf '    %s\n' "$(tr_fmt security_aliases "$aliases")"
+  return 0
+}
+
+# What kind of notice RustSec gives, in words.
+security_kind() {
+  case "$1" in
+    unmaintained) tr_msg security_kind_unmaintained ;;
+    unsound) tr_msg security_kind_unsound ;;
+    *) tr_msg security_kind_notice ;;
+  esac
+}
+
+# Says every flaw found for one part, and what to do about each. A flaw
+# known by several names, GitHub's and RustSec's, is said once.
+security_report() {
+  local ecosystem="$1" found="$2" work="$3" advice="$4" shipped="${5:-}" advice_build="${6:-}"
+  local name version id record informational fix said todo
+  local -A seen=()
+
+  if [[ ! -s "$found" ]]; then
+    success "$(tr_msg security_clean)"
+    return 0
+  fi
+  while IFS=$'\t' read -r name version id; do
+    [[ -n "${seen["${name}|${id}"]:-}" ]] && continue
+    record="$(security_record "$id" "$work")" || { warn "$(tr_msg security_offline)"; SECURITY_UNCHECKED=1; return 0; }
+    [[ "$(jq -r '.withdrawn // ""' "$record")" == "" ]] || continue
+    while IFS= read -r said; do
+      seen["${name}|${said}"]=1
+    done < <(jq -r '.id, (.aliases[]? // empty)' "$record")
+
+    fix="$(security_fix_for "$record" "$name" "$ecosystem" "$version")"
+    todo="$advice"
+    if [[ -n "$shipped" ]] && ! grep -qxF "${name}"$'\t'"${version}" "$shipped"; then
+      todo="$advice_build"
+    fi
+
+    # What RustSec says without it being a flaw: a library nobody looks
+    # after any more, a way of using one that is unsafe, or a plain notice.
+    informational="$(jq -r '[.affected[]?.database_specific.informational // empty] | first // ""' "$record")"
+    if [[ -n "$informational" ]]; then
+      SECURITY_NOTICES=$((SECURITY_NOTICES + 1))
+      echo
+      warn "$(tr_fmt security_notice "$name" "$version" "$(security_kind "$informational")" \
+        "$(security_say_record "$record" | head -n 1)")"
+      printf '    %s\n' "$(tr_fmt security_details "https://osv.dev/vulnerability/${id}")"
+      if [[ "$informational" == "unmaintained" ]]; then
+        printf '    %s\n' "$(tr_fmt security_notice_do "$name")"
+      elif [[ -n "$fix" ]]; then
+        printf '    %s\n' "$(tr_fmt security_fix_in "$fix")"
+        printf '    %s\n' "$(tr_fmt "$todo" "$name")"
+      fi
+      continue
+    fi
+
+    SECURITY_FLAWS=$((SECURITY_FLAWS + 1))
+    echo
+    error "$(tr_fmt security_flaw "$name" "$version" "$id")" 2>&1
+    printf '    %s\n' "$(security_say_record "$record")"
+    printf '    %s\n' "$(tr_fmt security_severity "$(security_severity "$record" "$work")")"
+    printf '    %s\n' "$(tr_fmt security_details "https://osv.dev/vulnerability/${id}")"
+    [[ "$todo" == "$advice" ]] || printf '    %s\n' "$(tr_msg security_build_side)"
+    if [[ -n "$fix" ]]; then
+      SECURITY_FIXABLE=$((SECURITY_FIXABLE + 1))
+      printf '    %s\n' "$(tr_fmt security_fix_in "$fix")"
+      printf '    %s\n' "$(tr_fmt "$todo" "$name")"
+    else
+      printf '    %s\n' "$(tr_msg security_no_fix)"
+    fi
+  done < <(sort -t $'\t' -k1,1 -k3,3 "$found")
+}
+
+# One part of Melyxar: listed, asked about, said. Given a list of what goes
+# into what is installed, a flaw in anything else is said to stay in the
+# tools that build it, with the advice that goes with that.
+security_part() {
+  local title="$1" ecosystem="$2" list="$3" work="$4" advice="$5"
+  local shipped="${6:-}" advice_build="${7:-}"
+  local found="${list}.found"
+
+  section "$(tr_fmt "$title" "$(wc -l <"$list")")"
+  if ! security_ask "$ecosystem" "$list" "$work" >"$found"; then
+    warn "$(tr_msg security_offline)"
+    SECURITY_UNCHECKED=1
+    return 0
+  fi
+  security_report "$ecosystem" "$found" "$work" "$advice" "$shipped" "$advice_build"
+}
+
+# The commit a release of a project stands on, its tag followed when it is
+# one that names another.
+security_tag_commit() {
+  local repo="$1" tag="$2" lines
+  lines="$(git ls-remote "$repo" "refs/tags/${tag}" "refs/tags/${tag}^{}" 2>/dev/null)" || return 1
+  printf '%s\n' "$lines" | awk '/\^\{\}$/ { peeled = $1 } { plain = $1 } END { print (peeled != "" ? peeled : plain) }'
+}
+
+# The newest release of a project, by the shape its tags have.
+security_latest_tag() {
+  local repo="$1" pattern="$2"
+  git ls-remote --tags --refs "$repo" 2>/dev/null | awk '{ sub("refs/tags/", "", $2); print $2 }' |
+    { grep -E "$pattern" || true; } | sort -V | tail -n 1
+}
+
+# One media tool built from source: the flaws reported on the commit it was
+# built from, and for each whether the newest release still carries it.
+security_tool() {
+  local label="$1" repo="$2" tag="$3" commit="$4" pattern="$5" prefix="$6" work="$7"
+  local latest latest_commit id record now later
+  local -A fixed_later=()
+
+  echo
+  if [[ -z "$commit" ]]; then
+    warn "$(tr_fmt security_tool_unknown "$label")"
+    SECURITY_UNCHECKED=1
+    return 0
+  fi
+  latest="$(security_latest_tag "$repo" "$pattern")" || latest=""
+  if [[ -z "$latest" || "$latest" == "$tag" ]]; then
+    info "$(tr_fmt security_tool_latest "$label" "${tag#"$prefix"}")"
+  else
+    info "$(tr_fmt security_tool_behind "$label" "${tag#"$prefix"}" "${latest#"$prefix"}")"
+  fi
+
+  now="$(security_ask_commit "$commit" | sort -u)" || { warn "$(tr_msg security_offline)"; SECURITY_UNCHECKED=1; return 0; }
+  if [[ -z "$now" ]]; then
+    success "$(tr_msg security_clean)"
+    return 0
+  fi
+  if [[ -n "$latest" && "$latest" != "$tag" ]]; then
+    latest_commit="$(security_tag_commit "$repo" "$latest")" || latest_commit=""
+    if [[ -n "$latest_commit" ]]; then
+      later="$(security_ask_commit "$latest_commit" | sort -u)" || later="$now"
+      while IFS= read -r id; do
+        grep -qxF "$id" <<<"$later" || fixed_later["$id"]=1
+      done <<<"$now"
+    fi
+  fi
+
+  while IFS= read -r id; do
+    record="$(security_record "$id" "$work")" || { warn "$(tr_msg security_offline)"; SECURITY_UNCHECKED=1; return 0; }
+    [[ "$(jq -r '.withdrawn // ""' "$record")" == "" ]] || continue
+    SECURITY_FLAWS=$((SECURITY_FLAWS + 1))
+    echo
+    error "$(tr_fmt security_flaw "$label" "${tag#"$prefix"}" "$id")" 2>&1
+    printf '    %s\n' "$(security_say_record "$record")"
+    printf '    %s\n' "$(tr_fmt security_severity "$(security_severity "$record" "$work")")"
+    printf '    %s\n' "$(tr_fmt security_details "https://osv.dev/vulnerability/${id}")"
+    if [[ -n "${fixed_later["$id"]:-}" ]]; then
+      SECURITY_FIXABLE=$((SECURITY_FIXABLE + 1))
+      printf '    %s\n' "$(tr_fmt security_fixed_later "$label" "${latest#"$prefix"}")"
+      printf '    %s\n' "$(tr_fmt security_do_tool "$label")"
+    else
+      printf '    %s\n' "$(tr_msg security_no_fix)"
+    fi
+  done <<<"$now"
+}
+
+# Node and Rust build Melyxar and nothing more: what is said of them is
+# whether a newer release is out, Node's own list saying which of its
+# releases fix a flaw.
+security_build_tools() {
+  local node major releases newest rustc_version latest_rust
+
+  section "$(tr_msg security_part_build)"
+  info "$(tr_msg security_build_only)"
+
+  node="$(node --version 2>/dev/null || true)"
+  if [[ -n "$node" ]]; then
+    major="${node#v}"
+    major="${major%%.*}"
+    if releases="$(curl -fs --retry 2 --max-time 60 https://nodejs.org/dist/index.json)"; then
+      newest="$(jq -r --arg line "v${major}." \
+        '.[] | select(.security and (.version | startswith($line))) | .version' <<<"$releases" |
+        { cat; printf '%s\n' "$node"; } | sort -V | tail -n 1)"
+      if [[ "$newest" != "$node" ]]; then
+        warn "$(tr_fmt security_node_behind "$node" "$newest" "$major")"
+      else
+        success "$(tr_fmt security_node_latest "$node")"
+      fi
+    else
+      warn "$(tr_msg security_node_unknown)"
+      SECURITY_UNCHECKED=1
+    fi
+  fi
+
+  rustc_version="$(/root/.cargo/bin/rustc --version 2>/dev/null | awk '{ print $2 }' || true)"
+  if [[ -n "$rustc_version" ]]; then
+    latest_rust="$(curl -fs --retry 2 --max-time 60 https://static.rust-lang.org/dist/channel-rust-stable.toml |
+      awk '/^\[pkg\.rustc\]/ { inside = 1; next } inside && /^version = / { gsub(/"/, "", $3); print $3; exit }' || true)"
+    if [[ -z "$latest_rust" ]]; then
+      warn "$(tr_msg security_rust_unknown)"
+      SECURITY_UNCHECKED=1
+    elif [[ "$(printf '%s\n%s\n' "$rustc_version" "$latest_rust" | sort -V | tail -n 1)" == "$rustc_version" ]]; then
+      success "$(tr_fmt security_rust_latest "$rustc_version")"
+    else
+      warn "$(tr_fmt security_rust_behind "$rustc_version" "$latest_rust")"
+    fi
+  fi
+}
+
+# The system the server runs on, asked of Debian's own security tracker.
+# What Debian has fixed is said package by package; what it has not fixed
+# yet is counted, most of it being minor and none of it anything to do but
+# wait for.
+security_system() {
+  local codename report fixable urgent unfixed packages
+
+  section "$(tr_msg security_part_system)"
+  codename="$(. /etc/os-release 2>/dev/null && [[ "${ID:-}" == "debian" ]] && printf '%s' "${VERSION_CODENAME:-}")" || codename=""
+  if [[ -z "$codename" ]]; then
+    warn "$(tr_msg security_not_debian)"
+    SECURITY_UNCHECKED=1
+    return 0
+  fi
+  if ! report="$(debsecan --suite "$codename" --format summary 2>/dev/null)"; then
+    warn "$(tr_msg security_debian_offline)"
+    SECURITY_UNCHECKED=1
+    return 0
+  fi
+
+  fixable="$(grep -c 'fixed' <<<"$report" || true)"
+  urgent="$(grep 'fixed' <<<"$report" | grep -c -e 'high urgency' -e 'remotely exploitable' || true)"
+  unfixed="$(grep -c -v -e 'fixed' -e '^$' <<<"$report" || true)"
+  if ((fixable > 0)); then
+    SECURITY_SYSTEM="$fixable"
+    packages="$(grep 'fixed' <<<"$report" | awk '{ print $2 }' | sort -u | paste -sd ' ' -)"
+    error "$(tr_fmt security_debian_fixable "$fixable" "$packages")" 2>&1
+    ((urgent > 0)) && warn "$(tr_fmt security_debian_urgent "$urgent")"
+    info "$(tr_msg security_debian_do)"
+  else
+    success "$(tr_msg security_debian_clean)"
+  fi
+  ((unfixed > 0)) && info "$(tr_fmt security_debian_unfixed "$unfixed")"
+
+  if dpkg-query -W -f='${Status}' unattended-upgrades 2>/dev/null | grep -q 'install ok installed'; then
+    success "$(tr_msg security_debian_auto_on)"
+  else
+    warn "$(tr_msg security_debian_auto_off)"
+  fi
+}
+
+action_security() {
+  is_installed || die "$(tr_msg err_not_installed)"
+
+  section "$(tr_msg section_security)"
+  info "$(tr_msg security_what)"
+  info "$(tr_fmt security_from "$(git -C "$SOURCE_DIR" rev-parse --short=8 HEAD)")"
+  if ! command -v jq >/dev/null 2>&1 || ! command -v debsecan >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    step "$(tr_msg step_security_tools)" apt-get install -y --no-install-recommends jq debsecan
+  fi
+
+  SECURITY_FLAWS=0
+  SECURITY_FIXABLE=0
+  SECURITY_NOTICES=0
+  SECURITY_SYSTEM=0
+  SECURITY_UNCHECKED=0
+  local work
+  work="$(mktemp -d)"
+  mkdir -p "${work}/records"
+
+  # The server.
+  local git_crates
+  security_crates "${SOURCE_DIR}/Cargo.lock" >"${work}/crates"
+  security_part security_part_server crates.io "${work}/crates" "$work" security_do_source
+  git_crates="$(security_git_crates "${SOURCE_DIR}/Cargo.lock" | paste -sd ' ' -)"
+  if [[ -n "$git_crates" ]]; then
+    warn "$(tr_fmt security_git_deps "$(wc -w <<<"$git_crates")" "$git_crates")"
+    SECURITY_UNCHECKED=1
+  fi
+
+  # The interface.
+  security_npm "${SOURCE_DIR}/web/package-lock.json" >"${work}/npm"
+  security_part security_part_web npm "${work}/npm" "$work" security_do_source
+
+  # The application, from the lists Gradle writes beside its build.
+  if [[ -f "${SOURCE_DIR}/android/app/gradle.lockfile" ]]; then
+    security_gradle "${SOURCE_DIR}/android/app/gradle.lockfile" \
+      "${SOURCE_DIR}/android/buildscript-gradle.lockfile" >"${work}/gradle"
+    cut -f 1,2 "${work}/gradle" | sort -u >"${work}/maven"
+    awk -F'\t' '$3 == "app" { print $1 "\t" $2 }' "${work}/gradle" | sort -u >"${work}/maven.shipped"
+    security_part security_part_android Maven "${work}/maven" "$work" security_do_android \
+      "${work}/maven.shipped" security_do_android_build
+  else
+    section "$(tr_fmt security_part_android "0")"
+    warn "$(tr_msg security_missing_list)"
+    SECURITY_UNCHECKED=1
+  fi
+
+  # The media tools, at the release and the commit they were built from.
+  section "$(tr_msg security_part_tools)"
+  local FFMPEG_VERSION="" LIBPLACEBO_TAG="" LIBPLACEBO_COMMIT=""
+  # shellcheck source=/dev/null
+  source "${SOURCE_DIR}/ffmpeg-melyxar/release"
+  security_tool FFmpeg "$FFMPEG_REPO" "n${FFMPEG_VERSION}" \
+    "$(security_tag_commit "$FFMPEG_REPO" "n${FFMPEG_VERSION}" || true)" \
+    '^n[0-9]+\.[0-9]+(\.[0-9]+)?$' n "$work"
+  security_tool libplacebo "$LIBPLACEBO_REPO" "$LIBPLACEBO_TAG" "$LIBPLACEBO_COMMIT" \
+    '^v[0-9]+\.[0-9]+\.[0-9]+$' v "$work"
+  if [[ -x "${WHISPER_DIR}/whisper-cli" && -s "${INSTALLED_DIR}/whisper" ]]; then
+    security_tool whisper.cpp "$WHISPER_URL" "$WHISPER_TAG" "$(<"${INSTALLED_DIR}/whisper")" \
+      '^v[0-9]+\.[0-9]+\.[0-9]+$' v "$work"
+  else
+    echo
+    info "$(tr_fmt security_tool_not_here whisper.cpp)"
+  fi
+
+  security_build_tools
+  security_system
+  rm -rf "$work"
+
+  section "$(tr_msg section_security_total)"
+  if ((SECURITY_FLAWS == 0 && SECURITY_NOTICES == 0 && SECURITY_UNCHECKED > 0)); then
+    warn "$(tr_msg security_total_clean_partial)"
+  elif ((SECURITY_FLAWS == 0 && SECURITY_NOTICES == 0)); then
+    success "$(tr_msg security_total_clean)"
+  else
+    warn "$(tr_fmt security_total "$SECURITY_FLAWS" "$SECURITY_FIXABLE" "$SECURITY_NOTICES")"
+  fi
+  ((SECURITY_SYSTEM > 0)) && warn "$(tr_fmt security_total_system "$SECURITY_SYSTEM")"
+  ((SECURITY_UNCHECKED > 0)) && warn "$(tr_msg security_unchecked)"
+  info "$(tr_msg security_limits)"
+}
+
 # ── Menu ──────────────────────────────────────────────────────────────────────
 
 menu() {
@@ -2212,6 +2853,7 @@ menu() {
   printf "   %b9%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_lines)"
   printf "  %b10%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_writes)"
   printf "  %b11%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_test_films)"
+  printf "  %b12%b) %s\n" "${BOLD}${RED_SOFT}" "${RESET}" "$(tr_msg menu_security)"
   printf "   %b0%b) %s\n" "${BOLD}${GRAY}" "${RESET}" "$(tr_msg menu_quit)"
   echo
 
@@ -2230,6 +2872,7 @@ menu() {
     9) action_lines ;;
     10) action_writes ;;
     11) action_test_films ;;
+    12) action_security ;;
     0) exit 0 ;;
     *) die "$(tr_fmt err_bad_choice "$choice")" ;;
   esac
@@ -2269,6 +2912,7 @@ main() {
     accounts)  action_accounts ;;
     lines)     action_lines ;;
     test-films) action_test_films ;;
+    security)  action_security ;;
     # Without a terminal there is nobody to answer the menu, and an install is
     # far too heavy a thing to start on a default nobody chose.
     "")        has_terminal || die "$(tr_msg err_no_terminal)"; menu ;;

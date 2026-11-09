@@ -189,4 +189,15 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
+// Every library the application is built with, the ones they bring along
+// included, written down with its exact version in gradle.lockfile. The
+// security check of the server's script reads it there, on a machine where no
+// application is built. Lenient, so a build never stops on it: the list is
+// written again, after any library changes, by
+// ./gradlew :app:dependencies buildEnvironment --write-locks
+dependencyLocking {
+    lockAllConfigurations()
+    lockMode.set(LockMode.LENIENT)
+}
+
 apply(from = rootProject.file("fdroid-panel.gradle.kts"))
