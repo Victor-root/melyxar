@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./app";
+import { WindowBackdrop } from "./components/backdrop";
 import { GoToProvider } from "./navigating";
 import { setUpMeasuring } from "./measure";
 import { markTheEdgeRoom } from "./edge-room";
@@ -17,6 +18,7 @@ keepRingsForTheKeyboard();
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <SettingsProvider>
+      <WindowBackdrop />
       <BrowserRouter>
         <GoToProvider>
           <App />
