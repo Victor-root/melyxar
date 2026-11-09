@@ -214,12 +214,11 @@
  *
  * Drawn over whichever background the server wears, because it is what this
  * screen is built around rather than a choice: a beam falling from above onto
- * the middle of the screen, where the accounts stand, the edges of the room
- * falling away into the dark, and at either side a faint run of spines, the
- * edge of a collection seen from too far away to read. Nothing in it is a
- * thing to look at, and nothing in it is a picture of a cinema.
+ * the middle of the screen, where the accounts stand, and the edges of the
+ * room falling away into the dark. Nothing in it is a thing to look at, and
+ * nothing in it is a picture of a cinema.
  *
- * Painted once and never moved, on one box and its two halves, for the
+ * Painted once and never moved, on one box and its one half, for the
  * reason the paintings of light give: a gradient costs nothing once it is
  * painted, a moving or blurred one costs every frame.
  */
@@ -243,17 +242,13 @@
   animation: door-arrive-slowly 1100ms var(--ease) 120ms forwards;
 }
 
-.door-stage::before,
-.door-stage::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-}
-
 /* The beam: a column of light from above the top of the screen, brightest
    down its middle, spreading as it falls and gone before it reaches the
    floor. Round gradients rather than a wedge, so it has no edge anywhere. */
 .door-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background:
     radial-gradient(
       9% 62% at 50% -6%,
@@ -266,37 +261,6 @@
       color-mix(in srgb, var(--accent-dim) calc(5% * var(--stage-force)), transparent) 60%,
       transparent 100%
     );
-}
-
-/* The spines: two runs of hairlines at different spacings, so where they
-   cross they read as the uneven edge of a shelf rather than as a grille.
-   Only at the two sides, and only through the middle of the height. */
-.door-stage::after {
-  background:
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--text) calc(7% * var(--stage-force)), transparent) 0 1px,
-      transparent 1px 11px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--accent) calc(12% * var(--stage-force)), transparent) 0 2px,
-      transparent 2px 37px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--text) calc(5% * var(--stage-force)), transparent) 0 3px,
-      transparent 3px 26px
-    );
-  mask-image:
-    linear-gradient(to right, #000 0%, transparent 20%, transparent 80%, #000 100%),
-    linear-gradient(to bottom, transparent 12%, #000 42%, #000 62%, transparent 92%);
-  -webkit-mask-image:
-    linear-gradient(to right, #000 0%, transparent 20%, transparent 80%, #000 100%),
-    linear-gradient(to bottom, transparent 12%, #000 42%, #000 62%, transparent 92%);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
-  opacity: 0.7;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1198,8 +1162,7 @@ img.door-greeting-mark {
  * ------------------------------------------------------------------------ */
 
 /* A phone: the same screen, down one column, with everything a little closer
-   together so the whole sign in fits it without a scrollbar. The spines at
-   the sides go, since on a screen this narrow there are no sides. */
+   together so the whole sign in fits it without a scrollbar. */
 @media (max-width: 760px) {
   .door {
     /* Everything below follows the room itself rather than the shortfall
@@ -1208,10 +1171,6 @@ img.door-greeting-mark {
     grid-template-columns: minmax(0, 1fr);
     gap: clamp(6px, calc(var(--door-room) * 0.016), var(--gap));
     padding: calc(12px + var(--safe-top)) calc(clamp(14px, 4vw, 28px) + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(clamp(14px, 4vw, 28px) + var(--safe-left));
-  }
-
-  .door-stage::after {
-    display: none;
   }
 
   .door-greeting {
