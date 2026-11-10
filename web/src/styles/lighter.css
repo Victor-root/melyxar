@@ -1,0 +1,41 @@
+/*
+ * The lighter drawing a device can choose (see lighter.ts): no frosted glass,
+ * and nothing that opens over the page casts a shadow.
+ *
+ * The pieces that were glass over the page are solid, of the surface the
+ * glass was mixed from. What stands over a film keeps the dark veil it
+ * already had, unblurred, so the film still shows through.
+ */
+
+:root[data-lighter],
+:root[data-lighter] .player {
+  --window-shadow: none;
+}
+
+:root[data-lighter] :is(.header-piece, .browse-piece, .letters, .glass-slice, .letter-drop, .toasts-more) {
+  --header-glass: var(--surface-raised);
+  backdrop-filter: none;
+}
+
+:root[data-lighter] :is(.work-choice .picker, .work-mark) {
+  --panel-glass: var(--surface-raised);
+  backdrop-filter: none;
+}
+
+:root[data-lighter] .music-now .player-bottom::before {
+  background: color-mix(in srgb, var(--surface-deep) 80%, transparent);
+  backdrop-filter: none;
+}
+
+:root[data-lighter] :is(
+    .player-bottom,
+    .player-loudness-said,
+    .player-notice,
+    .player-drawer-along,
+    .player-skip,
+    .player-up-next,
+    .watch-moving
+  ),
+:root[data-lighter] .player-button[aria-label]::before {
+  backdrop-filter: none;
+}

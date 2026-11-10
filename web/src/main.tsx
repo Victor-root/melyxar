@@ -7,6 +7,7 @@ import { GoToProvider } from "./navigating";
 import { setUpMeasuring } from "./measure";
 import { markTheEdgeRoom } from "./edge-room";
 import { keepRingsForTheKeyboard } from "./keyboard-rings";
+import { markLighter } from "./lighter";
 import { SettingsProvider } from "./settings";
 import "./styles/index.css";
 
@@ -14,6 +15,7 @@ import "./styles/index.css";
 setUpMeasuring();
 markTheEdgeRoom();
 keepRingsForTheKeyboard();
+markLighter();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

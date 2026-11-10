@@ -14,6 +14,8 @@ import { LanguagePicker } from "../../components/language-picker";
 import { Modal } from "../../components/modal";
 import { AccentSwatches } from "../../components/accent-swatches";
 import { useFrameRateShown } from "../../components/frame-rate";
+import { useLighter } from "../../lighter";
+import { ON_A_PHONE, useMediaQuery } from "../../media-query";
 import { PageHead, Panel, Picker, Setting, Toggle } from "../../components/panel";
 import { Sortable } from "../../components/sortable";
 import { useAccount } from "../../account";
@@ -100,6 +102,7 @@ function OnAPhone() {
   const { t, phoneTheme, setPhoneTheme, startLibraryOnPhone, setStartLibraryOnPhone } =
     useSettings();
   const { all } = useLibraries();
+  const here = useMediaQuery(ON_A_PHONE);
   // A library gone or taken away reads as the home page, which is where the
   // phone would open.
   const startsIn = all.some((library) => library.id === startLibraryOnPhone)
@@ -136,7 +139,19 @@ function OnAPhone() {
         />
       </Setting>
       {appIcon && <IconOfTheApp icon={appIcon} />}
+      {here && <LighterChoice />}
     </Panel>
+  );
+}
+
+/** The lighter drawing, on the phone this is shown on and on no other. */
+function LighterChoice() {
+  const { t } = useSettings();
+  const [on, setOn] = useLighter();
+  return (
+    <Setting label={t("settings.lighter")} why={t("settings.lighter_why")}>
+      <Toggle label={t("settings.lighter")} checked={on} onChange={setOn} />
+    </Setting>
   );
 }
 
