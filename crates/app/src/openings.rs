@@ -112,6 +112,27 @@ const TOO_BRIEF_TO_MENTION: Millis = Millis::new(2_000);
 /// offering to skip five minutes of the film would do real damage.
 const LONGEST_WORTH_A_BUTTON: Millis = Millis::new(3 * 60 * 1_000);
 
+/// How many episodes of a season must have a button the pairs agree on before
+/// what those buttons are like can vouch for one only a single pair heard.
+///
+/// Fewer and the season has no shape to go by: two buttons are as likely to be
+/// two coincidences as a title sequence.
+const FEWEST_TO_GO_BY: usize = 3;
+
+/// How far from the length of the season's other openings one a single pair
+/// heard may run and still be taken for the same.
+///
+/// The first episodes of a series often wear a cut of its titles a few
+/// seconds shorter or longer than the one it settles on: measured on a real
+/// sitcom, twenty nine seconds against thirty two everywhere else. A reminder
+/// of last week or a song played in a scene does not come within a few
+/// seconds of the titles' length but by chance.
+const ALIKE_IN_LENGTH: Millis = Millis::new(5_000);
+
+/// And how far before or after where the season's other openings begin, in
+/// what was read of it, it may begin.
+const ALIKE_IN_PLACE: Millis = Millis::new(60_000);
+
 /// How many later episodes each episode is compared against.
 ///
 /// Not all of them. Every pair would be two hundred and thirty comparisons on
@@ -589,6 +610,16 @@ fn say_what_was_found(one: &Found, kept: &[MediaSegment]) {
     }
 
     for (kind, what) in &one.ends {
+        if let WhatWasShared::LikeTheRest(stretch) = what {
+            tracing::debug!(
+                file = one.file_name,
+                what = kind.as_str(),
+                from = stretch.start.as_seconds_f64(),
+                to = stretch.end.as_seconds_f64(),
+                "only one pair heard this, and it is taken because it runs as long as the \
+                 rest of the season's and begins where theirs do"
+            );
+        }
         // A button is there, so there is nothing to explain.
         if kept.iter().any(|segment| segment.kind == *kind) {
             continue;
@@ -1012,6 +1043,10 @@ enum WhatWasShared {
     /// alone, or several that each heard it somewhere else. Either way it is
     /// what the second opinion exists to refuse.
     NoTwoPairsAgree,
+    /// One pair alone heard it, and it runs as long as the season's other
+    /// openings and begins where they do: the season stands in for the
+    /// second opinion.
+    LikeTheRest(Stretch),
     /// The neighbours have nothing whatever in common with this episode here.
     Nothing,
 }
@@ -1033,7 +1068,7 @@ impl WhatWasShared {
     /// The stretch, when there is one.
     fn stretch(self) -> Option<Stretch> {
         match self {
-            Self::AStretch(stretch) => Some(stretch),
+            Self::AStretch(stretch) | Self::LikeTheRest(stretch) => Some(stretch),
             _ => None,
         }
     }
@@ -1044,7 +1079,7 @@ impl WhatWasShared {
     /// would then be a lie.
     fn why_not(self) -> Option<&'static str> {
         match self {
-            Self::AStretch(_) => None,
+            Self::AStretch(_) | Self::LikeTheRest(_) => None,
             Self::TooShort(_) => Some("what the neighbours share here is too short for a button"),
             Self::TooLong(_) => Some("what the neighbours share here is too long to be an opening"),
             Self::NoTwoPairsAgree => {
@@ -1260,7 +1295,66 @@ fn what_they_share(
             }
         })
         .collect();
-    (shared, proposed)
+    (
+        taken_on_the_season(shared, &proposed, where_each_begins),
+        proposed,
+    )
+}
+
+/// Gives a button to the episodes only one pair heard something in, where
+/// what it heard is like what the rest of the season agreed on: as long, to a
+/// few seconds, and beginning in the same part of what was read.
+///
+/// The second opinion is there to refuse a coincidence, and a coincidence the
+/// length of the season's titles, where its titles stand, is the titles. What
+/// it was written against, a reminder of last week shared by two episodes,
+/// runs as long as whatever was reminded.
+fn taken_on_the_season(
+    mut shared: Vec<WhatWasShared>,
+    proposed: &[Vec<(usize, Stretch)>],
+    where_each_begins: &[Millis],
+) -> Vec<WhatWasShared> {
+    let in_what_was_read =
+        |stretch: Stretch, at: usize| moved(stretch, Millis::new(-where_each_begins[at].get()));
+    let agreed: Vec<Stretch> = shared
+        .iter()
+        .enumerate()
+        .filter_map(|(at, what)| match what {
+            WhatWasShared::AStretch(stretch) => Some(in_what_was_read(*stretch, at)),
+            _ => None,
+        })
+        .collect();
+    if agreed.len() < FEWEST_TO_GO_BY {
+        return shared;
+    }
+    let mut lengths: Vec<i64> = agreed
+        .iter()
+        .map(|stretch| stretch.length().get())
+        .collect();
+    lengths.sort_unstable();
+    let usual = lengths[lengths.len() / 2];
+    let starts = agreed.iter().map(|stretch| stretch.start.get());
+    let earliest = starts.clone().min().unwrap_or(0) - ALIKE_IN_PLACE.get();
+    let latest = starts.max().unwrap_or(0) + ALIKE_IN_PLACE.get();
+    let off_by = |stretch: &Stretch| (stretch.length().get() - usual).abs();
+
+    for (at, what) in shared.iter_mut().enumerate() {
+        if !matches!(what, WhatWasShared::NoTwoPairsAgree) {
+            continue;
+        }
+        let alike = proposed[at]
+            .iter()
+            .map(|(_, stretch)| *stretch)
+            .filter(|stretch| {
+                let begins = in_what_was_read(*stretch, at).start.get();
+                off_by(stretch) <= ALIKE_IN_LENGTH.get() && (earliest..=latest).contains(&begins)
+            })
+            .min_by_key(off_by);
+        if let Some(stretch) = alike {
+            *what = WhatWasShared::LikeTheRest(stretch);
+        }
+    }
+    shared
 }
 
 /// Which side of the two limits a refused stretch fell on.
@@ -1764,6 +1858,62 @@ mod tests {
             (heard[0].here.start.as_seconds_f64() - 1.4).abs() < 1.0,
             "where it sits in the first: {heard:?}"
         );
+    }
+
+    /// A season whose first two episodes share one tune and whose others share
+    /// another, each episode opening on a scene of its own first.
+    fn a_season_opening_on_two_cuts(first_cut: f32) -> Vec<ListenedTo> {
+        let early = a_tune(first_cut, 7);
+        let settled = a_tune(32.0, 8);
+        [
+            (37.5f32, 11u32, &early),
+            (71.9, 22, &early),
+            (129.5, 33, &settled),
+            (61.0, 44, &settled),
+            (44.3, 55, &settled),
+            (121.6, 66, &settled),
+        ]
+        .into_iter()
+        .map(|(before, seed, opening)| an_episode(WorkId::new(), before, opening, seed))
+        .collect()
+    }
+
+    #[test]
+    fn a_first_cut_of_the_titles_only_two_episodes_share_is_taken_when_it_runs_like_the_rest() {
+        let episodes = a_season_opening_on_two_cuts(29.0);
+        let found = what_a_season_shares(&episodes);
+
+        for (one, opens_at) in found.iter().zip([37.5f64, 71.9]) {
+            assert!(
+                matches!(how_the_opening_went(one), WhatWasShared::LikeTheRest(_)),
+                "{one:?} is taken on the season"
+            );
+            let opening = opening_of(one).unwrap_or_else(|| panic!("{one:?} has an opening"));
+            assert!(
+                (opening.start.as_seconds_f64() - opens_at).abs() < 1.0,
+                "found where it really sits: {opening:?}"
+            );
+        }
+        for one in &found[2..] {
+            assert!(matches!(
+                how_the_opening_went(one),
+                WhatWasShared::AStretch(_)
+            ));
+        }
+    }
+
+    #[test]
+    fn what_only_two_episodes_share_stays_without_a_button_when_it_runs_unlike_the_rest() {
+        let episodes = a_season_opening_on_two_cuts(12.0);
+        let found = what_a_season_shares(&episodes);
+
+        for one in &found[..2] {
+            assert!(matches!(
+                how_the_opening_went(one),
+                WhatWasShared::NoTwoPairsAgree
+            ));
+            assert!(opening_of(one).is_none(), "{one:?} has no button");
+        }
     }
 
     /// What the comparison came to about the opening of one episode.
