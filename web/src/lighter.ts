@@ -6,10 +6,11 @@
  * Lighter, nothing is drawn as frosted glass: what the glass stood over is
  * no longer blurred at every frame, and the pieces that were glass are
  * solid, of the colour they were. What opens over the page, the menus, the
- * sheets and the windows, is drawn without its shadow. Measured on a phone
- * of 2016: a menu opened with twice the frames, and a film's page scrolled at
- * 12 ms a frame rather than 30. Every piece is still there and does the
- * same.
+ * sheets and the windows, is drawn without its shadow, and as on a
+ * television, the painting behind the pages, the fades and the glows go
+ * too. Measured on a phone of 2016: a menu opened with twice the frames, and
+ * a film's page scrolled at 10 ms a frame rather than 30, nine frames in ten
+ * in time for 60 a second. Every piece is still there and does the same.
  *
  * Said to the stylesheet by a mark on the root (styles/lighter.css), put
  * there before the first drawing.

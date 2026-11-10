@@ -5,6 +5,11 @@
  * The pieces that were glass over the page are solid, of the surface the
  * glass was mixed from. What stands over a film keeps the dark veil it
  * already had, unblurred, so the film still shows through.
+ *
+ * And as a television's lighter drawing: nothing painted behind the pages
+ * but their plain ground, a banner, a row or a film's backdrop ending where
+ * it ends rather than fading out, and no glow or shadow round the bar's
+ * pieces, the cards and the panels.
  */
 
 :root[data-lighter],
@@ -38,4 +43,25 @@
   ),
 :root[data-lighter] .player-button[aria-label]::before {
   backdrop-filter: none;
+}
+
+:root[data-lighter] :is(.home-backdrop, .header-rim) {
+  display: none;
+}
+
+:root[data-lighter] .hero {
+  --hero-fade: none;
+}
+
+:root[data-lighter] :is(.row-view, .work-backdrop) {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+:root[data-lighter] .card {
+  --card-base-shadow: none;
+}
+
+:root[data-lighter] :is(.header-piece, .glass-slice, .panel) {
+  box-shadow: none;
 }

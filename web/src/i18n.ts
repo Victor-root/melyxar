@@ -907,7 +907,7 @@ const en: Dictionary = {
   "frame_rate.meter": "{fps} fps · slowest {ms} ms",
   "settings.lighter": "Lighter drawing on this phone",
   "settings.lighter_why":
-    "For an older phone that struggles to keep up: buttons are solid rather than frosted glass, and menus and windows open without their shadow. Smoother, a little plainer. Kept on this phone alone.",
+    "For an older phone that struggles to keep up: buttons are solid rather than frosted glass, the pages lose the painting behind them, and the fades, glows and shadows go. Smoother, plainer. Kept on this phone alone.",
   "settings.app_icon_accent_why": "The logo of the icon takes the accent colour above, or the offered colour nearest to it.",
   "settings.app_icon_apply": "Change the icon",
   "settings.app_icon_apply_why": "The icon only changes once applied.",
@@ -3325,7 +3325,7 @@ const fr: Dictionary = {
   "frame_rate.meter": "{fps} ips · plus lente {ms} ms",
   "settings.lighter": "Affichage allégé sur ce téléphone",
   "settings.lighter_why":
-    "Pour un téléphone ancien qui peine à suivre : les boutons sont pleins plutôt qu’en verre dépoli, et les menus et fenêtres s’ouvrent sans leur ombre. Plus fluide, un peu plus sobre. Ne vaut que pour ce téléphone.",
+    "Pour un téléphone ancien qui peine à suivre : les boutons sont pleins plutôt qu’en verre dépoli, les pages perdent leur fond peint, et les fondus, halos et ombres disparaissent. Plus fluide, plus sobre. Ne vaut que pour ce téléphone.",
   "settings.app_icon_accent_why": "Le logo de l'icône prend la couleur d'accentuation ci-dessus, ou la couleur proposée la plus proche.",
   "settings.app_icon_apply": "Changer l'icône",
   "settings.app_icon_apply_why": "L'icône ne change qu'une fois appliquée.",
