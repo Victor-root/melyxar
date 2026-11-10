@@ -22,7 +22,7 @@
   padding: 18px;
   border-radius: var(--radius-panel);
   border: 1px solid var(--border);
-  background: var(--panel-flat);
+  background: var(--window-wash), var(--panel-flat);
   box-shadow: var(--shadow-card);
 }
 

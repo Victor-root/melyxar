@@ -503,8 +503,8 @@ img {
      piece of the bar is mixed from it. */
   --header-glass: color-mix(in srgb, var(--surface-raised) 55%, transparent);
   --window-rim: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
-  --window-ground:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 160px),
-    var(--surface-raised);
+  /* The accent washing down from the top, which the panels wear too. */
+  --window-wash: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 160px);
+  --window-ground: var(--window-wash), var(--surface-raised);
   --window-shadow: var(--shadow-raised), 0 0 32px 0 var(--accent-glow);
 }
