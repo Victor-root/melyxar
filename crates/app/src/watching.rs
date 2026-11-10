@@ -346,6 +346,17 @@ impl Watching {
         if held.just_left(viewer.device, work, now) {
             return (false, None);
         }
+        // A player paused while something else plays on its device is one
+        // left behind, still saying where it stopped: the music a television
+        // paused for a film goes on saying so every ten seconds. Left to take
+        // the device back, it swapped the film out and in again at every word.
+        let something_else_plays = held
+            .playing
+            .get(&viewer.device)
+            .is_some_and(|watch| watch.work != work);
+        if something_else_plays && paused == Some(true) {
+            return (false, None);
+        }
         let (stop, changed, ended) = match held.playing.get_mut(&viewer.device) {
             Some(watch) if watch.work == work => {
                 watch.catch_up(now);
@@ -1122,6 +1133,47 @@ mod tests {
 
         watching.heard(who.clone(), song, seconds(0.0), Some(false), true, true, start + secs(3), at());
         assert_eq!(watching.now_playing(start + secs(3)).len(), 1, "the song loaded again");
+    }
+
+    #[test]
+    fn a_song_paused_for_a_film_on_the_same_device_leaves_the_film_where_it_is() {
+        let watching = Watching::default();
+        let television = viewer(DeviceId::new());
+        let song = WorkId::new();
+        let episode = WorkId::new();
+        let start = Instant::now();
+        watching.heard(television.clone(), song, seconds(40.0), Some(false), true, true, start, at());
+        watching.starting(television.clone(), plan_for(episode, None), start + secs(1), at());
+        watching.heard(television.clone(), episode, seconds(5.0), Some(false), false, false, start + secs(2), at());
+
+        let (stop, ended) = watching.heard(
+            television.clone(),
+            song,
+            seconds(41.0),
+            Some(true),
+            true,
+            false,
+            start + secs(10),
+            at(),
+        );
+        assert!(!stop);
+        assert!(ended.is_none(), "the episode is not over");
+        let shown = watching.now_playing(start + secs(10));
+        assert_eq!(shown.len(), 1);
+        assert_eq!(shown[0].work, episode, "the episode still plays there");
+
+        let (_, ended) = watching.heard(
+            television.clone(),
+            song,
+            seconds(41.0),
+            Some(false),
+            true,
+            false,
+            start + secs(20),
+            at(),
+        );
+        assert!(ended.is_some(), "the song played again is the episode over");
+        assert_eq!(watching.now_playing(start + secs(20))[0].work, song);
     }
 
     #[test]
