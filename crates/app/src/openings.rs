@@ -610,6 +610,19 @@ fn say_what_was_found(one: &Found, kept: &[MediaSegment]) {
             ),
             None => tracing::debug!(file = one.file_name, what = kind.as_str(), "{why}"),
         }
+        // What each pair heard, which is what tells an opening that really
+        // differs from one the pairs heard with ends of their own.
+        let heard = one.heard_in_pairs.iter().filter(|(end, _)| end == kind);
+        for pair in heard.flat_map(|(_, pairs)| pairs) {
+            tracing::debug!(
+                file = one.file_name,
+                what = kind.as_str(),
+                with = pair.with,
+                from = pair.here.start.as_seconds_f64(),
+                to = pair.here.end.as_seconds_f64(),
+                "one pair heard this in common"
+            );
+        }
     }
 }
 
@@ -995,9 +1008,10 @@ enum WhatWasShared {
     TooShort(Stretch),
     /// They agree on something so long it cannot be an opening.
     TooLong(Stretch),
-    /// One pair saw something and no other pair backed it up, which is what
-    /// the second opinion exists to refuse.
-    OnlyOnePairSawIt,
+    /// Pairs heard something, but no two of them in the same place: one pair
+    /// alone, or several that each heard it somewhere else. Either way it is
+    /// what the second opinion exists to refuse.
+    NoTwoPairsAgree,
     /// The neighbours have nothing whatever in common with this episode here.
     Nothing,
 }
@@ -1033,8 +1047,8 @@ impl WhatWasShared {
             Self::AStretch(_) => None,
             Self::TooShort(_) => Some("what the neighbours share here is too short for a button"),
             Self::TooLong(_) => Some("what the neighbours share here is too long to be an opening"),
-            Self::OnlyOnePairSawIt => {
-                Some("one pair heard something here and no other pair heard it too")
+            Self::NoTwoPairsAgree => {
+                Some("pairs heard something here, but no two of them in the same place")
             }
             Self::Nothing => Some("nothing of this end is shared with its neighbours"),
         }
@@ -1075,6 +1089,18 @@ struct Found {
     /// What came of each end, so that an episode with no button can say which
     /// of the four kinds of nothing it came away with.
     ends: Vec<(SegmentKind, WhatWasShared)>,
+    /// At each end, what every pair this episode was one of heard in it, and
+    /// the other episode of the pair: what an episode with no button was
+    /// refused on, written down so that it can be told apart from an opening
+    /// that really differs.
+    heard_in_pairs: Vec<(SegmentKind, Vec<HeardInAPair>)>,
+}
+
+/// What one pair heard in common, as it sits in one of the two episodes.
+#[derive(Debug, Clone)]
+struct HeardInAPair {
+    with: String,
+    here: Stretch,
 }
 
 impl Found {
@@ -1108,7 +1134,7 @@ fn what_a_season_shares(episodes: &[ListenedTo]) -> Vec<Found> {
         .iter()
         .map(|episode| Some(&episode.beginning))
         .collect();
-    let opening = what_they_share(
+    let (opening, opening_pairs) = what_they_share(
         &beginnings,
         &vec![Millis::ZERO; episodes.len()],
         &works,
@@ -1123,7 +1149,16 @@ fn what_a_season_shares(episodes: &[ListenedTo]) -> Vec<Found> {
         .iter()
         .map(|episode| episode.ending.as_ref().map_or(Millis::ZERO, |(at, _)| *at))
         .collect();
-    let closing = what_they_share(&endings, &where_endings_begin, &works, enough);
+    let (closing, closing_pairs) = what_they_share(&endings, &where_endings_begin, &works, enough);
+    let named = |pairs: &[(usize, Stretch)]| -> Vec<HeardInAPair> {
+        pairs
+            .iter()
+            .map(|(partner, here)| HeardInAPair {
+                with: episodes[*partner].file_name.clone(),
+                here: *here,
+            })
+            .collect()
+    };
 
     episodes
         .iter()
@@ -1149,19 +1184,24 @@ fn what_a_season_shares(episodes: &[ListenedTo]) -> Vec<Found> {
                 file_name: episode.file_name.clone(),
                 segments,
                 ends,
+                heard_in_pairs: vec![
+                    (SegmentKind::Intro, named(&opening_pairs[at])),
+                    (SegmentKind::Outro, named(&closing_pairs[at])),
+                ],
             }
         })
         .collect()
 }
 
-/// What each of a season's files shares with its neighbours, at one end.
+/// What each of a season's files shares with its neighbours, at one end, and
+/// every stretch a pair proposed in it, with the other file of the pair.
 fn what_they_share(
     heard: &[Option<&Listened>],
     where_each_begins: &[Millis],
     works: &[WorkId],
     enough: usize,
-) -> Vec<WhatWasShared> {
-    let mut proposed: Vec<Vec<Stretch>> = vec![Vec::new(); heard.len()];
+) -> (Vec<WhatWasShared>, Vec<Vec<(usize, Stretch)>>) {
+    let mut proposed: Vec<Vec<(usize, Stretch)>> = vec![Vec::new(); heard.len()];
     let mut refused: Vec<Vec<Stretch>> = vec![Vec::new(); heard.len()];
 
     for one in 0..heard.len() {
@@ -1190,16 +1230,17 @@ fn what_they_share(
                 refused[other].push(moved(shared.in_the_second(), where_each_begins[other]));
                 continue;
             }
-            proposed[one].push(moved(shared.in_the_first(), where_each_begins[one]));
-            proposed[other].push(moved(shared.in_the_second(), where_each_begins[other]));
+            proposed[one].push((other, moved(shared.in_the_first(), where_each_begins[one])));
+            proposed[other].push((one, moved(shared.in_the_second(), where_each_begins[other])));
         }
     }
 
-    proposed
+    let shared = proposed
         .iter()
         .zip(&refused)
-        .map(
-            |(proposed, refused)| match what_they_agree_on(proposed, enough) {
+        .map(|(proposed, refused)| {
+            let proposed: Vec<Stretch> = proposed.iter().map(|(_, stretch)| *stretch).collect();
+            match what_they_agree_on(&proposed, enough) {
                 Some(stretch) if worth_a_button(stretch.length()) => {
                     WhatWasShared::AStretch(stretch)
                 }
@@ -1207,7 +1248,7 @@ fn what_they_share(
                 // Proposals that nobody else backed up are the second opinion
                 // doing its work, and are worth saying so rather than passing for
                 // silence.
-                None if !proposed.is_empty() => WhatWasShared::OnlyOnePairSawIt,
+                None if !proposed.is_empty() => WhatWasShared::NoTwoPairsAgree,
                 None => match refused
                     .iter()
                     .copied()
@@ -1216,9 +1257,10 @@ fn what_they_share(
                     Some(stretch) => why_not_that_one(stretch),
                     None => WhatWasShared::Nothing,
                 },
-            },
-        )
-        .collect()
+            }
+        })
+        .collect();
+    (shared, proposed)
 }
 
 /// Which side of the two limits a refused stretch fell on.
@@ -1682,6 +1724,46 @@ mod tests {
                 "and for as long as it really lasts: {opening:?}"
             );
         }
+    }
+
+    #[test]
+    fn an_episode_refused_a_button_names_every_pair_that_heard_something_in_it() {
+        // The first two share one tune and the last two another: each pair is
+        // alone in what it heard, so no episode gets a button.
+        let one_tune = a_tune(14.0, 7);
+        let other_tune = a_tune(14.0, 8);
+        let episodes: Vec<ListenedTo> = [
+            (1.4f32, 11u32, &one_tune),
+            (4.9, 22, &one_tune),
+            (3.1, 33, &other_tune),
+            (2.2, 44, &other_tune),
+        ]
+        .into_iter()
+        .map(|(before, seed, opening)| an_episode(WorkId::new(), before, opening, seed))
+        .collect();
+
+        let found = what_a_season_shares(&episodes);
+        let first = &found[0];
+        assert!(matches!(
+            how_the_opening_went(first),
+            WhatWasShared::NoTwoPairsAgree
+        ));
+        let heard: Vec<&HeardInAPair> = first
+            .heard_in_pairs
+            .iter()
+            .filter(|(kind, _)| *kind == SegmentKind::Intro)
+            .flat_map(|(_, pairs)| pairs)
+            .collect();
+        assert_eq!(
+            heard.len(),
+            1,
+            "only the second episode heard the same tune: {heard:?}"
+        );
+        assert_eq!(heard[0].with, episodes[1].file_name);
+        assert!(
+            (heard[0].here.start.as_seconds_f64() - 1.4).abs() < 1.0,
+            "where it sits in the first: {heard:?}"
+        );
     }
 
     /// What the comparison came to about the opening of one episode.
