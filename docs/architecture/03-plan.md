@@ -52,7 +52,7 @@ Vérifié dans l'environnement de travail : un premier scan enregistre et analys
 
 ## Jalon 2 : métadonnées et images
 
-État : en cours. Le serveur, les règles et le stockage sont là ; ce qui reste demande l'interface du jalon 3.
+État : en cours. Le serveur, les règles, le stockage et l'interface sont là ; seuls restent les films similaires demandés au fournisseur.
 
 Fait : le fournisseur TMDb derrière un trait, avec un fournisseur de remplacement pour les tests ; l'identification en tâche de fond, séparée du scan et rejouable seule ; le choix du bon film (titre exact, puis année, l'ordre du fournisseur en dernier) ; les identifiants déjà connus qui court-circuitent la recherche ; les textes par langue, genres, studios, personnes, participations, collections et bandes annonces distantes ; les affiches et fonds téléchargés une fois, convertis en WebP aux tailles fixes, servis sous un nom tiré de leur contenu, avec la couleur dominante de la carte ; les champs verrouillés à la main et la provenance de chaque champ.
 
@@ -77,7 +77,7 @@ Vérifié dans l'environnement de travail : une affiche réelle est préparée e
 
 ## Jalon 3 : API et interface minimale
 
-État : en cours. On peut parcourir la bibliothèque dans un navigateur, ouvrir une fiche et chercher un titre ; ce qui reste demande un compte connecté ou du travail de fond qui n'existe pas encore.
+État : en cours. On parcourt la bibliothèque, on ouvre une fiche et on cherche un titre, avec un compte connecté ; restent la spécification OpenAPI, trois filtres et les étiquettes (voir plus bas).
 
 Fait : les routes de navigation (cartes paginées par curseur, fiche, images, filtres), le tri par titre, date d'ajout, année, note et durée, les filtres par genre, décennie et « à identifier », la recherche, la page d'accueil avec les derniers ajouts, la fiche complète avec sélecteur de version, distribution en visages, équipe, saga et bandes annonces, la page des tâches, les deux langues, les deux thèmes, et l'interface embarquée dans le binaire (servie depuis son propre dossier depuis, voir le README des décisions).
 
@@ -120,7 +120,7 @@ Fait : la décision pure avec ses raisons, le profil demandé au navigateur lui-
 
 Fait aussi : l'écran de réglages qui permet enfin de choisir tout cela. Le repliement, le niveau qui le suit, et les langues audio et sous-titres préférées vivaient dans la base avec leur valeur par défaut, sans écran ni route pour les changer. Les langues proposées sont celles que la bibliothèque contient vraiment, lues dans les pistes elles-mêmes.
 
-Reste : la courbe de volume, pas encore codée (le curseur règle le volume tel quel, sans la courbe prévue), puis à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel le dit clairement : le convertir est le jalon 5.
+Reste : la courbe de volume, pas encore codée (le curseur règle le volume tel quel, sans la courbe prévue), puis à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel est converti par le serveur depuis le jalon 5.
 
 Le lecteur a désormais ses propres commandes (barre de progression, volume, plein écran, titre et retour), en plus du choix des pistes, de la vitesse, de l'image dans un coin, des raccourcis clavier, des étapes de préparation et de l'apparence des sous-titres.
 
@@ -208,7 +208,7 @@ Reste à faire :
 
 - **NVENC pour Nvidia à vérifier sur la carte.** Le chemin est codé et testé (encodeurs h264 et hevc de Nvidia, mise à l'échelle et incrustation sur la carte) ; reste l'essai sur une vraie carte. Le mainteneur possède les deux cartes. VAAPI pour AMD est prouvé sur une RX 6600 (H.264 et HEVC écrits, H.264, HEVC et AV1 lus) ; le HDR d'AMD passe par Vulkan, qui lit lui-même le film quand il le sait, et les sous-titres en images sont posés par le processeur pendant que la carte encode. NVENC n'est pas encore vérifié ; Nvidia demande un chemin distinct. Les deux se branchent au même endroit : `HardwareAcceleration`, le nom de l'encodeur, et les filtres correspondants.
 - **QSV pour Intel, pas codé.** VAAPI marche sur l'Arc ; QSV est parfois plus rapide sur les cartes Intel récentes. À mesurer avant de l'ajouter, pas à supposer.
-- Vignettes de chapitres : celles de la barre de lecture sont faites, en planches et converties en SDR quand la source est HDR ; les vignettes de chapitre proprement dites sont faites depuis, sur la fiche de l'œuvre, dans la forme de l'image du film. L'intervalle et la résolution se règlent à l'écran, dans l'administration. La génération est activable par médiathèque depuis ses réglages.
+- **Vignettes de chapitres. Fait** : celles de la barre de lecture sont faites, en planches et converties en SDR quand la source est HDR ; les vignettes de chapitre proprement dites sont faites depuis, sur la fiche de l'œuvre, dans la forme de l'image du film. L'intervalle et la résolution se règlent à l'écran, dans l'administration. La génération est activable par médiathèque depuis ses réglages.
 - **Un fichier n'est traversé qu'une fois.** Direction voulue par le mainteneur, dans l'esprit de Jellyfin : prendre d'un fichier tout ce qu'il peut donner en une seule lecture, au lieu d'enchaîner des passes qui rouvrent chacune les mêmes films. **Largement atteint, et la dernière fusion a été essayée puis abandonnée sur mesure.** Les traversées ne sont plus des passes du scan mais des travaux de l'entretien, ce qui règle le coût pour celui qui lance un scan, et la lecture de l'index du conteneur a supprimé la traversée des images clés pour tous les formats courants. Restent celle des vignettes et celle des sous-titres.
 
   Fondre les deux, les mots voyageant dans la lecture des vignettes, a été codé et mesuré. **Deux résultats l'ont fait retirer.** D'abord le gain est minuscule : sur un film de 167 Mo, les vignettes coûtent 0,47 s, les mots seuls 0,09 s, et la lecture fusionnée 0,46 s. Sortir les mots ne coûte donc pas une traversée du fichier comme on le croyait en écrivant la règle, mais un sixième de la moins chère des deux passes : l'outil saute l'image au lieu de la décoder. Ensuite le prix est une panne de synchronisation : la lecture des vignettes ne décode que les images qui se suffisent (`-skip_frame nokey`, mesuré dix fois plus rapide, 0,47 s contre 5 s), et sous cette option l'outil décale les sous-titres qu'on lui demande en même temps du départ déclaré de leur piste. Vérifié : une piste déclarée à 1 s ressort une seconde trop tôt, alors que la lecture séparée la rend juste. Les deux contournements essayés sont pires : `-discard nokey` rend bien l'heure mais annule l'accélération (4,7 s au lieu de 0,47 s), et `-copyts` la rend aussi mais rend à l'outil les horodatages bruts, ce qui déplacerait la grille des vignettes sur tout film dont l'image ne commence pas à zéro, c'est-à-dire précisément les remux dont la médiathèque est pleine. Un sixième d'une passe ne vaut pas des sous-titres décalés.
@@ -229,9 +229,7 @@ Reste à faire :
 
 - Mesure pendant un scan et pendant deux transcodages. Rien à coder pour la première : il suffit de lancer un scan et de lancer le banc pendant qu'il tourne. Demande une vraie collection, puisqu'une bibliothèque inventée n'a aucun fichier à lire.
 - Test automatisé de l'interface (Playwright) pour les temps côté client. Attend l'interface définitive.
-- Tableau de bord d'administration en temps réel : sessions de lecture et leurs décisions, charge processeur et mémoire, carte graphique, tâches de fond, file d'écriture, espace disque, dernières erreurs. Flux d'événements arrêté quand personne ne regarde.
-- Journal d'activité consultable, avec purge automatique.
-- Export de diagnostic en un clic.
+- La file d'écriture dans le tableau de bord. Le reste de ce qui était prévu ici est fait et vit dans l'administration (voir le jalon 8) : le tableau de bord en temps réel (lectures et leurs décisions, processeur, mémoire, carte graphique, tâches de fond, disques, dernières erreurs), le journal d'activité avec sa purge automatique, et l'export de diagnostic en un clic.
 - Résultat visible : les budgets sont tenus à 100 000 œuvres, chiffres à l'appui, et le tableau de bord montre l'activité en direct.
 
 ## Jalon 8 : personnalisation et administration
@@ -282,6 +280,7 @@ Fait depuis, en avance sur ce jalon : la moitié serveur du refus de la conversi
 - Statistiques personnelles (pas faites) : temps de visionnage, films vus sur une période, genres préférés.
 - Notification d'une version plus récente publiée sur GitHub (pas faite), sans mise à jour automatique, vérification désactivable.
 - Sauvegarde automatique quotidienne de la base et des fichiers envoyés, quelques copies conservées. En partie : le script sauvegarde la base depuis son menu et avant chaque mise à jour, et en garde sept ; rien de quotidien, et pas les fichiers envoyés.
+- Page Métadonnées : deux réglages restent dessinés et marqués « Bientôt », l'état joignable de chaque fournisseur et la revue des titres non identifiés avec leurs raisons.
 - Résultat visible : le serveur ne ressemble plus à l'installation par défaut, et une maintenance annoncée s'affiche proprement.
 
 ## Jalon 9 : accès et chiffrement
@@ -309,7 +308,7 @@ Vérifié dans un vrai navigateur contre un serveur qui tourne : les quatre rang
 
 ## Jalon 11 : interface principale
 
-État : en cours.
+État : fait. Tout ce qui est listé ici est en place ; la télécommande (le « cast » du header) et les notifications, grisées au début du jalon, sont branchées depuis.
 
 Reprise à zéro de l'accueil et de la navigation, sur une direction visuelle donnée par le mainteneur : l'accessibilité d'Emby et de Jellyfin, avec une identité plus soignée et plus cinématique. Le modèle de base prévoyait presque tout ce que cette interface demande depuis la première migration : favoris, à voir plus tard, collections, listes de lecture, étiquettes, compteurs d'épisodes non vus, droits par compte. L'essentiel du travail moteur est donc de brancher, pas d'inventer.
 
@@ -362,7 +361,7 @@ Demandé par le mainteneur pendant ce jalon et remis à son propre chantier :
   5. **Le lecteur vidéo. Prêt à essayer** : dans l'application, le lecteur web dessine `melyxar-picture` à la place de l'élément vidéo et Media3 joue le film dessous (fichier tel quel ou session HLS du serveur, avec le cookie de la page). Sous-titres lus et dessinés par la page, cadrage et rotation transmis au natif, image dans l'image (bouton et en quittant l'écran pendant la lecture), plein écran qui range les barres du téléphone et le tourne sur le côté pour un film plus large que haut. Position de reprise et vus par les mêmes appels qu'aujourd'hui. Reste l'essai sur le téléphone du mainteneur, puis le décodeur FFmpeg pour le son que le téléphone ne décode pas (EAC3 sur la plupart).
   6. **Ce que l'application lit. Fait** : mesuré par l'application (décodeurs d'Android avec leurs profils et niveaux aux noms de l'analyseur, puces de l'appareil préférées au logiciel, HDR de l'écran, son décodé ou transmis tel quel à un ampli) et envoyé à la place du profil du navigateur ; le serveur n'a pas eu à changer.
   7. **Nom, logo et identifiant de chacun** : la refabrication par script et le guide restent valables (voir le README des décisions).
-  8. **Android Auto. Prêt à essayer** (voir le README des décisions) : la musique parcourue et lancée depuis l'écran de la voiture (les onglets de la médiathèque que le compte montre, recherche et voix), la file et les boutons aléatoire et répétition sur l'écran de lecture, les pochettes servies par l'application, sans rien de Google. Reste l'essai dans le simulateur de voiture puis dans la voiture du mainteneur.
+  8. **Android Auto. Prêt à essayer** (voir le README des décisions) : la musique parcourue et lancée depuis l'écran de la voiture (les onglets de la médiathèque que le compte montre, recherche et voix), la file et les boutons aléatoire et répétition sur l'écran de lecture, les pochettes servies par l'application, sans rien de Google. Essayé dans le simulateur de voiture de Google (Android Auto 18.1) et dans la voiture du mainteneur : la musique se parcourt et se joue. Reste un défaut vu seulement dans la voiture : le coin de la carte de musique montre un carré de couleur au lieu du logo, quand Android Auto teint l'icône à la couleur de la pochette ; le simulateur montre, lui, le logo en couleur.
 - **Applications Android : ce qui est commun** (voir le README des décisions) : un seul APK téléphone et télévision, sans aucune dépendance à Google, publié sur GitHub et suivi par Omnify. Android 7 au minimum, http accepté seulement sur le réseau local. Côté serveur, à prévoir : la version allégée d'un film pour le téléchargement, et ce que demande le hors ligne (télécharger une copie, renvoyer en lot positions et écoutes faites sans réseau). Côté application : plusieurs serveurs, téléchargements pour le hors ligne sur le téléphone, notifications par interrogation régulière du serveur.
 - **Application télévision, native** (voir le README des décisions), dans le dossier `android/`, sur la même base que l'application téléphone. Étapes, dans l'ordre :
   1. **Ce que l'appareil sait lire. Fait** : la mesure faite pour le téléphone (décodeurs, écran, HDR, son transmis tel quel à un ampli) sert telle quelle à la télévision, envoyée au serveur à chaque film.
