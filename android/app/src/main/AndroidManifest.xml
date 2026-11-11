@@ -403,5 +403,12 @@
         <meta-data
             android:name="com.google.android.gms.car.application.theme"
             android:resource="@style/Theme.Melyxar.Car" />
+        <!-- The mark a car draws in the corner of the music's card and on its
+             notices, in a colour of its own choosing: the shape of the logo
+             alone. Without it the car took the whole icon of the launcher,
+             ground included, and drew a square of colour. -->
+        <meta-data
+            android:name="com.google.android.gms.car.notification.SmallIcon"
+            android:resource="@drawable/ic_launcher_monochrome" />
     </application>
 </manifest>
