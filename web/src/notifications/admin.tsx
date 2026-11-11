@@ -25,6 +25,9 @@ const DURATIONS = ["level", "4", "8", "15", "30", "60"] as const;
 
 type Recipients = Audience["to"];
 
+/** What an account is called in the list of recipients, beside the groups. */
+const ONE_ACCOUNT = "account:";
+
 /** Tomorrow evening, the usual time of a maintenance, as a field holds it. */
 function tomorrowEvening(): string {
   const when = new Date();
@@ -114,29 +117,42 @@ function SendForm() {
         />
       </Setting>
       <Setting label={t("notes.recipients")} why={t("notes.recipients_why")}>
-        <Picker
+        {/* The accounts in the same list, under the two groups, each ticked
+            or unticked in place so several can be chosen in one opening. */}
+        <Picker<string>
           label={t("notes.recipients")}
           value={recipients}
           options={[
             ["administrators", t("notes.recipients.administrators")],
             ["everyone", t("notes.recipients.everyone")],
-            ["accounts", t("notes.recipients.accounts")],
+            ...(accounts.answer ?? []).map((account) => [ONE_ACCOUNT + account.id, account.name] as const),
           ]}
-          onPick={setRecipients}
+          fieldWording={
+            recipients === "accounts"
+              ? (accounts.answer ?? [])
+                  .filter((account) => chosen.includes(account.id))
+                  .map((account) => account.name)
+                  .join(", ") || t("notes.recipients.accounts")
+              : undefined
+          }
+          ticked={(option) =>
+            option.startsWith(ONE_ACCOUNT)
+              ? recipients === "accounts" && chosen.includes(option.slice(ONE_ACCOUNT.length))
+              : option === recipients
+          }
+          staysOpen={(option) => option.startsWith(ONE_ACCOUNT)}
+          onPick={(option) => {
+            if (!option.startsWith(ONE_ACCOUNT)) {
+              setRecipients(option as Recipients);
+              return;
+            }
+            const id = option.slice(ONE_ACCOUNT.length);
+            const had = recipients === "accounts" ? chosen : [];
+            setChosen(had.includes(id) ? had.filter((one) => one !== id) : [...had, id]);
+            setRecipients("accounts");
+          }}
         />
       </Setting>
-      {recipients === "accounts" &&
-        (accounts.answer ?? []).map((account) => (
-          <Setting key={account.id} label={account.name}>
-            <Toggle
-              label={account.name}
-              checked={chosen.includes(account.id)}
-              onChange={(on) =>
-                setChosen((was) => (on ? [...was, account.id] : was.filter((id) => id !== account.id)))
-              }
-            />
-          </Setting>
-        ))}
       <Setting label={t("notes.duration")} why={t("notes.duration_why")}>
         <Picker
           label={t("notes.duration")}

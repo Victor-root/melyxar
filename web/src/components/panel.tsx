@@ -333,6 +333,8 @@ export function Picker<T extends string>({
   fieldWording,
   sheetOnAPhone,
   asAMark,
+  ticked,
+  staysOpen,
 }: {
   value: T;
   /** Each option as it is kept, and as it is read. */
@@ -349,6 +351,12 @@ export function Picker<T extends string>({
   /** Drawn as a button wearing this class with this mark alone, the value
    *  said only to whoever reads the page aloud and in the list it opens. */
   asAMark?: { className: string; mark: ReactNode };
+  /** Which lines wear the tick, for a list where more than the one value can
+   *  be ticked at once. The value alone by default. */
+  ticked?: (option: T) => boolean;
+  /** Lines that are ticked and unticked in place, the list staying open for
+   *  the next. */
+  staysOpen?: (option: T) => boolean;
 }) {
   const asASheet = useMediaQuery(ON_A_PHONE) && sheetOnAPhone === true;
   const [open, setOpen] = useState(false);
@@ -442,7 +450,7 @@ export function Picker<T extends string>({
   /* Each line, and what closes the list before its choice is made. */
   const lines = (close: (then: () => void) => void) =>
     options.map(([option, wording]) => {
-      const chosen = option === value;
+      const chosen = ticked ? ticked(option) : option === value;
       return (
         <button
           key={option}
@@ -450,7 +458,11 @@ export function Picker<T extends string>({
           role="option"
           aria-selected={chosen}
           className={`header-menu-line${chosen ? " header-menu-line-on" : ""}`}
-          onClick={() =>
+          onClick={() => {
+            if (staysOpen?.(option)) {
+              onPick(option);
+              return;
+            }
             close(() => {
               // Chosen once the list is out of the history: a choice that
               // rewrites the address in place rewrites the page's own, not
@@ -458,8 +470,8 @@ export function Picker<T extends string>({
               if (!chosen) {
                 leaveHistory(() => onPick(option));
               }
-            })
-          }
+            });
+          }}
         >
           <span className="picker-line-words">{wording}</span>
           {chosen && <TickIcon size={16} />}
@@ -507,6 +519,7 @@ export function Picker<T extends string>({
             id={listId}
             role="listbox"
             aria-label={label}
+            aria-multiselectable={staysOpen ? true : undefined}
             className="header-menu-list picker-list"
             style={{
               top: under.top,
