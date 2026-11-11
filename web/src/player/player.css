@@ -2324,6 +2324,54 @@ melyxar-picture.player-video {
   font-weight: 600;
 }
 
+/* A face is pressed for who they are, rimmed in the accent under the pointer
+   as a scene is. */
+.player-drawer-person {
+  cursor: pointer;
+}
+
+.player-drawer-person .player-drawer-face {
+  border: 2px solid transparent;
+  transition: border-color var(--quick) var(--ease);
+}
+
+.player-drawer-person:hover .player-drawer-face {
+  border-color: var(--accent);
+}
+
+/* One of them, in the same place: the way back to the faces, then who they
+   are, laid out as what the film is. */
+.player-drawer-someone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.player-drawer-someone .player-drawer-face {
+  flex: none;
+}
+
+.player-drawer-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 4px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.player-drawer-back:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
 /* ---------------------------------------------------------------------------
  * What a button is called, while a hand is on it
  * ------------------------------------------------------------------------ */
@@ -2608,6 +2656,12 @@ melyxar-picture.player-video {
   .player-drawer-overview,
   .player-drawer-again {
     grid-column: 1 / -1;
+  }
+
+  .player-drawer-someone .player-drawer-face {
+    width: 92px;
+    height: 138px;
+    grid-row: 1 / span 3;
   }
 
   .player-drawer-again {

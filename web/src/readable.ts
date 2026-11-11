@@ -216,6 +216,24 @@ export function yearsBetween(from: string, to: string): number | null {
   return toYear - fromYear - (beforeTheBirthday ? 1 : 0);
 }
 
+/** When somebody was born and when they died, each said with the age it
+ *  made them: counted to the day they died when they did, to today on the
+ *  reader's own calendar otherwise. */
+export function lifeOf(
+  person: { born_on: string | null; died_on: string | null },
+  language: string,
+  t: Wording,
+  now: Date,
+): { born: string | null; died: string | null } {
+  const age = person.born_on ? yearsBetween(person.born_on, person.died_on ?? todayOf(now)) : null;
+  const born = person.born_on ? readableDay(person.born_on, language) : null;
+  const died = person.died_on ? readableDay(person.died_on, language) : null;
+  return {
+    born: born && (died || age === null ? born : t("person.born_age", { day: born, age })),
+    died: died && (age === null ? died : t("person.died_age", { day: died, age })),
+  };
+}
+
 /** Today, written year, month and day, on the reader's own calendar. */
 export function todayOf(now: Date): string {
   const two = (value: number) => String(value).padStart(2, "0");

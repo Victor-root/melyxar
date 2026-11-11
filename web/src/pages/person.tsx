@@ -17,7 +17,7 @@ import { useShownPicture } from "../components/picture";
 import { Row, RowHead } from "../components/row";
 import { useFittedText } from "../fitting";
 import { FilmIcon, SeriesIcon } from "../icons";
-import { readableDay, todayOf, yearsBetween } from "../readable";
+import { lifeOf } from "../readable";
 import { useSettings } from "../settings";
 import { PageBackdrop } from "../components/backdrop";
 import { useTabPage } from "../tab-page";
@@ -93,12 +93,7 @@ function AboutThem({ person }: { person: Person }) {
   const { picture: photo, itDidNotLoad } = useShownPicture(person.photo);
   const fitted = useFittedText([person.id, person.biography]);
 
-  /* How old they are, or were: counted to the day they died when they did,
-     to today on the reader's own calendar otherwise. */
-  const until = person.died_on ?? todayOf(new Date());
-  const age = person.born_on ? yearsBetween(person.born_on, until) : null;
-  const born = person.born_on ? readableDay(person.born_on, language) : null;
-  const died = person.died_on ? readableDay(person.died_on, language) : null;
+  const { born, died } = lifeOf(person, language, t, new Date());
 
   return (
     <section className="work-top">
@@ -130,15 +125,13 @@ function AboutThem({ person }: { person: Person }) {
             {born && (
               <div className="work-credit">
                 <dt>{t("person.born")}</dt>
-                <dd>
-                  {died || age === null ? born : t("person.born_age", { day: born, age })}
-                </dd>
+                <dd>{born}</dd>
               </div>
             )}
             {died && (
               <div className="work-credit">
                 <dt>{t("person.died")}</dt>
-                <dd>{age === null ? died : t("person.died_age", { day: died, age })}</dd>
+                <dd>{died}</dd>
               </div>
             )}
             {person.birthplace && (

@@ -36,6 +36,7 @@ import {
   readableBitrate,
   readableDate,
   readableSize,
+  lifeOf,
   readableDay,
   releaseOf,
   toolVersionOf,
@@ -266,6 +267,22 @@ describe("days", () => {
     expect(yearsBetween("1973-08-06", "2026-08-06")).toBe(53);
     expect(yearsBetween("1973-08-06", "2026-09-24")).toBe(53);
     expect(yearsBetween("unknown", "2026-09-24")).toBeNull();
+  });
+
+  it("ages the living to today and the dead to the day they died", () => {
+    const today = new Date(2026, 10, 12);
+    expect(lifeOf({ born_on: "1973-08-06", died_on: null }, "fr", said, today)).toEqual({
+      born: 'person.born_age({"day":"6 août 1973","age":53})',
+      died: null,
+    });
+    expect(lifeOf({ born_on: "1930-05-31", died_on: "2001-02-01" }, "fr", said, today)).toEqual({
+      born: "31 mai 1930",
+      died: 'person.died_age({"day":"1 février 2001","age":70})',
+    });
+    expect(lifeOf({ born_on: null, died_on: "2001-02-01" }, "fr", said, today)).toEqual({
+      born: null,
+      died: "1 février 2001",
+    });
   });
 
   it("spells a day out without letting a clock move it", () => {

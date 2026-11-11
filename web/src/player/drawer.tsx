@@ -14,7 +14,9 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Credit, PlaybackChapter, PlaybackPlan, Work } from "../api";
-import { pictureSet } from "../api";
+import { api, pictureSet } from "../api";
+import { useAsked } from "../asking";
+import { useBackClosesIt } from "../components/back-closes";
 import { useDragToScroll } from "../dragging";
 import { ScrollBar } from "../components/scrollbar";
 import { SeenMark } from "../components/seen";
@@ -22,9 +24,9 @@ import { PHONE_SIDEWAYS, PHONE_UPRIGHT, useMediaQuery } from "../media-query";
 import { chapterAt } from "./chapters";
 import { asClock } from "../clock";
 import type { Playback } from "./engine";
-import { PlayIcon } from "./icons";
+import { BackIcon, PlayIcon } from "./icons";
 import { languageName } from "../languages";
-import { numberOfOne, pictureName } from "../readable";
+import { lifeOf, numberOfOne, pictureName } from "../readable";
 import { heightAt, Thumbnail } from "./thumbnail";
 
 /** The sheets, in the order their tabs stand. Episodes only ever draws for a
@@ -256,7 +258,7 @@ export function Drawer({
           {showing === "chapters" && (
             <Chapters plan={plan} playback={playback} across={sizes.card} t={t} />
           )}
-          {showing === "cast" && <Cast work={work} across={sizes.face} t={t} />}
+          {showing === "cast" && <Cast work={work} across={sizes.face} language={language} t={t} />}
           {showing === "episodes" && (
             <Episodes
               work={work}
@@ -405,9 +407,28 @@ function everyFewMinutes(length: number): PlaybackChapter[] {
 }
 
 /** Who is in it and who made it, faces first, the guest stars of an
- *  episode right after its cast. */
-const Cast = memo(function Cast({ work, across, t }: Pick<Props, "work" | "t"> & { across: number }) {
+ *  episode right after its cast. A face pressed says who they are in the
+ *  same place, the film playing on, and the back key or the arrow above
+ *  returns to the faces. */
+const Cast = memo(function Cast({
+  work,
+  across,
+  language,
+  t,
+}: Pick<Props, "work" | "language" | "t"> & { across: number }) {
+  const [shown, setShown] = useState<Credit | null>(null);
+  const backToTheFaces = useBackClosesIt(() => setShown(null), shown !== null);
   const everyone: Credit[] = [...work.cast, ...work.guest_stars, ...work.crew];
+  if (shown) {
+    return (
+      <Someone
+        credit={shown}
+        language={language}
+        t={t}
+        onBack={() => backToTheFaces(() => setShown(null))}
+      />
+    );
+  }
   if (everyone.length === 0) {
     return <p className="player-drawer-nothing">{t("player.nobody_named")}</p>;
   }
@@ -416,7 +437,12 @@ const Cast = memo(function Cast({ work, across, t }: Pick<Props, "work" | "t"> &
       {everyone.map((credit, index) => {
         const photo = pictureSet(credit.photo);
         return (
-          <div className="player-drawer-person" key={`${credit.name}-${credit.role}-${index}`}>
+          <button
+            type="button"
+            className="player-drawer-person"
+            key={`${credit.name}-${credit.role}-${index}`}
+            onClick={() => setShown(credit)}
+          >
             <span className="player-drawer-face">
               {photo ? (
                 <img
@@ -439,12 +465,65 @@ const Cast = memo(function Cast({ work, across, t }: Pick<Props, "work" | "t"> &
             <span className="player-drawer-card-under">
               {credit.character ?? t(`credit.${credit.role}`)}
             </span>
-          </div>
+          </button>
         );
       })}
     </Strip>
   );
 });
+
+/** One person of the cast: their face, when they were born and where, and
+ *  their life in a few lines, read as their own page reads it. The face and
+ *  the name are there at once, from the credit; the rest when it comes. */
+function Someone({
+  credit,
+  language,
+  t,
+  onBack,
+}: Pick<Props, "language" | "t"> & { credit: Credit; onBack: () => void }) {
+  const asked = useAsked(
+    (signal) => api.person(credit.person_id, signal),
+    [credit.person_id],
+    `person:${credit.person_id}`,
+  );
+  const person = asked.waiting ? null : asked.answer;
+  const photo = pictureSet(credit.photo);
+  const { born, died } = person ? lifeOf(person, language, t, new Date()) : { born: null, died: null };
+  return (
+    <div className="player-drawer-someone">
+      <button type="button" className="player-drawer-back" onClick={onBack}>
+        <BackIcon size={18} />
+        {t("work.cast")}
+      </button>
+      <div className="player-drawer-about">
+        <span className="player-drawer-face">
+          {photo ? (
+            <img src={photo.src} srcSet={photo.srcSet} sizes={ROOM_FOR.face} alt="" draggable={false} />
+          ) : (
+            <span className="player-drawer-initial" aria-hidden="true">
+              {credit.name.slice(0, 1)}
+            </span>
+          )}
+        </span>
+        <div className="player-drawer-said">
+          <h2 className="player-drawer-title">{credit.name}</h2>
+          <p className="player-drawer-playing">{credit.character ?? t(`credit.${credit.role}`)}</p>
+          {(born || died || person?.birthplace) && (
+            <p className="player-drawer-facts">
+              {born && <span>{t("person.born")} {born}</span>}
+              {died && <span>{t("person.died")} {died}</span>}
+              {person?.birthplace && <span>{person.birthplace}</span>}
+            </p>
+          )}
+          {person && (
+            <p className="player-drawer-overview">{person.biography ?? t("person.no_biography")}</p>
+          )}
+          {asked.failure && <p className="player-drawer-overview">{t("error.unreachable")}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Every episode of the season this one belongs to, in order, with the one
