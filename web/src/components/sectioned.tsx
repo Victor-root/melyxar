@@ -8,14 +8,15 @@
  * On a narrow screen the list becomes a strip of the same entries across the
  * top, which scrolls sideways: a column of twelve down a phone would push the
  * page itself below the fold. On a phone it is a page of its own, as the
- * settings of a phone are: the bare address shows the list, a section opens
- * whole, and a link above its title leads back.
+ * settings of a phone are: the bare address shows the list, and a section
+ * opens whole. The way back to the list is the way back from anything, the
+ * phone's back and the arrow of the bar, so nothing above its title repeats it.
  */
 
 import { createContext, useContext, useRef } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { ChevronRightIcon } from "../icons";
 import type { IconProps } from "../icons";
 import { useMasonry } from "../masonry";
 import { ON_A_PHONE, useMediaQuery } from "../media-query";
@@ -125,35 +126,11 @@ export function Sectioned({
           <SectionList base={base} place={place} groups={groups} foot={foot} />
         ) : (
           <SectionContext.Provider value={here}>
-            {onAPhone && <BackToTheList base={base} place={place} />}
             <Outlet />
           </SectionContext.Provider>
         )}
       </main>
     </div>
-  );
-}
-
-/** Said by the list to the section it opens, so the way back is a step back
- *  rather than the list a second time on top of the history. */
-const FROM_THE_LIST = { fromTheList: true };
-
-/** Above a section on a phone: back to the list it was opened from, or to
- *  the list in place of the section when it was opened from elsewhere. */
-function BackToTheList({ base, place }: { base: string; place: string }) {
-  const { t } = useSettings();
-  const navigate = useNavigate();
-  const { state } = useLocation();
-  const cameFromTheList = (state as typeof FROM_THE_LIST | null)?.fromTheList === true;
-  return (
-    <button
-      type="button"
-      className="sectioned-back"
-      onClick={() => (cameFromTheList ? navigate(-1) : navigate(base, { replace: true }))}
-    >
-      <ChevronLeftIcon size={18} />
-      {t(place)}
-    </button>
   );
 }
 
@@ -188,7 +165,6 @@ function SectionList({
                 <Link
                   key={section.path}
                   to={`${base}/${section.path}`}
-                  state={FROM_THE_LIST}
                   className="section-list-line"
                 >
                   <span className="section-list-mark" aria-hidden="true">

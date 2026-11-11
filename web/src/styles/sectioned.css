@@ -339,28 +339,6 @@
   font-size: 12.5px;
 }
 
-.sectioned-back {
-  display: inline-flex;
-  align-items: center;
-  justify-self: start;
-  gap: 2px;
-  min-height: 40px;
-  margin: calc(-1 * var(--gap-tight)) 0 4px -6px;
-  padding: 0 10px 0 2px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: none;
-  color: var(--text-soft);
-  font: inherit;
-  font-size: 14.5px;
-  font-weight: 550;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.sectioned-back:active {
-  background: var(--surface-hover);
-}
-
 /* --------------------------------------------------------------------------
  * The head of a page
  * ----------------------------------------------------------------------- */
