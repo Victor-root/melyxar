@@ -114,13 +114,13 @@ Vérifié dans l'environnement de travail, sur de vrais films : la grille et la 
 
 ## Jalon 4 : lecture Direct Play
 
-État : en cours. Un film que le navigateur sait ouvrir se lit, et on revient là où on s'était arrêté.
+État : fait. Un film que le navigateur sait ouvrir se lit, et on revient là où on s'était arrêté.
 
 Fait : la décision pure avec ses raisons, le profil demandé au navigateur lui-même (chaque combinaison essayée, jamais devinée d'après le nom du navigateur), le fichier servi par morceaux, le lecteur, la position enregistrée pendant la lecture et une dernière fois en partant, la reprise et le bouton distinct pour repartir du début, le choix des pistes pendant la lecture avec mémoire du choix (par film jusqu'à la piste, par langue pour les films suivants), le repliement stéréo comme entrée de la décision, la vitesse de lecture, l'image dans un coin et les raccourcis clavier.
 
 Fait aussi : l'écran de réglages qui permet enfin de choisir tout cela. Le repliement, le niveau qui le suit, et les langues audio et sous-titres préférées vivaient dans la base avec leur valeur par défaut, sans écran ni route pour les changer. Les langues proposées sont celles que la bibliothèque contient vraiment, lues dans les pistes elles-mêmes.
 
-Reste : la courbe de volume, pas encore codée (le curseur règle le volume tel quel, sans la courbe prévue), puis à vérifier à l'oreille par le mainteneur. Un film que le navigateur ne sait pas ouvrir tel quel est converti par le serveur depuis le jalon 5.
+La courbe de volume prévue n'est pas faite, et ne le sera pas : le curseur règle le volume tel quel, et le mainteneur le trouve juste à l'oreille. Un film que le navigateur ne sait pas ouvrir tel quel est converti par le serveur depuis le jalon 5.
 
 Le lecteur a désormais ses propres commandes (barre de progression, volume, plein écran, titre et retour), en plus du choix des pistes, de la vitesse, de l'image dans un coin, des raccourcis clavier, des étapes de préparation et de l'apparence des sous-titres.
 
