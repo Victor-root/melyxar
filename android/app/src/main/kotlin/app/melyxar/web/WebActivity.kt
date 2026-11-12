@@ -106,6 +106,16 @@ class WebActivity : ComponentActivity() {
         }
     }
 
+    /** What the page calls to choose another server: the screen where
+     *  servers are chosen, over this one, which stays as it is when nothing
+     *  else is chosen. */
+    private inner class Servers {
+        @JavascriptInterface
+        fun choose() {
+            runOnUiThread { startActivity(ConnectActivity.choosing(this@WebActivity)) }
+        }
+    }
+
     /** Asked once a sitting, and only of a phone that asks for it: a phone
      *  answers by itself after the second refusal, and never asks again. */
     private var notificationsAsked = false
@@ -149,6 +159,7 @@ class WebActivity : ComponentActivity() {
         icons.settle()
         page.addJavascriptInterface(icons, "MelyxarIcon")
         page.addJavascriptInterface(Scanner(), "MelyxarScanner")
+        page.addJavascriptInterface(Servers(), "MelyxarServers")
         page.addJavascriptInterface(Shortcuts(applicationContext), "MelyxarShortcuts")
         page.addJavascriptInterface(LiveActivity.Bridge(this, { server.origin }, page.settings.userAgentString), "MelyxarCamera")
         music = PhoneMusic.of(this)

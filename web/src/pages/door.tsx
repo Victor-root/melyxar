@@ -35,10 +35,12 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
+  ServerIcon,
 } from "../icons";
 import { Face } from "../components/face";
 import { LanguagePicker } from "../components/language-picker";
 import { ThemeToggle } from "../components/theme-toggle";
+import { appServers } from "../app-servers";
 import { useDoorScreen } from "../screens/door";
 import { useSettings } from "../settings";
 import { ServerMark } from "../components/server-mark";
@@ -518,6 +520,12 @@ export function Door({
         <div className="door-settings">
           <LanguagePicker quiet />
           <ThemeToggle />
+          {appServers && (
+            <button type="button" className="theme-toggle" onClick={() => appServers?.choose()}>
+              <ServerIcon size={16} className="theme-toggle-icon" />
+              {t("nav.change_server")}
+            </button>
+          )}
         </div>
 
         <div className="door-credits">

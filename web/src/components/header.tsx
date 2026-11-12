@@ -68,11 +68,13 @@ import {
   HeartIcon,
   KindIcon,
   LeaveIcon,
+  ServerIcon,
   RefreshIcon,
   RequestIcon,
   SearchIcon,
   DashboardIcon,
 } from "../icons";
+import { appServers } from "../app-servers";
 import { ServerMark } from "./server-mark";
 import { sayTheBarIsOut, sayWherePiecesEnd } from "../bar-room";
 import { useBackClosesIt } from "./back-closes";
@@ -872,6 +874,12 @@ export function Header({
               <button type="button" className="header-menu-line" onClick={() => setLinking(true)}>
                 <DeviceIcon size={16} />
                 {t("nav.link")}
+              </button>
+            )}
+            {appServers && (
+              <button type="button" className="header-menu-line" onClick={() => appServers?.choose()}>
+                <ServerIcon size={16} />
+                {t("nav.change_server")}
               </button>
             )}
             <button type="button" className="header-menu-line" onClick={() => void leave()}>

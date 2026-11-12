@@ -30,13 +30,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -46,11 +49,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
+import app.melyxar.server.FoundServer
 import app.melyxar.server.KnownServer
 import app.melyxar.server.KnownServers
 import app.melyxar.server.Reading
 import app.melyxar.server.askBranding
 import app.melyxar.server.readAddress
+import app.melyxar.server.serversAtHome
 import app.melyxar.theme.Melyxar
 import app.melyxar.theme.MelyxarTheme
 import app.melyxar.theme.drawUnderTheBars
@@ -61,9 +66,12 @@ import app.melyxar.web.WebActivity
 import kotlinx.coroutines.launch
 
 /**
- * The one screen before any server: where its address is typed, and where the
+ * The one screen before any server: where its address is typed, where the
+ * servers of the home network are offered as they are found, and where the
  * servers already known are offered again. Opening the application goes
- * straight to the last one, unless this screen was asked for to change.
+ * straight to the last one, unless this screen was asked for to change,
+ * from the interface of the one open or from its screen saying it does not
+ * answer.
  *
  * On a television, the application is the television's own instead, which
  * keeps its own choice of server.
@@ -126,6 +134,17 @@ private fun ConnectScreen(servers: KnownServers, onOpen: (KnownServer) -> Unit) 
     var refusal by remember { mutableStateOf<Int?>(null) }
     var known by remember { mutableStateOf(servers.all()) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    // Looked for for as long as the screen is open, as the television does.
+    // One already known is offered among those rather than twice.
+    val found = remember { mutableStateListOf<FoundServer>() }
+    LaunchedEffect(Unit) {
+        serversAtHome(context).collect { server ->
+            if (found.none { it.origin == server.origin }) {
+                found += server
+            }
+        }
+    }
 
     fun connect() {
         when (val reading = readAddress(typed)) {
@@ -221,9 +240,16 @@ private fun ConnectScreen(servers: KnownServers, onOpen: (KnownServer) -> Unit) 
                         Text(stringResource(R.string.connect_go), fontSize = 16.sp)
                     }
                 }
+                val atHome = found
+                    .filter { server -> known.none { it.origin == server.origin.value } }
+                    .map { KnownServer(it.origin.value, it.name) }
+                if (atHome.isNotEmpty()) {
+                    ServerList(title = R.string.connect_found, servers = atHome, onOpen = onOpen)
+                }
                 if (known.isNotEmpty()) {
-                    KnownList(
-                        known = known,
+                    ServerList(
+                        title = R.string.connect_known,
+                        servers = known,
                         onOpen = onOpen,
                         onForget = { server ->
                             servers.forget(server.origin)
@@ -236,22 +262,25 @@ private fun ConnectScreen(servers: KnownServers, onOpen: (KnownServer) -> Unit) 
     }
 }
 
+/** Servers offered under a title, each opened by a press, and forgotten by
+ *  its own button when the list keeps them. */
 @Composable
-private fun KnownList(
-    known: List<KnownServer>,
+private fun ServerList(
+    title: Int,
+    servers: List<KnownServer>,
     onOpen: (KnownServer) -> Unit,
-    onForget: (KnownServer) -> Unit,
+    onForget: ((KnownServer) -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 18.dp)) {
         Text(
-            text = stringResource(R.string.connect_known),
+            text = stringResource(title),
             color = Melyxar.textFaint,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.sp,
             modifier = Modifier.padding(bottom = 6.dp),
         )
-        known.forEach { server ->
+        servers.forEach { server ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -263,8 +292,10 @@ private fun KnownList(
                     Text(server.name, color = Melyxar.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     Text(server.origin, color = Melyxar.textFaint, fontSize = 12.sp)
                 }
-                TextButton(onClick = { onForget(server) }) {
-                    Text(stringResource(R.string.connect_forget), color = Melyxar.textSoft)
+                onForget?.let { forget ->
+                    TextButton(onClick = { forget(server) }) {
+                        Text(stringResource(R.string.connect_forget), color = Melyxar.textSoft)
+                    }
                 }
             }
         }
