@@ -190,6 +190,9 @@ dependencies {
     constraints {
         // Brought by Media3 at a version with a known flaw: raised to a fixed one.
         implementation(libs.guava)
+        // Brought by the credential manager's fingerprint prompt at a version
+        // older than the activity results this application asks with.
+        implementation(libs.androidx.fragment)
     }
 
     testImplementation(libs.junit.jupiter)
