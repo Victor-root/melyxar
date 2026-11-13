@@ -18,6 +18,7 @@ import type { Account, Branding, NameAtTheDoor } from "../api";
 import { figuresOf, heldBackFor } from "../asking";
 import { deviceIdentity } from "../deviceIdentity";
 import { refusalKey } from "../i18n";
+import { DeviceSaidNo, passkeysHere, signInWithAPasskey } from "../passkeys";
 
 /** A refusal, worded and with whatever its wording needs. */
 export interface Refusal {
@@ -41,6 +42,10 @@ export interface DoorScreen {
    *  Remembering says whether the browser is to hold on to the session once
    *  it is closed, which is the one thing about it somebody chooses. */
   knock: (name: string, password: string, remember: boolean) => Promise<void>;
+  /** Whether a passkey can open this door from this page. */
+  byPasskey: boolean;
+  /** Signs in with whichever passkey the device offers. Never throws. */
+  knockWithAKey: (remember: boolean) => Promise<void>;
   /** Whether somebody may make their own account here. */
   signUpsOpen: boolean;
   /** Makes an account at the door, and signs it in when it does not have to
@@ -114,6 +119,20 @@ export function useDoorScreen(
     [brandNew, cameIn, language],
   );
 
+  const knockWithAKey = useCallback(
+    async (remember: boolean) => {
+      setAsking(true);
+      setRefused(null);
+      try {
+        cameIn(await signInWithAPasskey(remember));
+      } catch (error) {
+        setRefused(whatTheDeviceSaid(error));
+        setAsking(false);
+      }
+    },
+    [cameIn],
+  );
+
   const signUp = useCallback(
     async (name: string, password: string, remember: boolean) => {
       setAsking(true);
@@ -143,6 +162,8 @@ export function useDoorScreen(
     asked: brandNew || answered,
     serverName: branding.server_name,
     knock,
+    byPasskey: !brandNew && passkeysHere(),
+    knockWithAKey,
     asking,
     refused,
     forget: useCallback(() => {
@@ -161,7 +182,7 @@ export function useDoorScreen(
  * and believes they have forgotten it. And a form refused for something typed
  * names the thing to put right.
  */
-function whatTheServerSaid(error: unknown): Refusal {
+function whatTheServerSaid(error: unknown, about = "account"): Refusal {
   if (!(error instanceof ApiError)) {
     return { key: "door.refused.generic", values: {} };
   }
@@ -171,10 +192,22 @@ function whatTheServerSaid(error: unknown): Refusal {
     return { key: "door.refused.held_back", values: { seconds } };
   }
   if (error.code === "unauthenticated") {
-    return { key: "door.refused.wrong", values: {} };
+    return { key: about === "passkey" ? "door.refused.wrong_passkey" : "door.refused.wrong", values: {} };
   }
   if (error.reason) {
-    return { key: `refused.account.${error.reason}`, values: figuresOf(error) };
+    const subject = error.reason === "awaiting_approval" ? "account" : about;
+    return { key: `refused.${subject}.${error.reason}`, values: figuresOf(error) };
   }
   return { key: refusalKey(error.code), values: {} };
+}
+
+/**
+ * The refusal of a passkey brought to the door, or nothing when somebody put
+ * the device's question away: that is changing one's mind, not a fault.
+ */
+function whatTheDeviceSaid(error: unknown): Refusal | null {
+  if (error instanceof DeviceSaidNo) {
+    return error.why === "cancelled" ? null : { key: "door.refused.passkey_failed", values: {} };
+  }
+  return whatTheServerSaid(error, "passkey");
 }

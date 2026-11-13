@@ -35,6 +35,7 @@ import {
   EyeIcon,
   EyeOffIcon,
   LockIcon,
+  PasskeyIcon,
   ServerIcon,
 } from "../icons";
 import { Face } from "../components/face";
@@ -296,6 +297,17 @@ export function Door({
                 <AccountIcon size={18} />
                 {t("door.by_hand")}
               </button>
+              {door.byPasskey && (
+                <button
+                  type="button"
+                  className="door-by-hand"
+                  disabled={door.asking}
+                  onClick={() => void door.knockWithAKey(remember)}
+                >
+                  <PasskeyIcon size={18} />
+                  {t("door.passkey")}
+                </button>
+              )}
               <button type="button" className="door-by-hand" onClick={toTheTelephone}>
                 <DeviceIcon size={18} />
                 {t("door.link.go")}
@@ -305,6 +317,17 @@ export function Door({
                   <AccountAddIcon size={18} />
                   {t("door.create")}
                 </button>
+              )}
+              {/* Where a passkey refused on this view says why: there is no
+                  form here for the refusal to sit under. */}
+              {door.byPasskey && (
+                <div className="door-answer" role="alert" aria-live="polite">
+                  {door.refused && (
+                    <span className="door-refused" key={door.refused.key}>
+                      {t(door.refused.key, door.refused.values)}
+                    </span>
+                  )}
+                </div>
               )}
             </>
           )}
@@ -493,6 +516,17 @@ export function Door({
                   <div className="door-or">
                     <span>{t("door.or")}</span>
                   </div>
+                  {door.byPasskey && (
+                    <button
+                      type="button"
+                      className="button button-large door-make"
+                      disabled={door.asking}
+                      onClick={() => void door.knockWithAKey(remember)}
+                    >
+                      <PasskeyIcon size={20} />
+                      {t("door.passkey")}
+                    </button>
+                  )}
                   <button type="button" className="button button-large door-make" onClick={toTheTelephone}>
                     <DeviceIcon size={20} />
                     {t("door.link.go")}

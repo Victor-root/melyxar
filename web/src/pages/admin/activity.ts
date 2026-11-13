@@ -98,14 +98,28 @@ export function sayLine(line: ActivityLine, t: Wording): Said {
         note: t("activity.by", { name: text(details, "by") ?? t("activity.someone") }),
       };
     case "sign_in_refused":
+      if (details.passkey === true) {
+        return { title: t("activity.sign_in_refused_passkey"), note: joined([text(details, "address"), device]) };
+      }
+      return {
+        title: t("activity.sign_in_refused", { user }),
+        note: joined([text(details, "address"), device]),
+      };
     case "sign_in_held_back":
       return {
         title: t(`activity.${line.kind}`, { user }),
         note: joined([text(details, "address"), device]),
       };
     case "signed_in":
+      return {
+        title: t("activity.signed_in", { user }),
+        note: joined([device, details.passkey === true ? t("activity.by_passkey") : null]),
+      };
     case "signed_out":
-      return { title: t(`activity.${line.kind}`, { user }), note: device };
+      return { title: t("activity.signed_out", { user }), note: device };
+    case "passkey_added":
+    case "passkey_removed":
+      return { title: t(`activity.${line.kind}`, { user }), note: text(details, "name") };
     case "password_changed":
     case "account_created":
     case "account_removed":

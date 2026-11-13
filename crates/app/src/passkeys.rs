@@ -21,7 +21,7 @@ use std::time::Instant;
 use melyxar_auth::SessionToken;
 use melyxar_auth::passkeys::{
     AuthenticationResult, CEREMONY_LASTS, DiscoverableAuthentication, Passkey, PasskeyRegistration,
-    Site, Webauthn, checker_for,
+    Site, Webauthn, checker_for, to_be_found,
 };
 pub use melyxar_auth::passkeys::{
     CreationChallengeResponse, PublicKeyCredential, RegisterPublicKeyCredential,
@@ -49,6 +49,9 @@ pub const LONGEST_PASSKEY_NAME: usize = 60;
 /// How many ceremonies of each kind may wait for an answer at once.
 const MOST_WAITING: usize = 256;
 
+/// How many of them may come from one place: a few browsers of one home.
+const MOST_WAITING_FROM_ONE_PLACE: usize = 8;
+
 /// Why a passkey was not made, renamed or used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refused {
@@ -69,12 +72,12 @@ pub enum Refused {
 impl Refused {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::NotASite => "passkey.not_a_site",
-            Self::TooMany => "passkey.too_many",
-            Self::NameNeeded => "passkey.name_needed",
-            Self::NameTooLong => "passkey.name_too_long",
-            Self::WrongPassword => "passkey.wrong_password",
-            Self::NotMade => "passkey.not_made",
+            Self::NotASite => "not_a_site",
+            Self::TooMany => "too_many",
+            Self::NameNeeded => "name_needed",
+            Self::NameTooLong => "name_too_long",
+            Self::WrongPassword => "wrong_password",
+            Self::NotMade => "not_made",
         }
     }
 }
@@ -136,6 +139,7 @@ pub struct Ceremonies {
 
 struct Waiting<T> {
     since: Instant,
+    from: Origin,
     what: T,
 }
 
@@ -152,30 +156,43 @@ struct SigningIn {
 
 /// Keeps a ceremony under a word drawn for it, the stale ones and, past the
 /// bound, the oldest put away first.
-fn keep<T>(waiting: &Mutex<HashMap<String, Waiting<T>>>, what: T) -> Result<String> {
+fn keep<T>(waiting: &Mutex<HashMap<String, Waiting<T>>>, from: Origin, what: T) -> Result<String> {
     let word = SessionToken::new()?.as_text().to_string();
     let mut held = waiting
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     held.retain(|_, one| one.since.elapsed() < CEREMONY_LASTS);
+    // One place asking again and again only ever puts its own away, so it
+    // cannot push out what everybody else is answering.
+    while held.values().filter(|one| one.from == from).count() >= MOST_WAITING_FROM_ONE_PLACE {
+        put_the_oldest_away(&mut held, |one| one.from == from);
+    }
     while held.len() >= MOST_WAITING {
-        let Some(oldest) = held
-            .iter()
-            .min_by_key(|(_, one)| one.since)
-            .map(|(word, _)| word.clone())
-        else {
-            break;
-        };
-        held.remove(&oldest);
+        put_the_oldest_away(&mut held, |_| true);
     }
     held.insert(
         word.clone(),
         Waiting {
             since: Instant::now(),
+            from,
             what,
         },
     );
     Ok(word)
+}
+
+fn put_the_oldest_away<T>(
+    held: &mut HashMap<String, Waiting<T>>,
+    among: impl Fn(&Waiting<T>) -> bool,
+) {
+    let oldest = held
+        .iter()
+        .filter(|(_, one)| among(one))
+        .min_by_key(|(_, one)| one.since)
+        .map(|(word, _)| word.clone());
+    if let Some(oldest) = oldest {
+        held.remove(&oldest);
+    }
 }
 
 /// Takes a ceremony away for its one answer, if it is still waiting.
@@ -267,6 +284,7 @@ pub async fn start_making(
         })?;
     let word = keep(
         &state.passkey_ceremonies().making,
+        Origin::of(address),
         Making {
             user: who.id,
             site,
@@ -275,7 +293,7 @@ pub async fn start_making(
     )?;
     Ok(Challenge {
         ceremony: word,
-        options,
+        options: to_be_found(options),
     })
 }
 
@@ -383,6 +401,7 @@ pub async fn start_signing_in(
         })?;
     let word = keep(
         &state.passkey_ceremonies().signing_in,
+        Origin::of(address),
         SigningIn {
             site,
             state: ceremony,
@@ -422,7 +441,8 @@ pub async fn finish_signing_in(
             mut credential,
             used,
         }) => {
-            state.wrong_answers().forget(from);
+            // The counter is written whatever comes next: the device has
+            // moved it on, and a copy of the key would be caught by it.
             credential.update_credential(&used);
             state
                 .database()
@@ -431,6 +451,7 @@ pub async fn finish_signing_in(
             if user.awaiting_approval {
                 return Ok(SignedInOrNot::AwaitingApproval);
             }
+            state.wrong_answers().forget(from);
             let opened =
                 open_a_session(state, user, device_name, remembered, client, WayIn::Passkey)
                     .await?;
@@ -443,6 +464,7 @@ pub async fn finish_signing_in(
                     name: String::new(),
                     device: device_name.to_string(),
                     address: address.map(|address| address.to_string()),
+                    by_passkey: true,
                 },
             )
             .await;
@@ -570,7 +592,7 @@ mod tests {
     #[test]
     fn a_ceremony_answers_once() {
         let waiting = Mutex::new(HashMap::new());
-        let word = keep(&waiting, 7).expect("kept");
+        let word = keep(&waiting, Origin::of(FROM_AFAR), 7).expect("kept");
         assert_eq!(word.len(), 64);
         assert_eq!(take(&waiting, &word), Some(7));
         assert_eq!(take(&waiting, &word), None);
@@ -580,12 +602,32 @@ mod tests {
     #[test]
     fn the_oldest_ceremonies_make_room_past_the_bound() {
         let waiting = Mutex::new(HashMap::new());
-        let first = keep(&waiting, 0).expect("kept");
+        let first = keep(&waiting, Origin::of(FROM_AFAR), 0).expect("kept");
         for at in 1..=MOST_WAITING {
-            keep(&waiting, at).expect("kept");
+            keep(
+                &waiting,
+                Origin::of(Some(IpAddr::from([198, 51, 100, (at % 200) as u8]))),
+                at,
+            )
+            .expect("kept");
         }
         assert_eq!(waiting.lock().expect("held").len(), MOST_WAITING);
         assert_eq!(take(&waiting, &first), None);
+    }
+
+    #[test]
+    fn one_place_asking_again_and_again_only_puts_its_own_away() {
+        let waiting = Mutex::new(HashMap::new());
+        let elsewhere = Origin::of(Some(IpAddr::from([198, 51, 100, 7])));
+        let theirs = keep(&waiting, elsewhere, 0).expect("kept");
+        for at in 1..=MOST_WAITING {
+            keep(&waiting, Origin::of(FROM_AFAR), at).expect("kept");
+        }
+        assert_eq!(
+            waiting.lock().expect("held").len(),
+            MOST_WAITING_FROM_ONE_PLACE + 1
+        );
+        assert_eq!(take(&waiting, &theirs), Some(0));
     }
 
     #[test]

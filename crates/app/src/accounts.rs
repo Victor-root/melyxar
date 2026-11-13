@@ -246,6 +246,19 @@ pub(crate) async fn held_back_from_now(state: &AppState, name: &str, device: &st
     .await;
 }
 
+/// Signs an account out of every device and takes its passkeys away: what
+/// is done when somebody else may have held its password, who could have
+/// made a key of their own with it and come back by it. Says how many
+/// sessions were closed.
+async fn cut_off(state: &AppState, who: &User) -> Result<u64> {
+    let closed = state.database().close_every_session_of(who.id).await?;
+    let keys = state.database().remove_passkeys_of(who.id).await?;
+    if keys > 0 {
+        tracing::warn!(account = %who.name, keys, "took every passkey of an account away");
+    }
+    Ok(closed)
+}
+
 /// What a client is handed when it signs in.
 #[derive(Debug)]
 pub struct OpenedSession {
@@ -350,6 +363,7 @@ pub async fn sign_in(
                 name: name.chars().take(LONGEST_NAME).collect(),
                 device: device_name.to_string(),
                 address: address.map(|address| address.to_string()),
+                by_passkey: false,
             },
         )
         .await;
@@ -535,7 +549,7 @@ pub async fn change_password(
     // everywhere with its old password still on it.
     let hashed = stored_form_of(state, wanted).await?;
     state.database().set_password(who.id, Some(&hashed)).await?;
-    let closed = state.database().close_every_session_of(who.id).await?;
+    let closed = cut_off(state, who).await?;
     tracing::info!(account = %who.name, closed, "changed a password and signed every device out");
     record(
         state,
@@ -1170,7 +1184,7 @@ pub async fn sign_out_everywhere(
 ) -> std::result::Result<u64, Trouble> {
     not_to_yourself(acting, target)?;
     let user = account(state, target).await?;
-    let closed = state.database().close_every_session_of(user.id).await?;
+    let closed = cut_off(state, &user).await?;
     crate::watching::stop_everything_of(state, user.id);
     tracing::warn!(account = %user.name, by = %acting.name, closed, "signed an account out of every device");
     record(
@@ -1383,7 +1397,7 @@ async fn password_put_on(
 ) -> std::result::Result<(), Trouble> {
     let hashed = stored_form_of(state, password).await?;
     state.database().set_password(user.id, Some(&hashed)).await?;
-    let closed = state.database().close_every_session_of(user.id).await?;
+    let closed = cut_off(state, user).await?;
     crate::watching::stop_everything_of(state, user.id);
     tracing::warn!(
         account = %user.name,
@@ -2005,6 +2019,42 @@ mod tests {
             .expect("the rename has its line");
         assert_eq!(line.details["previous_name"], "victor");
         assert_eq!(line.details["user_name"], "Victor B");
+    }
+
+    #[tokio::test]
+    async fn changing_a_password_takes_the_passkeys_away() {
+        let (_directory, state) = a_server_with_an_account().await;
+        let here = a_session(&state, "victor", "quiet harbour", "a browser")
+            .await
+            .expect("signed in");
+        // As somebody who had learnt the password could have made one.
+        state
+            .database()
+            .add_passkey(melyxar_database::passkeys::NewPasskey {
+                user: here.user.id,
+                credential_id: b"theirs",
+                rp_id: "melyxar.example.org",
+                name: "Not mine",
+                credential: "{}",
+                at: now(),
+            })
+            .await
+            .expect("kept");
+
+        change_password(
+            &state,
+            &here.user,
+            "quiet harbour",
+            "amber field road",
+            "a browser",
+            Remembered::Yes,
+            None,
+            None,
+        )
+        .await
+        .expect("changed");
+
+        assert!(state.database().passkeys_of(here.user.id).await.expect("listed").is_empty());
     }
 
     #[tokio::test]

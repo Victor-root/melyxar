@@ -128,6 +128,15 @@ impl Database {
         Ok(done.rows_affected() > 0)
     }
 
+    /// Takes away every passkey of an account, and says how many there were.
+    pub async fn remove_passkeys_of(&self, user: UserId) -> Result<u64> {
+        let done = sqlx::query("DELETE FROM passkeys WHERE user_id = ?")
+            .bind(user.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(done.rows_affected())
+    }
+
     /// Takes away one of an account's passkeys, and answers its name when it
     /// was one of its own.
     pub async fn remove_passkey(&self, user: UserId, id: PasskeyId) -> Result<Option<String>> {
@@ -212,6 +221,19 @@ mod tests {
             Some("Pocket")
         );
         assert!(database.passkeys_of(alice).await.expect("listed").is_empty());
+    }
+
+    #[tokio::test]
+    async fn every_passkey_of_one_account_is_taken_away_and_no_other() {
+        let database = Database::open_in_memory().await.expect("database opens");
+        let alice = an_account(&database, "Alice").await;
+        let bob = an_account(&database, "Bob").await;
+        database.add_passkey(a_key(alice, b"one", "Phone")).await.expect("kept");
+        database.add_passkey(a_key(alice, b"two", "Laptop")).await.expect("kept");
+        database.add_passkey(a_key(bob, b"three", "Phone")).await.expect("kept");
+        assert_eq!(database.remove_passkeys_of(alice).await.expect("ran"), 2);
+        assert!(database.passkeys_of(alice).await.expect("listed").is_empty());
+        assert_eq!(database.passkeys_of(bob).await.expect("listed").len(), 1);
     }
 
     #[tokio::test]

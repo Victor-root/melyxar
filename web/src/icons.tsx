@@ -673,6 +673,18 @@ export function LockIcon(props: IconProps) {
   );
 }
 
+/** A passkey: a key, rather than the lock a password stands beside. */
+export function PasskeyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="8" cy="12" r="3.6" />
+      <path d="M11.6 12h8.6" />
+      <path d="M17.4 12v3" />
+      <path d="M20.2 12v2.2" />
+    </Icon>
+  );
+}
+
 /** Shown: what pressing it does, which is let the password be read. */
 export function EyeIcon(props: IconProps) {
   return (

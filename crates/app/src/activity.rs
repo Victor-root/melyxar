@@ -40,7 +40,13 @@ pub enum Event {
     /// typed, which may be nobody's.
     /// Where it came from is the address the server saw, or the one the
     /// proxy in front of it passed on.
-    SignInRefused { name: String, device: String, address: Option<String> },
+    SignInRefused {
+        name: String,
+        device: String,
+        address: Option<String>,
+        /// A passkey that did not pass, which names nobody.
+        by_passkey: bool,
+    },
     /// An address held back after too many tries without the right password,
     /// written when the hold begins. The name is the one its last try typed,
     /// which may be nobody's.
@@ -349,11 +355,16 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             Some(device),
             json!({ "user_name": user_name, "device_id": device_id.to_db_string(), "passkey": by_passkey }),
         ),
-        Event::SignInRefused { name, device, address } => line(
+        Event::SignInRefused {
+            name,
+            device,
+            address,
+            by_passkey,
+        } => line(
             SIGN_IN_REFUSED,
             None,
             Some(device),
-            json!({ "user_name": name, "address": address }),
+            json!({ "user_name": name, "address": address, "passkey": by_passkey }),
         ),
         Event::SignInHeldBack { name, device, address } => line(
             SIGN_IN_HELD_BACK,
@@ -886,6 +897,7 @@ mod tests {
                 name: "nobody".to_string(),
                 device: "a browser".to_string(),
                 address: Some("192.0.2.7".to_string()),
+                by_passkey: false,
             },
         )
         .await;

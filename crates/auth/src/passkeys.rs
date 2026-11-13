@@ -20,7 +20,7 @@ use std::time::Duration;
 
 pub use webauthn_rs::prelude::{
     AuthenticationResult, CreationChallengeResponse, CredentialID, DiscoverableAuthentication, Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse, Url, Webauthn, WebauthnError,
+    RequestChallengeResponse, Url, Uuid, Webauthn, WebauthnError,
 };
 use webauthn_rs::WebauthnBuilder;
 
@@ -73,6 +73,18 @@ pub fn checker_for(site: &Site, server_name: &str, applications: &[String]) -> R
         }
     }
     builder.build()
+}
+
+/// Asks the device for a key it can find again on its own: what lets the door
+/// offer the keys of this site before anybody is named. The library leaves
+/// it to each device, and some make a key that has to be named first, which
+/// would never be offered at the door.
+pub fn to_be_found(mut options: CreationChallengeResponse) -> CreationChallengeResponse {
+    if let Some(selection) = options.public_key.authenticator_selection.as_mut() {
+        selection.resident_key = Some(webauthn_rs_proto::ResidentKeyRequirement::Required);
+        selection.require_resident_key = true;
+    }
+    options
 }
 
 /// The origin Android gives an application signed with the certificate of
@@ -129,6 +141,18 @@ mod tests {
         assert_eq!(origin, "android:apk-key-hash:8ivXtGPY2JyhrDtsQdsLJarHe4YkyXDkUoEtMhlCqXE");
         assert_eq!(application_origin(&fingerprint.replace(':', "")), Some(origin));
         assert!(application_origin("not a fingerprint").is_none());
+    }
+
+    #[test]
+    fn a_key_is_asked_to_be_found_by_the_device() {
+        let site = Site::of_origin("https://melyxar.example.org").expect("a site");
+        let checker = checker_for(&site, "Melyxar", &[]).expect("a checker");
+        let (options, _) = checker
+            .start_passkey_registration(Uuid::new_v4(), "victor", "victor", None)
+            .expect("started");
+        let selection = to_be_found(options).public_key.authenticator_selection.expect("a selection");
+        assert_eq!(selection.resident_key, Some(webauthn_rs_proto::ResidentKeyRequirement::Required));
+        assert!(selection.require_resident_key);
     }
 
     #[test]

@@ -254,6 +254,7 @@ mod tests {
             name: "nobody".to_string(),
             device: "a browser".to_string(),
             address: None,
+            by_passkey: false,
         }
     }
 

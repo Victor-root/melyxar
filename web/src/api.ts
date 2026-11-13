@@ -28,6 +28,24 @@ export interface Account {
   face_picture: FacePicture;
 }
 
+/** One of the passkeys of the account signed in: never its key, only what
+ *  tells it apart. */
+export interface Passkey {
+  id: string;
+  name: string;
+  /** The site it was made under, the only one it opens. */
+  site: string;
+  created_at: string;
+  used_at: string | null;
+}
+
+/** A passkey ceremony begun: the options handed to the browser, as the
+ *  server writes them, and the word its answer comes back under. */
+export interface PasskeyChallenge {
+  ceremony: string;
+  options: { publicKey: Record<string, unknown> };
+}
+
 /** What an account may do and see, as the administration shows and sends
  *  it. An administrator holds every right whatever is sent. */
 export interface Rights {
@@ -1631,10 +1649,10 @@ export class ApiError extends Error {
  *
  * Everywhere else, being told that nobody is signed in means the session is
  * over and the interface has to say so and show the door again. At these
- * three it means what was typed is wrong, and throwing somebody back to a
+ * it means what was typed is wrong, and throwing somebody back to a
  * fresh door would lose what they typed and tell them nothing.
  */
-const THE_DOOR = ["/api/v1/session", "/api/v1/setup", "/api/v1/me/password"];
+const THE_DOOR = ["/api/v1/session", "/api/v1/setup", "/api/v1/me/password", "/api/v1/public/passkey/session"];
 
 /** Told when the server says nobody is signed in any more. */
 let noticeOfTheDoorClosing: (() => void) | null = null;
@@ -2768,6 +2786,23 @@ export const api = {
   /* Changing it signs every other device out and keeps this one going. */
   changePassword: (current: string, wanted: string) =>
     put<Account>("/api/v1/me/password", { current, wanted }),
+  /* The passkeys of the account signed in. Making one is two steps: the
+     password opens a challenge, and the device's answer to it is kept under
+     the name given. */
+  passkeys: (signal?: AbortSignal) => get<Passkey[]>("/api/v1/me/passkeys", signal),
+  startPasskey: (password: string) =>
+    post<PasskeyChallenge>("/api/v1/me/passkeys/making", { password }),
+  finishPasskey: (ceremony: string, name: string, credential: unknown) =>
+    post<Passkey>("/api/v1/me/passkeys", { ceremony, name, credential }),
+  renamePasskey: (id: string, name: string) =>
+    put<{ renamed: boolean }>(`/api/v1/me/passkeys/${encodeURIComponent(id)}`, { name }),
+  removePasskey: (id: string) =>
+    remove<{ removed: boolean }>(`/api/v1/me/passkeys/${encodeURIComponent(id)}`),
+  /* The door by a passkey: a challenge first, for whichever key the device
+     offers, then its answer, which opens a session as a password does. */
+  passkeyChallenge: () => post<PasskeyChallenge>("/api/v1/public/passkey/challenge"),
+  signInWithPasskey: (ceremony: string, credential: unknown, remember: boolean, client: string) =>
+    post<Account>("/api/v1/public/passkey/session", { ceremony, credential, remember, client }),
   /* Whether the account has a code for its televisions, which only ever
      opens a profile again where it already signed in with its password. */
   tvCode: (signal?: AbortSignal) => get<{ set: boolean }>("/api/v1/me/tv-code", signal),

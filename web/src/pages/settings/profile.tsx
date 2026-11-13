@@ -1,6 +1,6 @@
 /*
  * Who this account is: the picture it wears, its name, its password, its
- * code for televisions, whether the door offers its name, and the devices it
+ * passkeys, its code for televisions, whether the door offers its name, and the devices it
  * is signed in on.
  */
 
@@ -23,6 +23,7 @@ import type { Wording } from "../../readable";
 import { usePreferences } from "../../screens/settings";
 import { useSettings } from "../../settings";
 import { lookWhileSeen } from "../../polling";
+import { Passkeys } from "./passkeys";
 
 /** What the server answers a request carrying more than it takes. */
 const TOO_LARGE = 413;
@@ -38,6 +39,7 @@ export function MyProfile() {
   const { t } = useSettings();
   const preferences = usePreferences();
   const devices = useMyDevices();
+  const passkeys = useAsked((signal) => api.passkeys(signal));
 
   return (
     <>
@@ -45,7 +47,13 @@ export function MyProfile() {
       <ProfilePicture />
       <div className="panels">
         <Name />
-        <Password onChanged={devices.look} />
+        <Password
+          onChanged={() => {
+            devices.look();
+            passkeys.look();
+          }}
+        />
+        <Passkeys kept={passkeys} />
         <TvCode />
         {preferences.kept && (
           <Panel icon={EnterIcon} title={t("settings.door")} lead={t("settings.door_why")}>
