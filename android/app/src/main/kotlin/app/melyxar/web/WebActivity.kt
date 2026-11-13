@@ -80,6 +80,7 @@ class WebActivity : ComponentActivity() {
     private lateinit var outdated: ComposeView
     private lateinit var film: FilmPlayer
     private lateinit var pageWindow: PageWindow
+    private var passkeys: PasskeyBridge? = null
     private lateinit var barShades: BarShades
     private lateinit var music: Listening
     private val chrome = InterfaceChrome()
@@ -164,6 +165,7 @@ class WebActivity : ComponentActivity() {
         page.addJavascriptInterface(LiveActivity.Bridge(this, { server.origin }, page.settings.userAgentString), "MelyxarCamera")
         music = PhoneMusic.of(this)
         page.addJavascriptInterface(MusicBridge(this, page, music, ::askToShowTheMusic), "MelyxarMusic")
+        passkeys = PasskeyBridge.of(this, page)?.also { it.listenTo(server.origin) }
         holder.addView(film.picture, FrameLayout.LayoutParams(MATCH, MATCH))
         holder.addView(page, FrameLayout.LayoutParams(MATCH, MATCH))
         notice = ComposeView(this).apply {
@@ -263,6 +265,7 @@ class WebActivity : ComponentActivity() {
         setIntent(intent)
         server = KnownServer(origin = origin, name = intent.getStringExtra(NAME).orEmpty())
         music.stop()
+        passkeys?.listenTo(origin)
         page.loadUrl(origin)
     }
 

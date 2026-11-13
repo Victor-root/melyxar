@@ -161,6 +161,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.webkit)
+    // Passkeys through Android's own credential manager, on Android 14 and
+    // later. Its Google Play services half is left out on purpose.
+    implementation(libs.androidx.credentials)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
