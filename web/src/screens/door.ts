@@ -207,7 +207,12 @@ function whatTheServerSaid(error: unknown, about = "account"): Refusal {
  */
 function whatTheDeviceSaid(error: unknown): Refusal | null {
   if (error instanceof DeviceSaidNo) {
-    return error.why === "cancelled" ? null : { key: "door.refused.passkey_failed", values: {} };
+    if (error.why === "cancelled") {
+      return null;
+    }
+    return error.detail
+      ? { key: "door.refused.passkey_failed_said", values: { detail: error.detail } }
+      : { key: "door.refused.passkey_failed", values: {} };
   }
   return whatTheServerSaid(error, "passkey");
 }

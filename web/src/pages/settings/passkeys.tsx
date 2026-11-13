@@ -12,7 +12,6 @@ import { Panel } from "../../components/panel";
 import { deviceName } from "../../devices";
 import { PasskeyIcon } from "../../icons";
 import { DeviceSaidNo, makeAPasskey, passkeysHere } from "../../passkeys";
-import type { DeviceRefusal } from "../../passkeys";
 import { readableDate } from "../../readable";
 import type { Wording } from "../../readable";
 import { useSettings } from "../../settings";
@@ -60,14 +59,14 @@ function NewPasskey({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
   const { t } = useSettings();
   const [name, setName] = useState(() => deviceName(navigator.userAgent, t));
   const [password, setPassword] = useState("");
-  const [device, setDevice] = useState<DeviceRefusal | null>(null);
+  const [device, setDevice] = useState<DeviceSaidNo | null>(null);
   const told = useTold(async () => {
     setDevice(null);
     try {
       await makeAPasskey(password, name.trim());
     } catch (error) {
       if (error instanceof DeviceSaidNo) {
-        setDevice(error.why);
+        setDevice(error);
         return;
       }
       throw error;
@@ -101,10 +100,8 @@ function NewPasskey({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
         value={password}
         onChange={(event) => setPassword(event.target.value)}
       />
-      {device && device !== "cancelled" && (
-        <p className="panel-notice panel-notice-trouble">
-          {t(device === "already_here" ? "me.passkey_already_here" : "door.refused.passkey_failed")}
-        </p>
+      {device && device.why !== "cancelled" && (
+        <p className="panel-notice panel-notice-trouble">{deviceRefusal(device, t)}</p>
       )}
       {told.failure && <p className="panel-notice panel-notice-trouble">{passkeyRefusal(told.failure, t)}</p>}
       <div className="panel-foot">
@@ -253,4 +250,14 @@ function aboutPasskey(passkey: Passkey, language: string, t: Wording): string {
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
+}
+
+/** Why the device made no key, with its own words when it gave some. */
+function deviceRefusal(device: DeviceSaidNo, t: Wording): string {
+  if (device.why === "already_here") {
+    return t("me.passkey_already_here");
+  }
+  return device.detail
+    ? t("door.refused.passkey_failed_said", { detail: device.detail })
+    : t("door.refused.passkey_failed");
 }

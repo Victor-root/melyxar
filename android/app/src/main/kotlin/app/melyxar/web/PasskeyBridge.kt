@@ -77,8 +77,9 @@ class PasskeyBridge private constructor(private val activity: ComponentActivity,
     }
 
     private fun make(options: JSONObject, host: String, reply: JavaScriptReplyProxy, id: String) {
-        if (options.optJSONObject("rp")?.optString("id") != host) {
-            return refuse(reply, id, FAILED)
+        val site = options.optJSONObject("rp")?.optString("id")
+        if (site != host) {
+            return refuse(reply, id, FAILED, "site $site, server $host")
         }
         activity.lifecycleScope.launch {
             try {
@@ -91,9 +92,9 @@ class PasskeyBridge private constructor(private val activity: ComponentActivity,
             } catch (_: CreateCredentialCancellationException) {
                 refuse(reply, id, CANCELLED)
             } catch (error: CreatePublicKeyCredentialDomException) {
-                refuse(reply, id, if (error.domError is InvalidStateError) ALREADY_HERE else FAILED)
-            } catch (_: CreateCredentialException) {
-                refuse(reply, id, FAILED)
+                refuse(reply, id, if (error.domError is InvalidStateError) ALREADY_HERE else FAILED, said(error.type, error.errorMessage))
+            } catch (error: CreateCredentialException) {
+                refuse(reply, id, FAILED, said(error.type, error.errorMessage))
             }
         }
     }
@@ -114,8 +115,8 @@ class PasskeyBridge private constructor(private val activity: ComponentActivity,
                 }
             } catch (_: GetCredentialCancellationException) {
                 refuse(reply, id, CANCELLED)
-            } catch (_: GetCredentialException) {
-                refuse(reply, id, FAILED)
+            } catch (error: GetCredentialException) {
+                refuse(reply, id, FAILED, said(error.type, error.errorMessage))
             }
         }
     }
@@ -124,9 +125,15 @@ class PasskeyBridge private constructor(private val activity: ComponentActivity,
         reply.postMessage(JSONObject().put("id", id).put("credential", JSONObject(credential)).toString())
     }
 
-    private fun refuse(reply: JavaScriptReplyProxy, id: String, why: String) {
-        reply.postMessage(JSONObject().put("id", id).put("refused", why).toString())
+    /** Refuses, with what Android said when it said something: shown under
+     *  the refusal, it is what tells a site Android would not vouch for from
+     *  a device with no passkey keeper. */
+    private fun refuse(reply: JavaScriptReplyProxy, id: String, why: String, detail: String? = null) {
+        reply.postMessage(JSONObject().put("id", id).put("refused", why).put("detail", detail).toString())
     }
+
+    private fun said(type: String, message: CharSequence?) =
+        listOfNotNull(type.substringAfterLast('.'), message?.toString()).joinToString(": ")
 
     companion object {
         /** What the page finds the channel under. */

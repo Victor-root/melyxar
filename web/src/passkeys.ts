@@ -192,7 +192,11 @@ function answeredByTheBrowser(credential: PublicKeyCredential) {
 export type DeviceRefusal = "cancelled" | "already_here" | "failed";
 
 export class DeviceSaidNo extends Error {
-  constructor(readonly why: DeviceRefusal) {
+  constructor(
+    readonly why: DeviceRefusal,
+    /** What the device said, in its own words, when it said something. */
+    readonly detail: string | null = null,
+  ) {
     super(why);
   }
 }
@@ -206,7 +210,7 @@ function whyTheDevice(error: unknown): DeviceSaidNo {
       return new DeviceSaidNo("already_here");
     }
   }
-  return new DeviceSaidNo("failed");
+  return new DeviceSaidNo("failed", error instanceof Error ? `${error.name}: ${error.message}` : null);
 }
 
 /** Asks the application, which answers once under the word it was asked
@@ -215,7 +219,7 @@ function askTheApp(app: AppPasskeys, kind: "make" | "use", options: PasskeyChall
   const id = `${Date.now()}-${Math.random()}`;
   return new Promise<unknown>((done, fail) => {
     const heard = (event: MessageEvent<string>) => {
-      let said: { id?: string; credential?: unknown; refused?: DeviceRefusal };
+      let said: { id?: string; credential?: unknown; refused?: DeviceRefusal; detail?: string };
       try {
         said = JSON.parse(event.data);
       } catch {
@@ -228,7 +232,7 @@ function askTheApp(app: AppPasskeys, kind: "make" | "use", options: PasskeyChall
       if (said.credential) {
         done(said.credential);
       } else {
-        fail(new DeviceSaidNo(said.refused ?? "failed"));
+        fail(new DeviceSaidNo(said.refused ?? "failed", said.detail ?? null));
       }
     };
     app.addEventListener("message", heard);
