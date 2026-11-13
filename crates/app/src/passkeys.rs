@@ -20,9 +20,12 @@ use std::time::Instant;
 
 use melyxar_auth::SessionToken;
 use melyxar_auth::passkeys::{
-    AuthenticationResult, CEREMONY_LASTS, CreationChallengeResponse, DiscoverableAuthentication,
-    Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse, Site, Webauthn, checker_for,
+    AuthenticationResult, CEREMONY_LASTS, DiscoverableAuthentication, Passkey, PasskeyRegistration,
+    Site, Webauthn, checker_for,
+};
+pub use melyxar_auth::passkeys::{
+    CreationChallengeResponse, PublicKeyCredential, RegisterPublicKeyCredential,
+    RequestChallengeResponse,
 };
 use melyxar_core::id::{PasskeyId, UserId};
 use melyxar_core::time::{Timestamp, now};
@@ -66,12 +69,12 @@ pub enum Refused {
 impl Refused {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::NotASite => "passkeys_need_a_site",
-            Self::TooMany => "too_many_passkeys",
-            Self::NameNeeded => "passkey_name_needed",
-            Self::NameTooLong => "passkey_name_too_long",
-            Self::WrongPassword => "wrong_password",
-            Self::NotMade => "passkey_not_made",
+            Self::NotASite => "passkey.not_a_site",
+            Self::TooMany => "passkey.too_many",
+            Self::NameNeeded => "passkey.name_needed",
+            Self::NameTooLong => "passkey.name_too_long",
+            Self::WrongPassword => "passkey.wrong_password",
+            Self::NotMade => "passkey.not_made",
         }
     }
 }

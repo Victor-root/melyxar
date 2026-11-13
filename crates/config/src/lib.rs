@@ -217,6 +217,9 @@ impl Default for LoggingConfig {
     }
 }
 
+/// The package Melyxar's Android application is published under.
+pub const ANDROID_PACKAGE: &str = "app.melyxar.vroot";
+
 /// The fingerprint of the certificate Melyxar's own Android application is
 /// signed with: public, it is in every copy of the application.
 pub const OFFICIAL_APPLICATION: &str =

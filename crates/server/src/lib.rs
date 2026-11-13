@@ -32,6 +32,7 @@ pub mod interface;
 pub mod jobs;
 pub mod libraries;
 pub mod linking;
+pub mod passkeys;
 pub mod live;
 pub mod remote;
 pub mod maintenance;

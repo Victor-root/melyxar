@@ -100,10 +100,10 @@ pub fn router() -> Router<AppState> {
 /// and the mark of the server before anybody has signed in, which is what the
 /// branding address is for and why it says nothing else, and it offers the
 /// names on this server, which is the one deliberate disclosure here and is
-/// turned off from two places. Signing in cannot itself require being signed
-/// in, nor can a device waiting at the door to be let in from elsewhere, and
-/// a door says whether the server is closed for maintenance before anybody
-/// has. And a server nobody has set up yet has no account to sign in
+/// turned off from two places. Signing in, by a password or by a passkey,
+/// cannot itself require being signed in, nor can a device waiting at the
+/// door to be let in from elsewhere, and a door says whether the server is
+/// closed for maintenance before anybody has. And a server nobody has set up yet has no account to sign in
 /// as, so the one that makes the first account answers to whoever reaches a
 /// brand new server first, and shuts behind itself.
 ///
@@ -122,6 +122,7 @@ fn answers_to_anybody(path: &str) -> bool {
         || path.starts_with("/api/v1/public/logo/")
         || path.starts_with("/api/v1/public/app/")
         || path.starts_with("/api/v1/public/link")
+        || path.starts_with("/api/v1/public/passkey/")
         || matches!(
             path,
             "/api/v1/system/health"
@@ -382,12 +383,12 @@ struct WhoAndWhat {
     language: Option<String>,
 }
 
-fn kept_unless_said_otherwise() -> bool {
+pub(crate) fn kept_unless_said_otherwise() -> bool {
     true
 }
 
 /// What the person ticked, as the session layer says it.
-fn wished_for(remember: bool) -> Remembered {
+pub(crate) fn wished_for(remember: bool) -> Remembered {
     match remember {
         true => Remembered::Yes,
         false => Remembered::UntilTheBrowserCloses,
@@ -500,7 +501,7 @@ async fn sign_up(
 ///
 /// Told how long to wait, because somebody who has mistyped their own
 /// password ten times has to know to come back rather than to try harder.
-fn held_back(seconds: i64) -> ServerError {
+pub(crate) fn held_back(seconds: i64) -> ServerError {
     ServerError::with_details(
         axum::http::StatusCode::TOO_MANY_REQUESTS,
         melyxar_core::error::ErrorCode::TooManyAttempts,
@@ -923,6 +924,9 @@ mod tests {
             "/api/v1/public/app/manifest",
             "/api/v1/public/app/icon/e50000/0c0d10",
             "/api/v1/session",
+            "/api/v1/public/passkey/challenge",
+            "/api/v1/public/passkey/session",
+            "/.well-known/assetlinks.json",
             "/api/v1/setup",
         ] {
             assert!(answers_to_anybody(open), "{open} has to answer to anybody");
@@ -939,6 +943,8 @@ mod tests {
             "/api/v1/system/journal",
             "/api/v1/system/diagnostics",
             "/api/v1/preferences",
+            "/api/v1/me/passkeys",
+            "/api/v1/me/passkeys/making",
             "/api/v1/public",
             "/api/v1/public/accounts",
             "/api/v1/stream/a-session/playlist.m3u8",

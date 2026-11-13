@@ -251,6 +251,16 @@ impl From<melyxar_app::import::Trouble> for ServerError {
     }
 }
 
+impl From<melyxar_app::passkeys::Trouble> for ServerError {
+    fn from(trouble: melyxar_app::passkeys::Trouble) -> Self {
+        match trouble {
+            melyxar_app::passkeys::Trouble::Refused(refused) => Self::refused(refused.as_str()),
+            melyxar_app::passkeys::Trouble::HeldBack { seconds } => crate::account::held_back(seconds),
+            melyxar_app::passkeys::Trouble::Failed(error) => Self::from(error),
+        }
+    }
+}
+
 impl From<melyxar_app::accounts::Trouble> for ServerError {
     /// A refusal carries the word saying which thing to put right, and the
     /// rule it broke where there is one: the shortest a password may be and
