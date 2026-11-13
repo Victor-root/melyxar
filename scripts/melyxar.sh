@@ -288,8 +288,12 @@ en|step_npm_install|Installing web dependencies
 fr|step_npm_install|Installation des dépendances web
 en|step_npm_build|Building the web interface
 fr|step_npm_build|Compilation de l'interface web
-en|rust_present|Rust toolchain already present: %s
-fr|rust_present|Chaîne d'outils Rust déjà présente : %s
+en|step_rust_update|Updating the Rust toolchain
+fr|step_rust_update|Mise à jour de la chaîne d'outils Rust
+en|rust_update_failed|Could not update Rust. Keeping the installed version.
+fr|rust_update_failed|Impossible de mettre à jour Rust. La version installée est conservée.
+en|rust_ready|Rust toolchain: %s
+fr|rust_ready|Chaîne d'outils Rust : %s
 en|rust_long|The Rust toolchain download is several hundred megabytes and may take a few minutes. Progress appears below.
 fr|rust_long|Le téléchargement des outils Rust représente plusieurs centaines de mégaoctets et peut durer quelques minutes. La progression s’affiche ci-dessous.
 en|rust_unreachable|Could not reach rustup. Check the container’s network connection and try again.
@@ -1027,7 +1031,15 @@ install_packages() {
   # time.
   export PATH="/root/.cargo/bin:${PATH}"
   if command -v cargo >/dev/null 2>&1; then
-    success "$(tr_fmt rust_present "$(cargo --version)")"
+    # Kept on the latest stable, as Node is kept on the latest of its line:
+    # installed once and never touched again, it fell behind until the
+    # security check said so. Already the latest, this is one small download
+    # of the list of versions. Out of reach, the update goes on with the Rust
+    # it has.
+    if ! step "$(tr_msg step_rust_update)" rustup update stable --no-self-update; then
+      warn "$(tr_msg rust_update_failed)"
+    fi
+    success "$(tr_fmt rust_ready "$(cargo --version)")"
   else
     info "$(tr_msg rust_long)"
     step "$(tr_msg step_rust)" install_rust
@@ -1494,8 +1506,11 @@ build_and_install() {
     # then prints a refusal in the middle of the build and carries on at the
     # normal priority anyway. Trying it on something that does nothing tells us
     # which of the two messages to print, and leaves the build itself clean.
-    local priority=()
-    if nice -n -20 true 2>/dev/null; then
+    # Read by what it says rather than by how it ends: refused, it still runs
+    # what it was given and ends as that ends, so the refusal is only ever in
+    # what it prints.
+    local priority=() refused
+    if refused="$(nice -n -20 true 2>&1)" && [[ -z "$refused" ]]; then
       priority=(nice -n -20)
       info "$(tr_msg build_nice)"
     else
