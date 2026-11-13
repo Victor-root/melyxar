@@ -50,6 +50,7 @@ mod music_testing;
 pub mod numbering;
 pub mod openings;
 pub mod own;
+pub mod passkeys;
 pub mod people;
 pub mod playback;
 pub mod playlists;

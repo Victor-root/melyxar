@@ -68,6 +68,11 @@ define_id!(
     /// Identifies a person holding an account on this server.
     UserId
 );
+
+define_id!(
+    /// Identifies one passkey an account signs in with.
+    PasskeyId
+);
 define_id!(
     /// Identifies a library, which groups one or more root folders.
     LibraryId
