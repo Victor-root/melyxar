@@ -21,6 +21,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod passkeys;
 pub mod sealing;
 
 use argon2::password_hash::phc::PasswordHash;

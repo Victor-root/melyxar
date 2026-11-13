@@ -14,3 +14,5 @@ thiserror = { workspace = true }
 getrandom = { workspace = true }
 aws-lc-rs = { workspace = true }
 webauthn-rs = { workspace = true }
+base64 = "0.22"
+url = "2"
