@@ -12,7 +12,6 @@ kamadak-exif = { workspace = true }
 melyxar-core = { workspace = true }
 melyxar-tags = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

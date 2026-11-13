@@ -15,7 +15,7 @@ use melyxar_app::AppState;
 use serde::{Deserialize, Serialize};
 
 use crate::account::{ThisBrowser, Viewer};
-use crate::error::Result;
+use crate::error::{Result, ServerError};
 use crate::identifiers::parse_client;
 
 pub fn router() -> Router<AppState> {
@@ -111,13 +111,9 @@ async fn clip(
     RoutePath((codec, height)): RoutePath<(String, i32)>,
     request: Request<Body>,
 ) -> Response {
-    let served = async {
-        let path = melyxar_app::calibration::clip_file(&state, &who, &codec, height).await?;
-        crate::serve_the_file(&path, request).await
-    };
-    match served.await {
-        Ok(response) => response,
-        Err(error) => error.into_response(),
+    match melyxar_app::calibration::clip_file(&state, &who, &codec, height).await {
+        Ok(path) => crate::serve_the_file(&path, request).await,
+        Err(error) => ServerError::from(error).into_response(),
     }
 }
 

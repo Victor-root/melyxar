@@ -609,7 +609,7 @@ async fn sound(
 
     match sound {
         melyxar_app::music::listen::Sound::AsItIs(path) => {
-            crate::serve_the_file(&path, request).await
+            Ok(crate::serve_the_file(&path, request).await)
         }
         melyxar_app::music::listen::Sound::Converted { song, into } => Ok((
             [

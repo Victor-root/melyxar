@@ -93,7 +93,7 @@ async fn serve_trailer(
         .and_then(|trailer| trailer.local.as_ref())
         .ok_or_else(|| ServerError::not_found("no trailer of this work sits on the disk"))?;
 
-    crate::serve_the_file(&file.path, request).await
+    Ok(crate::serve_the_file(&file.path, request).await)
 }
 
 /// Hands over a photo as it is on the disk, for looking at it whole.
@@ -130,7 +130,7 @@ async fn serve_photo(
         .find(|version| version.missing_since.is_none())
         .ok_or_else(|| ServerError::not_found("the photo is not on the disk at the moment"))?;
     let path = melyxar_app::playback::file_of(state, who, file.source_id).await?;
-    crate::serve_the_file(&path, request).await
+    Ok(crate::serve_the_file(&path, request).await)
 }
 
 // ---------------------------------------------------------------------------

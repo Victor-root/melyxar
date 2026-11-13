@@ -102,20 +102,17 @@ pub(crate) fn tool_output(
 ///
 /// Ranges, conditional requests and the sending itself are all the file
 /// server's; what the routes add on top is only their own headers, so this is
-/// the one place that knows how to reach it and what a failure to reach it
-/// reads as.
+/// the one place that knows how to reach it. It never fails: a file gone or
+/// unreadable is answered by it with the status that says so.
 pub(crate) async fn serve_the_file(
     path: &std::path::Path,
     request: axum::http::Request<axum::body::Body>,
-) -> error::Result<axum::response::Response> {
+) -> axum::response::Response {
     use axum::response::IntoResponse;
     use tower::ServiceExt;
 
-    tower_http::services::ServeFile::new(path)
-        .oneshot(request)
-        .await
-        .map(IntoResponse::into_response)
-        .map_err(|error| ServerError::internal(error.to_string()))
+    let Ok(served) = tower_http::services::ServeFile::new(path).oneshot(request).await;
+    served.into_response()
 }
 
 /// Builds the application with the layers every response goes through.

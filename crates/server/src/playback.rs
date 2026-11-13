@@ -652,7 +652,7 @@ async fn download(
 ) -> Response {
     let answer = async {
         let path = melyxar_app::playback::file_to_download(&state, &who, parse_source(&id)?).await?;
-        let mut response = crate::serve_the_file(&path, request).await?;
+        let mut response = crate::serve_the_file(&path, request).await;
         if let Some(disposition) = kept_as(&path) {
             response.headers_mut().insert(header::CONTENT_DISPOSITION, disposition);
         }
@@ -694,7 +694,7 @@ async fn serve_file(
 ) -> Result<Response> {
     let source_id = parse_source(id)?;
     let path = melyxar_app::playback::file_of(state, who, source_id).await?;
-    crate::serve_the_file(&path, request).await
+    Ok(crate::serve_the_file(&path, request).await)
 }
 
 // ---------------------------------------------------------------------------
@@ -733,7 +733,7 @@ async fn serve_subtitle(
     let track_id = parse_track(track.strip_suffix(".vtt").unwrap_or(track))?;
 
     let path = melyxar_app::subtitles::as_web_vtt(state, who, source_id, track_id).await?;
-    let mut response = crate::serve_the_file(&path, request).await?;
+    let mut response = crate::serve_the_file(&path, request).await;
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/vtt; charset=utf-8"),
@@ -811,7 +811,7 @@ async fn serve_sheet(
         .map_err(|_| ServerError::not_found("that sheet of thumbnails"))?;
 
     let path = melyxar_app::thumbnails::sheet_of(state, who, source_id, number).await?;
-    let mut response = crate::serve_the_file(&path, request).await?;
+    let mut response = crate::serve_the_file(&path, request).await;
     response
         .headers_mut()
         .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/jpeg"));
@@ -1197,10 +1197,7 @@ async fn live_session(
 
 /// Hands over a file the session produced.
 async fn serve(path: std::path::PathBuf, request: Request<Body>, kind: &str) -> Response {
-    let mut response = match crate::serve_the_file(&path, request).await {
-        Ok(response) => response,
-        Err(error) => return error.into_response(),
-    };
+    let mut response = crate::serve_the_file(&path, request).await;
     if let Ok(value) = HeaderValue::from_str(kind) {
         response.headers_mut().insert(header::CONTENT_TYPE, value);
     }
