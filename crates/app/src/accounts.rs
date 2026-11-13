@@ -218,7 +218,7 @@ pub async fn set_sign_in_tries(state: &AppState, tries: i64) -> Result<i64> {
 ///
 /// An address already held back is told so without even the setting being
 /// read: while it is held back, it costs this server nothing.
-async fn turn_from(state: &AppState, from: Origin, at: Timestamp) -> Result<Turn> {
+pub(crate) async fn turn_from(state: &AppState, from: Origin, at: Timestamp) -> Result<Turn> {
     if let Some(left) = state.wrong_answers().held_back(from, at) {
         return Ok(Turn::HeldBack(left));
     }
@@ -227,13 +227,13 @@ async fn turn_from(state: &AppState, from: Origin, at: Timestamp) -> Result<Turn
 }
 
 /// A wait as somebody is told it: in whole seconds, and never none.
-fn seconds_of(left: time::Duration) -> i64 {
+pub(crate) fn seconds_of(left: time::Duration) -> i64 {
     left.whole_seconds().max(1)
 }
 
 /// Writes down that an address has just been held back, once for the whole
 /// hold rather than once for every try it then refuses.
-async fn held_back_from_now(state: &AppState, name: &str, device: &str, address: Option<IpAddr>) {
+pub(crate) async fn held_back_from_now(state: &AppState, name: &str, device: &str, address: Option<IpAddr>) {
     tracing::warn!(?address, "held back an address after too many wrong passwords");
     record(
         state,
@@ -360,8 +360,16 @@ pub async fn sign_in(
     };
     state.wrong_answers().forget(from);
 
-    let opened = open_a_session(state, user, device_name, remembered, client).await?;
+    let opened = open_a_session(state, user, device_name, remembered, client, WayIn::Password).await?;
     Ok(SignedInOrNot::Opened(Box::new(opened)))
+}
+
+/// How a session was opened, for its line in the journal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WayIn {
+    Password,
+    Passkey,
+    AnotherDevice,
 }
 
 /// Opens a session for this account on the device asking, writes its line
@@ -374,6 +382,7 @@ pub(crate) async fn open_a_session(
     device_name: &str,
     remembered: Remembered,
     client: Option<&str>,
+    by: WayIn,
 ) -> Result<OpenedSession> {
     // Every way in comes through here, a device let in from another as well
     // as a password, so this is where an account still waiting is kept out.
@@ -396,7 +405,7 @@ pub(crate) async fn open_a_session(
         .database()
         .keep_the_devices_used_last(user.id, MOST_DEVICES)
         .await?;
-    tracing::info!(account = %user.name, device = device_name, "signed in");
+    tracing::info!(account = %user.name, device = device_name, ?by, "signed in");
     record(
         state,
         Event::SignedIn {
@@ -404,6 +413,7 @@ pub(crate) async fn open_a_session(
             user_name: user.name.clone(),
             device: device_name.to_string(),
             device_id,
+            by_passkey: by == WayIn::Passkey,
         },
     )
     .await;
@@ -514,30 +524,11 @@ pub async fn change_password(
     client: Option<&str>,
     address: Option<IpAddr>,
 ) -> std::result::Result<PasswordChange, Trouble> {
-    let from = Origin::of(address);
-    let holds_back = match turn_from(state, from, now()).await? {
-        Turn::HeldBack(left) => return Ok(PasswordChange::HeldBack { seconds: seconds_of(left) }),
-        Turn::Checked { holds_back } => holds_back,
-    };
-
-    let stored = state
-        .database()
-        .user_by_name(&who.name)
-        .await?
-        .and_then(|(_, stored)| stored);
-    // An account with no password yet is one the wizard has not finished, and
-    // it is reached through the wizard rather than through here.
-    let right = match stored {
-        Some(stored) => state.passwords().matches(current, &stored).await,
-        None => false,
-    };
-    if !right {
-        if holds_back {
-            held_back_from_now(state, &who.name, device_name, address).await;
-        }
-        return Ok(PasswordChange::NotTheCurrentOne);
+    match password_confirmed(state, who, current, device_name, address).await? {
+        Confirmed::Yes => {}
+        Confirmed::No => return Ok(PasswordChange::NotTheCurrentOne),
+        Confirmed::HeldBack { seconds } => return Ok(PasswordChange::HeldBack { seconds }),
     }
-    state.wrong_answers().forget(from);
 
     // Hashed before anything is taken away, so a password the rule refuses
     // leaves the account exactly as it was rather than signed out of
@@ -568,6 +559,52 @@ pub async fn change_password(
         )
         .await?;
     Ok(PasswordChange::Changed(token))
+}
+
+/// What the current password given by an account already signed in came to.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Confirmed {
+    Yes,
+    No,
+    /// Too many wrong passwords from where this comes, by the same brake as
+    /// signing in: a session left open somewhere is not a way to guess the
+    /// password behind it at leisure.
+    HeldBack { seconds: i64 },
+}
+
+/// Checks the current password of an account already signed in, before
+/// something only its owner should do: changing it, or adding a passkey.
+pub(crate) async fn password_confirmed(
+    state: &AppState,
+    who: &User,
+    password: &str,
+    device_name: &str,
+    address: Option<IpAddr>,
+) -> Result<Confirmed> {
+    let from = Origin::of(address);
+    let holds_back = match turn_from(state, from, now()).await? {
+        Turn::HeldBack(left) => return Ok(Confirmed::HeldBack { seconds: seconds_of(left) }),
+        Turn::Checked { holds_back } => holds_back,
+    };
+    let stored = state
+        .database()
+        .user_by_name(&who.name)
+        .await?
+        .and_then(|(_, stored)| stored);
+    // An account with no password yet is one the wizard has not finished, and
+    // it is reached through the wizard rather than through here.
+    let right = match stored {
+        Some(stored) => state.passwords().matches(password, &stored).await,
+        None => false,
+    };
+    if !right {
+        if holds_back {
+            held_back_from_now(state, &who.name, device_name, address).await;
+        }
+        return Ok(Confirmed::No);
+    }
+    state.wrong_answers().forget(from);
+    Ok(Confirmed::Yes)
 }
 
 /// Whether an account has given itself a code for its televisions.
@@ -1468,7 +1505,7 @@ mod tests {
             .expect("asked");
         assert!(matches!(wrong, SignedInOrNot::NotAPair), "the wrong password says nothing of the wait");
         assert!(
-            open_a_session(&state, made.clone(), "a television", Remembered::Yes, None).await.is_err(),
+            open_a_session(&state, made.clone(), "a television", Remembered::Yes, None, WayIn::Password).await.is_err(),
             "no other way in opens it either"
         );
         assert!(state.database().signed_in_devices(Some(made.id)).await.expect("read").is_empty());

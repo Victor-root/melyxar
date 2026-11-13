@@ -33,6 +33,8 @@ pub enum Event {
         user_name: String,
         device: String,
         device_id: DeviceId,
+        /// Opened by a passkey rather than a password or another device.
+        by_passkey: bool,
     },
     /// A name and a password that were not a pair. The name is what was
     /// typed, which may be nobody's.
@@ -50,6 +52,10 @@ pub enum Event {
         browser: Option<String>,
     },
     PasswordChanged { user: UserId, user_name: String },
+    /// A passkey given to an account, or taken off it, under the name the
+    /// account gave it.
+    PasskeyAdded { user: UserId, user_name: String, name: String },
+    PasskeyRemoved { user: UserId, user_name: String, name: String },
     AccountCreated { user: UserId, user_name: String },
     AccountRemoved { user_name: String },
     /// Somebody made their own account at the door, from this address,
@@ -195,6 +201,8 @@ pub(crate) const SIGN_IN_REFUSED: &str = "sign_in_refused";
 pub(crate) const SIGN_IN_HELD_BACK: &str = "sign_in_held_back";
 const SIGNED_OUT: &str = "signed_out";
 const PASSWORD_CHANGED: &str = "password_changed";
+const PASSKEY_ADDED: &str = "passkey_added";
+const PASSKEY_REMOVED: &str = "passkey_removed";
 const ACCOUNT_CREATED: &str = "account_created";
 const ACCOUNT_REMOVED: &str = "account_removed";
 const SIGNED_UP: &str = "signed_up";
@@ -334,11 +342,12 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
             user_name,
             device,
             device_id,
+            by_passkey,
         } => line(
             SIGNED_IN,
             Some(user),
             Some(device),
-            json!({ "user_name": user_name, "device_id": device_id.to_db_string() }),
+            json!({ "user_name": user_name, "device_id": device_id.to_db_string(), "passkey": by_passkey }),
         ),
         Event::SignInRefused { name, device, address } => line(
             SIGN_IN_REFUSED,
@@ -365,6 +374,12 @@ async fn line_of(database: &Database, event: Event) -> Result<Line> {
         ),
         Event::PasswordChanged { user, user_name } => {
             line(PASSWORD_CHANGED, Some(user), None, json!({ "user_name": user_name }))
+        }
+        Event::PasskeyAdded { user, user_name, name } => {
+            line(PASSKEY_ADDED, Some(user), None, json!({ "user_name": user_name, "name": name }))
+        }
+        Event::PasskeyRemoved { user, user_name, name } => {
+            line(PASSKEY_REMOVED, Some(user), None, json!({ "user_name": user_name, "name": name }))
         }
         Event::AccountCreated { user, user_name } => {
             line(ACCOUNT_CREATED, Some(user), None, json!({ "user_name": user_name }))

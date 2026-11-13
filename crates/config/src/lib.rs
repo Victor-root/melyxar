@@ -217,6 +217,29 @@ impl Default for LoggingConfig {
     }
 }
 
+/// The fingerprint of the certificate Melyxar's own Android application is
+/// signed with: public, it is in every copy of the application.
+pub const OFFICIAL_APPLICATION: &str =
+    "F2:2B:D7:B4:63:D8:D8:9C:A1:AC:3B:6C:41:DB:0B:25:AA:C7:7B:86:24:C9:70:E4:52:81:2D:32:19:42:A9:71";
+
+/// The Android applications that may make and use this server's passkeys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PasskeysConfig {
+    /// The SHA-256 fingerprints of the certificates they are signed with. The
+    /// official application's to begin with; a copy built and signed by
+    /// somebody else adds its own.
+    pub applications: Vec<String>,
+}
+
+impl Default for PasskeysConfig {
+    fn default() -> Self {
+        Self {
+            applications: vec![OFFICIAL_APPLICATION.to_string()],
+        }
+    }
+}
+
 /// One root folder declared in the configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RootConfig {
@@ -266,11 +289,19 @@ pub struct Config {
     pub limits: LimitsConfig,
     #[serde(default)]
     pub logging: LoggingConfig,
+    /// Left out of a written file while it is the usual one, which is what
+    /// almost every server keeps.
+    #[serde(default, skip_serializing_if = "is_the_usual_passkeys")]
+    pub passkeys: PasskeysConfig,
     /// Left out entirely when empty, so that a starting file printed by the
     /// installer can have a library appended to it as it stands. An empty list
     /// written out would make the appended block a duplicate key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub libraries: Vec<LibraryConfig>,
+}
+
+fn is_the_usual_passkeys(passkeys: &PasskeysConfig) -> bool {
+    *passkeys == PasskeysConfig::default()
 }
 
 fn default_bind_address() -> IpAddr {
@@ -290,6 +321,7 @@ impl Default for Config {
             media_tools: MediaToolsConfig::default(),
             limits: LimitsConfig::default(),
             logging: LoggingConfig::default(),
+            passkeys: PasskeysConfig::default(),
             libraries: Vec::new(),
         }
     }

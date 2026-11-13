@@ -19,7 +19,7 @@ use melyxar_auth::{draw_link_code, fingerprint_of, SessionToken};
 use melyxar_core::id::UserId;
 use melyxar_core::user::User;
 
-use crate::accounts::{open_a_session, OpenedSession, Remembered};
+use crate::accounts::{open_a_session, OpenedSession, Remembered, WayIn};
 use crate::activity::{record, Event};
 use crate::{AppError, AppState, Result};
 
@@ -205,7 +205,15 @@ pub async fn standing(state: &AppState, secret: &str) -> Result<Standing> {
         return Ok(Standing::Gone);
     };
     let user_name = user.name.clone();
-    let opened = open_a_session(state, user, &taken.device_name, Remembered::Yes, taken.client.as_deref()).await?;
+    let opened = open_a_session(
+        state,
+        user,
+        &taken.device_name,
+        Remembered::Yes,
+        taken.client.as_deref(),
+        WayIn::AnotherDevice,
+    )
+    .await?;
     record(
         state,
         Event::DeviceLinked {

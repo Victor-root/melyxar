@@ -19,9 +19,8 @@
 use std::time::Duration;
 
 pub use webauthn_rs::prelude::{
-    AuthenticationResult, CreationChallengeResponse, CredentialID, DiscoverableAuthentication,
-    DiscoverableKey, Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
-    RequestChallengeResponse, Url, Uuid, Webauthn, WebauthnError,
+    AuthenticationResult, CreationChallengeResponse, CredentialID, DiscoverableAuthentication, Passkey, PasskeyRegistration, PublicKeyCredential, RegisterPublicKeyCredential,
+    RequestChallengeResponse, Url, Webauthn, WebauthnError,
 };
 use webauthn_rs::WebauthnBuilder;
 

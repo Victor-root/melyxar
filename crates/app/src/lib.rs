@@ -42,6 +42,7 @@ pub mod online_subtitles;
 pub mod openings;
 pub mod notifications;
 pub mod overview;
+pub mod passkeys;
 pub mod people;
 mod own;
 mod passwords;

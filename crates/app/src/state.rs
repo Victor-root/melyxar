@@ -51,6 +51,8 @@ struct Inner {
     /// the passwords: signing in to an account just made must not wipe out
     /// how many were made from there.
     sign_ups: crate::wrong_answers::WrongAnswers,
+    /// Passkey ceremonies waiting for the device's answer.
+    passkey_ceremonies: crate::passkeys::Ceremonies,
     /// Where passwords are hashed and checked, a few at a time.
     passwords: crate::passwords::Passwords,
     /// Profile pictures being made, a few at a time.
@@ -139,6 +141,7 @@ impl AppState {
                 intakes: crate::held_back::Intakes::default(),
                 wrong_answers: crate::wrong_answers::WrongAnswers::default(),
                 sign_ups: crate::wrong_answers::WrongAnswers::default(),
+                passkey_ceremonies: crate::passkeys::Ceremonies::default(),
                 passwords: crate::passwords::Passwords::default(),
                 avatar_making: crate::avatars::Making::default(),
                 access: crate::access::Current::default(),
@@ -228,6 +231,10 @@ impl AppState {
 
     pub(crate) fn sign_ups(&self) -> &crate::wrong_answers::WrongAnswers {
         &self.inner.sign_ups
+    }
+
+    pub(crate) fn passkey_ceremonies(&self) -> &crate::passkeys::Ceremonies {
+        &self.inner.passkey_ceremonies
     }
 
     pub(crate) fn passwords(&self) -> &crate::passwords::Passwords {
