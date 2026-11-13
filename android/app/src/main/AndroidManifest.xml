@@ -19,6 +19,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Reading the QR code a television shows at its door, on the phone. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Asked for by the fingerprint prompt the credential manager carries.
+         Passkeys are confirmed in Android's own sheet, never by this
+         application, so they are not kept. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Whether the device has something to listen with: since Android 11 an
