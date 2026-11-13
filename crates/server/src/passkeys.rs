@@ -235,10 +235,17 @@ async fn finish_signing_in(
 
 /// What lets Melyxar's Android application make and use the passkeys of
 /// this site: the fingerprints of the certificates it may be signed with.
+///
+/// Both relations Android's documentation declares for sharing sign-ins, the
+/// one for links included. That one opens no link in the application, which
+/// declares none to be verified.
 async fn asset_links(State(state): State<AppState>) -> Json<serde_json::Value> {
     let fingerprints = &state.config().passkeys.applications;
     Json(serde_json::json!([{
-        "relation": ["delegate_permission/common.get_login_creds"],
+        "relation": [
+            "delegate_permission/common.handle_all_urls",
+            "delegate_permission/common.get_login_creds"
+        ],
         "target": {
             "namespace": "android_app",
             "package_name": melyxar_config::ANDROID_PACKAGE,
