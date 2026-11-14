@@ -2125,7 +2125,7 @@ hand_over() {
 # Melyxar's group the folders whose group cannot write. What cannot be
 # settled is said, folder by folder, with the reason.
 settle_refusals() {
-  local refused="$1" folder gid mode gids=() shut=() explained=0
+  local refused="$1" folder gid mode gids=() shut=() explained=0 changed=0
   while IFS= read -r folder; do
     [[ -n "$folder" ]] || continue
     gid="$(stat -c '%g' "$folder")"
@@ -2150,8 +2150,7 @@ settle_refusals() {
         name="$(name_for_group "$gid")"
         step "$(tr_fmt step_writes_group "$name")" usermod -aG "$name" "$APP_USER"
       done
-      # The service takes its groups when it starts.
-      restart_service
+      changed=1
     fi
   fi
 
@@ -2168,7 +2167,9 @@ settle_refusals() {
         if is_system_folder "$folder"; then
           warn "$(tr_fmt writes_system_folder "$folder")"
           explained=1
-        elif ! step "$(tr_fmt step_writes_hand_over "$folder" "$own_group")" hand_over "$folder" "$own_group"; then
+        elif step "$(tr_fmt step_writes_hand_over "$folder" "$own_group")" hand_over "$folder" "$own_group"; then
+          changed=1
+        else
           warn "$(tr_fmt writes_hand_over_failed "$folder")"
           explained=1
         fi
@@ -2179,6 +2180,13 @@ settle_refusals() {
       done
       explained=1
     fi
+  fi
+
+  # The service takes its groups when it starts, and the server checks what
+  # each folder allows as it starts: without this, the library screen went
+  # on saying read-only after the folder had been opened.
+  if [[ "$changed" -eq 1 ]]; then
+    restart_service
   fi
 
   local still
@@ -2216,6 +2224,9 @@ action_writes() {
     refused="$(folders_refusing "$folders")"
     if [[ -n "$refused" ]]; then
       info "$(tr_fmt writes_half_open "$(grep -c . <<< "$refused" || true)")"
+      # Written again first, for a library declared since the last update,
+      # which the service would otherwise go on keeping read-only.
+      step "$(tr_msg step_writes)" write_media_writes
       settle_refusals "$refused"
       return 0
     fi
