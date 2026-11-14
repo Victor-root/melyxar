@@ -1,7 +1,7 @@
 /*
  * How the home page opens: its banner, which of its sections it shows and in
- * what order, and the order its libraries are laid out in. Both orders are
- * dragged into place.
+ * what order, which libraries this account browses at all, and the order
+ * they are laid out in. Both orders are dragged into place.
  *
  * The banner's two numbers apply as they are dragged, on every page, because
  * they are written onto the document rather than passed down. The share of the
@@ -38,6 +38,7 @@ export function MyHomePage() {
       <PageHead lead={t("me.home_lead")} />
       <Banner preferences={preferences} />
       <HomeSections preferences={preferences} />
+      <LibrariesShown preferences={preferences} />
       <LibraryOrder preferences={preferences} />
     </>
   );
@@ -204,6 +205,53 @@ function SectionMark({ section, libraries }: { section: HomeSection; libraries: 
         <CameraIcon size={18} />
       )}
     </span>
+  );
+}
+
+/**
+ * Which libraries this account browses. A library hidden leaves the bar, the
+ * home page and the searches, for this account alone; its rights on it stay,
+ * so an administrator still manages it and a link to one of its works still
+ * opens. Shown again, it comes back after the others.
+ */
+function LibrariesShown({ preferences }: { preferences: Preferences }) {
+  const { t } = useSettings();
+  const marks = useMarks();
+  const libraries = useLibraries();
+  const { kept, change } = preferences;
+
+  if (!kept || libraries.all.length < 2) {
+    return null;
+  }
+  const hidden = kept.hidden_libraries;
+  // The bar and the home page are built from the list of libraries, which
+  // says which are hidden: read again once the server holds the choice.
+  const show = (library: Library, shown: boolean) =>
+    change({
+      hidden_libraries: shown ? hidden.filter((one) => one !== library.id) : [...hidden, library.id],
+    }).then(() => {
+      libraries.refresh();
+      marks.rowsHaveMoved();
+    });
+
+  return (
+    <Panel icon={EyeIcon} title={t("settings.libraries_shown")} lead={t("settings.libraries_shown_why")}>
+      <div className="lines">
+        {libraries.all.map((library) => (
+          <div className={hidden.includes(library.id) ? "line order-line-off" : "line"} key={library.id}>
+            <span className="line-mark" aria-hidden="true">
+              <KindIcon kind={library.kind} size={18} />
+            </span>
+            <span className="order-name">{library.name}</span>
+            <Toggle
+              label={t("settings.library_shown", { name: library.name })}
+              checked={!hidden.includes(library.id)}
+              onChange={(shown) => show(library, shown)}
+            />
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }
 

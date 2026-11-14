@@ -101,11 +101,11 @@ function FrameRateChoice() {
 function OnAPhone() {
   const { t, phoneTheme, setPhoneTheme, startLibraryOnPhone, setStartLibraryOnPhone } =
     useSettings();
-  const { all } = useLibraries();
+  const { browsed } = useLibraries();
   const here = useMediaQuery(ON_A_PHONE);
   // A library gone or taken away reads as the home page, which is where the
   // phone would open.
-  const startsIn = all.some((library) => library.id === startLibraryOnPhone)
+  const startsIn = browsed.some((library) => library.id === startLibraryOnPhone)
     ? (startLibraryOnPhone ?? "")
     : "";
 
@@ -134,7 +134,7 @@ function OnAPhone() {
           onPick={(library) => setStartLibraryOnPhone(library || null)}
           options={[
             ["", t("settings.start_home")],
-            ...all.map((library) => [library.id, library.name] as const),
+            ...browsed.map((library) => [library.id, library.name] as const),
           ]}
         />
       </Setting>

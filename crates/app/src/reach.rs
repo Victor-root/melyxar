@@ -34,6 +34,34 @@ pub fn within(who: &User) -> Option<Vec<LibraryId>> {
     }
 }
 
+/// The libraries a viewer browses: the ones it may read, less the ones it
+/// chose not to see. What lists, counts and searches the server for one
+/// person is bounded by this; what reaches one work, a link or a film being
+/// played, is bounded by its rights alone, so a library hidden is never a
+/// library refused.
+///
+/// Nothing hidden is [`within`] itself, and an account that sees every
+/// library and hides none still skips the narrowing.
+pub async fn browsing(state: &AppState, who: &User) -> Result<Option<Vec<LibraryId>>> {
+    let hidden = &who.preferences.hidden_libraries;
+    if hidden.is_empty() {
+        return Ok(within(who));
+    }
+    let granted = match within(who) {
+        Some(granted) => granted,
+        None => state
+            .database()
+            .list_libraries()
+            .await?
+            .into_iter()
+            .map(|library| library.id)
+            .collect(),
+    };
+    Ok(Some(
+        granted.into_iter().filter(|id| !hidden.contains(id)).collect(),
+    ))
+}
+
 /// Refuses a library this account was not granted.
 pub fn may_read(who: &User, library: LibraryId) -> Result<()> {
     match who.permissions.may_access_library(library) {
@@ -108,7 +136,7 @@ pub async fn may_read_the_copy(
 ///
 /// One library asked for is that library, once this account is allowed it.
 /// Nothing asked for is the whole server for an ordinary account, and the
-/// libraries they were granted for anybody else, added up.
+/// libraries it browses for anybody else, added up.
 ///
 /// Adding up rather than counting again: each library is counted once per
 /// change and kept, so what happens here is the reading back of a handful of
@@ -125,7 +153,7 @@ pub async fn counted_for(
         return crate::counted::counted(state, Some(id)).await;
     }
 
-    let Some(granted) = within(who) else {
+    let Some(granted) = browsing(state, who).await? else {
         return crate::counted::counted(state, None).await;
     };
 
@@ -241,6 +269,46 @@ mod tests {
         });
         assert_eq!(within(&who), Some(Vec::new()));
         assert!(may_read(&who, LibraryId::new()).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_library_hidden_leaves_browsing_but_keeps_its_rights() {
+        let (_directory, state) = crate::speech::tests::a_server().await;
+        let made = |name: &'static str| {
+            let state = state.clone();
+            async move {
+                state
+                    .database()
+                    .create_library(
+                        name,
+                        melyxar_core::library::LibraryKind::Movies,
+                        "en",
+                        &[(name.to_string(), std::path::PathBuf::from(format!("/m/{name}")))],
+                    )
+                    .await
+                    .expect("library made")
+                    .id
+            }
+        };
+        let films = made("Films").await;
+        let theirs = made("Theirs").await;
+
+        let mut administrator = somebody(Permissions::administrator());
+        assert_eq!(browsing(&state, &administrator).await.expect("read"), None);
+
+        administrator.preferences.hidden_libraries = vec![theirs];
+        assert_eq!(browsing(&state, &administrator).await.expect("read"), Some(vec![films]));
+        assert_eq!(within(&administrator), None, "the rights are not narrowed");
+        assert!(may_read(&administrator, theirs).is_ok(), "a link into it still opens");
+
+        let mut granted = somebody(Permissions {
+            sees_every_library: false,
+            allowed_libraries: vec![films, theirs],
+            ..Permissions::viewer()
+        });
+        granted.preferences.hidden_libraries = vec![theirs];
+        assert_eq!(browsing(&state, &granted).await.expect("read"), Some(vec![films]));
+        assert_eq!(within(&granted), Some(vec![films, theirs]));
     }
 
     #[test]

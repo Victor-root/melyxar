@@ -115,6 +115,7 @@ export const FINDABLE: FindableSection[] = [
       ["settings.banner_whole", "settings.banner_whole_why"],
       ["settings.banner_at_random", "settings.banner_at_random_why"],
       ["settings.home_sections", "settings.home_sections_why"],
+      ["settings.libraries_shown", "settings.libraries_shown_why"],
       ["settings.library_order", "settings.library_order_why"],
     ],
     choices: {

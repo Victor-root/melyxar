@@ -87,6 +87,8 @@ struct PreferencesView {
     /// Every library this account sees, in the order the tiles of the home
     /// page lay them out, a library added since among them.
     home_order: Vec<String>,
+    /// The libraries this account chose not to see while browsing.
+    hidden_libraries: Vec<String>,
     /// Every section of the home page below its banner, the row of each
     /// library this account sees among them, in the order it lays them out,
     /// and those it leaves off.
@@ -179,6 +181,8 @@ struct PreferencesBody {
     hidden_at_the_door: Option<bool>,
     #[serde(default)]
     home_order: Option<Vec<String>>,
+    #[serde(default)]
+    hidden_libraries: Option<Vec<String>>,
     #[serde(default)]
     home_sections: Option<Vec<String>>,
     #[serde(default)]
@@ -331,11 +335,10 @@ async fn write(
         chosen.hidden_at_the_door = hidden;
     }
     if let Some(order) = body.home_order {
-        chosen.home_order = order
-            .iter()
-            .map(|library| library.parse().ok())
-            .collect::<Option<_>>()
-            .ok_or_else(|| ServerError::invalid_input("that is not a library"))?;
+        chosen.home_order = libraries_named(&order)?;
+    }
+    if let Some(hidden) = body.hidden_libraries {
+        chosen.hidden_libraries = libraries_named(&hidden)?;
     }
     if let Some(sections) = body.home_sections {
         chosen.home_sections = sections_named(&sections)?;
@@ -435,6 +438,15 @@ struct KindRulesView {
     rules: RulesView,
 }
 
+/// Libraries named by their identifiers, refused whole if one is not one.
+fn libraries_named(named: &[String]) -> Result<Vec<LibraryId>> {
+    named
+        .iter()
+        .map(|library| library.parse().ok())
+        .collect::<Option<_>>()
+        .ok_or_else(|| ServerError::invalid_input("that is not a library"))
+}
+
 /// Sections of the home page read from their names, all of them or none.
 fn sections_named(names: &[String]) -> Result<Vec<HomeSection>> {
     names
@@ -505,6 +517,7 @@ async fn view(
         backdrop_light: chosen.backdrop_light,
         hidden_at_the_door: chosen.hidden_at_the_door,
         home_order: home_order.iter().map(LibraryId::to_db_string).collect(),
+        hidden_libraries: chosen.hidden_libraries.iter().map(LibraryId::to_db_string).collect(),
         home_sections: home_sections.iter().map(|section| section.name()).collect(),
         hidden_home_sections: chosen
             .hidden_home_sections

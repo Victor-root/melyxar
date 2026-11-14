@@ -212,8 +212,8 @@ function BehindTheDoor() {
   // depend on moves: the libraries, the account's rights, its language.
   const administrator = useAccount().account?.is_administrator ?? false;
   useEffect(() => {
-    offerShortcuts(shortcutsFor(libraries.all, administrator, t));
-  }, [libraries.all, administrator, t]);
+    offerShortcuts(shortcutsFor(libraries.browsed, administrator, t));
+  }, [libraries.browsed, administrator, t]);
   // A brand new server takes its administrator through its first steps
   // before anything else, and nothing is drawn until it has said whether.
   const firstSteps = useFirstSteps(administrator);
@@ -260,13 +260,13 @@ function BehindTheDoor() {
         <MusicMarksProvider>
         <MusicProvider>
         <div className="shell">
-          <Header libraries={libraries.all} scrolling={scrolling} />
+          <Header libraries={libraries.browsed} scrolling={scrolling} />
           {/* The frame the page is seen through, which stays still while the
               page moves in it: what fades it at the foot is worn here. */}
           <div className="shell-view">
             <div className="shell-scroll" ref={scrolling}>
               <Routes>
-                <Route path="/" element={<Opening libraries={libraries.all} />} />
+                <Route path="/" element={<Opening libraries={libraries.browsed} />} />
                 {/* The door's own address, kept for a maintenance: once in,
                     it leads home. */}
                 <Route path="/door" element={<Navigate to="/" replace />} />
@@ -274,7 +274,7 @@ function BehindTheDoor() {
                 <Route path="/music/album/:id" element={<MusicAlbumPage />} />
                 <Route path="/music/playlist/:id" element={<MusicPlaylistPage />} />
                 <Route path="/music/artist/:id" element={<MusicArtistPage />} />
-                <Route path="/search" element={<SearchPage libraries={libraries.all} />} />
+                <Route path="/search" element={<SearchPage libraries={libraries.browsed} />} />
                 {/* The same grid, narrowed to what this account marked: a view of the
                     library rather than a library of its own. */}
                 <Route path="/favourites" element={<LibraryPage libraries={libraries.all} />} />

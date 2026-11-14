@@ -62,7 +62,7 @@ const WHAT_AN_ACCOUNT_IS: &str =
      p.header_hides_on_scroll_phone, p.theme_mode_phone, p.start_library_phone,
      p.header_buttons,
      p.buttons_in_the_bar, p.backdrop, p.backdrop_light,
-     p.hidden_at_the_door, p.home_order, p.home_sections, p.hidden_home_sections,
+     p.hidden_at_the_door, p.home_order, p.hidden_libraries, p.home_sections, p.hidden_home_sections,
      p.step_back_seconds, p.step_on_seconds, p.resume_rewind_seconds,
      p.resume_min_percent, p.resume_max_percent, p.resume_min_seconds,
      p.resume_rules_per_kind, p.resume_rules_by_kind, p.wide_gamut, p.library_views,
@@ -466,7 +466,7 @@ impl Database {
                 header_hides_on_scroll_phone = ?, theme_mode_phone = ?,
                 start_library_phone = ?, header_buttons = ?,
                 buttons_in_the_bar = ?, backdrop = ?, backdrop_light = ?,
-                hidden_at_the_door = ?, home_order = ?, home_sections = ?,
+                hidden_at_the_door = ?, home_order = ?, hidden_libraries = ?, home_sections = ?,
                 hidden_home_sections = ?, step_back_seconds = ?,
                 step_on_seconds = ?, resume_rewind_seconds = ?, resume_min_percent = ?,
                 resume_max_percent = ?, resume_min_seconds = ?, resume_rules_per_kind = ?,
@@ -498,6 +498,7 @@ impl Database {
         .bind(preferences.backdrop_light)
         .bind(preferences.hidden_at_the_door)
         .bind(written_order(&preferences.home_order))
+        .bind(written_order(&preferences.hidden_libraries))
         .bind(written_sections(&preferences.home_sections))
         .bind(written_sections(&preferences.hidden_home_sections))
         .bind(preferences.step_back_seconds)
@@ -832,6 +833,7 @@ pub(crate) fn build_user(row: &sqlx::sqlite::SqliteRow, allowed: &[(String,)]) -
             backdrop_light: row.try_get("backdrop_light")?,
             hidden_at_the_door: row.try_get("hidden_at_the_door")?,
             home_order: read_order(&row.try_get::<String, _>("home_order")?),
+            hidden_libraries: read_order(&row.try_get::<String, _>("hidden_libraries")?),
             home_sections: read_sections(&row.try_get::<String, _>("home_sections")?),
             hidden_home_sections: read_sections(
                 &row.try_get::<String, _>("hidden_home_sections")?,
@@ -1643,6 +1645,7 @@ mod tests {
             backdrop: Backdrop::None,
             backdrop_light: 7,
             home_order: vec![anime, films],
+            hidden_libraries: vec![films],
             step_back_seconds: 0,
             step_on_seconds: 30,
             wide_gamut: WideGamutChoice::NeverConvert,
@@ -1738,6 +1741,7 @@ mod tests {
             }
         );
         assert_eq!(loaded.preferences.home_order, vec![anime, films]);
+        assert_eq!(loaded.preferences.hidden_libraries, vec![films]);
         assert_eq!(
             loaded.preferences.downmix_method,
             DownmixMethod::NightDialogue

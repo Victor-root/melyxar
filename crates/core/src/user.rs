@@ -795,6 +795,10 @@ pub struct Preferences {
     /// once each. A library it does not name comes after the ones it does,
     /// as [`Preferences::libraries_in_order`] places it.
     pub home_order: Vec<LibraryId>,
+    /// The libraries this account chose not to see while it browses: left
+    /// out of its menus, its home page and its searches, while every right
+    /// it holds on them stays, a link to one of their works included.
+    pub hidden_libraries: Vec<LibraryId>,
     /// The sections of the home page in the order it lays them out, once
     /// each, shown or not. Always every fixed section; the row of a library
     /// it does not name is placed by [`Preferences::home_sections_shown`].
@@ -858,6 +862,7 @@ impl Default for Preferences {
             // list with holes in it is of no use to anybody.
             hidden_at_the_door: false,
             home_order: Vec::new(),
+            hidden_libraries: Vec::new(),
             home_sections: HomeSection::FIXED.to_vec(),
             hidden_home_sections: Vec::new(),
             step_back_seconds: DEFAULT_STEP_BACK,
@@ -928,6 +933,13 @@ impl Preferences {
             }
         }
         self.home_order = order;
+        let mut hidden: Vec<LibraryId> = Vec::new();
+        for library in self.hidden_libraries {
+            if !hidden.contains(&library) {
+                hidden.push(library);
+            }
+        }
+        self.hidden_libraries = hidden;
         // A section named twice keeps its first place, and a fixed one never
         // named goes after the others: a section added to the page must not
         // be missing from anybody's.

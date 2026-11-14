@@ -37,6 +37,10 @@ pub struct LibrarySummary {
     /// How many of its files were taken out of it and left on the disk, which
     /// the same screen offers to take back.
     pub set_aside: i64,
+    /// Whether this viewer chose not to see it while browsing. Still in the
+    /// list, which the administration manages libraries from: the screens
+    /// that browse leave it out.
+    pub hidden: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -248,9 +252,18 @@ pub async fn libraries(state: &AppState, who: &User) -> Result<Vec<LibrarySummar
             kind: library.kind,
             options: library.options,
             metadata_language: library.metadata_language,
+            hidden: who.preferences.hidden_libraries.contains(&library.id),
         });
     }
     Ok(summaries)
+}
+
+/// The libraries this viewer browses with these preferences, the ones they
+/// hide left out.
+async fn browsed(state: &AppState, who: &User, preferences: &Preferences) -> Result<Vec<LibrarySummary>> {
+    let mut seen = libraries(state, who).await?;
+    seen.retain(|library| !preferences.hidden_libraries.contains(&library.id));
+    Ok(seen)
 }
 
 /// What can be filtered on in one library.
@@ -300,8 +313,14 @@ async fn browse_holding_back(
     // account may read and who it is are the use case's to know, and a client
     // that could name either could read a library it was never given or wear
     // somebody else's marks.
+    // A library asked for by name is read whatever this account chose to
+    // hide: it went there. Every library at once is the ones it browses.
+    let within = match request.library_id {
+        Some(_) => crate::reach::within(who),
+        None => crate::reach::browsing(state, who).await?,
+    };
     let request = BrowseRequest {
-        within: crate::reach::within(who),
+        within,
         viewer: Some(who.id),
         held_back: held.clone(),
         ..request.clone()
@@ -343,7 +362,12 @@ pub async fn set_pinned(
 /// deciding how the page looks.
 pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -> Result<Home> {
     let database = state.database();
-    let within = crate::reach::within(who);
+    // A library's own page opens on it even when this account hides it, as
+    // its grid does: it went there.
+    let within = match library_id {
+        Some(_) => crate::reach::within(who),
+        None => crate::reach::browsing(state, who).await?,
+    };
     let granted = within.as_deref();
     let held = crate::held_back::now(state).await?;
 
@@ -374,7 +398,7 @@ pub async fn home(state: &AppState, library_id: Option<LibraryId>, who: &User) -
     // works to print two numbers is a home page nobody waits for.
     let counted = crate::reach::counted_for(state, who, library_id).await?;
 
-    let seen = libraries(state, who).await?;
+    let seen = browsed(state, who, &who.preferences).await?;
     let library_order = in_their_order(&seen, &who.preferences);
     // The banner of the whole server leaves out a library kept out of it; a
     // library's own page still opens on its own works.
@@ -651,7 +675,7 @@ pub async fn home_layout(
     who: &User,
     preferences: &Preferences,
 ) -> Result<(Vec<LibraryId>, Vec<HomeSection>)> {
-    let seen = libraries(state, who).await?;
+    let seen = browsed(state, who, preferences).await?;
     let order = in_their_order(&seen, preferences);
     let sections = preferences.home_sections_laid_out(&with_a_row(&seen, &order));
     Ok((order, sections))
@@ -1267,6 +1291,21 @@ mod tests {
         let page = home(&state, None, &viewer).await.expect("read");
         assert_eq!(libraries(&page), vec![anime, films]);
         assert_eq!(page.library_order, vec![anime, films]);
+
+        // Hidden, a library leaves the page, its tile and its row, and
+        // the search over every library, but stays in the list it is
+        // managed from and opens when asked for by name.
+        viewer.preferences.hidden_libraries = vec![films];
+        let page = home(&state, None, &viewer).await.expect("read");
+        assert_eq!(libraries(&page), vec![anime]);
+        assert_eq!(page.library_order, vec![anime]);
+        assert_eq!(page.recently_added.cards.len(), 0, "nothing of the films among the newest");
+        let listed = super::libraries(&state, &viewer).await.expect("read");
+        assert!(listed.iter().any(|library| library.id == films && library.hidden));
+        let their_own = browse(&state, &BrowseRequest { library_id: Some(films), ..Default::default() }, &viewer)
+            .await
+            .expect("read");
+        assert_eq!(their_own.cards.len(), 1);
     }
 
     #[tokio::test]

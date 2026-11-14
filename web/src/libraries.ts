@@ -22,7 +22,12 @@ import type { Wording } from "./readable";
 import { lookWhileSeen } from "./polling";
 
 export interface Libraries {
+  /** Every library this account may read, for the screens that manage
+   *  them and for a library opened by its address. */
   all: Library[];
+  /** The ones it browses: every one but those it chose to hide, for the
+   *  bar, the home page, the search and the shortcuts. */
+  browsed: Library[];
   /** Told to look again now, after declaring one or taking one away. */
   refresh: () => void;
 }
@@ -38,6 +43,7 @@ export const EPISODIC: LibraryKind[] = ["series", "anime", "shows"];
 
 export const LibrariesContext = createContext<Libraries>({
   all: [],
+  browsed: [],
   refresh: () => {},
 });
 
@@ -69,7 +75,8 @@ export function useWatchedLibraries(working: boolean, finished: number): Librari
   // left alone until something in it really moved.
   const said = JSON.stringify(asked.answer ?? []);
   const all = useMemo(() => JSON.parse(said) as Library[], [said]);
-  return useMemo(() => ({ all, refresh: asked.again }), [all, asked.again]);
+  const browsed = useMemo(() => all.filter((library) => !library.hidden), [all]);
+  return useMemo(() => ({ all, browsed, refresh: asked.again }), [all, browsed, asked.again]);
 }
 
 /** The libraries, for any page or part of the bar that shows them. */

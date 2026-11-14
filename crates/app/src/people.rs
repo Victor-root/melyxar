@@ -50,7 +50,7 @@ async fn person_page_asking(
     let Some(mut person) = database.person(id).await? else {
         return Ok(None);
     };
-    let within = crate::reach::within(who);
+    let within = crate::reach::browsing(state, who).await?;
     let held = crate::held_back::now(state).await?;
     let works = database
         .works_crediting(who.id, id, within.as_deref(), &held)

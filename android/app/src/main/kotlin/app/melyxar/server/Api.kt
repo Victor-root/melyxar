@@ -247,7 +247,10 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
 
     suspend fun home(): Home = get("/api/v1/home", Home.serializer())
 
-    suspend fun libraries(): List<Library> = get("/api/v1/libraries", ListSerializer(Library.serializer()))
+    /** The libraries this account browses: the ones it hid are left out, as
+     *  everything this application shows is browsing. */
+    suspend fun libraries(): List<Library> =
+        get("/api/v1/libraries", ListSerializer(Library.serializer())).filterNot { it.hidden }
 
     /** The cameras of a library of cameras, by name. */
     suspend fun cameras(library: String): List<Camera> =

@@ -339,7 +339,7 @@ async fn saga_and_its_kin(
     held: &HeldBack,
 ) -> Result<Option<SagaRow>> {
     let database = state.database();
-    let within = crate::reach::within(who);
+    let within = crate::reach::browsing(state, who).await?;
     let (name, mut cards) = match database
         .saga_of(who.id, work_id, within.as_deref(), held)
         .await?
@@ -599,7 +599,7 @@ pub async fn work_detail(
 
     let alike = match work.kind {
         melyxar_core::work::WorkKind::Movie | melyxar_core::work::WorkKind::Series => {
-            let within = crate::reach::within(who);
+            let within = crate::reach::browsing(state, who).await?;
             database
                 .alike_by_genre(viewer, work_id, within.as_deref(), &held, ROW_OF_ALIKE)
                 .await?

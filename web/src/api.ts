@@ -400,6 +400,9 @@ export interface Library {
   kind: LibraryKind;
   works: number;
   version: number;
+  /** Whether this account chose not to see it while browsing. The
+      administration still shows and manages it. */
+  hidden: boolean;
   /** Which heavy readings it wants: the subtitles made of words, the
       pictures of the playback bar, the opening and closing titles. */
   extract_subtitles: boolean;
@@ -2048,6 +2051,8 @@ export interface ViewerPreferences {
   /** Every library this account sees, in the order the tiles of the home
    *  page lay them out. */
   home_order: string[];
+  /** The libraries this account chose not to see while browsing. */
+  hidden_libraries: string[];
   /** Every section of the home page below its banner, the row of each
    *  library this account sees among them, in its order, and those it
    *  leaves off. */

@@ -188,8 +188,16 @@ data class Home(
     val libraryOrder: List<String> = emptyList(),
 )
 
+/** A library, and whether this account chose not to see it while browsing. */
 @Serializable
-data class Library(val id: String, val name: String, val kind: String, val works: Int = 0, val version: Long = 0)
+data class Library(
+    val id: String,
+    val name: String,
+    val kind: String,
+    val works: Int = 0,
+    val version: Long = 0,
+    val hidden: Boolean = false,
+)
 
 /** A camera of a library of cameras, as an account granted it sees it. */
 @Serializable

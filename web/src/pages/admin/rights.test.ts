@@ -26,6 +26,7 @@ function library(id: string, name: string): Library {
     metadata_language: "fr",
     roots: [],
     set_aside: 0,
+    hidden: false,
   };
 }
 

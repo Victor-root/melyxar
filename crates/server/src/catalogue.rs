@@ -180,6 +180,9 @@ struct LibraryView {
     roots: Vec<RootView>,
     /// How many of its files were taken out of it and left on the disk.
     set_aside: i64,
+    /// Whether this account chose not to see it while browsing: the screens
+    /// that browse leave it out, the administration does not.
+    hidden: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,6 +238,7 @@ async fn libraries(
                 watch_refusal,
                 metadata_language: library.metadata_language,
                 set_aside: library.set_aside,
+                hidden: library.hidden,
                 roots: library
                     .roots
                     .into_iter()

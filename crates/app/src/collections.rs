@@ -45,7 +45,7 @@ pub(crate) fn room_for_another(kept: usize) -> Result<()> {
 
 /// Every collection this account can see something of, by name.
 pub async fn every_one(state: &AppState, who: &User) -> Result<Vec<CollectionSummary>> {
-    let within = crate::reach::within(who);
+    let within = crate::reach::browsing(state, who).await?;
     let held = crate::held_back::now(state).await?;
     Ok(state
         .database()
@@ -60,7 +60,7 @@ pub async fn every_one(state: &AppState, who: &User) -> Result<Vec<CollectionSum
 
 /// One collection, with the works of it this account can reach.
 pub async fn one(state: &AppState, who: &User, id: CollectionId) -> Result<Option<CollectionHeld>> {
-    let within = crate::reach::within(who);
+    let within = crate::reach::browsing(state, who).await?;
     let held = crate::held_back::now(state).await?;
     Ok(state
         .database()
