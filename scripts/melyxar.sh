@@ -200,6 +200,18 @@ en|writes_unmapped|%s belongs to a group unavailable in this container. Configur
 fr|writes_unmapped|%s appartient à un groupe inaccessible depuis ce conteneur. Configurez l’accès sur l’hôte Proxmox.
 en|writes_group_shut|%s: group write access is denied (owner %s, group %s, permissions %s). No changes were made to this folder.
 fr|writes_group_shut|%s : le groupe ne dispose pas de l’accès en écriture (propriétaire %s, groupe %s, droits %s). Ce dossier n’a pas été modifié.
+en|writes_hand_over_offer|These folders do not let their group write. Melyxar can give them to its group (%s) and let that group write, including everything inside them and anything added later. Their owner and other users’ access stay the same.
+fr|writes_hand_over_offer|Ces dossiers n’accordent pas l’écriture à leur groupe. Melyxar peut les confier à son groupe (%s) et donner l’écriture à ce groupe, pour tout leur contenu et ce qui y sera ajouté plus tard. Leur propriétaire et l’accès des autres utilisateurs ne changent pas.
+en|writes_hand_over_warning|Warning: this changes the access rights of these folders and of every file in them. Melyxar will be able to modify and delete these files. If another program or container uses these folders through their current group, it may lose access.
+fr|writes_hand_over_warning|Attention : cela modifie les droits de ces dossiers et de tous les fichiers qu’ils contiennent. Melyxar pourra modifier et supprimer ces fichiers. Si un autre programme ou un autre conteneur utilise ces dossiers par leur groupe actuel, il risque de perdre son accès.
+en|prompt_writes_hand_over|Give these folders to Melyxar’s group?
+fr|prompt_writes_hand_over|Confier ces dossiers au groupe de Melyxar ?
+en|step_writes_hand_over|Giving %s to group %s
+fr|step_writes_hand_over|Attribution de %s au groupe %s
+en|writes_hand_over_failed|%s could not be fully given to Melyxar’s group. Some files inside may belong to an account this container cannot see.
+fr|writes_hand_over_failed|%s n’a pas pu être entièrement confié au groupe de Melyxar. Certains fichiers peuvent appartenir à un compte que ce conteneur ne voit pas.
+en|writes_system_folder|%s is a system folder. Melyxar never changes its access rights.
+fr|writes_system_folder|%s est un dossier du système. Melyxar ne modifie jamais ses droits.
 en|writes_partly|Write access enabled for %s of %s folders that denied it.
 fr|writes_partly|Accès en écriture activé pour %s des %s dossiers qui le refusaient.
 en|writes_still_refused|%s still denies write access to Melyxar.
@@ -2087,12 +2099,33 @@ name_for_group() {
   printf '%s' "$name"
 }
 
-# Makes every refusing folder writable for Melyxar where that needs nothing
-# but joining a group that already has the right: no owner, no permission of
-# any folder is ever changed. What cannot be settled that way is said, folder
-# by folder, with the reason.
+# Whether a folder is one of the system's own, or one of those that hold the
+# system's, which nothing a library declares can make this script change.
+is_system_folder() {
+  case "$(realpath -m "$1")" in
+    / | /bin | /boot | /dev | /etc | /home | /lib* | /media | /mnt | /opt | /proc | /root | /run | /sbin | /srv | /sys | /tmp | /usr | /var) return 0 ;;
+    /bin/* | /boot/* | /dev/* | /etc/* | /lib*/* | /proc/* | /root/* | /run/* | /sbin/* | /sys/* | /usr/* | /var/lib/* | /var/cache/* | /var/log/* | /opt/melyxar*) return 0 ;;
+  esac
+  return 1
+}
+
+# Gives a folder, everything in it included, to the melyxar account's group
+# with the right to write, and makes every folder in it hand that group on
+# to what is added later. The owner and everybody else's rights are left as
+# they are, and links are not followed out of it.
+hand_over() {
+  local folder="$1" group="$2"
+  chgrp -R -P -h "$group" "$folder" &&
+    chmod -R g+w "$folder" &&
+    find "$folder" -type d -exec chmod g+s {} +
+}
+
+# Makes every refusing folder writable for Melyxar: by joining a group that
+# already has the right, which changes no folder, and, once asked, by giving
+# Melyxar's group the folders whose group cannot write. What cannot be
+# settled is said, folder by folder, with the reason.
 settle_refusals() {
-  local refused="$1" folder gid mode gids=() explained=0
+  local refused="$1" folder gid mode gids=() shut=() explained=0
   while IFS= read -r folder; do
     [[ -n "$folder" ]] || continue
     gid="$(stat -c '%g' "$folder")"
@@ -2105,8 +2138,7 @@ settle_refusals() {
     elif (( (8#$mode & 8#020) != 0 )) && ! id -G "$APP_USER" | tr ' ' '\n' | grep -qx "$gid"; then
       [[ " ${gids[*]} " == *" $gid "* ]] || gids+=("$gid")
     else
-      warn "$(tr_fmt writes_group_shut "$folder" "$(stat -c '%U' "$folder")" "$(stat -c '%G' "$folder")" "$(stat -c '%A' "$folder")")"
-      explained=1
+      shut+=("$folder")
     fi
   done <<< "$refused"
 
@@ -2120,6 +2152,32 @@ settle_refusals() {
       done
       # The service takes its groups when it starts.
       restart_service
+    fi
+  fi
+
+  if [[ "${#shut[@]}" -gt 0 ]]; then
+    local own_group
+    own_group="$(id -gn "$APP_USER")"
+    info "$(tr_fmt writes_hand_over_offer "$own_group")"
+    for folder in "${shut[@]}"; do
+      info "  $folder"
+    done
+    warn "$(tr_msg writes_hand_over_warning)"
+    if confirm_default_yes "$(tr_msg prompt_writes_hand_over)"; then
+      for folder in "${shut[@]}"; do
+        if is_system_folder "$folder"; then
+          warn "$(tr_fmt writes_system_folder "$folder")"
+          explained=1
+        elif ! step "$(tr_fmt step_writes_hand_over "$folder" "$own_group")" hand_over "$folder" "$own_group"; then
+          warn "$(tr_fmt writes_hand_over_failed "$folder")"
+          explained=1
+        fi
+      done
+    else
+      for folder in "${shut[@]}"; do
+        warn "$(tr_fmt writes_group_shut "$folder" "$(stat -c '%U' "$folder")" "$(stat -c '%G' "$folder")" "$(stat -c '%A' "$folder")")"
+      done
+      explained=1
     fi
   fi
 
