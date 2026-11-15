@@ -214,6 +214,13 @@ melyxar-picture.player-video {
   object-fit: fill;
 }
 
+/* Just after the screen is filled or left: a hair short of opaque, so the
+   browser draws the picture with the page at its new size rather than
+   handing it to the graphics chip at its old one (see fullscreen.ts). */
+.player-stage[data-settling] video {
+  opacity: 0.999;
+}
+
 /* The picture turned, for a video filmed with the telephone the wrong way
    round. A quarter turn swaps its two sides, so the element is laid out the
    other way round first and then turned back into the stage, measured on the
