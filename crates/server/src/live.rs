@@ -1,9 +1,9 @@
 //! The live line of every page: what changes in the account's
 //! notifications, told the moment it changes; that the title requests, what
-//! the libraries hold or how the page looks moved; where maintenance stands
-//! as it moves; and for an administrator, what is written in the
-//! activity journal and what is being watched, sent again the moment it
-//! changes when the page shows it. The orders another device of the account
+//! the libraries hold, how the page looks or what the account made of its
+//! works moved; where maintenance stands as it moves; and for an
+//! administrator, what is written in the activity journal and what is being
+//! watched, sent again the moment it changes when the page shows it. The orders another device of the account
 //! gives this one travel on it too, and, for a page that steers the others,
 //! which of them can be reached and what plays there.
 //!
@@ -77,6 +77,9 @@ struct Following {
     requests: watch::Receiver<u64>,
     libraries: watch::Receiver<u64>,
     looks: broadcast::Receiver<Moved>,
+    /// Which account's marks moved: watched, liked, put aside, or where it
+    /// got to once a player left a film.
+    marks: broadcast::Receiver<melyxar_core::id::UserId>,
     maintenance: watch::Receiver<melyxar_app::maintenance::Kept>,
     /// Absent for anybody not an administrator, and from the moment an
     /// administrator stops being one.
@@ -182,6 +185,7 @@ async fn line(
         requests: melyxar_app::requests::live::follow(&state),
         libraries: state.database().library_moves(),
         looks: melyxar_app::looks::follow(&state),
+        marks: melyxar_app::marks::follow(&state),
         maintenance: melyxar_app::maintenance::follow(&state),
         administration,
         remote: melyxar_app::remote::line(&state, &watcher),
@@ -213,6 +217,9 @@ enum Word {
     /// How the page looks moved: the account's own choices, or the server's
     /// name, logo or theme. The page reads again what it wears.
     Looks(&'static str),
+    /// What this account made of its works moved, here or on another of
+    /// its devices: the page reads again what it shows of them.
+    Marks,
     /// The page fell behind and some changes were lost: it reads its
     /// notifications again.
     Missed,
@@ -271,6 +278,13 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
                     moved.ok()?;
                     Word::Maintenance
                 }
+                moved = following.marks.recv() => match moved {
+                    Ok(user) if user == following.who => Word::Marks,
+                    Ok(_) => continue,
+                    // Fallen behind, the page reads its marks again anyway.
+                    Err(broadcast::error::RecvError::Lagged(_)) => Word::Marks,
+                    Err(broadcast::error::RecvError::Closed) => return None,
+                },
                 moved = following.looks.recv() => match moved {
                     Ok(Moved::Account(user)) if user == following.who => Word::Looks("account"),
                     Ok(Moved::Account(_)) => continue,
@@ -310,6 +324,7 @@ async fn next_word(following: &mut Following) -> Option<Result<Event, axum::Erro
             Word::Requests => Ok(Event::default().event("requests").data("moved")),
             Word::Libraries => Ok(Event::default().event("libraries").data("moved")),
             Word::Looks(what) => Ok(Event::default().event("looks").data(what)),
+            Word::Marks => Ok(Event::default().event("marks").data("moved")),
             Word::Maintenance => Event::default()
                 .event("maintenance")
                 .json_data(melyxar_app::maintenance::seen(&following.state)),

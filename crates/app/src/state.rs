@@ -79,6 +79,8 @@ struct Inner {
     requests: crate::requests::live::Moved,
     /// Where every page is told how it looks moved.
     looks: crate::looks::Outbox,
+    /// Where every page of an account is told its marks moved.
+    mark_moves: crate::marks::Moves,
     /// Maintenance as it stands, which the gate asks about for every request.
     maintenance: crate::maintenance::Held,
     /// The devices waiting at the door to be let in from elsewhere.
@@ -154,6 +156,7 @@ impl AppState {
                 notifications: crate::notifications::live::Outbox::default(),
                 requests: crate::requests::live::Moved::default(),
                 looks: crate::looks::Outbox::default(),
+                mark_moves: crate::marks::Moves::default(),
                 maintenance: crate::maintenance::Held::default(),
                 links: crate::linking::Links::default(),
             }),
@@ -186,6 +189,10 @@ impl AppState {
 
     pub(crate) fn looks(&self) -> &crate::looks::Outbox {
         &self.inner.looks
+    }
+
+    pub(crate) fn mark_moves(&self) -> &crate::marks::Moves {
+        &self.inner.mark_moves
     }
 
     pub(crate) fn links(&self) -> &crate::linking::Links {

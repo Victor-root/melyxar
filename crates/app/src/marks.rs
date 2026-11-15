@@ -5,12 +5,43 @@
 //! play, live here, so the routes that set a mark and the player reporting
 //! where it is answer to the same ones.
 
-use melyxar_core::id::WorkId;
+use std::sync::Arc;
+
+use melyxar_core::id::{UserId, WorkId};
 use melyxar_core::library::LibraryOptions;
 use melyxar_core::time::{Millis, Timestamp};
 use melyxar_core::work::{progress_after, PlaybackState};
 
 use crate::{AppError, AppState, Result};
+
+/// How many words a page's line may fall behind before it is told it missed
+/// some.
+const KEPT: usize = 64;
+
+/// Where the word goes out that what an account made of its works moved:
+/// watched, liked, put aside for later, or where it got to once a player
+/// left a film. Only that something moved, and for whom: each page of that
+/// account reads again what it shows, so another device's doing appears
+/// without anybody reloading.
+#[derive(Clone)]
+pub struct Moves(Arc<tokio::sync::broadcast::Sender<UserId>>);
+
+impl Default for Moves {
+    fn default() -> Self {
+        Self(Arc::new(tokio::sync::broadcast::channel(KEPT).0))
+    }
+}
+
+/// Says this account's marks moved.
+pub(crate) fn moved(state: &AppState, user: UserId) {
+    // Nobody listening is nobody to tell.
+    let _ = state.mark_moves().0.send(user);
+}
+
+/// Told every time an account's marks move, for a page's live line.
+pub fn follow(state: &AppState) -> tokio::sync::broadcast::Receiver<UserId> {
+    state.mark_moves().0.subscribe()
+}
 
 /// Marks a film as one this viewer likes, or takes the mark off.
 ///
@@ -28,10 +59,9 @@ pub async fn set_favourite(
     favourite: bool,
 ) -> Result<bool> {
     crate::reach::may_read_the_work(state, who, work_id).await?;
-    Ok(state
-        .database()
-        .set_favourite(who.id, work_id, favourite)
-        .await?)
+    let now = state.database().set_favourite(who.id, work_id, favourite).await?;
+    moved(state, who.id);
+    Ok(now)
 }
 
 /// Puts a work on this viewer's list of what to watch later, or takes it off.
@@ -42,10 +72,9 @@ pub async fn set_watch_later(
     later: bool,
 ) -> Result<bool> {
     crate::reach::may_read_the_work(state, who, work_id).await?;
-    Ok(state
-        .database()
-        .set_watch_later(who.id, work_id, later)
-        .await?)
+    let now = state.database().set_watch_later(who.id, work_id, later).await?;
+    moved(state, who.id);
+    Ok(now)
 }
 
 /// Marks a work watched by hand, or puts it back to unwatched.
@@ -83,6 +112,7 @@ pub async fn mark_watched(
     if watched {
         database.set_watch_later(who.id, work_id, false).await?;
     }
+    moved(state, who.id);
     Ok(watched)
 }
 

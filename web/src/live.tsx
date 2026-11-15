@@ -65,6 +65,8 @@ interface Line {
   /** Told every time what a library holds changes, and whenever the line
    *  opens. Answers how to stop being told. */
   followLibraries: (listener: () => void) => () => void;
+  /** What this account made of its works moved. */
+  followMarks: (listener: () => void) => () => void;
   /** Told every order another device of the account gives this one, for as
    *  long as it follows. */
   followOrders: (listener: (order: RemoteOrder) => void) => () => void;
@@ -83,6 +85,7 @@ const LineContext = createContext<Line>({
   followNotifications: () => () => {},
   followRequests: () => () => {},
   followLibraries: () => () => {},
+  followMarks: () => () => {},
   followOrders: () => () => {},
   followDevices: () => () => {},
   keepWhileHidden: () => () => {},
@@ -97,6 +100,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
   const notificationListeners = useRef(new Set<(word: NotificationWord) => void>());
   const requestListeners = useRef(new Set<() => void>());
   const libraryListeners = useRef(new Set<() => void>());
+  const markListeners = useRef(new Set<() => void>());
   const orderListeners = useRef(new Set<(order: RemoteOrder) => void>());
   const deviceListeners = useRef(new Set<(news: DevicesNews) => void>());
   /* The devices as last told, handed at once to whatever starts following
@@ -135,6 +139,9 @@ export function LiveLine({ children }: { children: ReactNode }) {
     const toLibraries = () => {
       for (const listener of libraryListeners.current) listener();
     };
+    const toMarks = () => {
+      for (const listener of markListeners.current) listener();
+    };
     const toOrders = (order: RemoteOrder) => {
       for (const listener of orderListeners.current) listener(order);
     };
@@ -147,6 +154,8 @@ export function LiveLine({ children }: { children: ReactNode }) {
       line.addEventListener("open", () => {
         toNotifications({ name: "open" });
         toRequests();
+        // Read again with the libraries, which every row already follows:
+        // what moved while the page was hidden is in it.
         toLibraries();
         askAboutMaintenance();
         if (administrator) toJournal();
@@ -165,6 +174,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
         }
       });
       line.addEventListener("libraries", toLibraries);
+      line.addEventListener("marks", toMarks);
       line.addEventListener("activity", toJournal);
       line.addEventListener("maintenance", (event) =>
         maintenanceHeard(JSON.parse((event as MessageEvent<string>).data) as Maintenance),
@@ -243,6 +253,13 @@ export function LiveLine({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const followMarks = useCallback((listener: () => void) => {
+    markListeners.current.add(listener);
+    return () => {
+      markListeners.current.delete(listener);
+    };
+  }, []);
+
   const followOrders = useCallback((listener: (order: RemoteOrder) => void) => {
     orderListeners.current.add(listener);
     return () => {
@@ -277,6 +294,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
       followNotifications,
       followRequests,
       followLibraries,
+      followMarks,
       followOrders,
       followDevices,
       keepWhileHidden,
@@ -287,6 +305,7 @@ export function LiveLine({ children }: { children: ReactNode }) {
       followNotifications,
       followRequests,
       followLibraries,
+      followMarks,
       followOrders,
       followDevices,
       keepWhileHidden,
@@ -321,6 +340,16 @@ export function useLibrariesNews(look: () => void) {
   const latest = useRef(look);
   latest.current = look;
   useEffect(() => followLibraries(() => latest.current()), [followLibraries]);
+}
+
+/** Calls `look` every time what this account made of its works moves, here
+ *  or on another of its devices. What moved while the page was hidden is read
+ *  with the libraries, when the line opens again. */
+export function useMarksNews(look: () => void) {
+  const { followMarks } = useContext(LineContext);
+  const latest = useRef(look);
+  latest.current = look;
+  useEffect(() => followMarks(() => latest.current()), [followMarks]);
 }
 
 /** Follows what is being watched for as long as the caller is on the page. */

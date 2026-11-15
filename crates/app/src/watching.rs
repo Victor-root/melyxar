@@ -726,11 +726,14 @@ async fn playable_by(
     Ok(Some(found.kind == WorkKind::Song))
 }
 
-/// A player said it is leaving this film.
-pub fn gone(state: &AppState, device: DeviceId, work: WorkId) {
-    if let Some(ended) = state.watching().gone(device, work, Instant::now()) {
+/// A player said it is leaving this film. Where it got to was written
+/// with its last word, so the account's other pages are told its marks
+/// moved: the film to carry on stands where it was left.
+pub fn gone(state: &AppState, viewer: &Viewer, work: WorkId) {
+    if let Some(ended) = state.watching().gone(viewer.device, work, Instant::now()) {
         write_down(state, ended);
     }
+    crate::marks::moved(state, viewer.user);
 }
 
 /// A player opened its live line for this film. Absent when its device is
@@ -1040,6 +1043,16 @@ mod tests {
             device_name: "a browser".to_string(),
             browser: None,
         }
+    }
+
+    #[tokio::test]
+    async fn a_player_leaving_tells_the_accounts_pages_and_no_other() {
+        let (_directory, state) = crate::speech::tests::a_server().await;
+        let mut heard = crate::marks::follow(&state);
+        let watching = viewer(DeviceId::new());
+        gone(&state, &watching, WorkId::new());
+        assert_eq!(heard.try_recv().ok(), Some(watching.user));
+        assert!(heard.try_recv().is_err(), "said once");
     }
 
     fn plan_for(work: WorkId, resume_from: Option<Millis>) -> Arc<PlayPlan> {

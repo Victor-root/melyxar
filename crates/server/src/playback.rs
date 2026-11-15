@@ -1333,7 +1333,7 @@ async fn heard_from(
     said: PlayerWord,
 ) -> Result<bool> {
     if said.leaving {
-        melyxar_app::watching::gone(state, watcher.device, work);
+        melyxar_app::watching::gone(state, &watcher, work);
         return Ok(false);
     }
     Ok(melyxar_app::watching::heard(
