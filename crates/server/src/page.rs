@@ -39,6 +39,42 @@ pub fn router() -> Router<AppState> {
     )
 }
 
+/// One moment of the picture around a change to or from the whole screen.
+#[derive(Debug, Deserialize)]
+struct ShapeAt {
+    at_ms: u32,
+    across: u32,
+    down: u32,
+    drawn_across: u32,
+    drawn_down: u32,
+    /// The picture the browser last put on the screen, when it says.
+    frame_across: Option<u32>,
+    frame_down: Option<u32>,
+}
+
+/// The most moments a line about one change to the whole screen writes.
+const MOST_SHAPES: usize = 30;
+
+/// The shapes as one field of a line, in the order they came: the moment,
+/// the picture, the box it is drawn in, and the picture last put on screen.
+fn shapes_written(shapes: &[ShapeAt]) -> String {
+    shapes
+        .iter()
+        .take(MOST_SHAPES)
+        .map(|shape| {
+            let frame = match (shape.frame_across, shape.frame_down) {
+                (Some(across), Some(down)) => format!(" shown {across}x{down}"),
+                _ => String::new(),
+            };
+            format!(
+                "{}ms {}x{} in {}x{}{frame}",
+                shape.at_ms, shape.across, shape.down, shape.drawn_across, shape.drawn_down
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 /// One fact, named by the server.
 ///
 /// A closed list on purpose. Adding to it is a change to the server, never a
@@ -101,6 +137,18 @@ enum Seen {
         /// fault on this side of the wire.
         drawn_across: u32,
         drawn_down: u32,
+    },
+    /// Every shape the picture and its box went through, frame by frame,
+    /// for two seconds after the page went to the whole screen or came back
+    /// from it.
+    ///
+    /// A picture seen squashed for a moment there is the page drawing it in
+    /// the wrong box, or the browser drawing it wrong in the right one: right
+    /// numbers all along mean the second.
+    AroundFullscreen {
+        /// Whether the page went to the whole screen, or came back from it.
+        full: bool,
+        shapes: Vec<ShapeAt>,
     },
     /// A jump put a picture back on the screen, and how long that took.
     ///
@@ -936,6 +984,14 @@ async fn what_the_page_saw(
             drawn_down,
             "the browser says the picture is this shape"
         ),
+        Seen::AroundFullscreen { full, shapes } => tracing::debug!(
+            account,
+            session,
+            source,
+            full,
+            shapes = shapes_written(&shapes),
+            "the picture around a change to or from the whole screen"
+        ),
         Seen::ThePictureCameBack {
             asked_for_second,
             showed_second,
@@ -1276,6 +1332,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_shapes_around_the_whole_screen_read_as_one_line() {
+        let shapes = [
+            ShapeAt {
+                at_ms: 0,
+                across: 1920,
+                down: 800,
+                drawn_across: 1280,
+                drawn_down: 720,
+                frame_across: None,
+                frame_down: None,
+            },
+            ShapeAt {
+                at_ms: 16,
+                across: 1920,
+                down: 800,
+                drawn_across: 1920,
+                drawn_down: 1080,
+                frame_across: Some(1920),
+                frame_down: Some(800),
+            },
+        ];
+        assert_eq!(
+            shapes_written(&shapes),
+            "0ms 1920x800 in 1280x720; 16ms 1920x800 in 1920x1080 shown 1920x800"
+        );
+    }
+
+    #[test]
     fn a_page_can_only_say_what_this_module_has_a_name_for() {
         let said: FromThePage = serde_json::from_str(
             r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9","saw":"playback_began",
@@ -1464,6 +1548,15 @@ mod tests {
                     "saw":"the_picture_arrived","across":3840,"down":2160,
                     "drawn_across":1280,"drawn_down":720}"#,
                 "the shape of the picture the browser got",
+            ),
+            (
+                r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",
+                    "saw":"around_fullscreen","full":true,"shapes":[
+                    {"at_ms":0,"across":1920,"down":800,"drawn_across":1280,"drawn_down":720,
+                     "frame_across":null,"frame_down":null},
+                    {"at_ms":16,"across":1920,"down":800,"drawn_across":1920,"drawn_down":1080,
+                     "frame_across":1920,"frame_down":800}]}"#,
+                "the picture around a change to the whole screen",
             ),
             (
                 r#"{"session":"01a0a143-2ab0-748d-8924-e3208b7930c9",

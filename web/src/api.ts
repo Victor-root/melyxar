@@ -394,6 +394,20 @@ export interface CameraDeclared {
   password?: string;
 }
 
+/** One moment of the picture around a change to or from the whole screen. */
+export interface ShapeAt {
+  at_ms: number;
+  /** The shape the browser says the picture is meant to be. */
+  across: number;
+  down: number;
+  /** The box it is drawn in. */
+  drawn_across: number;
+  drawn_down: number;
+  /** The picture the browser last put on the screen, when it says. */
+  frame_across: number | null;
+  frame_down: number | null;
+}
+
 export interface Library {
   id: string;
   name: string;
@@ -1238,6 +1252,12 @@ export type PageFact =
       /** The box the page is drawing it in. */
       drawn_across: number;
       drawn_down: number;
+    }
+  | {
+      saw: "around_fullscreen";
+      /** Whether the page went to the whole screen, or came back from it. */
+      full: boolean;
+      shapes: ShapeAt[];
     }
   | {
       saw: "the_picture_came_back";

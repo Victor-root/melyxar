@@ -12,7 +12,7 @@
  * server names, sent as numbers, and the server writes the sentence.
  */
 
-import { api, type HowItMoved, type Reading } from "../api";
+import { api, type HowItMoved, type Reading, type ShapeAt } from "../api";
 import { followTheOpening } from "./opening";
 import { followTheSubtitles } from "./subtitleWatch";
 import type { Picture } from "./picture";
@@ -157,6 +157,92 @@ export interface Watching {
   movedBy: (how: HowItMoved) => void;
 }
 
+/** How long the picture is followed after a change to or from the whole
+ *  screen, and how many of its shapes are kept. */
+const AROUND_THE_SCREEN_MS = 2000;
+const MOST_SHAPES = 30;
+
+/**
+ * Every shape the picture and its box go through, at each frame, for two
+ * seconds after the page goes to the whole screen or comes back from it, told
+ * once that is over.
+ *
+ * A picture seen squashed for a moment there is either the page drawing it in
+ * the wrong box or the browser drawing it wrong in the right one, and these
+ * numbers say which: from the page they are all it has, and they are right or
+ * they are not.
+ */
+function followAroundTheScreen(element: Picture, told: (shapes: ShapeAt[], full: boolean) => void): () => void {
+  let looking: number | null = null;
+  let presenting: number | null = null;
+
+  const stop = () => {
+    if (looking !== null) {
+      window.cancelAnimationFrame(looking);
+      looking = null;
+    }
+    if (presenting !== null) {
+      element.cancelVideoFrameCallback?.(presenting);
+      presenting = null;
+    }
+  };
+
+  const follow = () => {
+    stop();
+    const began = performance.now();
+    const full = document.fullscreenElement !== null;
+    const shapes: ShapeAt[] = [];
+    let frame: { across: number; down: number } | null = null;
+    let last = "";
+
+    const presented = () => {
+      presenting =
+        element.requestVideoFrameCallback?.((_now, metadata) => {
+          frame = { across: metadata.width, down: metadata.height };
+          presented();
+        }) ?? null;
+    };
+    presented();
+
+    const look = () => {
+      const shape: ShapeAt = {
+        at_ms: Math.round(performance.now() - began),
+        across: element.videoWidth,
+        down: element.videoHeight,
+        drawn_across: element.clientWidth,
+        drawn_down: element.clientHeight,
+        frame_across: frame?.across ?? null,
+        frame_down: frame?.down ?? null,
+      };
+      const key = [
+        shape.across,
+        shape.down,
+        shape.drawn_across,
+        shape.drawn_down,
+        shape.frame_across,
+        shape.frame_down,
+      ].join("x");
+      if (key !== last && shapes.length < MOST_SHAPES) {
+        shapes.push(shape);
+        last = key;
+      }
+      if (shape.at_ms < AROUND_THE_SCREEN_MS) {
+        looking = window.requestAnimationFrame(look);
+        return;
+      }
+      stop();
+      told(shapes, full);
+    };
+    looking = window.requestAnimationFrame(look);
+  };
+
+  document.addEventListener("fullscreenchange", follow);
+  return () => {
+    document.removeEventListener("fullscreenchange", follow);
+    stop();
+  };
+}
+
 /**
  * Follows one film and reports what the server cannot see.
  */
@@ -206,6 +292,9 @@ export function watchTheReading(element: Picture, reading: Reading): Watching {
   const boxChanged = new ResizeObserver(() => sayTheShape());
   boxChanged.observe(element);
   sayTheShape();
+  const stopFollowingTheScreen = followAroundTheScreen(element, (shapes, full) =>
+    tell({ ...reading, saw: "around_fullscreen", full, shapes }),
+  );
 
   /* Where the film was before it moved. Read from the clock as it runs rather
      than from the jump itself, because by the time a jump is announced the
@@ -557,6 +646,7 @@ export function watchTheReading(element: Picture, reading: Reading): Watching {
       }
       stopFollowingTheOpening();
       stopFollowingTheSubtitles();
+      stopFollowingTheScreen();
       window.clearTimeout(startedOrNot);
       window.clearTimeout(settling);
       if (waitingForThePicture?.pending != null) {
