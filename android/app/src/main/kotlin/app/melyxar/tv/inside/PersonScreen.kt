@@ -31,12 +31,15 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import app.melyxar.R
 import app.melyxar.server.Card
 import app.melyxar.server.Person
+import app.melyxar.server.Picture
 import app.melyxar.theme.MelyxarDisplay
 import app.melyxar.tv.look.CardShape
 import app.melyxar.tv.look.Gutter
@@ -145,10 +148,7 @@ private fun AboutThem(person: Person, memory: FocusMemory, biography: FocusReque
                 .background(palette.surfaceRaised),
             contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.fillMaxWidth().aspectRatio(2f / 3), contentAlignment = Alignment.Center) {
-                Text(person.name.take(1), fontFamily = MelyxarDisplay, fontSize = 64.sp, color = palette.text.copy(alpha = 0.3f))
-                ServerPicture(person.photo, 190.dp, Modifier.fillMaxSize())
-            }
+            PersonPicture(person.name, person.photo, 190.dp, 64.sp, Modifier.fillMaxWidth().aspectRatio(2f / 3))
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
             Text(
@@ -195,5 +195,16 @@ private fun Fact(name: String, value: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = palette.textFaint, modifier = Modifier.width(150.dp))
         Text(value, fontSize = 15.sp, color = palette.text)
+    }
+}
+
+/** A person's photo, or the first letter of their name where there is none,
+ *  as their page and the cast of a film both show them. */
+@Composable
+fun PersonPicture(name: String, photo: List<Picture>, across: Dp, letter: TextUnit, modifier: Modifier) {
+    val palette = LocalPalette.current
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Text(name.take(1), fontFamily = MelyxarDisplay, fontSize = letter, color = palette.text.copy(alpha = 0.3f))
+        ServerPicture(photo, across, Modifier.fillMaxSize())
     }
 }

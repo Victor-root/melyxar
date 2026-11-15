@@ -114,10 +114,14 @@ data class Steps(val back: Int, val on: Int)
  * A film on the whole screen. The remote's arrows step through it and its
  * middle button pauses it with the controls away; any key brings them up,
  * Melyxar's own, as the web player draws them.
+ *
+ * Left with [onDone], told the next episode when the one playing was over,
+ * in its credits or at its end: watched, it is the next one's page the way
+ * out lands on.
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
+fun PlayerScreen(play: Play, onDone: (reached: Play?) -> Unit, onNext: (Play) -> Unit) {
     val context = LocalContext.current
     val api = LocalServer.current
     val scope = rememberCoroutineScope()
@@ -138,14 +142,14 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                         buildJsonObject { put("playback_quality", quality.key) },
                     )
                 },
-                onStopped = onDone,
+                onStopped = { onDone(null) },
                 onLeft = marks::rowsHaveMoved,
             )
         }
     }
     DisposableEffect(playback) { onDispose { playback?.leave() } }
     if (playback == null) {
-        CannotPlay(notReadyYet = false, onDone)
+        CannotPlay(notReadyYet = false) { onDone(null) }
         return
     }
 
@@ -180,6 +184,12 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
 
     fun playNext(episode: NextEpisode) = onNext(Play(episode.id, episode.sourceId, null))
 
+    // Over, whether its next episode was waited for or not: the episode is
+    // watched, and leaving goes on to the next one's page.
+    val reached = next?.takeIf { ended || inCredits }?.let { Play(it.id, it.sourceId, null) }
+
+    fun leave() = onDone(reached)
+
     // The sheets of thumbnails come over once the film plays, so they never
     // hold up its start, and are on the device by the time the bar goes far.
     var played by remember { mutableStateOf(false) }
@@ -193,7 +203,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     // Steered from another device of the account: the film answers the
     // orders about what is on the screen.
     val steered = LocalSteered.current
-    val leaving by rememberUpdatedState(onDone)
+    val leaving by rememberUpdatedState(::leave)
     val nextNow by rememberUpdatedState(next)
     LaunchedEffect(steered, playback) {
         steered.orders.collect { order ->
@@ -216,7 +226,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     }
     // Over with no next episode to announce: back to where it came from.
     LaunchedEffect(ended, declined) {
-        if (ended && (next == null || declined)) onDone()
+        if (ended && (next == null || declined)) leave()
     }
     // Away a moment after the remote stops, while the film plays and the
     // bar is not waiting for the middle button. Each press starts the wait
@@ -287,7 +297,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
     // An open list of tracks takes the key first, and closes.
     // With the controls up, the back key only takes them away.
     BackHandler {
-        if (shown) shown = false else onDone()
+        if (shown) shown = false else leave()
     }
 
     // What stands at the foot of the film says how far up it reaches.
@@ -449,7 +459,7 @@ fun PlayerScreen(play: Play, onDone: () -> Unit, onNext: (Play) -> Unit) {
                 else -> PlayerMenu(open, left, playback, onMenu = ::openMenu, Modifier.align(Alignment.BottomEnd))
             }
             if (playback.failed) {
-                CannotPlay(playback.notReadyYet, onDone)
+                CannotPlay(playback.notReadyYet) { onDone(null) }
             }
         }
     }

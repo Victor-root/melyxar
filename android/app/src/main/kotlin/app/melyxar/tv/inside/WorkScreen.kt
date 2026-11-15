@@ -639,7 +639,7 @@ fun Face(name: String, character: String?, photo: List<Picture>, modifier: Modif
                 .background(palette.surfaceRaised)
                 .rim(CardShape, palette.accentBright, 1.5.dp) { lit },
         ) {
-            ServerPicture(photo, PosterWidth * 0.8f, Modifier.fillMaxSize())
+            PersonPicture(name, photo, PosterWidth * 0.8f, 40.sp, Modifier.fillMaxSize())
         }
         Text(name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = palette.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         character?.let {

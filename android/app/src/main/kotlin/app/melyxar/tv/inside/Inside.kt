@@ -590,15 +590,25 @@ fun Inside(
                                     is Place.Playing -> key(here.play) {
                                         TvLook(paletteOf(chosenAccent, light = false)) {
                                             KeepingSheets {
+                                                // The page under the film moves on with
+                                                // the sitting, whether the next episode
+                                                // is played or the way out is taken once
+                                                // the one playing is over.
+                                                fun moveThePageUnder(next: Play) {
+                                                    val under = trail.lastIndex - 1
+                                                    pageUnderTheNext(trail.getOrNull(under), here.play, next)?.let { page ->
+                                                        kept.removeState(trail[under].key)
+                                                        trail[under] = page
+                                                    }
+                                                }
                                                 PlayerScreen(
                                                     here.play,
-                                                    onDone = { backTo(trail.size - 1) },
+                                                    onDone = { reached ->
+                                                        reached?.let(::moveThePageUnder)
+                                                        backTo(trail.size - 1)
+                                                    },
                                                     onNext = { next ->
-                                                        val under = trail.lastIndex - 1
-                                                        pageUnderTheNext(trail.getOrNull(under), here.play, next)?.let { page ->
-                                                            kept.removeState(trail[under].key)
-                                                            trail[under] = page
-                                                        }
+                                                        moveThePageUnder(next)
                                                         trail[trail.lastIndex] = Place.Playing(next)
                                                     },
                                                 )
