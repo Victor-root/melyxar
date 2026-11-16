@@ -34,3 +34,67 @@
 --enable-libmp3lame
 --enable-libvorbis
 --enable-libwebp
+
+# Decoders of formats no media library holds, left out so that a file crafted
+# against one of them is a file FFmpeg cannot open rather than a bug it runs.
+# They are where the flaws of recent years were found and are the last to be
+# fixed upstream (MagicYUV, "PixelSmash", CVE-2026-8461; Flash Screen Video,
+# an unfixed memory leak). Kept on purpose although rare: Bink and Smacker
+# (game cinematics people keep), Windows Media Screen (old WMV screencasts)
+# and Infinity IMM4/IMM5 (some surveillance cameras).
+#
+# A lossless editing intermediate, never a film anybody watches.
+--disable-decoder=magicyuv
+# Screen recordings.
+--disable-decoder=flashsv
+--disable-decoder=flashsv2
+--disable-decoder=tscc
+--disable-decoder=tscc2
+--disable-decoder=mss1
+--disable-decoder=msa1
+--disable-decoder=g2m
+--disable-decoder=cscd
+--disable-decoder=rscc
+--disable-decoder=screenpresso
+--disable-decoder=tdsc
+--disable-decoder=vmnc
+--disable-decoder=fic
+--disable-decoder=mwsc
+# The cinematics of 1990s video games and of their engines.
+--disable-decoder=arbc
+--disable-decoder=sanm
+--disable-decoder=bethsoftvid
+--disable-decoder=idcin
+--disable-decoder=interplay_video
+--disable-decoder=vmdvideo
+--disable-decoder=xan_wc3
+--disable-decoder=xan_wc4
+--disable-decoder=roq
+--disable-decoder=mmvideo
+--disable-decoder=c93
+--disable-decoder=dfa
+--disable-decoder=dsicinvideo
+--disable-decoder=kgv1
+--disable-decoder=kmvc
+--disable-decoder=eatgq
+--disable-decoder=eatgv
+--disable-decoder=eatqi
+--disable-decoder=eacmv
+--disable-decoder=eamad
+--disable-decoder=txd
+--disable-decoder=vqa
+--disable-decoder=jv
+--disable-decoder=paf_video
+--disable-decoder=sga
+--disable-decoder=tmv
+--disable-decoder=cdtoons
+--disable-decoder=gdv
+--disable-decoder=hnm4_video
+--disable-decoder=rl2
+--disable-decoder=bmv_video
+--disable-decoder=argo
+--disable-decoder=simbiosis_imx
+--disable-decoder=anm
+--disable-decoder=mvdv
+--disable-decoder=mvha
+--disable-decoder=pdv

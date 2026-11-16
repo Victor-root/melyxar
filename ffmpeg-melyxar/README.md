@@ -12,6 +12,12 @@ Le FFmpeg que Melyxar fait tourner : la dernière version stable officielle de F
 
 Le script d'installation et de mise à jour lance `build.sh` et pose le résultat dans `/opt/melyxar/ffmpeg` (`bin` pour les outils, `lib` pour libplacebo, que les outils trouvent à côté d'eux). Il ne recompile que si quelque chose a changé dans ce dossier. C'est le seul FFmpeg que le serveur fait tourner : il n'en cherche aucun autre (voir le README des décisions).
 
+## Les formats retirés
+
+`configure-options` retire 52 décodeurs de formats qu'aucune médiathèque ne contient : MagicYUV (format de montage, faille « PixelSmash », CVE-2026-8461), les formats d'enregistrement d'écran (dont Flash Screen Video, fuite de mémoire non corrigée par FFmpeg) et ceux des cinématiques de jeux des années 90. Un fichier piégé pour l'un d'eux est alors un fichier que FFmpeg refuse d'ouvrir, plus une faille qu'il exécute. Gardés exprès bien que rares : Bink et Smacker, Windows Media Screen, Infinity IMM4/IMM5.
+
+Vérifié avant de le garder : à part ces 52 décodeurs, tout est identique à la version d'avant (encodeurs, conteneurs, filtres, accélération matérielle, formats d'image) ; un échantillon de 32 fichiers dans les formats courants (vidéo, son, sous-titres, photos) se décode à l'identique, image par image ; un fichier MagicYUV est refusé proprement ; la suite complète de Melyxar donne les mêmes résultats avec l'une et l'autre version.
+
 ## Passer à une nouvelle version de FFmpeg
 
 1. Dans `release` : la nouvelle version, l'empreinte SHA-256 de son `.tar.xz` publiée sur ffmpeg.org, et `MELYXAR_REVISION` remis à 1. Pour libplacebo, la nouvelle étiquette et le commit qu'elle désigne.
