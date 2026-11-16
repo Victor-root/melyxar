@@ -94,6 +94,9 @@ private val UNDER_THE_ROW = 120.dp
 /** How long each work of the banner stands before the next. */
 private const val EACH_STANDS_FOR_MS = 9_000L
 
+/** The keys that move the remote, which stop the banner turning. */
+private val ARROWS = setOf(Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown)
+
 /** The crossfade from one work of the banner to the next. */
 private const val CROSSFADE_MS = 700
 
@@ -110,7 +113,9 @@ private fun backdropOf(work: WithCard<HeroMore>) = work.more.backdrop.ifEmpty { 
 /**
  * The banner of the home screen, as the web's: a few works one after the
  * other, each over its own picture faded into the page. Left and right on
- * its buttons step through them; on their own they turn every nine seconds.
+ * its buttons step through them; on their own they turn every nine seconds,
+ * with the remote resting in the banner as well. Once an arrow moves in it,
+ * somebody is reading it: they stop turning until the remote leaves.
  */
 @Composable
 fun Hero(
@@ -123,6 +128,7 @@ fun Hero(
     var shown by remember { mutableIntStateOf(0) }
     var turns by remember { mutableIntStateOf(0) }
     var holdsTheRemote by remember { mutableStateOf(false) }
+    var steered by remember { mutableStateOf(false) }
     /** Whether the remote was in the banner when it turned: a button the
      *  next work has no use for takes the remote away with it. */
     var keepTheRemote by remember { mutableStateOf(false) }
@@ -134,8 +140,8 @@ fun Hero(
     }
     // Drawn lighter, it stays on a work until the remote turns it: each turn
     // is a whole new picture to fetch and draw, while the remote is busy.
-    LaunchedEffect(items.size, turns, Lighter.on) {
-        if (items.size > 1 && !Lighter.on) {
+    LaunchedEffect(items.size, turns, Lighter.on, steered) {
+        if (items.size > 1 && !Lighter.on && !steered) {
             delay(EACH_STANDS_FOR_MS)
             step(1)
         }
@@ -153,7 +159,20 @@ fun Hero(
             first.requestFocus()
         }
     }
-    Box(modifier.fillMaxWidth().height(HeroHeight).onFocusChanged { holdsTheRemote = it.hasFocus }) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(HeroHeight)
+            .onFocusChanged {
+                holdsTheRemote = it.hasFocus
+                if (!it.hasFocus) steered = false
+            }
+            // Seen before the buttons take it, and left to them.
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key in ARROWS) steered = true
+                false
+            },
+    ) {
         AnimatedContent(
             targetState = at,
             // Drawn lighter, the next work takes the place of the one before
