@@ -181,7 +181,7 @@ async fn everything(
     if refused > 0 {
         points.push(Point::RefusedSignIns { count: refused });
     }
-    let unidentified = database.count_awaiting_identification(None).await?;
+    let unidentified = database.count_titles_awaiting_identification(None).await?;
     if unidentified > seen.get("unidentified").copied().unwrap_or(0) {
         points.push(Point::Unidentified {
             count: unidentified,

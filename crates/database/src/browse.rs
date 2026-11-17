@@ -1037,6 +1037,31 @@ impl Database {
         Ok(row.0)
     }
 
+    /// How many titles a person could name by hand are still waiting for a
+    /// name: what a grid shows on its own, a film, a series, never an episode
+    /// of a series already named, which nobody can name but its series. What
+    /// the grid of what waits for a name holds, and what is told to people;
+    /// the work left behind, episodes included, is
+    /// [`Database::count_awaiting_identification`].
+    pub async fn count_titles_awaiting_identification(
+        &self,
+        library_id: Option<LibraryId>,
+    ) -> Result<i64> {
+        let mut sql = format!(
+            "SELECT count(*) FROM works
+              WHERE {} AND identification IN ('pending', 'unidentified')",
+            met_on_its_own("")
+        );
+        if library_id.is_some() {
+            sql.push_str(" AND library_id = ?");
+        }
+        let mut query = sqlx::query_as::<_, (i64,)>(sqlx::AssertSqlSafe(sql));
+        if let Some(id) = library_id {
+            query = query.bind(id.to_db_string());
+        }
+        Ok(query.fetch_one(self.reader()).await?.0)
+    }
+
     /// Every genre that is actually in use, with how many works carry it.
     ///
     /// What a filter menu is built from: offering a genre nobody has leads to
@@ -1854,6 +1879,39 @@ mod tests {
             .await
             .expect("read");
         assert!(titles(nothing).is_empty());
+    }
+
+    #[tokio::test]
+    async fn only_the_titles_a_grid_shows_are_told_as_waiting_for_a_name() {
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let series = database
+            .create_work(library_id, WorkKind::Series, "Amber Coast", "amber coast", None)
+            .await
+            .expect("series created");
+        sqlx::query("UPDATE works SET identification = 'identified' WHERE id = ?")
+            .bind(series.id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("named");
+        let season = database
+            .create_child_work(library_id, series.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        database
+            .create_child_work(library_id, season.id, 1, WorkKind::Episode, "Episode 1", "episode 1")
+            .await
+            .expect("episode created");
+
+        // The episode and its season still wait, under a series named.
+        assert_eq!(database.count_awaiting_identification(Some(library_id)).await.expect("counted"), 2);
+        assert_eq!(database.count_titles_awaiting_identification(Some(library_id)).await.expect("counted"), 0);
+
+        database
+            .create_work(library_id, WorkKind::Movie, "Untitled 1994", "untitled 1994", None)
+            .await
+            .expect("work created");
+        assert_eq!(database.count_titles_awaiting_identification(Some(library_id)).await.expect("counted"), 1);
+        assert_eq!(database.count_titles_awaiting_identification(None).await.expect("counted"), 1);
     }
 
     #[tokio::test]

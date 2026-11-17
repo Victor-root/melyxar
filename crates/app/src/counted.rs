@@ -36,7 +36,8 @@ pub struct Counted {
     /// How many works a grid of it holds. Seasons and episodes are not met on
     /// their own, so they are not in it.
     pub browsable: i64,
-    /// How many works are still waiting for a name.
+    /// How many of its titles are still waiting for a name, as a grid of
+    /// them shows them.
     pub awaiting_identification: i64,
 }
 
@@ -192,7 +193,7 @@ async fn count(state: &AppState, library_id: Option<LibraryId>) -> Result<Counte
             initials: database.initials_in_use(library_id, &held).await?,
         },
         browsable: database.count_browsable(library_id, &held).await?,
-        awaiting_identification: database.count_awaiting_identification(library_id).await?,
+        awaiting_identification: database.count_titles_awaiting_identification(library_id).await?,
     })
 }
 

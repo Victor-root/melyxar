@@ -186,7 +186,7 @@ describe("sayPoint", () => {
   it("leads each point to where it is put right", () => {
     expect(sayPoint({ point: "unidentified", state: "attention", may_be_seen: true, count: 3 }, t, "en")).toEqual({
       title: "attention.unidentified(3)",
-      to: "/admin/metadata",
+      to: "/search?unidentified=true",
     });
     expect(
       sayPoint({ point: "refused_sign_ins", state: "attention", may_be_seen: true, count: 1 }, t, "en"),

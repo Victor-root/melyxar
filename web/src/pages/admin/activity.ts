@@ -286,6 +286,6 @@ export function sayPoint(point: AttentionPoint, t: Wording, language: string): P
     case "falling_behind":
       return { title: howMany(count, "attention.falling_behind", t), to: "/admin/playback" };
     case "unidentified":
-      return { title: howMany(count, "attention.unidentified", t), to: "/admin/metadata" };
+      return { title: howMany(count, "attention.unidentified", t), to: "/search?unidentified=true" };
   }
 }
