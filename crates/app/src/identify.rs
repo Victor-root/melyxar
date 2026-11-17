@@ -24,7 +24,7 @@ use melyxar_database::metadata::{
 };
 use melyxar_database::numbering::EpisodeMove;
 use melyxar_jobs::{JobHandle, StartedJob};
-use melyxar_library::naming;
+use melyxar_library::{naming, rereading};
 use melyxar_metadata::provider::Trailer;
 use melyxar_metadata::{Candidate, Catalogue, Details, MetadataProvider, ProviderError};
 
@@ -438,7 +438,17 @@ where
     let chosen = match known_id(&known_ids, provider.name()) {
         Some(external_id) => external_id,
         None => {
-            match find_candidate(provider.as_ref(), catalogue, work, &known_ids, language).await {
+            // The name of its file, for the reading that needs what the title
+            // read from it left behind.
+            let file_name = database
+                .sources_of_work(work.id)
+                .await?
+                .first()
+                .and_then(|source| source.relative_path.file_name())
+                .map(|name| name.to_string_lossy().into_owned());
+            match find_candidate(provider.as_ref(), catalogue, work, file_name.as_deref(), &known_ids, language)
+                .await
+            {
                 // Said every time, since a film taken for another is only ever
                 // noticed later, on its page, and this line is what says how
                 // the name on disk led to it.
@@ -896,12 +906,14 @@ struct NearestMiss {
 /// Finds the film a work is about.
 ///
 /// An identifier from another site is tried first, then a search by title and
-/// year, then the same search without the year, then one in plain letters, and
-/// last one without a shorthand somebody numbered a series with.
+/// year, then the same search without the year, then one in plain letters, then
+/// one without a shorthand somebody numbered a series with, and last the title
+/// asked in English and read again in other ways (see [`rereading`]).
 async fn find_candidate(
     provider: &impl MetadataProvider,
     catalogue: Catalogue,
     work: &Work,
+    file_name: Option<&str>,
     known_ids: &[(String, String)],
     language: &str,
 ) -> melyxar_metadata::provider::Result<WhatCameBack> {
@@ -973,11 +985,142 @@ async fn find_candidate(
         note_what_was_offered(&shortened, &without, &mut offered, &mut nearest);
     }
 
+    // Everything below only for a name nothing above could find, so a film
+    // found today is found the same way tomorrow, and every film is taken on
+    // the rules above and on nothing looser. Only its identifier is kept: its
+    // page is then read in the library's language, whatever language found it.
+    //
+    // A name written in English, where the provider answers in the library's
+    // language: its English title is the one the file carries.
+    let in_english = !language.starts_with(ENGLISH);
+    if in_english {
+        let mut years = vec![work.release_year];
+        if work.release_year.is_some() {
+            years.push(None);
+        }
+        for searched_year in years {
+            let asked = Asked {
+                title: &work.title,
+                searched_year,
+                year: work.release_year,
+                year_must_agree: false,
+                language: ENGLISH,
+            };
+            if let Some(found) = ask(provider, catalogue, asked, &mut offered, &mut nearest).await? {
+                return Ok(WhatCameBack::Found(Box::new(found)));
+            }
+        }
+    }
+    // And the name read again: what a collection or a release put in it taken
+    // out, two welded words put apart, the title written after a year, a
+    // volume number taken away, in the library's language and in English.
+    let current_year = melyxar_core::time::now().year();
+    for reading in rereading::rereadings(&work.title, work.release_year, file_name, current_year) {
+        let languages: &[&str] = if in_english { &[language, ENGLISH] } else { &[language] };
+        for asked_in in languages {
+            let asked = Asked {
+                title: &reading.title,
+                searched_year: reading.year,
+                year: reading.year,
+                year_must_agree: reading.year_must_agree,
+                language: asked_in,
+            };
+            if let Some(found) = ask(provider, catalogue, asked, &mut offered, &mut nearest).await? {
+                return Ok(WhatCameBack::Found(Box::new(found)));
+            }
+        }
+    }
+
     if offered == 0 {
         return Ok(WhatCameBack::NothingAtAll);
     }
     Ok(WhatCameBack::NoneCarriedTheName { offered, nearest })
 }
+
+/// The language a name is asked in once more, when the library reads another.
+const ENGLISH: &str = "en";
+
+/// One more question about a name.
+struct Asked<'a> {
+    title: &'a str,
+    /// The year handed to the provider, which may be none to widen the search.
+    searched_year: Option<i32>,
+    /// The year what came back is judged on, which is always the one known:
+    /// a search made without it still never takes a film of another time.
+    year: Option<i32>,
+    /// Whether only a film whose year agrees may be taken: the reading took a
+    /// number away, and only the year tells which instalment was meant.
+    year_must_agree: bool,
+    language: &'a str,
+}
+
+/// Asks one more question, and answers the film it found by the rules of
+/// [`choose_for`], judged on the title asked.
+async fn ask(
+    provider: &impl MetadataProvider,
+    catalogue: Catalogue,
+    asked: Asked<'_>,
+    offered: &mut usize,
+    nearest: &mut Option<NearestMiss>,
+) -> melyxar_metadata::provider::Result<Option<Candidate>> {
+    let candidates = provider
+        .search(catalogue, asked.title, asked.searched_year, asked.language)
+        .await?;
+    let wanted = naming::matchable_title(asked.title);
+    let allowed: Vec<Candidate> = candidates
+        .iter()
+        .filter(|candidate| match (asked.year_must_agree, asked.year, candidate.release_year) {
+            (false, _, _) => true,
+            (true, Some(wanted), Some(found)) => (wanted - found).abs() <= YEARS_APART,
+            (true, _, _) => false,
+        })
+        .filter(|candidate| !says_less_than(candidate, &wanted))
+        .cloned()
+        .collect();
+    if let Some(found) = choose_for(&allowed, asked.title, asked.year) {
+        return Ok(Some(found.clone()));
+    }
+    note_what_was_offered(&candidates, asked.title, offered, nearest);
+    Ok(None)
+}
+
+/// Whether a candidate's name is the name asked with words left out, words
+/// that say which film it is rather than an instalment number: `Amber Coast`
+/// for a name asked as `Amber Coast 007` is another film called less. A number
+/// of one or two figures, or in roman numerals, is how a collection numbers
+/// even its first film on disk, and is not refused; nor a word that only ties
+/// two others, `and` written where the provider writes `&`.
+///
+/// Only for the questions asked once everything else failed, where a name
+/// shorter than the one asked shares nearly all its words by construction.
+fn says_less_than(candidate: &Candidate, wanted: &[String]) -> bool {
+    let says_nothing_of_the_film = |word: &str| {
+        (word.len() <= 2 && word.chars().all(|c| c.is_ascii_digit()))
+            || (!word.is_empty() && word.chars().all(|c| "ivx".contains(c)))
+            || TYING_WORDS.contains(&word)
+    };
+    let names = std::iter::once(candidate.title.as_str())
+        .chain(candidate.original_title.as_deref())
+        .map(naming::matchable_title)
+        .collect::<Vec<_>>();
+    if names.iter().any(|name| name.as_slice() == wanted) {
+        return false;
+    }
+    names.iter().any(|name| {
+        name.len() < wanted.len()
+            && name.iter().all(|word| wanted.contains(word))
+            && wanted
+                .iter()
+                .filter(|word| !name.contains(word))
+                .any(|word| !says_nothing_of_the_film(word))
+    })
+}
+
+/// Words that tie the others of a title together, in English and French, and
+/// that a provider writes as a sign or leaves out.
+const TYING_WORDS: &[&str] = &[
+    "and", "et", "the", "a", "an", "of", "le", "la", "les", "l", "de", "des", "du", "d",
+];
 
 /// Keeps count of what one question brought back, and of its nearest miss.
 ///
@@ -1717,6 +1860,9 @@ mod tests {
         only_in_english: bool,
         /// Every picture it holds for a work, for whoever chooses one by hand.
         offered: Vec<melyxar_metadata::OfferedPicture>,
+        /// What a search asked in English answers, when it answers otherwise
+        /// than in the library's language.
+        in_english: Option<Vec<Candidate>>,
     }
 
     impl StandIn {
@@ -1733,6 +1879,7 @@ mod tests {
                 exact: false,
                 only_in_english: false,
                 offered: Vec::new(),
+                in_english: None,
             }
         }
 
@@ -1766,7 +1913,14 @@ mod tests {
                 exact: false,
                 only_in_english: false,
                 offered: Vec::new(),
+                in_english: None,
             }
+        }
+
+        /// A provider whose films carry other titles when asked in English.
+        fn answering_in_english(mut self, candidates: Vec<Candidate>) -> Self {
+            self.in_english = Some(candidates);
+            self
         }
 
         fn searches(&self) -> Vec<(String, Option<i32>)> {
@@ -1802,7 +1956,7 @@ mod tests {
             catalogue: Catalogue,
             title: &str,
             year: Option<i32>,
-            _language: &str,
+            language: &str,
         ) -> melyxar_metadata::provider::Result<Vec<Candidate>> {
             self.catalogues.lock().expect("free").push(catalogue);
             self.searches
@@ -1825,12 +1979,15 @@ mod tests {
                 }
             }
 
+            let held = match (&self.in_english, language) {
+                (Some(english), "en") => english,
+                _ => &self.candidates,
+            };
             // A search with a year only returns what matches it, the way the
             // provider itself behaves.
             Ok(match year {
-                None => self.candidates.clone(),
-                Some(year) => self
-                    .candidates
+                None => held.clone(),
+                Some(year) => held
                     .iter()
                     .filter(|candidate| candidate.release_year == Some(year))
                     .cloned()
@@ -3259,7 +3416,7 @@ mod tests {
         let silent = StandIn::new(Vec::new(), Vec::new());
         assert!(
             matches!(
-                find_candidate(&silent, Catalogue::Films, &work, &[], "fr").await,
+                find_candidate(&silent, Catalogue::Films, &work, None, &[], "fr").await,
                 Ok(WhatCameBack::NothingAtAll)
             ),
             "a provider that offered nothing says so"
@@ -3278,7 +3435,7 @@ mod tests {
             vec![details("111", "Amber Field", Some(2019))],
         );
         let Ok(WhatCameBack::NoneCarriedTheName { offered, nearest }) =
-            find_candidate(&crowded, Catalogue::Films, &work, &[], "fr").await
+            find_candidate(&crowded, Catalogue::Films, &work, None, &[], "fr").await
         else {
             panic!("films came back, so that is what it has to say");
         };
@@ -3293,6 +3450,58 @@ mod tests {
     }
 
     /// The one work of a library set up by `state_with_work`, read back.
+    /// What a search for this work found, by the identifier it found.
+    async fn found_for(provider: &StandIn, work: &Work, file_name: Option<&str>) -> Option<String> {
+        match find_candidate(provider, Catalogue::Films, work, file_name, &[], "fr").await {
+            Ok(WhatCameBack::Found(found)) => Some(found.external_id),
+            _ => None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_name_found_nowhere_as_written_is_read_again_without_its_noise() {
+        let (_directory, _state, _library, work) =
+            state_with_work("01 Quiet Harbour Version Longue", None).await;
+        let provider = StandIn::new(vec![candidate("111", "Quiet Harbour", Some(2019))], Vec::new());
+        assert_eq!(found_for(&provider, &work, None).await.as_deref(), Some("111"));
+    }
+
+    #[tokio::test]
+    async fn a_name_written_in_english_is_found_by_its_english_title() {
+        let (_directory, _state, _library, work) = state_with_work("Northwind Cove", Some(2022)).await;
+        let provider = StandIn::new(vec![candidate("222", "La Crique du Nord", Some(2022))], Vec::new())
+            .answering_in_english(vec![candidate("222", "Northwind Cove", Some(2022))]);
+        assert_eq!(found_for(&provider, &work, None).await.as_deref(), Some("222"));
+    }
+
+    #[tokio::test]
+    async fn the_title_written_after_the_year_of_a_collection_is_asked_about() {
+        let (_directory, _state, _library, work) = state_with_work("Saga 007", Some(2006)).await;
+        let provider = StandIn::new(vec![candidate("444", "Quiet Harbour", Some(2006))], Vec::new());
+        assert_eq!(found_for(&provider, &work, None).await, None, "nothing without the file's name");
+        let file = "Saga 007 - 2006 - Quiet Harbour Uncut - 1080p X264.mkv";
+        assert_eq!(found_for(&provider, &work, Some(file)).await.as_deref(), Some("444"));
+    }
+
+    #[tokio::test]
+    async fn a_volume_taken_away_never_lands_on_another_instalment() {
+        // Tome 2 of a series whose first film alone the provider holds: read
+        // without its number it is the first film's name, of another year.
+        let (_directory, _state, _library, work) = state_with_work("Amber Coast Tome 2", Some(2011)).await;
+        let provider = StandIn::new(vec![candidate("555", "Amber Coast", Some(2008))], Vec::new());
+        assert_eq!(found_for(&provider, &work, None).await, None);
+
+        // Nor on another film whose name says less than the one asked.
+        let (_directory, _state, _library, longer) = state_with_work("Amber Coast 007", Some(2015)).await;
+        let shorter = StandIn::new(vec![candidate("666", "La Côte", Some(2015))], Vec::new())
+            .answering_in_english(vec![candidate("666", "Amber Coast", Some(2015))]);
+        assert_eq!(found_for(&shorter, &longer, None).await, None);
+
+        // Its year agreeing, it is that film.
+        let (_directory, _state, _library, first) = state_with_work("Amber Coast Tome 1", Some(2008)).await;
+        assert_eq!(found_for(&provider, &first, None).await.as_deref(), Some("555"));
+    }
+
     async fn only_work(state: &AppState) -> Work {
         let library = state
             .database()

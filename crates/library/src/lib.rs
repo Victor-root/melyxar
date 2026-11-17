@@ -17,6 +17,7 @@ pub mod folders;
 pub mod music;
 pub mod naming;
 pub mod orientation;
+pub mod rereading;
 pub mod scan;
 pub mod sidecar;
 pub mod upload;
