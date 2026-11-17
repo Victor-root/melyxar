@@ -88,34 +88,110 @@ pub fn parse_episode(
     signs: &LibrarySigns,
 ) -> Option<ParsedEpisode> {
     naming::with_the_words_of(file_name, current_year, signs, |words| {
-        let marker = find_the_marker(words)?;
-
-        let after = &words[marker.through..];
-        let boundary = naming::first_technical_tag(after, 0).unwrap_or(after.len());
-        let title = naming::title_of(
-            naming::trim_leading_separators(&after[..boundary]),
-            signs.marks(),
-        );
-
-        // The series stops at the first word that can only describe a file,
-        // exactly as a film's title does. A name carrying one before the
-        // marker would otherwise hand it to the series, and a series named
-        // with a technical word in it groups apart from the same series
-        // without one.
-        let named = &words[..marker.at];
-        let named = &named[..naming::first_technical_tag(named, 1).unwrap_or(named.len())];
-        let (named, year) = the_series(named, current_year);
-
-        Some(ParsedEpisode {
-            series: naming::title_of(named, signs.marks()),
-            year,
-            season: marker.season,
-            first: marker.first,
-            last: marker.last,
-            title: (!title.is_empty()).then_some(title),
-            tags: naming::tags_from(&after[boundary..]),
-        })
+        Some(episode_at(
+            words,
+            find_the_marker(words)?,
+            current_year,
+            signs,
+        ))
     })
+}
+
+/// Reads the episode a folder is named after, for a file inside it whose own
+/// name says nothing: `Distant.Signal.S01E02.1080p/ds-102-harbour.mkv`.
+///
+/// Only a folder naming its season as well, which is what tells one episode
+/// packed in its own folder apart from a folder of a series or a season.
+fn episode_of_a_folder(
+    folder: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    naming::with_the_words_of_a_folder(folder, current_year, signs, |words| {
+        let marker = find_the_marker(words).filter(|marker| marker.season.is_some())?;
+        Some(episode_at(words, marker, current_year, signs))
+    })
+}
+
+/// Reads a name carrying its season and episode as one number of three
+/// digits, `Distant.Signal.205`, the second season's fifth episode.
+///
+/// Asked last, once nothing else in the name or the folders said which
+/// episode this is, and only in a library of series: three digits mean
+/// nothing else there, where in a library of anime they are an episode's
+/// number. The number has to be the first one in the name, so the series is
+/// never named with digits only it could explain, neither half may be
+/// nought, `100` being no episode anybody can place, and a picture's height
+/// is not one.
+fn episode_of_a_compact_number(
+    file_name: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<ParsedEpisode> {
+    naming::with_the_words_of(file_name, current_year, signs, |words| {
+        let at = words
+            .iter()
+            .position(|word| word.chars().any(|c| c.is_ascii_digit()))
+            .filter(|&at| at > 0)?;
+        let number = plain(words[at]);
+        if number.len() != COMPACT_DIGITS {
+            return None;
+        }
+        let both = number_of(&number)?;
+        let (season, first) = (both / 100, both % 100);
+        if season == 0 || first == 0 || PICTURE_HEIGHTS.contains(&both) {
+            return None;
+        }
+        let marker = Marker {
+            at,
+            through: at + 1,
+            season: Some(season),
+            first,
+            last: first,
+        };
+        Some(episode_at(words, marker, current_year, signs))
+    })
+}
+
+/// How many digits a season and an episode written as one number carry: one
+/// for the season, two for the episode.
+const COMPACT_DIGITS: usize = 3;
+
+/// Heights of a picture somebody may write without the `p`, which a number
+/// of three digits must never be read as.
+const PICTURE_HEIGHTS: [i32; 4] = [360, 480, 576, 720];
+
+/// The episode a name says, once its marker has been found.
+fn episode_at(
+    words: &[&str],
+    marker: Marker,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> ParsedEpisode {
+    let after = &words[marker.through..];
+    let boundary = naming::first_technical_tag(after, 0).unwrap_or(after.len());
+    let title = naming::title_of(
+        naming::trim_leading_separators(&after[..boundary]),
+        signs.marks(),
+    );
+
+    // The series stops at the first word that can only describe a file,
+    // exactly as a film's title does. A name carrying one before the marker
+    // would otherwise hand it to the series, and a series named with a
+    // technical word in it groups apart from the same series without one.
+    let named = &words[..marker.at];
+    let named = &named[..naming::first_technical_tag(named, 1).unwrap_or(named.len())];
+    let (named, year) = the_series(named, current_year);
+
+    ParsedEpisode {
+        series: naming::title_of(named, signs.marks()),
+        year,
+        season: marker.season,
+        first: marker.first,
+        last: marker.last,
+        title: (!title.is_empty()).then_some(title),
+        tags: naming::tags_from(&after[boundary..]),
+    }
 }
 
 /// The series part of a name, and the year it carried if it carried one.
@@ -400,6 +476,45 @@ pub fn season_of_folder(folder: &str) -> Option<i32> {
     // word is only ever read here, never in a file name: a file called
     // `Series 1 ...` is far more likely to be a series actually called that.
     (is_a_season_word(first) || *first == "series").then(|| number_of(rest[0]))?
+}
+
+/// Reads a folder holding one whole season of a series and named after both,
+/// `Distant.Signal.S03.1080p.WEB` or `Distant Signal Saison 3`, as that series
+/// and that season.
+///
+/// The shape a season taken off a release keeps, and often the only place
+/// the series is named properly: the files inside may carry a shorthand,
+/// `ds.s03e01`, or a name made unrecognisable on purpose. Nothing for a folder
+/// naming one episode, nor for one naming no series before its season.
+fn season_pack_of_folder(
+    folder: &str,
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<(NamedSeries, i32)> {
+    naming::with_the_words_of_a_folder(folder, current_year, signs, |words| {
+        if find_the_marker(words).is_some() {
+            return None;
+        }
+        let (at, season) = (1..words.len())
+            .find_map(|at| a_season_said_at(words, at).map(|season| (at, season)))?;
+        let named = &words[..at];
+        let named = &named[..naming::first_technical_tag(named, 1).unwrap_or(named.len())];
+        let (named, year) = the_series(named, current_year);
+        let title = naming::title_of(named, signs.marks());
+        (!title.is_empty()).then_some((NamedSeries { title, year }, season))
+    })
+}
+
+/// The season a word says on its own, `S03`, or spelled out with the number
+/// after it, `Saison 3`.
+fn a_season_said_at(words: &[&str], at: usize) -> Option<i32> {
+    let word = plain(words[at]);
+    let season = match a_season_alone(&word) {
+        Some(Mark::Season(season)) => season,
+        _ if is_a_season_word(&word) => number_of(&plain(word_after(words, at)?.0))?,
+        _ => return None,
+    };
+    (season <= HIGHEST_SEASON).then_some(season)
 }
 
 /// Whether a folder holds what belongs to no season.
@@ -777,13 +892,57 @@ pub fn read_path(
 ) -> Option<EpisodeOnDisk> {
     let file_name = relative_path.file_name()?.to_str()?;
     let folders = folders_above(relative_path);
-    let season_folder = folders.iter().find_map(|folder| season_of_folder(folder));
-    let episode = read_file_name(kind, file_name, season_folder, current_year, signs)?;
-    let series = series_it_belongs_to(&episode, &folders, current_year, signs)?;
+    let said = the_season_folder(&folders, current_year, signs);
+    let season_folder = said.as_ref().map(|said| said.season);
+    let episode = read_file_name(kind, file_name, season_folder, current_year, signs)
+        // Nothing in the name, but the folder holding the file is named
+        // after this very episode.
+        .or_else(|| {
+            folders
+                .first()
+                .and_then(|folder| episode_of_a_folder(folder, current_year, signs))
+        })
+        .or_else(|| {
+            (kind == LibraryKind::Series)
+                .then(|| episode_of_a_compact_number(file_name, current_year, signs))
+                .flatten()
+        })?;
+    let series = series_it_belongs_to(&episode, &folders, said, current_year, signs)?;
     Some(EpisodeOnDisk {
         episode,
         series,
         season_folder,
+    })
+}
+
+/// The nearest folder above a file that says which season it holds.
+struct SeasonFolder {
+    /// How far up it sits, the file's own folder being the first.
+    at: usize,
+    season: i32,
+    /// The series it names too, for a folder holding a whole season of one.
+    series: Option<NamedSeries>,
+}
+
+fn the_season_folder(
+    folders: &[&str],
+    current_year: i32,
+    signs: &LibrarySigns,
+) -> Option<SeasonFolder> {
+    folders.iter().enumerate().find_map(|(at, folder)| {
+        if let Some(season) = season_of_folder(folder) {
+            return Some(SeasonFolder {
+                at,
+                season,
+                series: None,
+            });
+        }
+        let (series, season) = season_pack_of_folder(folder, current_year, signs)?;
+        Some(SeasonFolder {
+            at,
+            season,
+            series: Some(series),
+        })
     })
 }
 
@@ -835,7 +994,8 @@ fn folders_above(relative_path: &Path) -> Vec<&str> {
 /// series and it is that folder which names it. Everything under it lands in
 /// the same series however each file happens to be named: two seasons ripped
 /// by two teams that write the title in two languages are still one series,
-/// and reading the file names first made two.
+/// and reading the file names first made two. A season folder named after its
+/// series as well, `Distant.Signal.S03.WEB`, names it itself.
 ///
 /// Where there is no season folder nothing has changed: a folder holding files
 /// in bulk groups nothing by itself, so the file name names the series, and
@@ -843,13 +1003,19 @@ fn folders_above(relative_path: &Path) -> Vec<&str> {
 fn series_it_belongs_to(
     episode: &ParsedEpisode,
     folders: &[&str],
+    said: Option<SeasonFolder>,
     current_year: i32,
     signs: &LibrarySigns,
 ) -> Option<NamedSeries> {
-    if let Some(named) = the_folder_of_the_series(folders)
-        .and_then(|folder| series_of_folder(folder, current_year, signs))
-    {
-        return Some(named);
+    if let Some(said) = said {
+        let named = said.series.or_else(|| {
+            folders
+                .get(said.at + 1)
+                .and_then(|folder| series_of_folder(folder, current_year, signs))
+        });
+        if named.is_some() {
+            return named;
+        }
     }
     if !episode.series.is_empty() {
         return Some(NamedSeries {
@@ -860,15 +1026,6 @@ fn series_it_belongs_to(
     folders
         .iter()
         .find_map(|folder| series_of_folder(folder, current_year, signs))
-}
-
-/// The folder that names the series: the one holding the nearest season
-/// folder, when the path goes through one at all.
-fn the_folder_of_the_series<'a>(folders: &[&'a str]) -> Option<&'a str> {
-    let season = folders
-        .iter()
-        .position(|folder| season_of_folder(folder).is_some())?;
-    folders.get(season + 1).copied()
 }
 
 #[cfg(test)]
@@ -982,9 +1139,11 @@ mod tests {
             assert_eq!((read.first, read.last), (1, 2), "{name}");
             assert!(read.holds_several(), "{name}");
         }
-        assert!(!read("Distant Signal S01E01.mkv")
-            .expect("read")
-            .holds_several());
+        assert!(
+            !read("Distant Signal S01E01.mkv")
+                .expect("read")
+                .holds_several()
+        );
     }
 
     #[test]
@@ -1470,10 +1629,16 @@ mod tests {
     #[test]
     fn a_bare_leading_number_is_an_episode_only_under_a_season_folder() {
         assert_eq!(
-            on_disk("Distant Signal/Season 1/07 - The Harbour.mkv", LibraryKind::Series),
+            on_disk(
+                "Distant Signal/Season 1/07 - The Harbour.mkv",
+                LibraryKind::Series
+            ),
             Some(("Distant Signal".to_string(), Some(1), 7))
         );
-        assert_eq!(on_disk("Films/07 - The Harbour.mkv", LibraryKind::Series), None);
+        assert_eq!(
+            on_disk("Films/07 - The Harbour.mkv", LibraryKind::Series),
+            None
+        );
     }
 
     #[test]
@@ -1572,6 +1737,85 @@ mod tests {
                 across: None
             },
             "a season folder says the number is inside its season"
+        );
+    }
+
+    #[test]
+    fn a_folder_holding_a_whole_season_names_the_series_and_the_season() {
+        // Files named in a shorthand, or in a way made unrecognisable on
+        // purpose, inside the folder the season came in.
+        for path in [
+            "Distant.Signal.S03.FRENCH.HDTV.XviD-GROUP/DxSx.S03E04.FRENCH.avi",
+            "Distant Signal S03 (2019) VFF DVDRip/ds.s03e04-group.avi",
+            "Distant Signal Saison 3/ds.s03e04.avi",
+        ] {
+            assert_eq!(
+                on_disk(path, LibraryKind::Series),
+                Some(("Distant Signal".to_string(), Some(3), 4)),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            filed("Distant.Signal.S03.WEB/E04.mkv", LibraryKind::Series, &[]),
+            Filing {
+                season: 3,
+                number: 4,
+                across: None
+            },
+            "the season it says fills in for a name that said none"
+        );
+    }
+
+    #[test]
+    fn a_folder_naming_one_episode_or_no_series_holds_no_season() {
+        for name in ["Distant.Signal.S03E04.WEB", "S03.WEB", "Distant Signal"] {
+            assert_eq!(
+                season_pack_of_folder(name, THIS_YEAR, &LibrarySigns::default()),
+                None,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_saying_nothing_is_the_episode_its_own_folder_is_named_after() {
+        assert_eq!(
+            on_disk(
+                "Distant Signal S05/Distant.Signal.S05E17.FRENCH.DVDRip/grp-harbour-lights.avi",
+                LibraryKind::Series
+            ),
+            Some(("Distant Signal".to_string(), Some(5), 17))
+        );
+    }
+
+    #[test]
+    fn three_digits_are_a_season_and_an_episode_only_in_a_library_of_series() {
+        let path = "Distant Signal/Distant.Signal.205.FRENCH.WEB-DL.avi";
+        assert_eq!(
+            on_disk(path, LibraryKind::Series),
+            Some(("Distant Signal".to_string(), Some(2), 5))
+        );
+        assert_eq!(on_disk(path, LibraryKind::Anime).map(|read| read.2), None);
+        for name in [
+            "Distant.Signal.100.FRENCH.avi",
+            "Distant.Signal.020.FRENCH.avi",
+            "205.Distant.Signal.avi",
+            "Distant.Signal.2050.avi",
+            "Distant.Signal.720.x264.avi",
+        ] {
+            assert_eq!(
+                episode_of_a_compact_number(name, THIS_YEAR, &LibrarySigns::default()),
+                None,
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_run_of_dashes_separates_words() {
+        assert_eq!(
+            said("Distant---Signal---S01e03---French---The-Harbour-WEBRIP.mp4").0,
+            "Distant Signal"
         );
     }
 }

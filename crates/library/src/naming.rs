@@ -147,10 +147,31 @@ fn the_words_of<T>(stem: &str, current_year: i32, read: impl FnOnce(&[&str]) -> 
     // The underscore separates words just like the dot does. Personal markers
     // attach themselves to the previous tag with one, and without this rule
     // the tag becomes unrecognisable and can land in the title.
-    let normalised = stem.replace(['.', '_'], " ");
+    let normalised = with_dash_runs_apart(&stem.replace(['.', '_'], " "));
     let separated: Vec<&str> = normalised.split_whitespace().collect();
     let whole = separate_a_year_from_what_is_glued_to_it(&separated, current_year);
     read(drop_what_is_bracketed_in_front(&whole))
+}
+
+/// A run of dashes turned into a space.
+///
+/// Nobody writes two dashes in a row inside a word: a name written
+/// `Distant---Signal---S01E02` uses them where another uses dots, and read
+/// as it stands it is one long word with nothing to find in it. A single
+/// dash stays, since it joins the halves of `Spider-Man` as often as it
+/// separates anything.
+fn with_dash_runs_apart(text: &str) -> String {
+    let mut apart = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '-' && chars.peek() == Some(&'-') {
+            while chars.next_if_eq(&'-').is_some() {}
+            apart.push(' ');
+        } else {
+            apart.push(c);
+        }
+    }
+    apart
 }
 
 /// A year somebody wrote in front of the title, and the rest of the name.
