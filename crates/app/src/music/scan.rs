@@ -354,9 +354,11 @@ fn described(sound: &melyxar_tags::Sound, source_id: MediaSourceId) -> (SourceAn
 mod tests {
     use std::process::Command;
 
-    use melyxar_core::job::{JobPriority, JobState};
+    use melyxar_core::job::JobPriority;
     use melyxar_core::refresh::RefreshMode;
     use melyxar_core::work::{Work, WorkKind};
+
+    use crate::music::testing::{album_of, fixture, music_library, put, scan, song_of};
 
     use super::*;
 
@@ -384,21 +386,6 @@ mod tests {
         assert_eq!(said(u64::MAX), None);
     }
 
-    /// The one second files the tag reader is tested on, shared rather than
-    /// made again.
-    fn fixture(name: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tags/tests/fixtures")
-            .join(name)
-    }
-
-    fn put(root: &Path, relative: &str, fixture_name: &str) -> PathBuf {
-        let path = root.join(relative);
-        std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
-        std::fs::copy(fixture(fixture_name), &path).expect("song copied");
-        path
-    }
-
     /// Writes tags into a copy of a fixture the way a tagging program would,
     /// with the tool the server runs on. Answers false where there is none.
     fn tagged(root: &Path, relative: &str, fixture_name: &str, tags: &[(&str, &str)]) -> bool {
@@ -420,31 +407,6 @@ mod tests {
         true
     }
 
-    async fn music_library(directory: &Path, root: &Path) -> (AppState, Library) {
-        let (config, database, library) =
-            crate::a_test_server(directory, "music", vec![("disk-one", root.to_path_buf())]).await;
-        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
-        (
-            AppState::new(config, database, tools, capabilities),
-            library,
-        )
-    }
-
-    async fn scan(state: &AppState, library: &Library) -> ScanReport {
-        let (ended, report) = crate::scan::start_scan(
-            state,
-            library.clone(),
-            JobPriority::REQUESTED,
-            RefreshMode::default(),
-        )
-        .await
-        .expect("scan started")
-        .wait()
-        .await;
-        assert_eq!(ended, JobState::Succeeded);
-        report.expect("a finished scan says what it did")
-    }
-
     async fn works(state: &AppState, library: &Library, kind: WorkKind) -> Vec<Work> {
         let mut found: Vec<Work> = state
             .database()
@@ -456,32 +418,6 @@ mod tests {
             .collect();
         found.sort_by(|one, two| one.sort_title.cmp(&two.sort_title));
         found
-    }
-
-    async fn song_of(state: &AppState, library: &Library, relative: &str) -> Work {
-        let source = state
-            .database()
-            .sources_of_root(library.roots[0].id)
-            .await
-            .expect("read")
-            .into_iter()
-            .find(|source| source.relative_path == Path::new(relative))
-            .expect("the file is written down");
-        state
-            .database()
-            .work(source.work_id)
-            .await
-            .expect("read")
-            .expect("its song")
-    }
-
-    async fn album_of(state: &AppState, song: &Work) -> Work {
-        state
-            .database()
-            .work(song.parent_id.expect("on an album"))
-            .await
-            .expect("read")
-            .expect("the album")
     }
 
     #[tokio::test]
@@ -807,17 +743,11 @@ mod tests {
 mod picture_tests {
     use std::process::Command;
 
-    use melyxar_core::job::{JobPriority, JobState};
-    use melyxar_core::refresh::RefreshMode;
     use melyxar_core::work::WorkKind;
 
-    use super::*;
+    use crate::music::testing::{fixture, music_library, put, scan};
 
-    fn fixture(name: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../tags/tests/fixtures")
-            .join(name)
-    }
+    use super::*;
 
     /// Runs the tool the server runs on, or answers false where there is
     /// none: pictures are made with it, so without it there is nothing to
@@ -848,38 +778,6 @@ mod picture_tests {
         ])
     }
 
-    fn a_song(root: &Path, relative: &str) -> PathBuf {
-        let path = root.join(relative);
-        std::fs::create_dir_all(path.parent().expect("a folder")).expect("folder made");
-        std::fs::copy(fixture("one-second.mp3"), &path).expect("copied");
-        path
-    }
-
-    async fn library(directory: &Path, root: &Path) -> (AppState, Library) {
-        let (config, database, library) =
-            crate::a_test_server(directory, "music", vec![("disk-one", root.to_path_buf())]).await;
-        let (tools, capabilities) = crate::startup::media_tools(Ok(melyxar_ffmpeg::testing::tools())).await;
-        (
-            AppState::new(config, database, tools, capabilities),
-            library,
-        )
-    }
-
-    async fn scan(state: &AppState, library: &Library) -> ScanReport {
-        let (ended, report) = crate::scan::start_scan(
-            state,
-            library.clone(),
-            JobPriority::REQUESTED,
-            RefreshMode::default(),
-        )
-        .await
-        .expect("started")
-        .wait()
-        .await;
-        assert_eq!(ended, JobState::Succeeded);
-        report.expect("a report")
-    }
-
     async fn wears_a_picture(
         state: &AppState,
         library: &Library,
@@ -906,14 +804,14 @@ mod picture_tests {
     async fn an_album_wears_the_cover_beside_it_and_an_artist_the_picture_above() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let root = directory.path().join("Music");
-        a_song(&root, "Amber Field/Northern Lights/01 - Quiet Harbour.mp3");
-        a_song(&root, "Amber Field/Southern Nights/01 - Tides.mp3");
+        put(&root, "Amber Field/Northern Lights/01 - Quiet Harbour.mp3", "one-second.mp3");
+        put(&root, "Amber Field/Southern Nights/01 - Tides.mp3", "one-second.mp3");
         if !a_picture(&root.join("Amber Field/Northern Lights/cover.jpg"), "red") {
             eprintln!("no media tool here, no picture could be made");
             return;
         }
         a_picture(&root.join("Amber Field/artist.jpg"), "blue");
-        let (state, library) = library(directory.path(), &root).await;
+        let (state, library) = music_library(directory.path(), &root).await;
 
         let report = scan(&state, &library).await;
         assert_eq!(report.pictured, 2, "the album with a cover, and its artist");
@@ -958,7 +856,7 @@ mod picture_tests {
             "attached_pic".as_ref(),
             song.as_os_str(),
         ]);
-        let (state, library) = library(directory.path(), &root).await;
+        let (state, library) = music_library(directory.path(), &root).await;
 
         let report = scan(&state, &library).await;
         assert_eq!(

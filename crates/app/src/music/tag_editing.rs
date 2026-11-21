@@ -336,11 +336,7 @@ pub async fn set_cover(
     if !jpeg.starts_with(&[0xFF, 0xD8, 0xFF]) {
         return Err(refused("a cover is sent as a JPEG picture"));
     }
-    let songs = state.database().songs_of_album(album).await?;
-    let Some(first) = songs.first() else {
-        return Err(AppError::Domain(melyxar_core::Error::not_found("album")));
-    };
-    let on_disk = writable(state, who, *first).await?;
+    let on_disk = writable_album(state, who, album).await?;
     let path = on_disk.path();
     let folder = path
         .parent()
@@ -444,6 +440,16 @@ async fn writable(state: &AppState, who: &User, song: WorkId) -> Result<SongOnDi
         )));
     }
     Ok(on_disk)
+}
+
+/// The file of the first song of an album, once it is sure this account may
+/// write into the album: what its cover is put beside.
+pub(crate) async fn writable_album(state: &AppState, who: &User, album: WorkId) -> Result<SongOnDisk> {
+    let songs = state.database().songs_of_album(album).await?;
+    let Some(first) = songs.first() else {
+        return Err(AppError::Domain(melyxar_core::Error::not_found("album")));
+    };
+    writable(state, who, *first).await
 }
 
 async fn read_tags(path: PathBuf) -> Result<EditedTags> {

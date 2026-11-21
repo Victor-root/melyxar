@@ -1,15 +1,25 @@
-//! Deezer, for the photos of artists: free, with no account and no key, and
-//! the one source of them that asks for neither (see
-//! `docs/architecture/06-musique.md`). Only an artist whose name it knows
-//! exactly is taken, and only when it holds a photo of them.
+//! Deezer, for the photos of artists and the covers offered to be chosen:
+//! free, with no account and no key, and the one source of artist photos
+//! that asks for neither (see `docs/architecture/06-musique.md`). Only an
+//! artist whose name it knows exactly is taken, and only when it holds a
+//! photo of them.
 
 use std::time::Duration;
 
 use serde::Deserialize;
 
+use crate::album_covers::{CoverSize, CoverSource, OfferedCover};
 use crate::provider::{ProviderError, Result};
 
-const SEARCH_URL: &str = "https://api.deezer.com/search/artist";
+const ARTISTS_URL: &str = "https://api.deezer.com/search/artist";
+const ALBUMS_URL: &str = "https://api.deezer.com/search/album";
+
+/// Where the covers are kept, each under the name Deezer gives it.
+const COVERS_URL: &str = "https://cdn-images.dzcdn.net/images/cover";
+
+/// How many answers a search brings: as many artists are looked through for
+/// the one of the exact name, as many albums are offered to choose among.
+const OFFERED: &str = "10";
 
 /// Far enough apart to stay well under the fifty questions in five seconds
 /// Deezer allows.
@@ -41,10 +51,36 @@ impl DeezerClient {
 
     /// Where the photo of an artist of this name is, when Deezer has one.
     pub async fn artist_photo(&self, name: &str) -> Result<Option<String>> {
+        let body = self.search(ARTISTS_URL, name).await?;
+        photo_in(&body, name)
+    }
+
+    /// The albums an album title and its artist could be, as Deezer ranks
+    /// them, for somebody to choose among by their covers.
+    pub async fn albums(&self, title: &str, artist: Option<&str>) -> Result<Vec<OfferedCover>> {
+        let asked = match artist {
+            Some(artist) => format!("{title} {artist}"),
+            None => title.to_string(),
+        };
+        let body = self.search(ALBUMS_URL, &asked).await?;
+        albums_in(&body)
+    }
+
+    /// The cover of an album offered to be chosen, at the size asked.
+    pub async fn cover(&self, picture: &str, size: CoverSize) -> Result<Vec<u8>> {
+        let across = match size {
+            CoverSize::Small => 250,
+            CoverSize::Large => 1000,
+        };
+        self.photo(&format!("{COVERS_URL}/{picture}/{across}x{across}-000000-80-0-0.jpg"))
+            .await
+    }
+
+    async fn search(&self, url: &str, asked: &str) -> Result<String> {
         let response = self
             .client
-            .get(SEARCH_URL)
-            .query(&[("q", name), ("limit", "10")])
+            .get(url)
+            .query(&[("q", asked), ("limit", OFFERED)])
             .send()
             .await
             .map_err(|error| ProviderError::Unreachable(error.to_string()))?;
@@ -54,7 +90,7 @@ impl DeezerClient {
             .await
             .map_err(|error| ProviderError::Unreachable(error.to_string()))?;
         match status {
-            200 => photo_in(&body, name),
+            200 => Ok(body),
             429 => Err(ProviderError::TooManyRequests {
                 retry_after_seconds: None,
             }),
@@ -91,9 +127,9 @@ impl DeezerClient {
 }
 
 #[derive(Debug, Deserialize)]
-struct Search {
-    #[serde(default)]
-    data: Vec<Found>,
+struct Search<T> {
+    #[serde(default = "Vec::new")]
+    data: Vec<T>,
     /// Deezer answers its refusals with a success and this in the body.
     error: Option<Refusal>,
 }
@@ -112,6 +148,21 @@ struct Found {
     picture_xl: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct FoundAlbum {
+    #[serde(default)]
+    title: String,
+    /// The name of its cover, empty for an album without one.
+    #[serde(default)]
+    md5_image: String,
+    artist: Option<FoundArtist>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FoundArtist {
+    name: String,
+}
+
 /// Deezer's answer to asking too often.
 const QUOTA_EXCEEDED: u32 = 4;
 
@@ -119,24 +170,41 @@ const QUOTA_EXCEEDED: u32 = 4;
 /// case and surrounding spaces aside, when it has one: a name that only
 /// looks like it would be somebody else's face.
 fn photo_in(body: &str, name: &str) -> Result<Option<String>> {
-    let search: Search =
-        serde_json::from_str(body).map_err(|error| ProviderError::Unexpected(error.to_string()))?;
-    if let Some(refusal) = search.error {
-        return Err(if refusal.code == QUOTA_EXCEEDED {
-            ProviderError::TooManyRequests {
-                retry_after_seconds: None,
-            }
-        } else {
-            ProviderError::Unexpected(refusal.message)
-        });
-    }
     let asked = name.trim().to_lowercase();
-    Ok(search
-        .data
+    Ok(answered::<Found>(body)?
         .into_iter()
         .find(|found| found.name.trim().to_lowercase() == asked)
         .and_then(|found| found.picture_xl)
         .filter(|url| has_a_photo(url)))
+}
+
+/// Every album of a search that has a cover, as it is offered to be chosen.
+/// Deezer knows no year of an album in a search.
+fn albums_in(body: &str) -> Result<Vec<OfferedCover>> {
+    Ok(answered::<FoundAlbum>(body)?
+        .into_iter()
+        .filter(|found| CoverSource::Deezer.takes(&found.md5_image))
+        .map(|found| OfferedCover {
+            source: CoverSource::Deezer,
+            key: found.md5_image,
+            title: found.title,
+            artist: found.artist.map(|artist| artist.name),
+            year: None,
+        })
+        .collect())
+}
+
+/// What a search found, or why Deezer refused it.
+fn answered<T: serde::de::DeserializeOwned>(body: &str) -> Result<Vec<T>> {
+    let search: Search<T> =
+        serde_json::from_str(body).map_err(|error| ProviderError::Unexpected(error.to_string()))?;
+    match search.error {
+        Some(refusal) if refusal.code == QUOTA_EXCEEDED => Err(ProviderError::TooManyRequests {
+            retry_after_seconds: None,
+        }),
+        Some(refusal) => Err(ProviderError::Unexpected(refusal.message)),
+        None => Ok(search.data),
+    }
 }
 
 /// Whether a photo address names a photo, and not the empty place of an
@@ -177,11 +245,30 @@ mod tests {
     }
 
     #[test]
+    fn every_album_with_a_cover_is_offered() {
+        let found = r#"{"data":[
+            {"id":1,"title":"Northern Lights","md5_image":"5718f7c81c27e0b2417e2a4c45224f8a","artist":{"name":"Amber Field"}},
+            {"id":2,"title":"Northern Lights (Deluxe)","md5_image":"","artist":{"name":"Amber Field"}}
+        ],"total":2}"#;
+        assert_eq!(
+            albums_in(found).expect("read"),
+            vec![OfferedCover {
+                source: CoverSource::Deezer,
+                key: "5718f7c81c27e0b2417e2a4c45224f8a".to_string(),
+                title: "Northern Lights".to_string(),
+                artist: Some("Amber Field".to_string()),
+                year: None,
+            }]
+        );
+    }
+
+    #[test]
     fn asking_too_often_is_worth_trying_again_later() {
         let refused = r#"{"error":{"type":"Exception","message":"Quota limit exceeded","code":4}}"#;
         assert!(matches!(
             photo_in(refused, "Anyone"),
             Err(ProviderError::TooManyRequests { .. })
         ));
+        assert!(matches!(albums_in(refused), Err(ProviderError::TooManyRequests { .. })));
     }
 }

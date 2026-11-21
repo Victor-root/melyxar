@@ -278,6 +278,7 @@ export const FINDABLE: FindableSection[] = [
       ["music.covers_online", "music.covers_online_why"],
       ["music.artist_photos_online", "music.artist_photos_online_why"],
       ["music.tag_writing", "music.tag_writing_why"],
+      ["music.cover_search_online", "music.cover_search_online_why"],
       ["settings.add_library", "settings.new_library_why"],
       ["settings.library_kind"],
       ["settings.metadata_language"],

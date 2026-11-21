@@ -176,3 +176,8 @@
 .pictures-offered-logo .pictures-frame {
   aspect-ratio: 16 / 9;
 }
+
+/* The covers of an album, square as albums are. */
+.pictures-offered-cover .pictures-frame {
+  aspect-ratio: 1;
+}

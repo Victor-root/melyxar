@@ -4,6 +4,9 @@
  * a pattern when asked, a copy of each kept first when asked, and a new
  * cover put beside them.
  *
+ * A cover can also be searched online and chosen by eye, where the library
+ * allows it (see cover-search.tsx).
+ *
  * Laid out as the lyrics window is: the album on top with its cover, its
  * songs under it as the one part that scrolls, and how they are written along
  * the foot beside the button that writes them.
@@ -35,6 +38,7 @@ import { useMusicControls } from "./player/player";
 import { albumFieldsOf, namesField, namesIn, numberOf, textOf, withAlbum } from "./tag-form";
 import type { AlbumFields } from "./tag-form";
 import { AlbumCover } from "./tiles";
+import { CoverSearch } from "./cover-search";
 import { TrimSong } from "./trim";
 
 /** A song's own fields, as they are typed. */
@@ -95,7 +99,10 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
   const [refused, setRefused] = useState<string | null>(null);
   const [planned, setPlanned] = useState<PlannedTags[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [cover, setCover] = useState<{ jpeg: Blob; shown: string } | null>(null);
+  const [cover, setCover] = useState<(Jpeg & { shown: string }) | null>(null);
+  /** Whether the library lets covers be searched online from here. */
+  const [mayLookOnline, setMayLookOnline] = useState(false);
+  const [lookingOnline, setLookingOnline] = useState(false);
   const [trimming, setTrimming] = useState<SongFields | null>(null);
   const [leaving, setLeaving] = useState(false);
   /** The fields as they were read, to tell whether anything was changed. */
@@ -119,6 +126,18 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
       });
     return () => stop.abort();
   }, [id]);
+
+  useEffect(() => {
+    const stop = new AbortController();
+    music
+      .libraryOptions(shownAlbum.library, stop.signal)
+      .then((options) => setMayLookOnline(options.cover_search_online))
+      .catch(() => {});
+    return () => stop.abort();
+  }, [shownAlbum.library]);
+
+  const takeCover = (picture: Blob) =>
+    void asJpeg(picture).then((jpeg) => setCover({ ...jpeg, shown: URL.createObjectURL(jpeg.jpeg) }));
 
   useEffect(() => () => {
     if (cover) {
@@ -236,22 +255,36 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
       }
     >
       <section className="tag-dialog-album" aria-label={t("music.album")}>
-        <div className="tag-dialog-cover">
-          {cover ? <img src={cover.shown} alt="" /> : <AlbumCover album={shownAlbum} />}
-          <label className="tag-dialog-cover-change">
-            {t("music.tag.choose_cover")}
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  void asJpeg(file).then((jpeg) => setCover({ jpeg, shown: URL.createObjectURL(jpeg) }));
-                }
-              }}
-            />
-          </label>
+        <div className="tag-dialog-cover-column">
+          <div className="tag-dialog-cover">
+            {cover ? <img src={cover.shown} alt="" /> : <AlbumCover album={shownAlbum} />}
+          </div>
+          <div className="tag-dialog-cover-actions">
+            <label className="tag-dialog-cover-change">
+              {t("music.tag.choose_cover")}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    takeCover(file);
+                  }
+                }}
+              />
+            </label>
+            {mayLookOnline && (
+              <button type="button" className="tag-dialog-cover-change" onClick={() => setLookingOnline(true)}>
+                {t("music.tag.search_cover")}
+              </button>
+            )}
+          </div>
+          {cover && (
+            <p className="tag-dialog-cover-size">
+              {t("music.tag.cover_size", { across: cover.across, down: cover.down })}
+            </p>
+          )}
         </div>
         <div className="tag-dialog-fields">
           <Field
@@ -341,6 +374,16 @@ export function TagEditor({ album: shownAlbum, onClose }: { album: AlbumPage; on
             ))}
           </div>
         </div>
+      )}
+
+      {lookingOnline && (
+        <CoverSearch
+          album={id}
+          title={album.album}
+          artist={album.albumArtists}
+          onChosen={takeCover}
+          onClose={() => setLookingOnline(false)}
+        />
       )}
 
       {trimming && trimming.length !== null && (
@@ -477,17 +520,25 @@ function shown(value: EditedTags[keyof EditedTags]): string {
   return value === null ? "" : String(value);
 }
 
+/** A cover as it is written, and how large it is. */
+interface Jpeg {
+  jpeg: Blob;
+  across: number;
+  down: number;
+}
+
 /** Any picture as a JPEG no larger than the largest a cover is kept at, which
  *  is what a cover beside the songs is. */
-async function asJpeg(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file);
+async function asJpeg(picture: Blob): Promise<Jpeg> {
+  const bitmap = await createImageBitmap(picture);
   const scale = Math.min(1, LARGEST_COVER / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
   canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
-  return new Promise((done, failed) =>
+  const jpeg = await new Promise<Blob>((done, failed) =>
     canvas.toBlob((blob) => (blob ? done(blob) : failed(new Error("no picture"))), "image/jpeg", 0.92),
   );
+  return { jpeg, across: canvas.width, down: canvas.height };
 }

@@ -1,6 +1,7 @@
 //! The routes of the tag manager: what the songs of an album carry in their
-//! files, what writing would change, writing it, an album's cover, and a
-//! song cut short at either end, drawn as its wave to cut it on.
+//! files, what writing would change, writing it, an album's cover and the
+//! covers offered online to choose it from, and a song cut short at either
+//! end, drawn as its wave to cut it on.
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderName, header};
@@ -10,10 +11,11 @@ use axum::{Json, Router};
 use melyxar_app::AppState;
 use melyxar_app::music::tag_editing::{EditedTags, Planned, SongTags, Wanted, Wave};
 use melyxar_core::time::Millis;
+use melyxar_app::music::cover_search::{CoverSize, CoverSource, OfferedCover};
 use serde::{Deserialize, Serialize};
 
 use crate::account::Viewer;
-use crate::error::Result;
+use crate::error::{Result, ServerError};
 use crate::identifiers::parse_work;
 
 pub fn router() -> Router<AppState> {
@@ -23,6 +25,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/music/tags/write", post(write))
         .route("/api/v1/music/songs/{id}/trim", post(trim))
         .route("/api/v1/music/songs/{id}/wave", get(wave))
+        .route("/api/v1/music/albums/{id}/covers/offered", get(offered_covers))
+        .route(
+            "/api/v1/music/albums/{id}/covers/offered/{source}/{key}",
+            get(offered_cover),
+        )
         .route(
             "/api/v1/music/albums/{id}/cover",
             // A picture straight off a phone, the same as a profile picture.
@@ -238,6 +245,96 @@ async fn cover(
     )
     .await?;
     Ok(Json(()))
+}
+
+#[derive(Debug, Deserialize)]
+struct CoverSearch {
+    title: String,
+    artist: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct OfferedCoverView {
+    source: &'static str,
+    key: String,
+    title: String,
+    artist: Option<String>,
+    year: Option<i32>,
+}
+
+impl From<OfferedCover> for OfferedCoverView {
+    fn from(cover: OfferedCover) -> Self {
+        Self {
+            source: cover.source.as_str(),
+            key: cover.key,
+            title: cover.title,
+            artist: cover.artist,
+            year: cover.year,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct OfferedCoversView {
+    covers: Vec<OfferedCoverView>,
+    /// The services that did not answer, so a screen can say why it shows
+    /// fewer covers than it might.
+    unanswered: Vec<&'static str>,
+}
+
+async fn offered_covers(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path(id): Path<String>,
+    Query(search): Query<CoverSearch>,
+) -> Result<Json<OfferedCoversView>> {
+    let offered = melyxar_app::music::cover_search::offered(
+        &state,
+        &who,
+        parse_work(&id)?,
+        &search.title,
+        search.artist.as_deref(),
+    )
+    .await?;
+    Ok(Json(OfferedCoversView {
+        covers: offered.covers.into_iter().map(OfferedCoverView::from).collect(),
+        unanswered: offered.unanswered.into_iter().map(CoverSource::as_str).collect(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct CoverSizeQuery {
+    #[serde(default)]
+    large: bool,
+}
+
+/// One offered cover, fetched by the server and handed on as it came.
+async fn offered_cover(
+    State(state): State<AppState>,
+    Viewer(who): Viewer,
+    Path((id, source, key)): Path<(String, String, String)>,
+    Query(size): Query<CoverSizeQuery>,
+) -> Result<Response> {
+    let source = CoverSource::parse(&source).ok_or_else(|| ServerError::invalid_input("source"))?;
+    let picture = melyxar_app::music::cover_search::picture(
+        &state,
+        &who,
+        parse_work(&id)?,
+        source,
+        &key,
+        if size.large { CoverSize::Large } else { CoverSize::Small },
+    )
+    .await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/jpeg"),
+            // The same picture under the same name for as long as the service
+            // keeps it, and only this account's to see.
+            (header::CACHE_CONTROL, "private, max-age=86400"),
+        ],
+        picture,
+    )
+        .into_response())
 }
 
 /// Where a song is cut, in milliseconds from its start.

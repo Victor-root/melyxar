@@ -100,7 +100,8 @@ impl Database {
     /// nothing was chosen.
     pub async fn music_library_options(&self, library: LibraryId) -> Result<MusicLibraryOptions> {
         let row = sqlx::query(
-            "SELECT lyrics_online, tag_writing, covers_online, artist_photos_online
+            "SELECT lyrics_online, tag_writing, covers_online, artist_photos_online,
+                    cover_search_online
                FROM music_library_options WHERE library_id = ?",
         )
         .bind(library.to_db_string())
@@ -112,6 +113,7 @@ impl Database {
                 tag_writing: row.try_get::<i64, _>("tag_writing")? != 0,
                 covers_online: row.try_get::<i64, _>("covers_online")? != 0,
                 artist_photos_online: row.try_get::<i64, _>("artist_photos_online")? != 0,
+                cover_search_online: row.try_get::<i64, _>("cover_search_online")? != 0,
             },
             None => MusicLibraryOptions::default(),
         })
@@ -124,18 +126,21 @@ impl Database {
     ) -> Result<()> {
         sqlx::query(
             "INSERT INTO music_library_options
-                (library_id, lyrics_online, tag_writing, covers_online, artist_photos_online)
-             VALUES (?, ?, ?, ?, ?)
+                (library_id, lyrics_online, tag_writing, covers_online, artist_photos_online,
+                 cover_search_online)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT (library_id) DO UPDATE SET
                 lyrics_online = excluded.lyrics_online, tag_writing = excluded.tag_writing,
                 covers_online = excluded.covers_online,
-                artist_photos_online = excluded.artist_photos_online",
+                artist_photos_online = excluded.artist_photos_online,
+                cover_search_online = excluded.cover_search_online",
         )
         .bind(library.to_db_string())
         .bind(options.lyrics_online)
         .bind(options.tag_writing)
         .bind(options.covers_online)
         .bind(options.artist_photos_online)
+        .bind(options.cover_search_online)
         .execute(self.writer())
         .await?;
         Ok(())
@@ -212,6 +217,7 @@ mod tests {
             tag_writing: true,
             covers_online: true,
             artist_photos_online: true,
+            cover_search_online: true,
         };
         database
             .set_music_library_options(library, &on)

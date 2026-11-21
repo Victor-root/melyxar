@@ -217,6 +217,10 @@ pub struct MusicLibraryOptions {
     /// Whether the photos its artists lack are looked up online, on Deezer.
     /// Off until an administrator turns it on.
     pub artist_photos_online: bool,
+    /// Whether the tag manager may search the covers of MusicBrainz and
+    /// Deezer for one to be chosen by eye. Off until an administrator turns
+    /// it on.
+    pub cover_search_online: bool,
 }
 
 /// The highest the wave behind the player can be asked to rise.

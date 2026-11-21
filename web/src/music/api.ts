@@ -315,6 +315,9 @@ export interface MusicLibraryOptions {
   covers_online: boolean;
   /** Whether the photos its artists lack are looked up on Deezer. */
   artist_photos_online: boolean;
+  /** Whether the tag manager may search MusicBrainz and Deezer for a cover
+      to choose. */
+  cover_search_online: boolean;
 }
 
 /** What a library of music does until an administrator says otherwise, the
@@ -324,7 +327,27 @@ export const NO_MUSIC_OPTIONS: MusicLibraryOptions = {
   tag_writing: false,
   covers_online: false,
   artist_photos_online: false,
+  cover_search_online: false,
 };
+
+/** Where a cover offered to be chosen comes from. */
+export type CoverSource = "musicbrainz" | "deezer";
+
+/** One cover found online for an album, to be chosen by eye. */
+export interface OfferedCover {
+  source: CoverSource;
+  key: string;
+  /** The album, as the service names it. */
+  title: string;
+  artist: string | null;
+  year: number | null;
+}
+
+/** What a search for covers found, and the services that did not answer. */
+export interface OfferedCovers {
+  covers: OfferedCover[];
+  unanswered: CoverSource[];
+}
 
 /** One playlist of songs, as the list of them shows it. */
 export interface MusicPlaylist {
@@ -412,6 +435,13 @@ function query(values: Record<string, string | number | boolean | null | undefin
   }
   const written = parts.toString();
   return written ? `?${written}` : "";
+}
+
+/** Where an offered cover is shown from, small for the grid it is chosen
+    from, large for the one chosen. Fetched by the server, never by the
+    browser from the service. */
+function offeredCoverAddress(album: string, cover: OfferedCover, large: boolean): string {
+  return `/api/v1/music/albums/${album}/covers/offered/${cover.source}/${cover.key}${query({ large })}`;
 }
 
 export const music = {
@@ -545,6 +575,11 @@ export const music = {
     const momentsASecond = Number(answer.headers.get("x-wave-moments-a-second"));
     return { momentsASecond, levels: new Uint8Array(await answer.arrayBuffer()) };
   },
+  offeredCovers: (album: string, title: string, artist: string, signal?: AbortSignal) =>
+    get<OfferedCovers>(`/api/v1/music/albums/${album}/covers/offered${query({ title, artist: artist || null })}`, signal),
+  offeredCoverAddress,
+  offeredCover: async (album: string, cover: OfferedCover) =>
+    (await getRaw(offeredCoverAddress(album, cover, true), "image/jpeg")).blob(),
   setCover: (album: string, jpeg: Blob, keepACopy: boolean) =>
     put<null>(`/api/v1/music/albums/${album}/cover?keep_a_copy=${keepACopy}`, jpeg),
   search: (words: string, library: string | undefined, signal?: AbortSignal) =>

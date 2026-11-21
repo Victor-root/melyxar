@@ -2326,9 +2326,10 @@
   background: var(--panel-glass);
 }
 
-/* The cover, and over its foot the button that changes it. */
+/* The cover itself. */
 .tag-dialog-cover {
   position: relative;
+  grid-area: cover;
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: var(--radius-control);
@@ -2336,22 +2337,37 @@
   box-shadow: var(--shadow-card);
 }
 
-.tag-dialog-cover > *:not(.tag-dialog-cover-change),
+.tag-dialog-cover > *,
 .tag-dialog-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+/* The cover, the ways of changing it laid over its foot, and how large the
+   picture chosen is under it: one cell each, the ways sharing the cover's. */
+.tag-dialog-cover-column {
+  display: grid;
+  grid-template-areas: "cover" "size";
+}
+
+.tag-dialog-cover-actions {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  grid-area: cover;
+  align-self: end;
+  gap: 6px;
+  margin: 8px;
+}
+
 .tag-dialog-cover-change {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  left: 8px;
   padding: 6px 8px;
+  border: 0;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--surface-deep) 78%, transparent);
   color: var(--text);
+  font: inherit;
   font-size: 12.5px;
   font-weight: 650;
   text-align: center;
@@ -2360,8 +2376,9 @@
   transition: opacity var(--quick) var(--ease), background var(--quick) var(--ease);
 }
 
-.tag-dialog-cover:hover .tag-dialog-cover-change,
-.tag-dialog-cover-change:focus-within {
+.tag-dialog-cover-column:hover .tag-dialog-cover-change,
+.tag-dialog-cover-change:focus-within,
+.tag-dialog-cover-change:focus-visible {
   opacity: 1;
 }
 
@@ -2374,6 +2391,56 @@
   .tag-dialog-cover-change {
     opacity: 1;
   }
+}
+
+.tag-dialog-cover-size {
+  grid-area: size;
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+ * The covers searched online, chosen from a window over the tag manager
+ * ----------------------------------------------------------------------- */
+
+.cover-search-asked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px var(--gap);
+  margin-bottom: var(--gap);
+}
+
+@media (max-width: 600px) {
+  .cover-search-asked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cover-search-title,
+.cover-search-by {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cover-search-title {
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.cover-search-by {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.cover-search-source {
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .tag-dialog-fields {
@@ -2610,6 +2677,16 @@
   .tag-dialog-album {
     grid-template-columns: 96px minmax(0, 1fr);
     gap: 12px;
+  }
+
+  /* A cover this small would be hidden by its buttons: they go under it. */
+  .tag-dialog-cover-column {
+    grid-template-areas: "cover" "actions" "size";
+  }
+
+  .tag-dialog-cover-actions {
+    grid-area: actions;
+    margin: 6px 0 0;
   }
 
   .tag-dialog-hint {

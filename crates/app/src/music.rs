@@ -9,6 +9,7 @@
 
 pub mod analysis;
 pub mod browse;
+pub mod cover_search;
 pub mod covers;
 pub mod listen;
 pub mod lyrics;
@@ -19,3 +20,5 @@ pub mod tag_editing;
 pub(crate) mod pictures;
 pub mod preferences;
 pub(crate) mod scan;
+#[cfg(test)]
+pub(crate) mod testing;

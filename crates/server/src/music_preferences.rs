@@ -158,6 +158,8 @@ struct LibraryOptionsView {
     covers_online: bool,
     #[serde(default)]
     artist_photos_online: bool,
+    #[serde(default)]
+    cover_search_online: bool,
 }
 
 async fn read_library_options(
@@ -173,6 +175,7 @@ async fn read_library_options(
         tag_writing: options.tag_writing,
         covers_online: options.covers_online,
         artist_photos_online: options.artist_photos_online,
+        cover_search_online: options.cover_search_online,
     }))
 }
 
@@ -192,6 +195,7 @@ async fn write_library_options(
             tag_writing: body.tag_writing,
             covers_online: body.covers_online,
             artist_photos_online: body.artist_photos_online,
+            cover_search_online: body.cover_search_online,
         },
     )
     .await?;
@@ -200,6 +204,7 @@ async fn write_library_options(
         tag_writing: options.tag_writing,
         covers_online: options.covers_online,
         artist_photos_online: options.artist_photos_online,
+        cover_search_online: options.cover_search_online,
     }))
 }
 
