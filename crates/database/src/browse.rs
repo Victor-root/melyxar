@@ -71,7 +71,8 @@ pub(crate) fn met_on_its_own(table: &str) -> String {
 pub enum WorkOrder {
     /// Alphabetical, ignoring a leading article and accents.
     Title,
-    /// Newest in the library first, which is what a home page shows.
+    /// Newest in the library first, which is what a home page shows. A
+    /// series counts as new as its newest episode: a new season is news.
     AddedAt,
     ReleaseYear,
     CommunityRating,
@@ -93,11 +94,11 @@ impl WorkOrder {
                 descending_after: "(w.sort_title, w.id) < (SELECT sort_title, id FROM works WHERE id = ?)",
             },
             Self::AddedAt => OrderStatements {
-                column: "w.added_at",
-                ascending_order: "ORDER BY w.added_at, w.id",
-                descending_order: "ORDER BY w.added_at DESC, w.id DESC",
-                ascending_after: "(w.added_at, w.id) > (SELECT added_at, id FROM works WHERE id = ?)",
-                descending_after: "(w.added_at, w.id) < (SELECT added_at, id FROM works WHERE id = ?)",
+                column: "w.content_added_at",
+                ascending_order: "ORDER BY w.content_added_at, w.id",
+                descending_order: "ORDER BY w.content_added_at DESC, w.id DESC",
+                ascending_after: "(w.content_added_at, w.id) > (SELECT content_added_at, id FROM works WHERE id = ?)",
+                descending_after: "(w.content_added_at, w.id) < (SELECT content_added_at, id FROM works WHERE id = ?)",
             },
             Self::ReleaseYear => OrderStatements {
                 column: "w.release_year",
@@ -1881,6 +1882,112 @@ mod tests {
         assert!(titles(nothing).is_empty());
     }
 
+    /// The titles of the newest works, newest first.
+    async fn newest(database: &Database) -> Vec<String> {
+        database
+            .browse_works(&BrowseRequest {
+                order: WorkOrder::AddedAt,
+                descending: true,
+                ..Default::default()
+            })
+            .await
+            .expect("read")
+            .cards
+            .into_iter()
+            .map(|card| card.title)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_new_season_brings_its_series_back_among_the_newest() {
+        let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
+        let series = database
+            .create_work(library_id, WorkKind::Series, "Amber Coast", "amber coast", None)
+            .await
+            .expect("series created");
+        database
+            .create_work(library_id, WorkKind::Movie, "Winter Signal", "winter signal", None)
+            .await
+            .expect("film created");
+        assert_eq!(newest(&database).await, ["Winter Signal", "Amber Coast", "Quiet Harbour"]);
+
+        let season = database
+            .create_child_work(library_id, series.id, 2, WorkKind::Season, "Season 2", "season 2")
+            .await
+            .expect("season created");
+        database
+            .create_child_work(library_id, season.id, 1, WorkKind::Episode, "Episode 1", "episode 1")
+            .await
+            .expect("episode created");
+        assert_eq!(newest(&database).await, ["Amber Coast", "Winter Signal", "Quiet Harbour"]);
+
+        let card = database
+            .browse_works(&BrowseRequest::default())
+            .await
+            .expect("read")
+            .cards
+            .into_iter()
+            .find(|card| card.id == series.id)
+            .expect("the series is there");
+        assert_eq!(card.added_at, series.added_at, "the day the series appeared stays what it was");
+    }
+
+    #[tokio::test]
+    async fn a_new_episode_in_a_season_already_there_brings_its_series_back_too() {
+        let (database, library_id) = library_of(&[]).await;
+        let series = database
+            .create_work(library_id, WorkKind::Series, "Amber Coast", "amber coast", None)
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(library_id, series.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        database
+            .create_work(library_id, WorkKind::Movie, "Winter Signal", "winter signal", None)
+            .await
+            .expect("film created");
+        database
+            .create_child_work(library_id, season.id, 2, WorkKind::Episode, "Episode 2", "episode 2")
+            .await
+            .expect("episode created");
+        assert_eq!(newest(&database).await, ["Amber Coast", "Winter Signal"]);
+    }
+
+    #[tokio::test]
+    async fn an_old_episode_put_under_another_series_is_nothing_new() {
+        let (database, library_id) = library_of(&[]).await;
+        let target = database
+            .create_work(library_id, WorkKind::Series, "Amber Coast", "amber coast", None)
+            .await
+            .expect("series created");
+        let stray = database
+            .create_work(library_id, WorkKind::Series, "Amber Cst", "amber cst", None)
+            .await
+            .expect("series created");
+        let season = database
+            .create_child_work(library_id, stray.id, 1, WorkKind::Season, "Season 1", "season 1")
+            .await
+            .expect("season created");
+        database
+            .create_child_work(library_id, season.id, 1, WorkKind::Episode, "Episode 1", "episode 1")
+            .await
+            .expect("episode created");
+        database
+            .create_work(library_id, WorkKind::Movie, "Winter Signal", "winter signal", None)
+            .await
+            .expect("film created");
+
+        sqlx::query("UPDATE works SET parent_id = ? WHERE id = ?")
+            .bind(target.id.to_db_string())
+            .bind(season.id.to_db_string())
+            .execute(database.writer())
+            .await
+            .expect("moved");
+        let order = newest(&database).await;
+        assert_eq!(order[0], "Winter Signal", "the season brought its own date and no other: {order:?}");
+    }
+
     #[tokio::test]
     async fn only_the_titles_a_grid_shows_are_told_as_waiting_for_a_name() {
         let (database, library_id) = library_of(&[("Quiet Harbour", 2019, 7.4)]).await;
@@ -2910,7 +3017,7 @@ mod tests {
     async fn the_works_met_on_their_own_are_read_through_their_indexes() {
         let database = Database::open_in_memory().await.expect("database opens");
         for (also, order, index) in [
-            ("", "w.added_at DESC, w.id DESC", "works_met_by_added_at"),
+            ("", "w.content_added_at DESC, w.id DESC", "works_met_by_content_added_at"),
             (
                 "AND w.community_rating IS NOT NULL",
                 "w.community_rating DESC",
@@ -2923,8 +3030,8 @@ mod tests {
             ),
             (
                 "AND w.library_id = 'a library'",
-                "w.added_at DESC, w.id DESC",
-                "works_met_in_a_library_by_added_at",
+                "w.content_added_at DESC, w.id DESC",
+                "works_met_in_a_library_by_content_added_at",
             ),
         ] {
             let plan: Vec<String> = sqlx::query(AssertSqlSafe(format!(
