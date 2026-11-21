@@ -17,9 +17,13 @@ const ALBUMS_URL: &str = "https://api.deezer.com/search/album";
 /// Where the covers are kept, each under the name Deezer gives it.
 const COVERS_URL: &str = "https://cdn-images.dzcdn.net/images/cover";
 
-/// How many answers a search brings: as many artists are looked through for
-/// the one of the exact name, as many albums are offered to choose among.
-const OFFERED: &str = "10";
+/// How many artists of a search are looked through for the one of the exact
+/// name.
+const ARTISTS_LOOKED_THROUGH: &str = "10";
+
+/// How many albums a search offers to choose among: enough for an artist
+/// searched alone, whose albums all come back.
+const ALBUMS_OFFERED: &str = "25";
 
 /// Far enough apart to stay well under the fifty questions in five seconds
 /// Deezer allows.
@@ -51,18 +55,15 @@ impl DeezerClient {
 
     /// Where the photo of an artist of this name is, when Deezer has one.
     pub async fn artist_photo(&self, name: &str) -> Result<Option<String>> {
-        let body = self.search(ARTISTS_URL, name).await?;
+        let body = self.search(ARTISTS_URL, name, ARTISTS_LOOKED_THROUGH).await?;
         photo_in(&body, name)
     }
 
-    /// The albums an album title and its artist could be, as Deezer ranks
-    /// them, for somebody to choose among by their covers.
-    pub async fn albums(&self, title: &str, artist: Option<&str>) -> Result<Vec<OfferedCover>> {
-        let asked = match artist {
-            Some(artist) => format!("{title} {artist}"),
-            None => title.to_string(),
-        };
-        let body = self.search(ALBUMS_URL, &asked).await?;
+    /// The albums a title, an artist or both could be, as Deezer ranks them,
+    /// for somebody to choose among by their covers.
+    pub async fn albums(&self, title: Option<&str>, artist: Option<&str>) -> Result<Vec<OfferedCover>> {
+        let asked: Vec<&str> = [title, artist].into_iter().flatten().collect();
+        let body = self.search(ALBUMS_URL, &asked.join(" "), ALBUMS_OFFERED).await?;
         albums_in(&body)
     }
 
@@ -76,11 +77,11 @@ impl DeezerClient {
             .await
     }
 
-    async fn search(&self, url: &str, asked: &str) -> Result<String> {
+    async fn search(&self, url: &str, asked: &str, limit: &str) -> Result<String> {
         let response = self
             .client
             .get(url)
-            .query(&[("q", asked), ("limit", OFFERED)])
+            .query(&[("q", asked), ("limit", limit)])
             .send()
             .await
             .map_err(|error| ProviderError::Unreachable(error.to_string()))?;

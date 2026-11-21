@@ -2,7 +2,7 @@
  * The covers MusicBrainz and Deezer hold for an album, searched from the tag
  * manager and chosen by eye, in a window over it. Searched at once with the
  * album and artist the tag manager holds, and again with whatever is typed
- * here. The pictures come through the server, never from the services.
+ * here: the album, the artist, or both. The pictures come through the server, never from the services.
  *
  * A cover chosen is handed back as a picture, the way one taken from the
  * device is: the tag manager shows it and writes it with the rest.
@@ -48,7 +48,7 @@ export function CoverSearch({
 
   const search = useCallback(
     (asked: { title: string; artist: string }, signal?: AbortSignal) => {
-      if (!asked.title.trim()) {
+      if (!typedAny(asked)) {
         return;
       }
       setSearching(true);
@@ -113,7 +113,7 @@ export function CoverSearch({
           <span className="tag-dialog-label">{t("music.tag.album_artists")}</span>
           <input className="field-line" value={artist} onChange={(event) => setArtist(event.target.value)} />
         </label>
-        <button type="submit" className="button button-accent" disabled={searching || !title.trim()}>
+        <button type="submit" className="button button-accent" disabled={searching || !typedAny({ title, artist })}>
           {t("music.tag.cover_search_go")}
         </button>
       </form>
@@ -158,4 +158,9 @@ export function CoverSearch({
       )}
     </Modal>
   );
+}
+
+/** Whether anything was typed to search with: an album, an artist or both. */
+function typedAny({ title, artist }: { title: string; artist: string }): boolean {
+  return title.trim() !== "" || artist.trim() !== "";
 }

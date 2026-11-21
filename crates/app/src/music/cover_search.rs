@@ -23,24 +23,23 @@ pub struct Offered {
     pub unanswered: Vec<CoverSource>,
 }
 
-/// The covers both services hold for an album title and its artist,
+/// The covers both services hold for an album title, an artist or both,
 /// MusicBrainz's first. A service that does not answer leaves only the
 /// other's, and says so.
 pub async fn offered(
     state: &AppState,
     who: &User,
     album: WorkId,
-    title: &str,
+    title: Option<&str>,
     artist: Option<&str>,
 ) -> Result<Offered> {
     may_search(state, who, album).await?;
-    let title = title.trim();
-    if title.is_empty() {
+    let (title, artist) = (typed(title), typed(artist));
+    if title.is_none() && artist.is_none() {
         return Err(AppError::Domain(melyxar_core::Error::invalid_input(
-            "an album title is needed to search for its cover",
+            "an album title or an artist is needed to search for a cover",
         )));
     }
-    let artist = artist.map(str::trim).filter(|artist| !artist.is_empty());
     let (musicbrainz, deezer) = tokio::join!(
         asked_of_musicbrainz(title, artist),
         async { DeezerClient::new()?.albums(title, artist).await },
@@ -51,12 +50,17 @@ pub async fn offered(
     ]))
 }
 
-/// The albums MusicBrainz has for a title and an artist, asked a second time
+/// What was typed, nothing when it is only spaces.
+fn typed(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// The albums MusicBrainz has for a title, an artist or both, asked a second time
 /// after the pause it asks for when it says it is busy: it says so of any
 /// second question within a second of the first, which a search following
 /// another or the covers looked up in the background is often enough.
 async fn asked_of_musicbrainz(
-    title: &str,
+    title: Option<&str>,
     artist: Option<&str>,
 ) -> std::result::Result<Vec<OfferedCover>, ProviderError> {
     let client = MusicBrainzClient::new()?;
@@ -186,7 +190,7 @@ mod tests {
             .await
             .expect("set");
         assert!(refused_with(
-            offered(&state, &administrator, album, "Northern Lights", None).await,
+            offered(&state, &administrator, album, Some("Northern Lights"), None).await,
             "does not search covers online"
         ));
         assert!(refused_with(
@@ -200,8 +204,8 @@ mod tests {
             .await
             .expect("set");
         assert!(refused_with(
-            offered(&state, &administrator, album, "  ", None).await,
-            "an album title is needed"
+            offered(&state, &administrator, album, Some("  "), Some("")).await,
+            "an album title or an artist is needed"
         ));
         assert!(
             refused_with(
@@ -213,7 +217,7 @@ mod tests {
 
         let viewer = crate::a_viewer(&state).await;
         assert!(refused_with(
-            offered(&state, &viewer, album, "Northern Lights", None).await,
+            offered(&state, &viewer, album, Some("Northern Lights"), None).await,
             "may not edit the tags"
         ));
     }

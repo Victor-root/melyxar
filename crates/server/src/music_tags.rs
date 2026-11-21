@@ -249,7 +249,7 @@ async fn cover(
 
 #[derive(Debug, Deserialize)]
 struct CoverSearch {
-    title: String,
+    title: Option<String>,
     artist: Option<String>,
 }
 
@@ -292,7 +292,7 @@ async fn offered_covers(
         &state,
         &who,
         parse_work(&id)?,
-        &search.title,
+        search.title.as_deref(),
         search.artist.as_deref(),
     )
     .await?;

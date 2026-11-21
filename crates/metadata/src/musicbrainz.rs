@@ -23,8 +23,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// out of a hundred: below this a stranger's cover would be worse than none.
 const SURE_ENOUGH: u32 = 90;
 
-/// How many albums a search offers to choose among.
-const OFFERED: u32 = 12;
+/// How many albums a search offers to choose among: enough for an artist
+/// searched alone, whose albums all come back.
+const OFFERED: u32 = 25;
 
 pub struct MusicBrainzClient {
     client: reqwest::Client,
@@ -47,27 +48,23 @@ impl MusicBrainzClient {
     /// The album MusicBrainz is sure an album title and its artist are, as
     /// the identifier of its release group.
     pub async fn album(&self, title: &str, artist: Option<&str>) -> Result<Option<String>> {
-        let body = self.search(title, artist, 3).await?;
+        let body = self.search(&query_for(Some(title), artist), 3).await?;
         album_in(&body)
     }
 
-    /// The albums a title and an artist could be, the likeliest first, for
-    /// somebody to choose among by their covers.
-    pub async fn albums(&self, title: &str, artist: Option<&str>) -> Result<Vec<OfferedCover>> {
-        let body = self.search(title, artist, OFFERED).await?;
+    /// The albums a title, an artist or both could be, the likeliest first,
+    /// for somebody to choose among by their covers.
+    pub async fn albums(&self, title: Option<&str>, artist: Option<&str>) -> Result<Vec<OfferedCover>> {
+        let body = self.search(&query_for(title, artist), OFFERED).await?;
         albums_in(&body)
     }
 
-    async fn search(&self, title: &str, artist: Option<&str>, limit: u32) -> Result<String> {
-        let mut query = format!("releasegroup:\"{}\"", quoted(title));
-        if let Some(artist) = artist {
-            query.push_str(&format!(" AND artist:\"{}\"", quoted(artist)));
-        }
+    async fn search(&self, query: &str, limit: u32) -> Result<String> {
         let response = self
             .client
             .get(SEARCH_URL)
             .query(&[
-                ("query", query.as_str()),
+                ("query", query),
                 ("fmt", "json"),
                 ("limit", limit.to_string().as_str()),
             ])
@@ -132,6 +129,22 @@ impl MusicBrainzClient {
             ))),
         }
     }
+}
+
+/// A search for the albums of this title, of this artist, or both.
+///
+/// An artist searched alone is held to their albums: MusicBrainz otherwise
+/// ranks every single, remix and recorded concert of theirs among them, and
+/// the albums were lost in the middle.
+fn query_for(title: Option<&str>, artist: Option<&str>) -> String {
+    let mut asked: Vec<String> = [("releasegroup", title), ("artist", artist)]
+        .into_iter()
+        .filter_map(|(field, value)| value.map(|value| format!("{field}:\"{}\"", quoted(value))))
+        .collect();
+    if title.is_none() {
+        asked.push("primarytype:album".to_string());
+    }
+    asked.join(" AND ")
 }
 
 /// A value put between quotes in a search, its own quotes and escapes kept
@@ -246,6 +259,19 @@ mod tests {
             ]
         );
         assert!(albums_in("not json").is_err());
+    }
+
+    #[test]
+    fn an_album_is_searched_by_its_title_its_artist_or_both() {
+        assert_eq!(query_for(Some("Northern Lights"), None), r#"releasegroup:"Northern Lights""#);
+        assert_eq!(
+            query_for(None, Some("Amber Field")),
+            r#"artist:"Amber Field" AND primarytype:album"#
+        );
+        assert_eq!(
+            query_for(Some("Northern Lights"), Some("Amber Field")),
+            r#"releasegroup:"Northern Lights" AND artist:"Amber Field""#
+        );
     }
 
     #[test]

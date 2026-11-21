@@ -576,7 +576,10 @@ export const music = {
     return { momentsASecond, levels: new Uint8Array(await answer.arrayBuffer()) };
   },
   offeredCovers: (album: string, title: string, artist: string, signal?: AbortSignal) =>
-    get<OfferedCovers>(`/api/v1/music/albums/${album}/covers/offered${query({ title, artist: artist || null })}`, signal),
+    get<OfferedCovers>(
+      `/api/v1/music/albums/${album}/covers/offered${query({ title: title.trim() || null, artist: artist.trim() || null })}`,
+      signal,
+    ),
   offeredCoverAddress,
   offeredCover: async (album: string, cover: OfferedCover) =>
     (await getRaw(offeredCoverAddress(album, cover, true), "image/jpeg")).blob(),
