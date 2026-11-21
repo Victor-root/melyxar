@@ -40,6 +40,8 @@ import { useAdaptiveQuality } from "./adapting";
 import { markTheOpening } from "./opening";
 import { watchTheReading, whatIsHeldAround } from "./watch";
 import { watchStill } from "./sound-hole";
+import { filmLeftOutAhead, forgetThrownAway, stretchesHeld, whereItLies } from "./skipped-film";
+import type { Stretch } from "./skipped-film";
 import type { Watch } from "./sound-hole";
 import { sayHowItDecodes } from "./card";
 import { useLoading } from "./loading";
@@ -114,6 +116,9 @@ const STILL_HERE_EVERY = 30_000;
  * tenth: measured, and it cost two seconds of nothing at all before the
  * library hopped over it. Half a second covers the seam with room to spare and
  * is still far too short to hop over anything a viewer would miss.
+ *
+ * The library also counts a gap this narrow as held when it is made of
+ * segments it never fetched, which `skipped-film.ts` undoes.
  */
 const A_SEAM_IS_WORTH_HOPPING = 0.5;
 
@@ -766,12 +771,14 @@ export function usePlayback({
        three: it cannot make room for the film, then it cannot put anything in
        the room it did not make. Only the first says anything. */
     let gaveUp = false;
+    const listening = new AbortController();
 
     const leave = () => {
       gone = true;
       whileTheViewerMoves.current = null;
       watching.current = null;
       stopWatching();
+      listening.abort();
       feed?.destroy();
     };
 
@@ -881,6 +888,46 @@ export function usePlayback({
           feed?.startLoad(to);
         },
       };
+      /* Segments left out inside a gap the library takes for a seam, see
+         `skipped-film.ts`. Looked for whenever film is added and whenever the
+         viewer lands somewhere new, the two ways such a gap comes to lie ahead
+         of the film. Never while a hand is on the bar: letting go starts the
+         library again from wherever it lands. */
+      const fetched = new Map<number, Stretch>();
+      // Once for each gap: a library that leaves the same segments out again
+      // after being made to fetch them would otherwise be made to forever.
+      const fetchedAgainAfter = new Set<number>();
+      const fetchWhatWasLeftOut = () => {
+        if (stopped || !feed) {
+          return;
+        }
+        const leftOut = filmLeftOutAhead(
+          stretchesHeld(element.buffered),
+          element.currentTime,
+          fetched,
+          A_SEAM_IS_WORTH_HOPPING,
+        );
+        if (leftOut === null || fetchedAgainAfter.has(leftOut.after)) {
+          return;
+        }
+        fetchedAgainAfter.add(leftOut.after);
+        feed.trigger(Library.Events.BUFFER_FLUSHING, {
+          startOffset: leftOut.from,
+          endOffset: Number.POSITIVE_INFINITY,
+          type: null,
+        });
+      };
+      feed.on(Library.Events.FRAG_BUFFERED, (_event, buffered) => {
+        const { sn, type } = buffered.frag;
+        if (typeof sn === "number" && type === "main") {
+          fetched.set(sn, whereItLies(buffered.frag));
+        }
+        fetchWhatWasLeftOut();
+      });
+      feed.on(Library.Events.BUFFER_FLUSHING, (_event, flushing) =>
+        forgetThrownAway(fetched, flushing.startOffset, flushing.endOffset),
+      );
+      element.addEventListener("seeked", fetchWhatWasLeftOut, { signal: listening.signal });
       sayWhereItBegan(Library, feed, stream.id);
       sayWhereSegmentsLand(Library, feed, stream.id);
       // The playlist has been read, and the library now knows what to ask
