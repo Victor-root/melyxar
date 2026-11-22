@@ -524,6 +524,7 @@ mod tests {
                 user_id: reader,
                 catalogue: "films",
                 tmdb_id: "tmdb-Amber Field",
+                imdb_id: None,
                 title: "Amber Field",
                 year: None,
                 poster_path: None,

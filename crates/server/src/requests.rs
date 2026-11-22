@@ -69,6 +69,7 @@ struct RequestView {
     user_name: String,
     catalogue: String,
     tmdb_id: String,
+    imdb_id: Option<String>,
     title: String,
     year: Option<i32>,
     poster: Option<String>,
@@ -90,6 +91,7 @@ fn request_view(state: &AppState, request: &TitleRequest) -> RequestView {
         user_name: request.user_name.clone(),
         catalogue: request.catalogue.clone(),
         tmdb_id: request.tmdb_id.clone(),
+        imdb_id: request.imdb_id.clone(),
         title: request.title.clone(),
         year: request.year,
         poster: poster_of(state, request.poster_path.as_deref()),
@@ -429,6 +431,7 @@ struct AskerView {
 struct WaitingView {
     catalogue: &'static str,
     tmdb_id: String,
+    imdb_id: Option<String>,
     accepted: bool,
     /// Every open request for the title, oldest first.
     requests: Vec<RequestView>,
@@ -466,6 +469,7 @@ async fn for_the_administrator(
             .map(|title: &Waiting| WaitingView {
                 catalogue: word_of(title.catalogue),
                 tmdb_id: title.tmdb_id.clone(),
+                imdb_id: title.imdb_id().map(str::to_string),
                 accepted: title.accepted(),
                 requests: title
                     .requests

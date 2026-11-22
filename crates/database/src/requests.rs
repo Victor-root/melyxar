@@ -23,6 +23,7 @@ pub struct NewRequest<'a> {
     /// films or series.
     pub catalogue: &'a str,
     pub tmdb_id: &'a str,
+    pub imdb_id: Option<&'a str>,
     pub title: &'a str,
     pub year: Option<i32>,
     pub poster_path: Option<&'a str>,
@@ -41,6 +42,8 @@ pub struct TitleRequest {
     pub user_name: String,
     pub catalogue: String,
     pub tmdb_id: String,
+    /// The same title as IMDb names it, when known.
+    pub imdb_id: Option<String>,
     pub title: String,
     pub year: Option<i32>,
     pub poster_path: Option<String>,
@@ -84,7 +87,7 @@ impl Decision {
 }
 
 const WHAT_A_REQUEST_IS: &str = "r.id, r.user_id, u.name AS user_name, r.catalogue, r.tmdb_id, \
-     r.title, r.year, r.poster_path, r.overview, r.seasons, r.note, r.state, r.answer, r.work_id, \
+     r.imdb_id, r.title, r.year, r.poster_path, r.overview, r.seasons, r.note, r.state, r.answer, r.work_id, \
      r.created_at, r.decided_at";
 
 const OPEN: &str = "r.state IN ('pending', 'accepted')";
@@ -97,6 +100,7 @@ fn request_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<TitleRequest> {
         user_name: row.try_get("user_name")?,
         catalogue: row.try_get("catalogue")?,
         tmdb_id: row.try_get("tmdb_id")?,
+        imdb_id: row.try_get("imdb_id")?,
         title: row.try_get("title")?,
         year: row.try_get("year")?,
         poster_path: row.try_get("poster_path")?,
@@ -170,14 +174,15 @@ impl Database {
         let seasons = serde_json::to_string(new.seasons)
             .map_err(|error| DatabaseError::Corrupt(error.to_string()))?;
         sqlx::query(
-            "INSERT INTO title_requests (id, user_id, catalogue, tmdb_id, title, year, poster_path,
-                 overview, seasons, note, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO title_requests (id, user_id, catalogue, tmdb_id, imdb_id, title, year,
+                 poster_path, overview, seasons, note, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id.to_db_string())
         .bind(new.user_id.to_db_string())
         .bind(new.catalogue)
         .bind(new.tmdb_id)
+        .bind(new.imdb_id)
         .bind(new.title)
         .bind(new.year)
         .bind(new.poster_path)
@@ -190,6 +195,21 @@ impl Database {
         self.request(id)
             .await?
             .ok_or_else(|| DatabaseError::Corrupt("a request just written is missing".to_string()))
+    }
+
+    /// Writes down how IMDb names a title, on every request for it that
+    /// does not say yet.
+    pub async fn set_request_imdb_id(&self, catalogue: &str, tmdb_id: &str, imdb_id: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE title_requests SET imdb_id = ?
+              WHERE catalogue = ? AND tmdb_id = ? AND imdb_id IS NULL",
+        )
+        .bind(imdb_id)
+        .bind(catalogue)
+        .bind(tmdb_id)
+        .execute(self.writer())
+        .await?;
+        Ok(())
     }
 
     pub async fn request(&self, id: RequestId) -> Result<Option<TitleRequest>> {
@@ -447,6 +467,7 @@ mod tests {
             user_id: user,
             catalogue: if seasons.is_empty() { "films" } else { "series" },
             tmdb_id,
+            imdb_id: None,
             title: "The Lantern Keeper",
             year: Some(2019),
             poster_path: Some("/lantern.jpg"),
@@ -494,6 +515,25 @@ mod tests {
             .await
             .expect("read");
         assert_eq!(for_title.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_request_keeps_how_imdb_names_its_title_or_is_given_it_later() {
+        let (database, one, other) = an_account().await;
+        let named = database
+            .add_request(&NewRequest { imdb_id: Some("tt0000011"), ..asking(one, "11", &[]) })
+            .await
+            .expect("written");
+        assert_eq!(named.imdb_id.as_deref(), Some("tt0000011"));
+
+        let unnamed = database.add_request(&asking(other, "12", &[])).await.expect("written");
+        assert_eq!(unnamed.imdb_id, None);
+        database.set_request_imdb_id("films", "12", "tt0000012").await.expect("written");
+        database.set_request_imdb_id("films", "11", "tt9999999").await.expect("written");
+        let given = database.request(unnamed.id).await.expect("read").expect("there");
+        assert_eq!(given.imdb_id.as_deref(), Some("tt0000012"));
+        let kept = database.request(named.id).await.expect("read").expect("there");
+        assert_eq!(kept.imdb_id.as_deref(), Some("tt0000011"), "what was known stays");
     }
 
     #[tokio::test]

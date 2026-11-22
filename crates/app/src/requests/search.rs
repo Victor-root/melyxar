@@ -301,6 +301,7 @@ mod tests {
                     user_id: asker,
                     catalogue: "films",
                     tmdb_id: "2",
+                    imdb_id: None,
                     title: "Salt Road",
                     year: None,
                     poster_path: None,

@@ -97,6 +97,16 @@ export function TickIcon(props: IconProps) {
   );
 }
 
+/** Two sheets one over the other, for copying. */
+export function CopyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+      <path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2" />
+    </Icon>
+  );
+}
+
 /* -------------------------------------------------------------------------
  * The bar at the top
  * ---------------------------------------------------------------------- */

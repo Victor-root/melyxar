@@ -3,6 +3,7 @@
 //! on the same title.
 
 use melyxar_database::requests::{Decision, TitleRequest};
+use melyxar_metadata::MetadataProvider;
 
 use super::live::moved;
 use super::{telling, word_of, Catalogue, Result, Trouble};
@@ -23,6 +24,11 @@ impl Waiting {
     /// Whether the administrator accepted it already.
     pub fn accepted(&self) -> bool {
         self.requests.iter().any(|request| request.state == "accepted")
+    }
+
+    /// How IMDb names the title, when it is known.
+    pub fn imdb_id(&self) -> Option<&str> {
+        self.requests.iter().find_map(|request| request.imdb_id.as_deref())
     }
 }
 
@@ -45,7 +51,38 @@ pub async fn waiting(state: &AppState) -> Result<Vec<Waiting>> {
             }),
         }
     }
+    if let Some(provider) = state.metadata_provider() {
+        name_at_imdb(state, provider.as_ref(), &mut gathered).await?;
+    }
     Ok(gathered)
+}
+
+/// Asks the provider how IMDb names each title whose requests were made
+/// before that was written down, and writes it down for next time. A title
+/// the provider cannot answer for keeps none, and is asked again later.
+async fn name_at_imdb<P: MetadataProvider>(
+    state: &AppState,
+    provider: &P,
+    titles: &mut [Waiting],
+) -> Result<()> {
+    for title in titles.iter_mut().filter(|title| title.imdb_id().is_none()) {
+        let named = match provider.imdb_id(title.catalogue, &title.tmdb_id).await {
+            Ok(Some(named)) => named,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(tmdb_id = title.tmdb_id, %error, "how IMDb names a title asked for could not be read");
+                continue;
+            }
+        };
+        state
+            .database()
+            .set_request_imdb_id(word_of(title.catalogue), &title.tmdb_id, &named)
+            .await?;
+        for request in &mut title.requests {
+            request.imdb_id = Some(named.clone());
+        }
+    }
+    Ok(())
 }
 
 /// Decides every open request for a title, and tells each account that
@@ -88,6 +125,39 @@ mod tests {
     use super::super::testing::{a_film, requests_on, StandIn};
     use super::*;
     use crate::notifications::live::{follow, Change};
+
+    #[tokio::test]
+    async fn a_title_asked_for_before_imdb_was_written_down_is_given_it() {
+        let (_held, state, viewer) = requests_on().await;
+        let provider = StandIn {
+            films: vec![a_film("1", "Amber Field")],
+            series: Vec::new(),
+        };
+        state
+            .database()
+            .add_request(&melyxar_database::requests::NewRequest {
+                user_id: viewer.id,
+                catalogue: "films",
+                tmdb_id: "1",
+                imdb_id: None,
+                title: "Amber Field",
+                year: None,
+                poster_path: None,
+                overview: None,
+                seasons: &[],
+                note: "",
+                created_at: melyxar_core::time::now(),
+            })
+            .await
+            .expect("asked before");
+
+        let mut titles = waiting(&state).await.expect("read");
+        assert_eq!(titles[0].imdb_id(), None, "no provider on this server, nothing asked");
+        name_at_imdb(&state, &provider, &mut titles).await.expect("named");
+        assert_eq!(titles[0].imdb_id(), Some("tt1"));
+        let kept = waiting(&state).await.expect("read");
+        assert_eq!(kept[0].imdb_id(), Some("tt1"), "written down for next time");
+    }
 
     #[tokio::test]
     async fn one_decision_reaches_every_account_waiting_on_the_title() {

@@ -9,17 +9,79 @@ import { useEffect, useState } from "react";
 import { refusalAbout, useAsked } from "../asking";
 import { Face } from "../components/face";
 import { PageHead, Panel, Toggle } from "../components/panel";
-import { PeopleIcon, RequestIcon } from "../icons";
+import { putOnTheClipboard } from "../clipboard";
+import { CopyIcon, PeopleIcon, RequestIcon, TickIcon } from "../icons";
 import { useRequestsNews } from "../live";
 import { useToast } from "../notifications/toasts";
 import { readableDate, seasonsNamed } from "../readable";
 import { useSettings } from "../settings";
 import { requestsApi } from "./api";
 import type { Decision, RequestsAdministration, Waiting } from "./api";
+import { elsewhere } from "../screens/work";
 import { TitleCard, titleAddress } from "./card";
 
 /** The longest word a refusal keeps. */
 const LONGEST_ANSWER = 500;
+
+/** Where the title is described at the provider and at IMDb, each named by
+    its identifier there and opening its page. */
+function TitleIds({ title }: { title: Waiting }) {
+  const { t } = useSettings();
+  const kind = title.catalogue === "films" ? "movie" : "series";
+  const ids = [
+    { provider: "tmdb", id: title.tmdb_id },
+    ...(title.imdb_id ? [{ provider: "imdb", id: title.imdb_id }] : []),
+  ];
+  return (
+    <span className="request-ids">
+      {ids.map((entry) => (
+        <span key={entry.provider} className="request-id">
+          <a
+            className="work-link"
+            href={elsewhere(entry.provider, entry.id, kind)}
+            target="_blank"
+            rel="noreferrer noopener"
+          >
+            {t(`provider.${entry.provider}`)} {entry.id}
+          </a>
+          <CopyId id={entry.id} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** How long the tick stays once an identifier is copied. */
+const COPIED_SHOWN_MS = 1500;
+
+/** Puts an identifier on the clipboard, ticked once it is there. */
+function CopyId({ id }: { id: string }) {
+  const { t } = useSettings();
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const gone = window.setTimeout(() => setCopied(false), COPIED_SHOWN_MS);
+    return () => window.clearTimeout(gone);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      className="note-action"
+      title={t("requests.copy_id", { id })}
+      aria-label={t("requests.copy_id", { id })}
+      onClick={() =>
+        void putOnTheClipboard(id).then((done) =>
+          done ? setCopied(true) : toast({ state: "trouble", title: t("requests.copy_failed", { id }) }),
+        )
+      }
+    >
+      {copied ? <TickIcon size={15} /> : <CopyIcon size={15} />}
+    </button>
+  );
+}
 
 function WaitingTitle({
   title,
@@ -51,6 +113,7 @@ function WaitingTitle({
             : t("requests.askers", { count: title.requests.length })}
         </span>
       </div>
+      <TitleIds title={title} />
       <ul className="request-askers">
         {title.requests.map((request) => (
           <li key={request.id}>

@@ -73,6 +73,7 @@ pub async fn ask<P: MetadataProvider>(
             user_id: who.id,
             catalogue,
             tmdb_id: &details.external_id,
+            imdb_id: details.imdb_id.as_deref(),
             title: &details.title,
             year: details.release_year,
             poster_path: details.poster_path.as_deref(),

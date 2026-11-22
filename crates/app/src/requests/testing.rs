@@ -92,7 +92,7 @@ pub(super) async fn held(state: &AppState, library: LibraryId, kind: WorkKind, t
 fn described(id: &str, title: &str, seasons: &[(i32, i32)]) -> Details {
     Details {
         external_id: id.to_string(),
-        imdb_id: None,
+        imdb_id: Some(format!("tt{id}")),
         title: title.to_string(),
         original_title: None,
         original_language: None,
@@ -191,8 +191,15 @@ impl MetadataProvider for StandIn {
         Ok(Vec::new())
     }
 
-    async fn imdb_id(&self, _catalogue: Catalogue, _external_id: &str) -> Result<Option<String>> {
-        Ok(None)
+    async fn imdb_id(&self, catalogue: Catalogue, external_id: &str) -> Result<Option<String>> {
+        let known = match catalogue {
+            Catalogue::Films => &self.films,
+            Catalogue::Series => &self.series,
+        };
+        Ok(known
+            .iter()
+            .find(|title| title.external_id == external_id)
+            .and_then(|title| title.imdb_id.clone()))
     }
 
     async fn by_imdb_id(&self, _imdb_id: &str, _language: &str) -> Result<Option<Candidate>> {

@@ -92,6 +92,8 @@ export interface TitleRequest {
   user_name: string;
   catalogue: Catalogue;
   tmdb_id: string;
+  /** The same title as IMDb names it, when known. */
+  imdb_id: string | null;
   title: string;
   year: number | null;
   poster: string | null;
@@ -128,6 +130,7 @@ export interface Asker {
 export interface Waiting {
   catalogue: Catalogue;
   tmdb_id: string;
+  imdb_id: string | null;
   accepted: boolean;
   requests: TitleRequest[];
 }

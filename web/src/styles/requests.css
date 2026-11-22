@@ -155,6 +155,20 @@
   text-decoration: none;
 }
 
+/* Where else the title is described, by its identifier there. */
+.request-ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+.request-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .request-others,
 .request-when {
   color: var(--text-faint);
