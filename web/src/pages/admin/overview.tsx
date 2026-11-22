@@ -40,6 +40,7 @@ import {
 } from "../../readable";
 import { useRunning } from "../../running";
 import { useAttention } from "../../notifications/attention";
+import { PointSeen } from "../../notifications/point-seen";
 import { useSettings } from "../../settings";
 import { sayPoint, sayWorry } from "./activity";
 import { ActivityJournal } from "./activity-list";
@@ -242,26 +243,29 @@ function ServerPanel({
         {shown.map((point, index) => {
           const said = sayPoint(point, t, language);
           return (
-            <Link className="line line-link" to={said.to} key={index}>
-              <span
-                className={`line-mark state-${point.state}`}
-                aria-hidden="true"
-              >
-                <WarningIcon size={18} />
-              </span>
-              <span className="line-words">
-                <span className="line-name">{said.title}</span>
-              </span>
-              <span className="line-end">
-                <ArrowRightIcon size={15} />
-              </span>
-            </Link>
+            <div className="line line-link" key={index}>
+              <Link className="line-open" to={said.to}>
+                <span
+                  className={`line-mark state-${point.state}`}
+                  aria-hidden="true"
+                >
+                  <WarningIcon size={18} />
+                </span>
+                <span className="line-words">
+                  <span className="line-name">{said.title}</span>
+                </span>
+                <span className="line-end">
+                  <ArrowRightIcon size={15} />
+                </span>
+              </Link>
+              {point.seen_as !== null && <PointSeen point={point.seen_as} />}
+            </div>
           );
         })}
       </div>
 
       <div className="panel-foot">
-        {shown.some((point) => point.may_be_seen) && (
+        {shown.some((point) => point.seen_as !== null) && (
           <button
             className="button button-small"
             onClick={() => void markSeen()}

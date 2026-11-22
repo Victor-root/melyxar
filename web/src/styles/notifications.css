@@ -324,10 +324,23 @@
   font-size: 13.5px;
 }
 
+/* A point and, beside it, what marks it alone as seen. */
+.bell-point-line {
+  display: flex;
+  align-items: flex-start;
+}
+
 .bell-point {
+  flex: 1;
+  min-width: 0;
   align-items: flex-start;
   white-space: normal;
   line-height: 1.35;
+}
+
+.bell-point-line .note-action {
+  flex: none;
+  margin: 6px 4px 0 0;
 }
 
 .bell-point .state-dot {

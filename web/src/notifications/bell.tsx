@@ -11,6 +11,7 @@ import type { Level } from "./api";
 import { pieOf } from "./pie";
 import { useAttention } from "./attention";
 import { NoteList } from "./list";
+import { PointSeen } from "./point-seen";
 import { useNotes } from "./store";
 
 /**
@@ -102,7 +103,7 @@ export function Bell({ administrator }: { administrator: boolean }) {
               last point, where a long list would push it out of reach. */}
           <span className="bell-head">
             <span className="bell-title">{t("admin.watch")}</span>
-            {looked.some((point) => point.may_be_seen) && (
+            {looked.some((point) => point.seen_as !== null) && (
               <button type="button" className="bell-seen" onClick={() => void markSeen()}>
                 <TickIcon size={14} />
                 {t("attention.mark_seen")}
@@ -112,10 +113,13 @@ export function Bell({ administrator }: { administrator: boolean }) {
           {looked.map((point, index) => {
             const said = sayPoint(point, t, language);
             return (
-              <Link key={index} to={said.to} className="header-menu-line bell-point">
-                <span className={`state-dot state-${point.state}`} aria-hidden="true" />
-                <span>{said.title}</span>
-              </Link>
+              <span key={index} className="bell-point-line">
+                <Link to={said.to} className="header-menu-line bell-point">
+                  <span className={`state-dot state-${point.state}`} aria-hidden="true" />
+                  <span>{said.title}</span>
+                </Link>
+                {point.seen_as !== null && <PointSeen point={point.seen_as} />}
+              </span>
             );
           })}
         </>

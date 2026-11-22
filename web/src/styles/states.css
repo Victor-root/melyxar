@@ -182,6 +182,18 @@
   border-top: 0;
 }
 
+/* A line that opens a page, with room beside it for a press of its own. */
+.line-open {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
 .line-mark {
   flex: none;
   display: grid;

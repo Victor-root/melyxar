@@ -53,8 +53,9 @@ pub struct Shown {
     #[serde(flatten)]
     pub point: Point,
     pub state: State,
-    /// Whether marking it as seen quiets it.
-    pub may_be_seen: bool,
+    /// What marking it alone as seen asks for, for a point that can be
+    /// quieted; none for one that cannot.
+    pub seen_as: Option<String>,
 }
 
 impl Point {
@@ -214,19 +215,22 @@ pub async fn points(state: &AppState, user: UserId) -> Result<Vec<Shown>> {
         .into_iter()
         .map(|point| Shown {
             state: point.state(),
-            may_be_seen: point.key().is_some(),
+            seen_as: point.key(),
             point,
         })
         .collect())
 }
 
-/// Marks as seen every point shown to this administrator that can be.
-pub async fn mark_seen(state: &AppState, user: UserId) -> Result<()> {
+/// Marks as seen every point shown to this administrator that can be, or
+/// only the one asked for by what it is seen as.
+pub async fn mark_seen(state: &AppState, user: UserId, only: Option<&str>) -> Result<()> {
     let now = melyxar_core::time::now();
     let seen = seen_by(state, user).await?;
     let worries = crate::overview::collect(state).await?.worries;
     for point in everything(state, worries, &seen, now).await? {
-        if let (Some(key), Some(mark)) = (point.key(), point.mark_now(now)) {
+        if let (Some(key), Some(mark)) = (point.key(), point.mark_now(now))
+            && only.is_none_or(|asked| asked == key)
+        {
             state.database().mark_attention_seen(user, &key, mark).await?;
         }
     }
@@ -306,9 +310,9 @@ mod tests {
         assert_eq!(refusals.len(), 1);
         assert_eq!(refusals[0].point, Point::RefusedSignIns { count: 2 });
         assert_eq!(refusals[0].state, State::Attention);
-        assert!(refusals[0].may_be_seen);
+        assert_eq!(refusals[0].seen_as.as_deref(), Some("refused_sign_ins"));
 
-        mark_seen(&state, user).await.expect("marked");
+        mark_seen(&state, user, None).await.expect("marked");
         assert!(of_events(&points(&state, user).await.expect("read")).is_empty());
 
         // The next refusal, written a moment after the mark rather than
@@ -332,6 +336,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn one_point_marked_seen_alone_leaves_the_others() {
+        let (_held, state, user) = a_server().await;
+        record(&state, refused()).await;
+        state
+            .database()
+            .record_activity(&melyxar_database::activity::NewActivity {
+                at: melyxar_core::time::now(),
+                kind: TASK_FAILED,
+                user_id: None,
+                work_id: None,
+                device_name: None,
+                details: None,
+            })
+            .await
+            .expect("recorded");
+        assert_eq!(of_events(&points(&state, user).await.expect("read")).len(), 2);
+
+        mark_seen(&state, user, Some("refused_sign_ins")).await.expect("marked");
+        assert_eq!(
+            of_events(&points(&state, user).await.expect("read")),
+            vec![Point::FailedTasks { count: 1 }]
+        );
+    }
+
+    #[tokio::test]
     async fn what_one_administrator_saw_is_still_shown_to_another() {
         let (_held, state, user) = a_server().await;
         let other = state
@@ -341,7 +370,7 @@ mod tests {
             .expect("account created")
             .id;
         record(&state, refused()).await;
-        mark_seen(&state, user).await.expect("marked");
+        mark_seen(&state, user, None).await.expect("marked");
         assert_eq!(
             of_events(&points(&state, other).await.expect("read")),
             vec![Point::RefusedSignIns { count: 1 }]
@@ -377,7 +406,7 @@ mod tests {
         let worry = Shown {
             point: Point::Worry(Worry::FolderMissing { label: "disk-one".into() }),
             state: State::Trouble,
-            may_be_seen: false,
+            seen_as: None,
         };
         assert_eq!(
             serde_json::to_value(&worry).expect("written"),
@@ -386,13 +415,13 @@ mod tests {
                 "kind": "folder_missing",
                 "label": "disk-one",
                 "state": "trouble",
-                "may_be_seen": false,
+                "seen_as": null,
             })
         );
         let counted = Shown {
             point: Point::Unidentified { count: 3 },
             state: State::Attention,
-            may_be_seen: true,
+            seen_as: Some("unidentified".to_string()),
         };
         assert_eq!(
             serde_json::to_value(&counted).expect("written"),
@@ -400,7 +429,7 @@ mod tests {
                 "point": "unidentified",
                 "count": 3,
                 "state": "attention",
-                "may_be_seen": true,
+                "seen_as": "unidentified",
             })
         );
     }

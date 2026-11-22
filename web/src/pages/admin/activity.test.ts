@@ -184,16 +184,16 @@ describe("whenItHappened", () => {
 
 describe("sayPoint", () => {
   it("leads each point to where it is put right", () => {
-    expect(sayPoint({ point: "unidentified", state: "attention", may_be_seen: true, count: 3 }, t, "en")).toEqual({
+    expect(sayPoint({ point: "unidentified", state: "attention", seen_as: "unidentified", count: 3 }, t, "en")).toEqual({
       title: "attention.unidentified(3)",
       to: "/search?unidentified=true",
     });
     expect(
-      sayPoint({ point: "refused_sign_ins", state: "attention", may_be_seen: true, count: 1 }, t, "en"),
+      sayPoint({ point: "refused_sign_ins", state: "attention", seen_as: "refused_sign_ins", count: 1 }, t, "en"),
     ).toEqual({ title: "attention.refused_sign_ins_one", to: "/admin/journal?families=access" });
     expect(
       sayPoint(
-        { point: "worry", kind: "folder_missing", label: "disk-one", state: "trouble", may_be_seen: false },
+        { point: "worry", kind: "folder_missing", label: "disk-one", state: "trouble", seen_as: null },
         t,
         "en",
       ),

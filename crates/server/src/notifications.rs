@@ -462,12 +462,22 @@ async fn attention(
     }))
 }
 
+/// The one point marked as seen, by what it is seen as; every one when
+/// none is named.
+#[derive(Debug, Default, Deserialize)]
+struct SeenAsked {
+    #[serde(default)]
+    point: Option<String>,
+}
+
 async fn mark_seen(
     _: Administrator,
     Viewer(who): Viewer,
     State(state): State<AppState>,
+    asked: Option<Json<SeenAsked>>,
 ) -> Result<Json<AttentionView>> {
-    melyxar_app::notifications::attention::mark_seen(&state, who.id).await?;
+    let asked = asked.map(|Json(asked)| asked).unwrap_or_default();
+    melyxar_app::notifications::attention::mark_seen(&state, who.id, asked.point.as_deref()).await?;
     Ok(Json(AttentionView {
         points: melyxar_app::notifications::attention::points(&state, who.id).await?,
     }))

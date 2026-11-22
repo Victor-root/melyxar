@@ -153,8 +153,9 @@ export interface Written {
 export interface AttentionPoint {
   point: "worry" | "refused_sign_ins" | "failed_tasks" | "falling_behind" | "unidentified";
   state: "attention" | "trouble";
-  /** Whether marking it as seen quiets it. */
-  may_be_seen: boolean;
+  /** What marking it alone as seen asks for; nothing for a point that
+   *  cannot be quieted. */
+  seen_as: string | null;
   count?: number;
   kind?: string;
   label?: string;
@@ -187,6 +188,8 @@ export const notesApi = {
   /* What deserves a look, for the administrator asking. */
   attention: (signal?: AbortSignal) =>
     get<{ points: AttentionPoint[] }>("/api/v1/system/attention", signal),
-  /* Quiets every point that can be, and answers what is left. */
-  markAttentionSeen: () => post<{ points: AttentionPoint[] }>("/api/v1/system/attention/seen"),
+  /* Quiets the one point named by what it is seen as, or every point that
+     can be, and answers what is left. */
+  markAttentionSeen: (point?: string) =>
+    post<{ points: AttentionPoint[] }>("/api/v1/system/attention/seen", { point: point ?? null }),
 };

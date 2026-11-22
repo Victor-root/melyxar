@@ -24,8 +24,9 @@ const LOOKED_AT_EVERY_MS = 30_000;
 export interface Attention {
   /** Nothing until the first answer, and for anybody not an administrator. */
   points: AttentionPoint[] | null;
-  /** Quiets every point that can be, everywhere it is shown. */
-  markSeen: () => Promise<void>;
+  /** Quiets the one point named by what it is seen as, or every point that
+   *  can be, everywhere it is shown. */
+  markSeen: (point?: string) => Promise<void>;
 }
 
 const AttentionContext = createContext<Attention>({
@@ -67,8 +68,8 @@ export function AttentionProvider({ children }: { children: ReactNode }) {
     return lookWhileSeen(look, LOOKED_AT_EVERY_MS);
   }, [administrator, look]);
 
-  const markSeen = useCallback(async () => {
-    const answer = await notesApi.markAttentionSeen();
+  const markSeen = useCallback(async (point?: string) => {
+    const answer = await notesApi.markAttentionSeen(point);
     setPoints(answer.points);
   }, []);
 
