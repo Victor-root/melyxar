@@ -1,13 +1,15 @@
 //! What the page saw of the player of music, written into the journal under
 //! a tag for each part of it: `music-decks` for the sound, `music-queue` for
 //! what plays and why, `music-controls` for the presses, `music-tabs` for
-//! the tab that holds the sound.
+//! the tab that holds the sound. And, under `music-app`, what the
+//! application's own player heard of its sound, which no page sees.
 //!
 //! The server sends the sound and never hears it: which deck held which
 //! song, which press moved the queue and which tab played are only known to
 //! the page. Like `page`, this is a closed list of facts the server names
 //! itself, and every name from outside is read before it is written down.
 
+mod app;
 mod controls;
 mod decks;
 mod queue;
@@ -37,6 +39,7 @@ enum Seen {
     QueueMoved(queue::Moved),
     Pressed(controls::Pressed),
     Tab(tabs::Tab),
+    App(app::Fact),
 }
 
 #[derive(Debug, Deserialize)]
@@ -79,6 +82,7 @@ async fn what_the_page_saw(
         Seen::QueueMoved(seen) => queue::write(&by, &seen)?,
         Seen::Pressed(seen) => controls::write(&by, &seen),
         Seen::Tab(seen) => tabs::write(&by, &seen),
+        Seen::App(seen) => app::write(&by, &seen),
     }
     Ok(Json(Written { written: true }))
 }
@@ -112,6 +116,7 @@ mod tests {
             ),
             r#"{"saw":"pressed","command":"next","holds":true}"#.to_string(),
             r#"{"saw":"tab","holds":false,"following":true}"#.to_string(),
+            format!(r#"{{"song":"{SONG}","saw":"app","what":"waited","deck":0,"live":true,"second":3.0,"waited_ms":450}}"#),
         ];
         let read: Vec<Seen> = facts
             .iter()
@@ -122,6 +127,7 @@ mod tests {
         assert!(matches!(read[2], Seen::QueueMoved(_)));
         assert!(matches!(read[3], Seen::Pressed(_)));
         assert!(matches!(read[4], Seen::Tab(_)));
+        assert!(matches!(read[5], Seen::App(_)));
     }
 
     #[test]

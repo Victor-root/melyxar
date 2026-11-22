@@ -79,6 +79,10 @@ pub fn tag_of(module: &str) -> &'static str {
         ("melyxar_server::music_watch::queue", "music-queue"),
         ("melyxar_server::music_watch::controls", "music-controls"),
         ("melyxar_server::music_watch::tabs", "music-tabs"),
+        // What the application's own player heard of its sound, the phone's
+        // and a car's through it: apart from the page's, since a sound that
+        // breaks up in a car is chased through these lines alone.
+        ("melyxar_server::music_watch::app", "music-app"),
         // What the application saw of a camera it opened itself, a tag for
         // each side of it.
         ("melyxar_server::camera_watch::open", "camera-open"),
@@ -428,6 +432,7 @@ mod tests {
         assert_eq!(tag_of("melyxar_app::cameras"), "cameras");
         assert_eq!(tag_of("melyxar_app::collections"), "library");
         assert_eq!(tag_of("melyxar_server::music_watch::decks"), "music-decks");
+        assert_eq!(tag_of("melyxar_server::music_watch::app"), "music-app");
         assert_eq!(tag_of("melyxar_server::music_watch::queue"), "music-queue");
         assert_eq!(tag_of("melyxar_server::music_watch::controls"), "music-controls");
         assert_eq!(tag_of("melyxar_server::music_watch::tabs"), "music-tabs");
