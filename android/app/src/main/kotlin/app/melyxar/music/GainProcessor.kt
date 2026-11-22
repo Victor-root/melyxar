@@ -14,7 +14,9 @@ import java.nio.ByteOrder
  * volume cannot, and what fades one song into the next.
  *
  * Asked from the main thread and applied on the thread that plays, a frame
- * at a time, so a change is a slope rather than a click.
+ * at a time, so a change is a slope rather than a click. How long that takes
+ * is kept for the journal ([taken]): done in time, it is the sound the card
+ * plays; done late, it is a silence.
  */
 @OptIn(UnstableApi::class)
 class GainProcessor : BaseAudioProcessor() {
@@ -28,6 +30,26 @@ class GainProcessor : BaseAudioProcessor() {
         asked = level to seconds
     }
 
+    /** The time spent on the thread that plays, in milliseconds: the
+     *  longest piece of sound, and all of them together. */
+    data class Spent(val longestMs: Double, val busyMs: Double) {
+        operator fun plus(other: Spent) = Spent(maxOf(longestMs, other.longestMs), busyMs + other.busyMs)
+    }
+
+    @Volatile
+    private var longestNs = 0L
+
+    @Volatile
+    private var busyNs = 0L
+
+    /** The time spent since the last time it was asked. */
+    fun taken(): Spent {
+        val spent = Spent(longestNs / 1e6, busyNs / 1e6)
+        longestNs = 0
+        busyNs = 0
+        return spent
+    }
+
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT && inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
@@ -36,6 +58,16 @@ class GainProcessor : BaseAudioProcessor() {
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
+        val started = System.nanoTime()
+        level(inputBuffer)
+        val spent = System.nanoTime() - started
+        busyNs += spent
+        if (spent > longestNs) {
+            longestNs = spent
+        }
+    }
+
+    private fun level(inputBuffer: ByteBuffer) {
         asked?.let { (level, seconds) ->
             asked = null
             ramp.aim(level, (seconds * inputAudioFormat.sampleRate).toInt())

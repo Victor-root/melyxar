@@ -360,6 +360,13 @@ class Api(val origin: ServerOrigin, private val base: OkHttpClient, val token: S
         send("POST", "/api/v1/system/journal/page", fact)
     }
 
+    /** One fact the application's player of music heard of its sound, for
+     *  the journal under `music-app`, among those the server names
+     *  (`music_watch`). */
+    suspend fun tellTheMusicJournal(fact: JsonObject) {
+        send("POST", "/api/v1/system/journal/music", fact)
+    }
+
     /** One fact seen of a camera watched live, for the journal, among those
      *  the server names (`camera_watch`). */
     suspend fun tellTheCameraJournal(fact: JsonObject) {

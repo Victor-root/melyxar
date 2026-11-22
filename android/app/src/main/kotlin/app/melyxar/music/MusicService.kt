@@ -142,6 +142,9 @@ class MusicService : MediaLibraryService() {
             searched?.takeIf { it.first == query }?.second ?: reading.search(query).also { searched = query to it }
 
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            if (controller.packageName == ANDROID_AUTO) {
+                carConnections++
+            }
             val browses = catalogue != null &&
                 (controller.packageName == packageName || controller.packageName == ANDROID_AUTO || controller.isTrusted)
             if (browses && controller.packageName != packageName) {
@@ -155,6 +158,12 @@ class MusicService : MediaLibraryService() {
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands.buildUpon().add(SHUFFLE).add(REPEAT).build())
                 .build()
+        }
+
+        override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) {
+            if (controller.packageName == ANDROID_AUTO) {
+                carConnections = (carConnections - 1).coerceAtLeast(0)
+            }
         }
 
         override fun onCustomCommand(
@@ -329,8 +338,16 @@ class MusicService : MediaLibraryService() {
         super.onDestroy()
     }
 
-    private companion object {
-        const val CHANNEL = "music_card"
-        const val MEDIA3_CHANNEL = "default_channel_id"
+    companion object {
+        private const val CHANNEL = "music_card"
+        private const val MEDIA3_CHANNEL = "default_channel_id"
+
+        /** How many of Android Auto's connections to the music are open. */
+        @Volatile
+        private var carConnections = 0
+
+        /** Whether Android Auto is connected to the music, for the journal
+         *  to say whether a car holds the sound. */
+        val carConnected: Boolean get() = carConnections > 0
     }
 }

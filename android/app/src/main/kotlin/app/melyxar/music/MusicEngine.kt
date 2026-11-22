@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import android.media.AudioManager
 import androidx.media3.common.AudioAttributes
@@ -17,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -53,6 +55,17 @@ class MusicEngine private constructor(
 
     var listener: Listener? = null
 
+    /** Where what the decks hear of their sound is told, once somebody
+     *  listens: the server's journal, under `music-app`. */
+    var journal: MusicJournal? = null
+        set(told) {
+            field = told
+            decks.forEach { it.watchedBy(told) }
+        }
+
+    /** When how the sound held up was last told. */
+    private var healthToldAt = SystemClock.elapsedRealtime()
+
     /** The card of the lock screen, held here and drawn by the service. Made
      *  once the engine is whole, as it reads it. */
     val face by lazy { SessionFace(this) }
@@ -85,6 +98,7 @@ class MusicEngine private constructor(
             // of it and asked for the song again from its start.
             decks.sortedByDescending { HANDED_OVER in it.events }.forEach { it.tell() }
             lookAtTheHandOver()
+            tellTheHealth()
             if (decks.any { it.holds }) {
                 main.postDelayed(this, TELL_EVERY_MS)
             }
@@ -102,6 +116,13 @@ class MusicEngine private constructor(
             .build()
             .apply { addListener(Heard()) }
         var holds = false
+        private var watched: AnalyticsListener? = null
+
+        /** What this deck hears, told to [told] from now on. */
+        fun watchedBy(told: MusicJournal?) {
+            watched?.let(player::removeAnalyticsListener)
+            watched = told?.watching(index) { live == index }?.also(player::addAnalyticsListener)
+        }
 
         /** Counted at each song given or let go of, to tell one from the next. */
         var given = 0
@@ -284,10 +305,29 @@ class MusicEngine private constructor(
         }
     }
 
+    /** How the sound held up, told every [HEALTH_EVERY_MS] while a deck
+     *  holds a song. */
+    private fun tellTheHealth() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - healthToldAt < HEALTH_EVERY_MS) {
+            return
+        }
+        healthToldAt = now
+        val told = journal ?: return
+        val playing = decks[live].player
+        told.health(
+            playing = playing.isPlaying,
+            second = playing.currentPosition / 1000.0,
+            aheadSeconds = (playing.bufferedPosition - playing.currentPosition).coerceAtLeast(0) / 1000.0,
+            level = decks.map { it.gain.taken() }.reduce(GainProcessor.Spent::plus),
+        )
+    }
+
     private fun handOver(due: HandOver) {
         handOver = null
         val from = decks[due.from]
         val to = decks[due.to]
+        journal?.handedOver(due.from, due.to, from.player.currentPosition - due.atMs, due.fadeSeconds)
         if (due.fadeSeconds > 0) {
             from.gain.aim(0f, due.fadeSeconds)
             to.gain.aim(0f, 0.0)
@@ -378,19 +418,22 @@ class MusicEngine private constructor(
     }
 
     private fun focusChanged(change: Int) {
-        when (change) {
+        val did = when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> {
                 focusHeld = false
                 pausedForAMoment = false
                 decks.forEach { it.player.pause() }
+                "paused"
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 pausedForAMoment = decks[live].player.playWhenReady
                 decks.forEach { it.player.pause() }
+                "paused"
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 ducked = DUCKED
                 decks.forEach { it.applyVolume() }
+                "lowered"
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 ducked = 1f
@@ -398,9 +441,14 @@ class MusicEngine private constructor(
                 if (pausedForAMoment) {
                     pausedForAMoment = false
                     decks[live].player.play()
+                    "played_again"
+                } else {
+                    "raised"
                 }
             }
+            else -> "nothing"
         }
+        journal?.focus(change, did)
     }
 
     companion object {

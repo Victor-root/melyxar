@@ -41,7 +41,8 @@ pub(super) enum Fact {
     HandedOver(HandedOver),
 }
 
-/// The sound card was given nothing in time and played a silence.
+/// The sound card was given nothing in time and played a silence. Only the
+/// first few of every stretch are told one by one: [`Health`] counts them all.
 #[derive(Debug, Deserialize)]
 pub(super) struct RanDry {
     deck: u8,
@@ -53,9 +54,6 @@ pub(super) struct RanDry {
     since_fed_ms: i64,
     /// How much of the song was in hand past where it plays, in seconds.
     ahead_seconds: f64,
-    /// How many more were not told, the device saying a few at most.
-    #[serde(default)]
-    untold: u32,
 }
 
 /// The song stopped to wait for its sound, and went on.
@@ -343,7 +341,6 @@ pub(super) fn write(by: &Said, fact: &Fact) {
             holds_ms = seen.holds_ms,
             since_fed_ms = seen.since_fed_ms,
             ahead_seconds = seen.ahead_seconds,
-            untold = seen.untold,
             "the sound card ran dry and played a silence"
         ),
         Fact::Waited(seen) => tracing::info!(

@@ -85,6 +85,8 @@ class Listening(
             OkHttpDataSource.Factory(Call.Factory { request -> checkNotNull(leading?.invoke()) { "nobody listening" }.http.newCall(request) })
         }.also { engine ->
             engine.listener = this
+            // Told as the account listening, whichever it is by then.
+            engine.journal = MusicJournal(context, { leading?.invoke() }, scope) { queue.current?.id }
             made = engine
             service = MediaController.Builder(context, SessionToken(context, ComponentName(context, MusicService::class.java))).buildAsync()
             sound(engine)
