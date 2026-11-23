@@ -1,0 +1,15 @@
+-- Where a film really ends, read from its last key frame to the end of the
+-- file.
+--
+-- What a file says it lasts is written once by whatever made it, and a copy
+-- cut short or put together from a broken one keeps saying it. Believed, it
+-- has the playlist promise minutes of picture the file does not hold: the
+-- player waits for them where the film runs out, and a resume point kept
+-- there brings it straight back to that wait. A film read for it and found
+-- to hold less has its duration put right.
+--
+-- Read by the same pass as the key frames, the last of which is where the
+-- reading begins. Unset until it has been read: every film read before this
+-- has its end read on the next pass, which costs a few seconds of each file
+-- rather than the whole of it.
+ALTER TABLE media_source_key_frames ADD COLUMN ends_read_at TEXT;

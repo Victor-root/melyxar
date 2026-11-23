@@ -283,6 +283,12 @@ pub(crate) async fn write_analysis(
     .bind(source_id.to_db_string())
     .execute(&mut **transaction)
     .await?;
+    // The duration just written is the one the file claims, and where the
+    // film really ends is read again by the next pass of the upkeep.
+    sqlx::query("UPDATE media_source_key_frames SET ends_read_at = NULL WHERE source_id = ?")
+        .bind(source_id.to_db_string())
+        .execute(&mut **transaction)
+        .await?;
 
     // An analysis owns the streams inside the file and nothing else: the
     // subtitles that live in their own files are not its to replace.

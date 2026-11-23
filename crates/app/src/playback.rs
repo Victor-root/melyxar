@@ -478,8 +478,14 @@ pub async fn plan(
         .library_of_work(source.work_id)
         .await?
         .is_none_or(|(_, options)| options.keeps_resume_points);
+    // Nor a place past the end of the film: kept while a film claimed more
+    // than it holds, it would bring the player straight back to waiting there
+    // for a picture the file has never had.
+    let within_the_film = |position: Millis| source.duration.is_none_or(|lasts| position < lasts);
     let resume_from = remembered
-        .filter(|progress| keeps_resume_points && progress.position.get() > 0)
+        .filter(|progress| {
+            keeps_resume_points && progress.position.get() > 0 && within_the_film(progress.position)
+        })
         .map(|progress| Millis::new((progress.position.get() - rewind).max(0)));
 
     // Nothing here waits on them or makes them: a film that has none is a film

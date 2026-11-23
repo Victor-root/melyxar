@@ -518,6 +518,61 @@ pub fn where_the_film_can_be_cut(key_frames: &[Millis]) -> Vec<Millis> {
     boundaries
 }
 
+/// Where the picture and the sound of a film really end, read from `from` to
+/// the end of the file.
+///
+/// What the file says it lasts is written once, by whatever made it, and a
+/// file cut short or put together from a broken copy keeps saying it. The
+/// packets are the film: read from its last key frame, this costs a few
+/// seconds of it. Nothing when nothing was there to read.
+pub async fn where_the_film_ends(
+    tools: &crate::ToolPaths,
+    media: &Path,
+    from: Millis,
+) -> Result<Option<Millis>> {
+    let output = TokioCommand::new(&tools.ffprobe)
+        .args(["-hide_banner", "-loglevel", "error"])
+        .args([
+            "-read_intervals",
+            &format!("{}%", from.as_seconds_f64()),
+            "-show_entries",
+            "packet=codec_type,pts_time,duration_time",
+            "-of",
+            "csv=p=0",
+        ])
+        .args(crate::formats::only_as(tools.allowed_formats()))
+        .arg(media)
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if !output.status.success() {
+        return Err(FfmpegError::from_output("analyser", &output));
+    }
+    Ok(film_ends_in(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Reads where the last piece of picture or sound ends in a listing of them,
+/// one a line: its kind, when it begins and how long it lasts.
+///
+/// The words are left out: a line of subtitle placed after the film has
+/// nothing to be shown over.
+pub fn film_ends_in(listing: &str) -> Option<Millis> {
+    listing
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split(',');
+            let kind = fields.next()?;
+            if kind != "video" && kind != "audio" {
+                return None;
+            }
+            let begins = seconds_to_ms(fields.next()?)?;
+            let lasts = fields.next().and_then(seconds_to_ms).unwrap_or(0);
+            Some(begins + lasts.max(0))
+        })
+        .max()
+        .map(Millis::new)
+}
+
 /// How far past a stuck moment the sound is looked for.
 ///
 /// Read from there and no further, so the answer costs a few seconds of the
@@ -781,6 +836,78 @@ mod tests {
             (found[1].get() - found[0].get() - 10_000).abs() < 500,
             "ten seconds apart, as asked for: {found:?}"
         );
+    }
+
+    #[test]
+    fn a_film_ends_where_its_last_picture_or_sound_does() {
+        let listing = "video,18.000000,0.041000\n\
+                       audio,19.952000,0.034000\n\
+                       subtitle,25.000000,2.000000\n\
+                       audio,19.987000,0.013000,\n\
+                       video,19.958000,N/A\n";
+        assert_eq!(
+            film_ends_in(listing),
+            Some(Millis::new(20_000)),
+            "the last sound, the words after it left out"
+        );
+        assert_eq!(film_ends_in("subtitle,3.000000,1.000000\n"), None);
+        assert_eq!(film_ends_in(""), None);
+    }
+
+    #[tokio::test]
+    async fn a_film_claiming_more_than_it_holds_is_read_for_where_it_ends() {
+        // Made, then told in its header that it lasts more than it does: what
+        // a copy put together from a broken one says, and what every player
+        // believes until the picture runs out under it.
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let source = directory.path().join("film.mkv");
+        let made = tokio::process::Command::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=320x180:rate=24:duration=12")
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:duration=12"])
+            .args(["-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-c:a", "aac"])
+            .arg(&source)
+            .output()
+            .await
+            .expect("the tool runs");
+        assert!(made.status.success());
+        claim_in_the_header(&source, 20_000.0);
+
+        let tools = crate::testing::tools();
+        let claimed = probe(&tools, &source)
+            .await
+            .expect("the film is described")
+            .format
+            .duration
+            .and_then(|seconds| seconds_to_ms(&seconds))
+            .expect("a duration is claimed");
+        assert!(claimed >= 19_000, "the header was believed: {claimed}");
+
+        let key_frames = key_frames(&tools, &source, AskedToStop::never())
+            .await
+            .expect("a film says where it can be started");
+        let last = *key_frames.last().expect("one at least");
+        let ends = where_the_film_ends(&tools, &source, last)
+            .await
+            .expect("the end is read")
+            .expect("there is a picture after the last key frame");
+        assert!(
+            (ends.get() - 12_000).abs() < 300,
+            "twelve seconds, whatever the header says: {ends:?}"
+        );
+    }
+
+    /// Overwrites the length a Matroska file says it has, in milliseconds.
+    fn claim_in_the_header(file: &Path, milliseconds: f64) {
+        const DURATION_OF_EIGHT_BYTES: [u8; 3] = [0x44, 0x89, 0x88];
+        let mut bytes = std::fs::read(file).expect("the film is read");
+        let at = bytes
+            .windows(3)
+            .position(|window| window == DURATION_OF_EIGHT_BYTES)
+            .expect("the header names a length")
+            + 3;
+        bytes[at..at + 8].copy_from_slice(&milliseconds.to_be_bytes());
+        std::fs::write(file, bytes).expect("the film is written");
     }
     use crate::ToolPaths;
     use std::path::PathBuf;

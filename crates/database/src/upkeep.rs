@@ -136,7 +136,8 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_key_frames.source_id IS NULL
+               AND (media_source_key_frames.source_id IS NULL
+                    OR media_source_key_frames.ends_read_at IS NULL)
                ",
             a_moving_picture!(),
             "
@@ -172,7 +173,8 @@ impl Database {
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
                AND media_sources.missing_since IS NULL
-               AND media_source_key_frames.source_id IS NULL
+               AND (media_source_key_frames.source_id IS NULL
+                    OR media_source_key_frames.ends_read_at IS NULL)
                ",
             a_moving_picture!()
         ))
@@ -202,12 +204,41 @@ impl Database {
              JOIN library_roots ON library_roots.id = media_sources.root_id
              WHERE library_roots.library_id = ?
                AND media_sources.analysed_at IS NOT NULL
-               AND media_sources.missing_since IS NULL",
+               AND media_sources.missing_since IS NULL
+               AND media_source_key_frames.ends_read_at IS NOT NULL",
         )
         .bind(library_id.to_db_string())
         .fetch_one(self.reader())
         .await?;
         Ok(row.0)
+    }
+
+    /// Keeps where one film was found to really end, once it has been read
+    /// for it, and puts its duration right when it claimed more.
+    ///
+    /// `lasts` is what the film was found to last when that is less than it
+    /// said, and nothing otherwise: the length a file gives is kept whenever
+    /// it is not shown to be wrong.
+    pub async fn store_where_the_film_ends(
+        &self,
+        source_id: MediaSourceId,
+        lasts: Option<Millis>,
+    ) -> Result<()> {
+        let mut transaction = self.begin().await?;
+        if let Some(lasts) = lasts {
+            sqlx::query("UPDATE media_sources SET duration_ms = ? WHERE id = ?")
+                .bind(lasts.get())
+                .bind(source_id.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
+        sqlx::query("UPDATE media_source_key_frames SET ends_read_at = ? WHERE source_id = ?")
+            .bind(timestamp_to_text(now()))
+            .bind(source_id.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(())
     }
 
     /// Keeps what a reading of one film gave for the bar somebody drags along.
@@ -761,6 +792,19 @@ mod tests {
         source_id
     }
 
+    /// Reads one film for its key frames and for where it ends, as the
+    /// upkeep does, finding that it holds what it claims.
+    async fn read_through(database: &Database, source_id: MediaSourceId, key_frames: &[Millis]) {
+        database
+            .store_key_frames(source_id, key_frames)
+            .await
+            .expect("kept");
+        database
+            .store_where_the_film_ends(source_id, None)
+            .await
+            .expect("kept");
+    }
+
     fn every_ten_seconds() -> Layout {
         Layout {
             every: Millis::new(10_000),
@@ -1048,10 +1092,7 @@ mod tests {
         let source_id =
             a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
 
-        database
-            .store_key_frames(source_id, &[])
-            .await
-            .expect("kept");
+        read_through(&database, source_id, &[]).await;
         assert_eq!(
             database.key_frames_of(source_id).await.expect("read"),
             Some(Vec::new()),
@@ -1110,6 +1151,18 @@ mod tests {
             .store_key_frames(source_id, &[Millis::ZERO])
             .await
             .expect("kept");
+        assert_eq!(
+            database
+                .sources_without_key_frames(library_id, 10)
+                .await
+                .expect("read"),
+            vec![source_id],
+            "where it ends is still to be read"
+        );
+        database
+            .store_where_the_film_ends(source_id, None)
+            .await
+            .expect("kept");
         assert!(
             database
                 .sources_without_key_frames(library_id, 10)
@@ -1145,6 +1198,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_film_found_to_end_early_lasts_what_it_holds_until_it_is_analysed_again() {
+        let (database, library_id, root_id) = library().await;
+        let source_id =
+            a_described_film(&database, library_id, root_id, "Quiet.Harbour.2019.mkv").await;
+        let lasts = || async {
+            database
+                .playable_source(source_id)
+                .await
+                .expect("read")
+                .expect("there")
+                .duration
+        };
+        let claimed = lasts().await;
+        database
+            .store_key_frames(source_id, &[Millis::ZERO, Millis::new(20_938)])
+            .await
+            .expect("kept");
+        assert_eq!(database.count_awaiting_key_frames(library_id).await.expect("counted"), 1);
+        assert_eq!(database.count_read_for_key_frames(library_id).await.expect("counted"), 0);
+
+        database
+            .store_where_the_film_ends(source_id, Some(Millis::new(21_500)))
+            .await
+            .expect("kept");
+        assert_eq!(lasts().await, Some(Millis::new(21_500)));
+        assert_eq!(database.count_awaiting_key_frames(library_id).await.expect("counted"), 0);
+        assert_eq!(database.count_read_for_key_frames(library_id).await.expect("counted"), 1);
+
+        // Analysed again, the film says what it claims once more, and where it
+        // ends is read again to put it right.
+        database
+            .store_analysis(
+                source_id,
+                &SourceAnalysis {
+                    container: Some("matroska,webm".to_string()),
+                    duration: claimed,
+                    overall_bitrate: None,
+                },
+                &[],
+                &[],
+            )
+            .await
+            .expect("analysis stored");
+        assert_eq!(lasts().await, claimed);
+        assert_eq!(
+            database.sources_without_key_frames(library_id, 10).await.expect("read"),
+            vec![source_id]
+        );
+        assert_eq!(
+            database.key_frames_of(source_id).await.expect("read"),
+            Some(vec![Millis::ZERO, Millis::new(20_938)]),
+            "its key frames are kept"
+        );
+    }
+
+    #[tokio::test]
     async fn every_matroska_film_is_read_again_for_its_key_frames_and_the_others_keep_theirs() {
         let (database, library_id, root_id) = library().await;
         let matroska =
@@ -1165,10 +1274,7 @@ mod tests {
             .await
             .expect("analysis stored");
         for source in [matroska, other] {
-            database
-                .store_key_frames(source, &[Millis::ZERO, Millis::new(20_938)])
-                .await
-                .expect("kept");
+            read_through(&database, source, &[Millis::ZERO, Millis::new(20_938)]).await;
         }
 
         sqlx::query(include_str!("../migrations/0129_read_matroska_marks_again.sql"))
@@ -1236,14 +1342,8 @@ mod tests {
             0
         );
 
-        database
-            .store_key_frames(in_films, &[Millis::ZERO])
-            .await
-            .expect("kept");
-        database
-            .store_key_frames(in_series, &[Millis::ZERO])
-            .await
-            .expect("kept");
+        read_through(&database, in_films, &[Millis::ZERO]).await;
+        read_through(&database, in_series, &[Millis::ZERO]).await;
 
         assert_eq!(
             database
@@ -1334,10 +1434,7 @@ mod tests {
             2
         );
 
-        database
-            .store_key_frames(first, &[Millis::ZERO])
-            .await
-            .expect("kept");
+        read_through(&database, first, &[Millis::ZERO]).await;
         database
             .store_thumbnails(second, &made(720))
             .await
@@ -1451,10 +1548,7 @@ mod tests {
         let gone =
             a_described_film(&database, library_id, root_id, "Distant.Signal.2021.mkv").await;
         for film in [here, gone] {
-            database
-                .store_key_frames(film, &[Millis::ZERO])
-                .await
-                .expect("kept");
+            read_through(&database, film, &[Millis::ZERO]).await;
         }
         assert_eq!(
             database

@@ -27,7 +27,9 @@ use melyxar_core::id::{LibraryId, MediaSourceId};
 use melyxar_core::job::{Job, JobKind, JobPriority, JobStep};
 use melyxar_core::library::{Library, LibraryKind};
 use melyxar_core::media_log::file_name_of as name_of_file;
+use melyxar_core::time::Millis;
 use melyxar_database::Database;
+use melyxar_database::playback::PlayableSource;
 use melyxar_ffmpeg::AskedToStop;
 use melyxar_jobs::JobHandle;
 
@@ -357,6 +359,7 @@ pub(crate) async fn read_the_key_frames_of(
     let tools = tools.clone();
     let mut read = 0;
     let mut from_their_own_index = 0;
+    let mut only_where_they_end = 0;
     let mut still_waiting = waiting;
     loop {
         if handle.is_cancelled() {
@@ -389,12 +392,12 @@ pub(crate) async fn read_the_key_frames_of(
                 let asked_to_stop = asked_to_stop.clone();
                 async move {
                     if handle.is_cancelled() {
-                        return HowItWasRead::NotAtAll;
+                        return FilmRead::NOT_AT_ALL;
                     }
                     if let Some(name) = file_name_of(&database, source_id).await {
                         handle.now_working_on(Some(&name)).await;
                     }
-                    let how = read_one_film_for_its_key_frames(
+                    let read = read_one_film_for_its_key_frames(
                         &database,
                         &tools,
                         source_id,
@@ -403,26 +406,24 @@ pub(crate) async fn read_the_key_frames_of(
                     )
                     .await;
                     handle.advance(1).await;
-                    how
+                    read
                 }
             },
         )
         .await;
 
-        let read_now = done
-            .iter()
-            .filter(|how| **how != HowItWasRead::NotAtAll)
-            .count();
+        let counted = |how: HowItWasRead| done.iter().filter(|read| read.how == how).count();
+        let read_now = done.len() - counted(HowItWasRead::NotAtAll);
         read += read_now;
-        // A film read here may be what its library was holding back, and
-        // the pages are told so batch by batch rather than at the very end.
-        if read_now > 0 && library.holds_back_until_ready() {
+        // A film read here may be what its library was holding back, or have
+        // its length put right, and the pages are told so batch by batch
+        // rather than at the very end.
+        let put_right = done.iter().any(|read| read.put_right);
+        if put_right || (read_now > 0 && library.holds_back_until_ready()) {
             database.bump_library_version(library.id).await?;
         }
-        from_their_own_index += done
-            .iter()
-            .filter(|how| **how == HowItWasRead::FromItsOwnIndex)
-            .count();
+        from_their_own_index += counted(HowItWasRead::FromItsOwnIndex);
+        only_where_they_end += counted(HowItWasRead::OnlyWhereItEnds);
 
         // What is left is asked for again rather than worked out from what the
         // batch answered, and it is the only thing that says the run is moving.
@@ -444,7 +445,8 @@ pub(crate) async fn read_the_key_frames_of(
             library = library.name,
             read,
             from_their_own_index,
-            by_reading_them_through = read - from_their_own_index,
+            by_reading_them_through = read - from_their_own_index - only_where_they_end,
+            only_where_they_end,
             "the films of this library were read for where their picture can be started"
         );
     }
@@ -737,29 +739,141 @@ enum HowItWasRead {
     FromItsOwnIndex,
     /// The film had to be handed to the analyser and read from end to end.
     ByReadingItThrough,
+    /// Its key frames were already known, and only where it ends was read.
+    OnlyWhereItEnds,
 }
 
-/// Reads one film, and says whether it gave up anything usable.
+/// What reading one film gave.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FilmRead {
+    how: HowItWasRead,
+    /// Whether the film was found to hold less than it claims, and its
+    /// length put right.
+    put_right: bool,
+}
+
+impl FilmRead {
+    const NOT_AT_ALL: Self = Self {
+        how: HowItWasRead::NotAtAll,
+        put_right: false,
+    };
+}
+
+/// How much longer than what it holds a film may say it is before what it says
+/// is put right.
 ///
-/// The film's own index first. A container worth the name carries a table of
-/// where its pictures stand on their own, and reading it costs a few thousand
-/// bytes where reading the film through costs the whole file. What carries no
-/// index this server can read is read through, which is the answer that is
-/// always available, and the two answer exactly the same thing.
+/// Well over the sound running on a little past the last picture, or the
+/// other way round, which every film does by a fraction of a second.
+const CLAIMED_PAST_WHAT_IT_HOLDS: Millis = Millis::new(5_000);
+
+/// What a film lasts once read for where it ends: what it holds, when that is
+/// clearly less than it claims, and nothing when what it claims stands.
+fn what_it_really_lasts(claimed: Option<Millis>, ends: Millis) -> Option<Millis> {
+    let claimed = claimed?;
+    (claimed.get() - ends.get() > CLAIMED_PAST_WHAT_IT_HOLDS.get()).then_some(ends)
+}
+
+/// Reads one film for where its picture can be started and where it ends, and
+/// says what it gave up.
+///
+/// The key frames are read only once: a film already read for them is read
+/// only for where it ends, from the last of them.
 async fn read_one_film_for_its_key_frames(
     database: &Database,
     tools: &melyxar_ffmpeg::ToolPaths,
     source_id: MediaSourceId,
     asked_to_stop: AskedToStop,
     handle: &JobHandle,
-) -> HowItWasRead {
+) -> FilmRead {
     let Ok(Some(source)) = database.playable_source(source_id).await else {
-        return HowItWasRead::NotAtAll;
+        return FilmRead::NOT_AT_ALL;
     };
     if source.missing {
-        return HowItWasRead::NotAtAll;
+        return FilmRead::NOT_AT_ALL;
     }
 
+    let (key_frames, how) = match database.key_frames_of(source_id).await {
+        Ok(Some(known)) => (known, HowItWasRead::OnlyWhereItEnds),
+        Ok(None) => {
+            match key_frames_read_and_kept(database, tools, &source, asked_to_stop, handle).await {
+                Some(read) => read,
+                None => return FilmRead::NOT_AT_ALL,
+            }
+        }
+        Err(error) => {
+            tracing::warn!(error = %error, "what was known of a film could not be read");
+            return FilmRead::NOT_AT_ALL;
+        }
+    };
+    match where_it_ends_read_and_kept(database, tools, &source, &key_frames).await {
+        Some(put_right) => FilmRead { how, put_right },
+        None => FilmRead::NOT_AT_ALL,
+    }
+}
+
+/// Reads where one film really ends, from the last of its key frames, and
+/// puts its length right when it claimed more than it holds. Whether it was
+/// put right, and nothing when nothing could be written down.
+///
+/// A film that says nowhere its picture can be started is not read for it:
+/// short of a key frame, the reading would begin at the beginning and take the
+/// whole file past, and such a film is cut on the usual grid of its claimed
+/// length anyway.
+async fn where_it_ends_read_and_kept(
+    database: &Database,
+    tools: &melyxar_ffmpeg::ToolPaths,
+    source: &PlayableSource,
+    key_frames: &[Millis],
+) -> Option<bool> {
+    let ends = match key_frames.last() {
+        Some(last) => {
+            match melyxar_ffmpeg::probe::where_the_film_ends(tools, &source.path, *last).await {
+                Ok(ends) => ends,
+                Err(error) => {
+                    tracing::warn!(
+                        file = %name_of_file(&source.path),
+                        error = %error,
+                        "this film could not be read for where it ends"
+                    );
+                    return None;
+                }
+            }
+        }
+        None => None,
+    };
+    let lasts = ends.and_then(|ends| what_it_really_lasts(source.duration, ends));
+    if let Some(lasts) = lasts {
+        tracing::info!(
+            file = %name_of_file(&source.path),
+            claimed = source.duration.map(Millis::as_seconds_f64),
+            holds = lasts.as_seconds_f64(),
+            "this film holds less than it claims, so it lasts what it holds"
+        );
+    }
+    match database.store_where_the_film_ends(source.id, lasts).await {
+        Ok(()) => Some(lasts.is_some()),
+        Err(error) => {
+            tracing::warn!(error = %error, "where a film ends could not be kept");
+            None
+        }
+    }
+}
+
+/// Reads where the picture of one film can be started and keeps it, with how
+/// it was read; nothing when nothing could be written down.
+///
+/// The film's own index first. A container worth the name carries a table of
+/// where its pictures stand on their own, and reading it costs a few thousand
+/// bytes where reading the film through costs the whole file. What carries no
+/// index this server can read is read through, which is the answer that is
+/// always available, and the two answer exactly the same thing.
+async fn key_frames_read_and_kept(
+    database: &Database,
+    tools: &melyxar_ffmpeg::ToolPaths,
+    source: &PlayableSource,
+    asked_to_stop: AskedToStop,
+    handle: &JobHandle,
+) -> Option<(Vec<Millis>, HowItWasRead)> {
     let (read, how) = match melyxar_container::key_frames(&source.path).await {
         Some(found) => (Ok(found), HowItWasRead::FromItsOwnIndex),
         None => (
@@ -778,43 +892,8 @@ async fn read_one_film_for_its_key_frames(
         ),
     };
 
-    match read {
-        Ok(found) if !found.is_empty() => {
-            match database.store_key_frames(source_id, &found).await {
-                Ok(()) => how,
-                Err(error) => {
-                    tracing::warn!(error = %error, "where a film can be started could not be kept");
-                    HowItWasRead::NotAtAll
-                }
-            }
-        }
-        // A reading that finished and gave nothing is an answer about the
-        // file, and it is written down so the file is never read through
-        // again for the same nothing. A file that was merely busy is the
-        // other branch: the analyser fails there, and nothing is written.
-        //
-        // Seen on a VC-1 remux of the maintainer's: every packet of the
-        // picture carried no time at all, and every one of them claimed to
-        // stand on its own, which is what a demuxer says about a stream it
-        // cannot read. Reading it again can only say the same, and it cost a
-        // minute of every scan. Such a film keeps the usual grid, which is
-        // exact for it anyway: no browser plays that codec, so its picture is
-        // rebuilt, and a rebuilt picture is cut where this server puts the
-        // cuts.
-        Ok(_) => {
-            tracing::warn!(
-                file = %name_of_file(&source.path),
-                "this film says nowhere its picture can be started, so it is cut on the usual \
-                 grid from now on and never read for this again"
-            );
-            match database.store_key_frames(source_id, &[]).await {
-                Ok(()) => how,
-                Err(error) => {
-                    tracing::warn!(error = %error, "that answer could not be kept");
-                    HowItWasRead::NotAtAll
-                }
-            }
-        }
+    let found = match read {
+        Ok(found) => found,
         // A reading somebody called off says nothing about the film. Nothing
         // is written down, so the next run finds it waiting exactly as it was.
         Err(melyxar_ffmpeg::FfmpegError::GivenUp) => {
@@ -822,7 +901,7 @@ async fn read_one_film_for_its_key_frames(
                 file = %name_of_file(&source.path),
                 "this film was left where it was, its reading having been stopped"
             );
-            HowItWasRead::NotAtAll
+            return None;
         }
         Err(error) => {
             tracing::warn!(
@@ -830,7 +909,34 @@ async fn read_one_film_for_its_key_frames(
                 error = %error,
                 "this film could not be read for where its picture can be started"
             );
-            HowItWasRead::NotAtAll
+            return None;
+        }
+    };
+
+    // A reading that finished and gave nothing is an answer about the file,
+    // and it is written down so the file is never read through again for the
+    // same nothing. A file that was merely busy is the other branch: the
+    // analyser fails there, and nothing is written.
+    //
+    // Seen on a VC-1 remux of the maintainer's: every packet of the picture
+    // carried no time at all, and every one of them claimed to stand on its
+    // own, which is what a demuxer says about a stream it cannot read. Reading
+    // it again can only say the same, and it cost a minute of every scan. Such
+    // a film keeps the usual grid, which is exact for it anyway: no browser
+    // plays that codec, so its picture is rebuilt, and a rebuilt picture is
+    // cut where this server puts the cuts.
+    if found.is_empty() {
+        tracing::warn!(
+            file = %name_of_file(&source.path),
+            "this film says nowhere its picture can be started, so it is cut on the usual \
+             grid from now on and never read for this again"
+        );
+    }
+    match database.store_key_frames(source.id, &found).await {
+        Ok(()) => Some((found, how)),
+        Err(error) => {
+            tracing::warn!(error = %error, "where a film can be started could not be kept");
+            None
         }
     }
 }
@@ -845,6 +951,26 @@ mod tests {
             assert_eq!(UpkeepTask::parse(task.as_str()), Some(task));
         }
         assert_eq!(UpkeepTask::parse("something_new"), None);
+    }
+
+    #[test]
+    fn a_film_lasts_what_it_holds_only_when_it_claims_clearly_more() {
+        let claimed = Some(Millis::new(1_694_568));
+        assert_eq!(
+            what_it_really_lasts(claimed, Millis::new(1_351_000)),
+            Some(Millis::new(1_351_000))
+        );
+        assert_eq!(
+            what_it_really_lasts(claimed, Millis::new(1_693_900)),
+            None,
+            "the sound running on a little past the picture is no lie"
+        );
+        assert_eq!(
+            what_it_really_lasts(claimed, Millis::new(1_700_000)),
+            None,
+            "holding more than it claims is not put right here"
+        );
+        assert_eq!(what_it_really_lasts(None, Millis::new(1_351_000)), None);
     }
 
     #[test]
