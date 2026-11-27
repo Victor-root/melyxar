@@ -449,7 +449,14 @@ function Film({
         )}
         t={t}
       />
-      {next && onNextEpisode && upNextOffered(next, declined, ended, stretches?.segments ?? [], playback.at) && (
+      {next && onNextEpisode && upNextOffered(
+          next,
+          declined,
+          ended,
+          stretches?.segments ?? [],
+          playback.at,
+          playback.length,
+        ) && (
         <UpNext
           next={next}
           left={ended ? 0 : playback.length - playback.at}

@@ -15,18 +15,27 @@ const CREDITS = [{ kind: "outro", from_second: 1260, to_second: 1320 }] as Playb
 
 describe("the next episode", () => {
   it("is offered from the start of the credits", () => {
-    expect(upNextOffered(NEXT, false, false, CREDITS, 1259)).toBe(false);
-    expect(upNextOffered(NEXT, false, false, CREDITS, 1260)).toBe(true);
+    expect(upNextOffered(NEXT, false, false, CREDITS, 1259, 1320)).toBe(false);
+    expect(upNextOffered(NEXT, false, false, CREDITS, 1260, 1320)).toBe(true);
   });
 
-  it("is offered at the very end when the credits are not known", () => {
-    expect(upNextOffered(NEXT, false, false, [], 1300)).toBe(false);
-    expect(upNextOffered(NEXT, false, true, [], 1321)).toBe(true);
+  it("waits for the credits when they are known, however near the end", () => {
+    expect(upNextOffered(NEXT, false, false, [{ ...CREDITS[0], from_second: 1310 }], 1300, 1320)).toBe(false);
+  });
+
+  it("is offered over the last seconds when the credits are not known", () => {
+    expect(upNextOffered(NEXT, false, false, [], 1289, 1320)).toBe(false);
+    expect(upNextOffered(NEXT, false, false, [], 1290, 1320)).toBe(true);
+    expect(upNextOffered(NEXT, false, true, [], 1321, 1320)).toBe(true);
+  });
+
+  it("is not offered before the film says how long it is", () => {
+    expect(upNextOffered(NEXT, false, false, [], 0, 0)).toBe(false);
   });
 
   it("is not offered again once turned down, nor when there is none", () => {
-    expect(upNextOffered(NEXT, true, true, CREDITS, 1300)).toBe(false);
-    expect(upNextOffered(null, false, true, CREDITS, 1300)).toBe(false);
+    expect(upNextOffered(NEXT, true, true, CREDITS, 1300, 1320)).toBe(false);
+    expect(upNextOffered(null, false, true, CREDITS, 1300, 1320)).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 /*
  * The next episode, announced over the end of this one as the television
  * announces it: from the start of the credits when the file says where they
- * are, from the very end otherwise. Started once the count is over, or at
+ * are, over the last seconds of the episode otherwise. Started once the count is over, or at
  * once on its button. Cancelled, or shut with the back key, it is not
  * offered again for this episode.
  */
@@ -26,20 +26,32 @@ export function shareLeft(left: number, from: number): number {
   return from > 0 ? Math.min(Math.max(left / from, 0), 1) : 0;
 }
 
+/** How long before the end of an episode whose credits are not known the
+ *  next one is offered, in seconds: about as long as credits run. */
+export const OFFERED_BEFORE_THE_END = 30;
+
 /** Whether the next episode is offered: one there is, not turned down, and
- *  the film in its credits or over. */
+ *  the film in its credits, in its last seconds when they are not known, or
+ *  over. `length` is nothing until the film says how long it is. */
 export function upNextOffered(
   next: NextEpisode | null,
   declined: boolean,
   ended: boolean,
   segments: PlaybackSegment[],
   at: number,
+  length: number,
 ): boolean {
   if (next === null || declined) {
     return false;
   }
+  if (ended) {
+    return true;
+  }
   const credits = segments.find((segment) => segment.kind === "outro");
-  return ended || (credits !== undefined && at >= credits.from_second);
+  if (credits !== undefined) {
+    return at >= credits.from_second;
+  }
+  return length > 0 && length - at <= OFFERED_BEFORE_THE_END;
 }
 
 type Say = (key: string, values?: Record<string, string | number>) => string;
