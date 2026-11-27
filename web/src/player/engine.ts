@@ -40,6 +40,7 @@ import { useAdaptiveQuality } from "./adapting";
 import { markTheOpening } from "./opening";
 import { watchTheReading, whatIsHeldAround } from "./watch";
 import { watchStill } from "./sound-hole";
+import { standsAtItsEnd } from "./film-end";
 import { filmLeftOutAhead, forgetThrownAway, stretchesHeld, whereItLies } from "./skipped-film";
 import type { Stretch } from "./skipped-film";
 import type { Watch } from "./sound-hole";
@@ -655,7 +656,9 @@ export function usePlayback({
 
   /* A film stood still at a hole in its own sound goes on from where the
      sound comes back (see `sound-hole.ts`). Asked once for each place it
-     stands at, so a hole the server finds no end to costs one question. */
+     stands at, so a hole the server finds no end to costs one question.
+     One stood still at its very end is over (see `film-end.ts`), and ends
+     the way a film the browser saw to its end does. */
   useEffect(() => {
     if (pictureKey === null) {
       return;
@@ -673,8 +676,16 @@ export function usePlayback({
       }
       const at = element.currentTime;
       const held = whatIsHeldAround(element, at).held_to_second;
-      const seen = watchStill(watch, at, performance.now(), held === null ? 0 : held - at);
+      const heldAhead = held === null ? 0 : held - at;
+      const now = performance.now();
+      const seen = watchStill(watch, at, now, heldAhead);
       watch = seen.watch;
+      if (standsAtItsEnd(watch, at, now, element.duration, heldAhead)) {
+        // Paused, which tells the server where the film got to.
+        element.pause();
+        reachedTheEnd.current?.();
+        return;
+      }
       if (!seen.stuck || asked === at) {
         return;
       }
