@@ -40,7 +40,7 @@ import { useAdaptiveQuality } from "./adapting";
 import { markTheOpening } from "./opening";
 import { watchTheReading, whatIsHeldAround } from "./watch";
 import { watchStill } from "./sound-hole";
-import { standsAtItsEnd } from "./film-end";
+import { standsAtItsEnd, waitsAtItsLastPicture } from "./film-end";
 import { filmLeftOutAhead, forgetThrownAway, stretchesHeld, whereItLies } from "./skipped-film";
 import type { Stretch } from "./skipped-film";
 import type { Watch } from "./sound-hole";
@@ -239,6 +239,10 @@ export interface Playback {
   /** Where the film has got to, how long it is, and how far it is held. */
   at: number;
   length: number;
+  /** Where the film really ends: its last picture once the last piece of it
+   *  is held, which can come a second before the length it announces, and
+   *  that length until then. What a count to its end counts to. */
+  endsAt: number;
   loaded: number;
   playing: boolean;
   muted: boolean;
@@ -332,6 +336,10 @@ export function usePlayback({
      handed the same numbers instead of going and fetching them again. */
   const [at, setAt] = useState(0);
   const [length, setLength] = useState(0);
+  /* Where the last piece of the film ends, once it is held: in a hand for
+     the listeners, and drawn for the count to the end. */
+  const lastPictureAt = useRef<number | null>(null);
+  const [lastPicture, setLastPicture] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(0);
   const [playing, setPlaying] = useState(false);
   /* What `playing` said before the element was replaced, read when the new one
@@ -668,6 +676,24 @@ export function usePlayback({
       name ? api.soundAfter(name, at) : api.soundAfterInTheFile(sourceId, audioId, at);
     let watch: Watch = null;
     let asked: number | null = null;
+    const over = (element: Picture) => {
+      // Paused, which tells the server where the film got to.
+      element.pause();
+      reachedTheEnd.current?.();
+    };
+    const waited = () => {
+      const element = video.current;
+      if (
+        element &&
+        !element.paused &&
+        !element.seeking &&
+        waitsAtItsLastPicture(element.currentTime, lastPictureAt.current)
+      ) {
+        over(element);
+      }
+    };
+    const shown = video.current;
+    shown?.addEventListener("waiting", waited);
     const look = () => {
       const element = video.current;
       if (!element || element.paused || element.seeking || element.ended) {
@@ -681,9 +707,7 @@ export function usePlayback({
       const seen = watchStill(watch, at, now, heldAhead);
       watch = seen.watch;
       if (standsAtItsEnd(watch, at, now, element.duration, heldAhead)) {
-        // Paused, which tells the server where the film got to.
-        element.pause();
-        reachedTheEnd.current?.();
+        over(element);
         return;
       }
       if (!seen.stuck || asked === at) {
@@ -708,7 +732,10 @@ export function usePlayback({
         });
     };
     const timer = window.setInterval(look, LOOKED_FOR_A_HOLE_EVERY);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      shown?.removeEventListener("waiting", waited);
+    };
   }, [pictureKey, stream, sourceId, audioId]);
 
   /* Asked for while the picture is not there yet, and not a moment longer:
@@ -783,6 +810,8 @@ export function usePlayback({
        the room it did not make. Only the first says anything. */
     let gaveUp = false;
     const listening = new AbortController();
+    lastPictureAt.current = null;
+    setLastPicture(null);
 
     const leave = () => {
       gone = true;
@@ -932,6 +961,16 @@ export function usePlayback({
         const { sn, type } = buffered.frag;
         if (typeof sn === "number" && type === "main") {
           fetched.set(sn, whereItLies(buffered.frag));
+          // The last piece of the film: the furthest film held ends where
+          // the film does, whatever length the file announces. Not what is
+          // held around the piece itself, which can begin past the last
+          // picture and add nothing the browser counts as held.
+          const held = element.buffered;
+          if (sn === feed?.levels[buffered.frag.level]?.details?.endSN && held.length > 0) {
+            const ends = held.end(held.length - 1);
+            lastPictureAt.current = ends;
+            setLastPicture(ends);
+          }
         }
         fetchWhatWasLeftOut();
       });
@@ -1587,6 +1626,7 @@ export function usePlayback({
     setMuted,
     at,
     length,
+    endsAt: lastPicture !== null && lastPicture < length ? lastPicture : length,
     loaded,
     playing,
     muted,

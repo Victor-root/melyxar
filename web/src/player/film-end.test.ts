@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { standsAtItsEnd } from "./film-end";
+import { standsAtItsEnd, waitsAtItsLastPicture } from "./film-end";
 
 describe("standsAtItsEnd", () => {
   const watch = { at: 1464.84, since: 0 };
@@ -21,5 +21,17 @@ describe("standsAtItsEnd", () => {
     expect(standsAtItsEnd({ at: 1400, since: 0 }, 1400, 5000, 1465.92, 0)).toBe(false);
     expect(standsAtItsEnd(watch, 1464.84, 5000, 1465.92, 1.2)).toBe(false);
     expect(standsAtItsEnd(watch, 1464.84, 5000, Number.NaN, 0)).toBe(false);
+  });
+});
+
+describe("waitsAtItsLastPicture", () => {
+  it("ends a film waiting at the last picture it holds", () => {
+    expect(waitsAtItsLastPicture(1464.54, 1464.907)).toBe(true);
+    expect(waitsAtItsLastPicture(1464.907, 1464.907)).toBe(true);
+  });
+
+  it("leaves a film waiting well before its last picture, or before it is held", () => {
+    expect(waitsAtItsLastPicture(1460, 1464.907)).toBe(false);
+    expect(waitsAtItsLastPicture(1464.54, null)).toBe(false);
   });
 });

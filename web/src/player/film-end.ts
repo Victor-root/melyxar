@@ -4,7 +4,9 @@
  * and it stands still a second short of the end. It never says the film
  * ended, so nothing follows it, not the next episode either. Seen standing
  * still that close to its end, with no more than a moment held after, the
- * film is over.
+ * film is over. Once the last piece of the film is held, it is over the
+ * moment it stops to wait at its last picture, with nothing to stand still
+ * for: what is counted down to its end reaches nothing then, not seconds on.
  */
 
 import { HELD_AHEAD, STILL_FOR } from "./sound-hole";
@@ -37,4 +39,15 @@ export function standsAtItsEnd(
     // third of a second short as often as at nothing.
     heldAhead <= HELD_AHEAD
   );
+}
+
+/** Whether a film that has just stopped to wait at `at` is at its last
+ *  picture: the last piece of it is held, ending at `lastPicture`, so nothing
+ *  more is coming and there is nothing to wait for. Nothing known of the
+ *  last piece is no answer, and the stillness above decides. */
+export function waitsAtItsLastPicture(
+  at: number,
+  lastPicture: number | null,
+): boolean {
+  return lastPicture !== null && lastPicture - at <= HELD_AHEAD;
 }

@@ -455,11 +455,11 @@ function Film({
           ended,
           stretches?.segments ?? [],
           playback.at,
-          playback.length,
+          playback.endsAt,
         ) && (
         <UpNext
           next={next}
-          left={ended ? 0 : playback.length - playback.at}
+          left={ended ? 0 : playback.endsAt - playback.at}
           t={t}
           onMoment={tellUpNext}
           onPlay={() => {
