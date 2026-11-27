@@ -175,7 +175,8 @@ fun PlayerScreen(play: Play, onDone: (reached: Play?) -> Unit, onNext: (Play) ->
     val next = work?.carryOnWith?.takeIf { it.sourceId != null }
     var declined by remember { mutableStateOf(false) }
     val inCredits by rememberInCredits(playback)
-    val announced = next?.takeIf { !declined && (ended || inCredits) }
+    val inItsLastSeconds by rememberInItsLastSeconds(playback)
+    val announced = next?.takeIf { !declined && (ended || inCredits || inItsLastSeconds) }
     // The credits of an episode with another after it are the next
     // episode's announcement rather than something to skip.
     val skippable by rememberSkippable(playback, creditsToo = next == null || declined)

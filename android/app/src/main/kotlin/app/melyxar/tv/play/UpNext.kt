@@ -73,6 +73,10 @@ private const val READ_EVERY_MS = 250L
 /** How often the film is looked at for its credits. */
 private const val LOOKED_AT_EVERY_MS = 500L
 
+/** How long before the end of an episode whose credits are not known the
+ *  next one is announced, in seconds: about as long as credits run. */
+private const val ANNOUNCED_BEFORE_THE_END_S = 30.0
+
 /** Whether the film is in its credits, when its file says where they are:
  *  the next episode is announced from there rather than from its very end. */
 @Composable
@@ -80,6 +84,19 @@ fun rememberInCredits(playback: Playback): State<Boolean> = produceState(false, 
     val credits = playback.plan?.segments?.firstOrNull { it.kind == "outro" } ?: return@produceState
     while (true) {
         value = playback.seconds >= credits.fromSecond
+        delay(LOOKED_AT_EVERY_MS)
+    }
+}
+
+/** Whether the film is in its last seconds and its credits are not known:
+ *  the next episode is announced over them rather than after the end, which
+ *  is too late to be seen. Never while the credits are known: they decide. */
+@Composable
+fun rememberInItsLastSeconds(playback: Playback): State<Boolean> = produceState(false, playback.plan) {
+    if (playback.plan?.segments?.any { it.kind == "outro" } == true) return@produceState
+    while (true) {
+        val length = playback.length
+        value = length != null && length > 0 && length - playback.seconds <= ANNOUNCED_BEFORE_THE_END_S
         delay(LOOKED_AT_EVERY_MS)
     }
 }
