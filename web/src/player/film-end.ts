@@ -3,10 +3,11 @@
  * sound runs on past the last picture, the browser holds only what has both,
  * and it stands still a second short of the end. It never says the film
  * ended, so nothing follows it, not the next episode either. Seen standing
- * still that close to its end, with nothing held after, the film is over.
+ * still that close to its end, with no more than a moment held after, the
+ * film is over.
  */
 
-import { STILL_FOR } from "./sound-hole";
+import { HELD_AHEAD, STILL_FOR } from "./sound-hole";
 import type { Watch } from "./sound-hole";
 
 /** How close to its announced length a film standing still counts as over,
@@ -14,10 +15,6 @@ import type { Watch } from "./sound-hole";
  *  second to a second, and a last piece of film the browser would not take,
  *  which is about a second more. */
 export const THE_LAST_STRETCH = 3;
-
-/** How little film held past where it stands still means nothing is left to
- *  play, in seconds: less than a few pictures. */
-const NOTHING_HELD = 0.25;
 
 /** Whether the film, seen at `at` since the watch began, has stood still at
  *  its very end long enough to be over. */
@@ -35,6 +32,9 @@ export function standsAtItsEnd(
     Number.isFinite(length) &&
     length > 0 &&
     length - at <= THE_LAST_STRETCH &&
-    heldAhead < NOTHING_HELD
+    // More held than this is a hole in the sound, which `sound-hole.ts` sees
+    // to; less, and the browser stands still on the last of it, seen at a
+    // third of a second short as often as at nothing.
+    heldAhead <= HELD_AHEAD
   );
 }

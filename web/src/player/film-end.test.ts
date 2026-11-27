@@ -6,6 +6,9 @@ describe("standsAtItsEnd", () => {
 
   it("ends a film stood still for long enough just short of its length", () => {
     expect(standsAtItsEnd(watch, 1464.84, 2000, 1465.92, 0.07)).toBe(true);
+    // Stood still with a third of a second still held, as seen on a real one.
+    const short = { at: 1464.54, since: 0 };
+    expect(standsAtItsEnd(short, 1464.54, 2000, 1465.92, 0.37)).toBe(true);
   });
 
   it("waits until it has stood still long enough", () => {
@@ -16,7 +19,7 @@ describe("standsAtItsEnd", () => {
 
   it("leaves alone a film far from its end, or with film still held ahead", () => {
     expect(standsAtItsEnd({ at: 1400, since: 0 }, 1400, 5000, 1465.92, 0)).toBe(false);
-    expect(standsAtItsEnd(watch, 1464.84, 5000, 1465.92, 1)).toBe(false);
+    expect(standsAtItsEnd(watch, 1464.84, 5000, 1465.92, 1.2)).toBe(false);
     expect(standsAtItsEnd(watch, 1464.84, 5000, Number.NaN, 0)).toBe(false);
   });
 });
