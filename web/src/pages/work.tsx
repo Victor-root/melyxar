@@ -367,6 +367,11 @@ function TopOfTheWork({
           )}
           <ElsewhereRatings ratings={work.ratings} />
           {facts.length > 0 && <span>{facts.join(" · ")}</span>}
+          {work.kind === "series" && work.series_status && (
+            <span className={`work-badge work-badge-${work.series_status}`}>
+              {t(`work.status.${work.series_status}`)}
+            </span>
+          )}
           {work.age_rating && <span className="work-badge">{work.age_rating}</span>}
           {work.genres.length > 0 && <span>{work.genres.join(", ")}</span>}
           {!isNamed(work.identification) && (

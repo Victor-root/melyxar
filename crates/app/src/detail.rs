@@ -8,7 +8,7 @@
 use melyxar_core::id::{MediaSourceId, PersonId, WorkId};
 use melyxar_core::media::{Chapter, Track};
 use melyxar_core::time::{Millis, Timestamp};
-use melyxar_core::work::Work;
+use melyxar_core::work::{SeriesStatus, Work, WorkKind};
 use melyxar_database::browse::WorkCard;
 use melyxar_database::catalogue::{PlayableExtraVideo, SourceAnalysis};
 use melyxar_database::held_back::HeldBack;
@@ -35,6 +35,8 @@ pub struct WorkDetail {
     /// year, month, day.
     pub release_date: Option<String>,
     pub end_date: Option<String>,
+    /// Whether a series is still made. Nothing for anything else.
+    pub series_status: Option<SeriesStatus>,
     pub genres: Vec<String>,
     pub studios: Vec<String>,
     /// Who is credited, leads first, then the parts behind the camera. For an
@@ -629,6 +631,10 @@ pub async fn work_detail(
         overview: texts.as_ref().and_then(|(_, _, overview)| overview.clone()),
         release_date,
         end_date,
+        series_status: match work.kind {
+            WorkKind::Series => database.series_status_of(work_id).await?,
+            _ => None,
+        },
         genres: database.work_genres(work_id).await?,
         studios: database.work_studios(work_id).await?,
         credits,

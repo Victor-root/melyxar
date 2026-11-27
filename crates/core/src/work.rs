@@ -203,6 +203,40 @@ pub struct Work {
     pub updated_at: Timestamp,
 }
 
+/// Whether a series is still being made.
+///
+/// Asked of the provider with the rest of the series, and asked again now and
+/// then, since a series running today is one that ends some day.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeriesStatus {
+    /// New episodes still come, or are being made.
+    Continuing,
+    /// It came to the end its makers meant for it.
+    Ended,
+    /// It was stopped before that.
+    Canceled,
+}
+
+impl SeriesStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Continuing => "continuing",
+            Self::Ended => "ended",
+            Self::Canceled => "canceled",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "continuing" => Some(Self::Continuing),
+            "ended" => Some(Self::Ended),
+            "canceled" => Some(Self::Canceled),
+            _ => None,
+        }
+    }
+}
+
 /// Where a viewer is in a work, per user.
 ///
 /// The state is explicit rather than derived from a percentage, because a
@@ -383,6 +417,14 @@ pub fn place_across(number: i32, lengths: &[SeasonLength]) -> Option<(i32, i32)>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_series_status_survives_a_round_trip_through_its_stored_form() {
+        for status in [SeriesStatus::Continuing, SeriesStatus::Ended, SeriesStatus::Canceled] {
+            assert_eq!(SeriesStatus::parse(status.as_str()), Some(status));
+        }
+        assert_eq!(SeriesStatus::parse("paused"), None);
+    }
 
     #[test]
     fn a_series_is_as_watched_as_its_episodes() {

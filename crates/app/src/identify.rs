@@ -20,7 +20,7 @@ use melyxar_core::work::{
     place_across, IdentificationNote, IdentificationState, SeasonLength, Work, WorkKind,
 };
 use melyxar_database::metadata::{
-    CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord,
+    CollectionRecord, CreditRecord, IdentifiedWork, RemoteTrailerRecord, SeriesStatusReadBefore,
 };
 use melyxar_database::numbering::EpisodeMove;
 use melyxar_jobs::{JobHandle, StartedJob};
@@ -51,6 +51,8 @@ pub struct IdentifyReport {
     pub pictures_filled: usize,
     /// Films that had a name but no synopsis, and have one now.
     pub synopses_filled: usize,
+    /// Series asked again whether they are still made.
+    pub statuses_filled: usize,
     /// Films and episodes nobody could name that now show a picture out of
     /// their own file rather than a letter.
     pub pictured: usize,
@@ -140,6 +142,7 @@ where
         let filled = fill_in_what_is_missing(state, provider, library, handle).await?;
         report.pictures_filled = filled.pictures;
         report.synopses_filled = filled.synopses;
+        report.statuses_filled = filled.statuses;
     }
 
     // What the provider could not name shows a picture out of the film, so
@@ -158,6 +161,7 @@ where
         || report.refiled > 0
         || report.pictures_filled > 0
         || report.synopses_filled > 0
+        || report.statuses_filled > 0
         || report.pictured > 0
     {
         database.bump_library_version(library.id).await?;
@@ -183,6 +187,7 @@ where
         refiled = report.refiled,
         pictures_filled = report.pictures_filled,
         synopses_filled = report.synopses_filled,
+        statuses_filled = report.statuses_filled,
         pictured = report.pictured,
         cancelled = report.cancelled,
         "identification finished"
@@ -279,7 +284,19 @@ async fn fill_in_the_synopsis(
 struct Filled {
     pictures: usize,
     synopses: usize,
+    /// Series asked again whether they are still made.
+    statuses: usize,
 }
+
+/// How long a series still being made is believed to be, before its
+/// provider is asked again: the answer that changes, and the one a page
+/// showing it wants right.
+const STILL_MADE_ASKED_AGAIN_AFTER: time::Duration = time::Duration::days(7);
+
+/// How long a series that is over, or that its provider said nothing about,
+/// is believed to be. One brought back after its end is rare, and late news
+/// of it costs nobody anything.
+const OVER_ASKED_AGAIN_AFTER: time::Duration = time::Duration::days(90);
 
 /// Asks again about films that have a name and are still missing something.
 ///
@@ -309,6 +326,10 @@ where
             provider.name(),
             language,
             crate::images::RECIPE,
+            SeriesStatusReadBefore {
+                continuing: melyxar_core::time::now() - STILL_MADE_ASKED_AGAIN_AFTER,
+                settled: melyxar_core::time::now() - OVER_ASKED_AGAIN_AFTER,
+            },
         )
         .await?;
     if waiting.is_empty() {
@@ -368,6 +389,14 @@ where
                 .set_work_synopsis(work.id, language, details.tagline.as_deref(), synopsis)
                 .await?;
             filled.synopses += 1;
+        }
+
+        if work.wants_its_status {
+            state
+                .database()
+                .set_series_status(work.id, details.status)
+                .await?;
+            filled.statuses += 1;
         }
         handle.advance(1).await;
     }
@@ -567,6 +596,7 @@ where
     crate::images::store_person_photos(state, provider, &people).await;
 
     if catalogue == Catalogue::Series {
+        state.database().set_series_status(work_id, details.status).await?;
         if library.kind == LibraryKind::Anime {
             place_what_was_numbered_across(state, library.id, work_id, &details.season_lengths)
                 .await?;
@@ -783,6 +813,7 @@ fn as_details(
         release_year,
         release_date: None,
         end_date: None,
+        status: None,
         runtime,
         community_rating,
         age_rating_label: None,
@@ -1831,7 +1862,7 @@ pub async fn clear_identification(state: &AppState, work_id: WorkId) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use melyxar_core::work::{IdentificationState, WorkKind};
+    use melyxar_core::work::{IdentificationState, SeriesStatus, WorkKind};
     use melyxar_metadata::provider::{Collection, Credit, Trailer};
     use std::sync::Mutex;
 
@@ -2395,6 +2426,7 @@ mod tests {
             release_year: year,
             release_date: None,
             end_date: None,
+            status: None,
             runtime: Some(melyxar_core::time::Millis::new(118 * 60_000)),
             community_rating: Some(7.4),
             age_rating_label: Some("12".to_string()),
@@ -4691,6 +4723,47 @@ mod tests {
             run(&state, &talking, &library).await.synopses_filled,
             more,
             "every one of them, in one run"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_series_says_whether_it_is_still_made_when_named_and_when_asked_again() {
+        let (_directory, state, library, work) = state_with_series("Distant Signal", Some(2019)).await;
+        let mut running = details("111", "Distant Signal", Some(2019));
+        running.status = Some(SeriesStatus::Continuing);
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("111", "Distant Signal", Some(2019))],
+            vec![running],
+        ));
+        assert_eq!(run(&state, &provider, &library).await.identified, 1);
+        let status = || async {
+            crate::detail::work_detail(&state, &crate::a_viewer(&state).await, work.id)
+                .await
+                .expect("read")
+                .expect("present")
+                .series_status
+        };
+        assert_eq!(status().await, Some(SeriesStatus::Continuing));
+
+        // Named before anybody asked, as every series was before this.
+        sqlx::query("UPDATE works SET series_status = NULL, series_status_read_at = NULL")
+            .execute(state.database().writer())
+            .await
+            .expect("forgotten");
+        let mut over = details("111", "Distant Signal", Some(2019));
+        over.status = Some(SeriesStatus::Ended);
+        let provider = Arc::new(StandIn::new(
+            vec![candidate("111", "Distant Signal", Some(2019))],
+            vec![over],
+        ));
+        let report = run(&state, &provider, &library).await;
+        assert_eq!(report.identified, 0);
+        assert_eq!(report.statuses_filled, 1);
+        assert_eq!(status().await, Some(SeriesStatus::Ended));
+        assert_eq!(
+            run(&state, &provider, &library).await.statuses_filled,
+            0,
+            "just asked, so not asked again"
         );
     }
 

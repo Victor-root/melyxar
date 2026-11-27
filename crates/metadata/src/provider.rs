@@ -8,7 +8,7 @@
 use std::future::Future;
 
 use melyxar_core::time::Millis;
-use melyxar_core::work::SeasonLength;
+use melyxar_core::work::{SeasonLength, SeriesStatus};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderError {
@@ -175,6 +175,9 @@ pub struct Details {
     /// each written year, month, day.
     pub release_date: Option<String>,
     pub end_date: Option<String>,
+    /// Whether a series is still made. Nothing for a film, and for a series
+    /// the provider says nothing about.
+    pub status: Option<SeriesStatus>,
     pub runtime: Option<Millis>,
     pub community_rating: Option<f64>,
     /// Age rating as the country writes it, and the country it came from.

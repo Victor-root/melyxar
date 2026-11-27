@@ -981,6 +981,9 @@ export interface Ancestor {
   logo: Picture[];
 }
 
+/** Whether a series is still made. */
+export type SeriesStatus = "continuing" | "ended" | "canceled";
+
 export interface Work {
   id: string;
   library_id: string;
@@ -993,6 +996,9 @@ export interface Work {
    *  day. */
   release_date: string | null;
   end_date: string | null;
+  /** Whether a series is still made; nothing for anything else, and for a
+   *  series its provider said nothing about. */
+  series_status: SeriesStatus | null;
   runtime_minutes: number | null;
   rating: number | null;
   age_rating: string | null;

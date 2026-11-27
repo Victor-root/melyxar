@@ -192,6 +192,18 @@
   color: var(--accent-bright);
 }
 
+/* Whether a series is still made: good news while it is, a word of warning
+   when it was stopped short, and the plain badge once it came to its end. */
+.work-badge-continuing {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.work-badge-canceled {
+  border-color: var(--attention);
+  color: var(--attention);
+}
+
 /* Which copy, which sound, which words: a word and a choice each, on one
    line while there is room for it. */
 .work-choices {

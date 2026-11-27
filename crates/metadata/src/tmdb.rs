@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use melyxar_core::time::Millis;
-use melyxar_core::work::SeasonLength;
+use melyxar_core::work::{SeasonLength, SeriesStatus};
 use serde::Deserialize;
 
 use crate::provider::{
@@ -571,6 +571,10 @@ struct DetailsResponse {
     /// When the last episode of a series went out. Absent for a film.
     #[serde(default)]
     last_air_date: Option<String>,
+    /// Whether a series is still made, in the provider's words. A film says
+    /// whether it is out, which is no question asked of it here.
+    #[serde(default)]
+    status: Option<String>,
     #[serde(default)]
     runtime: Option<i64>,
     /// A series says how long its episodes run rather than how long it does,
@@ -945,6 +949,7 @@ fn details_from(raw: DetailsResponse, language: &str) -> Details {
         release_year: year_of(raw.release_date.as_deref()),
         release_date: day_of(raw.release_date.as_deref()),
         end_date: day_of(raw.last_air_date.as_deref()),
+        status: raw.status.as_deref().and_then(series_status),
         // A film says how long it runs. A series says how long its episodes
         // run, as a list, because the answer has changed over the years; the
         // first is the one a page means by "an episode of this".
@@ -1029,6 +1034,20 @@ fn year_of(date: Option<&str>) -> Option<i32> {
 
 /// A day as the provider writes it, year, month, day, or nothing for an
 /// empty answer or one in any other shape.
+/// Whether a series is still made, from the words the provider uses for it.
+///
+/// A series waiting for its first episode is one being made, and so is one
+/// whose pilot alone is out. Whatever else it says, a film's own words among
+/// them, says nothing about it.
+fn series_status(said: &str) -> Option<SeriesStatus> {
+    match said {
+        "Returning Series" | "In Production" | "Planned" | "Pilot" => Some(SeriesStatus::Continuing),
+        "Ended" => Some(SeriesStatus::Ended),
+        "Canceled" | "Cancelled" => Some(SeriesStatus::Canceled),
+        _ => None,
+    }
+}
+
 fn day_of(date: Option<&str>) -> Option<String> {
     date.filter(|date| melyxar_core::time::is_a_day(date))
         .map(str::to_string)
@@ -1400,6 +1419,23 @@ mod tests {
         )
         .expect("the answer parses");
         assert_eq!(details_from(raw, "fr").imdb_id, None, "an empty identifier is none");
+    }
+
+    #[test]
+    fn a_series_says_whether_it_is_still_made() {
+        let status = |said: &str| {
+            let raw: DetailsResponse = serde_json::from_str(&format!(
+                r#"{{"id": 222, "name": "Amber Field", "status": "{said}"}}"#
+            ))
+            .expect("the answer parses");
+            details_from(raw, "fr").status
+        };
+        assert_eq!(status("Returning Series"), Some(SeriesStatus::Continuing));
+        assert_eq!(status("In Production"), Some(SeriesStatus::Continuing));
+        assert_eq!(status("Ended"), Some(SeriesStatus::Ended));
+        assert_eq!(status("Canceled"), Some(SeriesStatus::Canceled));
+        assert_eq!(status("Released"), None, "what a film says of itself");
+        assert_eq!(details("fr").status, None, "a film says nothing of it");
     }
 
     #[test]

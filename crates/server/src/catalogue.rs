@@ -21,7 +21,7 @@ use melyxar_core::media::TrackKind;
 use melyxar_core::time::Millis;
 use melyxar_core::library::LibraryKind;
 use melyxar_core::id::LibraryId;
-use melyxar_core::work::{IdentificationNote, PlaybackState};
+use melyxar_core::work::{IdentificationNote, PlaybackState, SeriesStatus};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ServerError};
@@ -834,6 +834,8 @@ struct WorkView {
     /// year, month, day.
     release_date: Option<String>,
     end_date: Option<String>,
+    /// Whether a series is still made: continuing, ended or canceled.
+    series_status: Option<&'static str>,
     runtime_minutes: Option<i64>,
     rating: Option<f64>,
     age_rating: Option<String>,
@@ -1225,6 +1227,7 @@ fn work_view(detail: &WorkDetail) -> WorkView {
         year: detail.work.release_year,
         release_date: detail.release_date.clone(),
         end_date: detail.end_date.clone(),
+        series_status: detail.series_status.map(SeriesStatus::as_str),
         runtime_minutes: detail.length().map(whole_minutes),
         rating: detail.work.community_rating,
         age_rating: detail.work.age_rating_label.clone(),

@@ -8,8 +8,8 @@
 use std::path::{Path, PathBuf};
 
 use melyxar_core::id::{CollectionId, CreditId, ExtraVideoId, LibraryId, NameId, PersonId, WorkId};
-use melyxar_core::time::{now, Millis};
-use melyxar_core::work::{IdentificationNote, IdentificationState};
+use melyxar_core::time::{now, Millis, Timestamp};
+use melyxar_core::work::{IdentificationNote, IdentificationState, SeriesStatus};
 use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
 
 use crate::convert::{int_to_bool, timestamp_to_text};
@@ -140,6 +140,17 @@ pub struct IncompleteNamedWork {
     /// The same, for the thumb, which came after both.
     pub wants_a_thumb: bool,
     pub wants_a_synopsis: bool,
+    /// A series whose status was never asked, or was asked too long ago.
+    pub wants_its_status: bool,
+}
+
+/// Before when what a series said of whether it is still made counts as too
+/// old to believe: soon for one still made, since that answer changes, and
+/// seldom for one that is over or said nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeriesStatusReadBefore {
+    pub continuing: Timestamp,
+    pub settled: Timestamp,
 }
 
 /// A film that has a name and is still missing something a page shows.
@@ -454,6 +465,7 @@ impl Database {
         provider: &str,
         language: &str,
         recipe: &str,
+        statuses: SeriesStatusReadBefore,
     ) -> Result<Vec<IncompleteNamedWork>> {
         let made_today = format!("{recipe}-%");
         let rows = sqlx::query(
@@ -476,21 +488,27 @@ impl Database {
                     NOT EXISTS (
                         SELECT 1 FROM work_translations t
                          WHERE t.work_id = w.id AND t.language = ?
-                           AND t.overview IS NOT NULL AND t.overview <> '') AS wants_a_synopsis
+                           AND t.overview IS NOT NULL AND t.overview <> '')
+                    AND NOT EXISTS (
+                        SELECT 1 FROM work_locked_fields l
+                         WHERE l.work_id = w.id AND l.field = 'overview') AS wants_a_synopsis,
+                    w.kind = 'series'
+                    AND (w.series_status_read_at IS NULL
+                         OR w.series_status_read_at < CASE WHEN w.series_status = 'continuing'
+                                                           THEN ? ELSE ? END) AS wants_its_status
              FROM works w
              JOIN work_external_ids e ON e.work_id = w.id AND e.provider = ?
              WHERE w.library_id = ?
                AND w.kind IN ('movie', 'series')
                AND w.identification IN ('identified', 'manual')
-               AND NOT EXISTS (
-                   SELECT 1 FROM work_locked_fields l
-                    WHERE l.work_id = w.id AND l.field = 'overview')
              ORDER BY w.added_at",
         )
         .bind(&made_today)
         .bind(&made_today)
         .bind(&made_today)
         .bind(language)
+        .bind(timestamp_to_text(statuses.continuing))
+        .bind(timestamp_to_text(statuses.settled))
         .bind(provider)
         .bind(library_id.to_db_string())
         .fetch_all(self.reader())
@@ -502,7 +520,13 @@ impl Database {
             let wants_a_title_image: bool = int_to_bool(row.try_get("wants_a_title_image")?);
             let wants_a_thumb: bool = int_to_bool(row.try_get("wants_a_thumb")?);
             let wants_a_synopsis: bool = int_to_bool(row.try_get("wants_a_synopsis")?);
-            if !wants_pictures && !wants_a_title_image && !wants_a_thumb && !wants_a_synopsis {
+            let wants_its_status: bool = int_to_bool(row.try_get("wants_its_status")?);
+            if !wants_pictures
+                && !wants_a_title_image
+                && !wants_a_thumb
+                && !wants_a_synopsis
+                && !wants_its_status
+            {
                 continue;
             }
             let kind_text: String = row.try_get("kind")?;
@@ -518,9 +542,36 @@ impl Database {
                 wants_a_title_image,
                 wants_a_thumb,
                 wants_a_synopsis,
+                wants_its_status,
             });
         }
         Ok(waiting)
+    }
+
+    /// Writes down whether a series is still made, as its provider just said,
+    /// and when that was asked.
+    pub async fn set_series_status(
+        &self,
+        work_id: WorkId,
+        status: Option<SeriesStatus>,
+    ) -> Result<()> {
+        sqlx::query("UPDATE works SET series_status = ?, series_status_read_at = ? WHERE id = ?")
+            .bind(status.map(SeriesStatus::as_str))
+            .bind(timestamp_to_text(now()))
+            .bind(work_id.to_db_string())
+            .execute(self.writer())
+            .await?;
+        Ok(())
+    }
+
+    /// Whether a series is still made, when its provider said.
+    pub async fn series_status_of(&self, work_id: WorkId) -> Result<Option<SeriesStatus>> {
+        let said: Option<Option<String>> =
+            sqlx::query_scalar("SELECT series_status FROM works WHERE id = ?")
+                .bind(work_id.to_db_string())
+                .fetch_optional(self.reader())
+                .await?;
+        Ok(said.flatten().as_deref().and_then(SeriesStatus::parse))
     }
 
     /// Gives a work the synopsis it was missing, and nothing else.
@@ -772,7 +823,8 @@ impl Database {
                AND collection_id IN (SELECT id FROM collections WHERE origin = 'provider')",
             "UPDATE works SET community_rating = NULL, critic_rating = NULL, runtime_ms = NULL,
                               age_rating_label = NULL, release_date = NULL, end_date = NULL,
-                              dominant_color = NULL
+                              dominant_color = NULL, series_status = NULL,
+                              series_status_read_at = NULL
              WHERE id IN (SELECT id FROM tree)",
         ] {
             sqlx::query(AssertSqlSafe(format!("{TREE} {statement}")))
@@ -1378,6 +1430,15 @@ mod tests {
     /// it. Any word does here: what matters is that a picture stamped with
     /// another one is asked for again.
     const RECIPE_NOW: &str = "b4";
+
+    /// A series' status asked a week ago is too old when it was still made,
+    /// and one asked a season ago when it was over.
+    fn statuses_now() -> SeriesStatusReadBefore {
+        SeriesStatusReadBefore {
+            continuing: now() - time::Duration::days(7),
+            settled: now() - time::Duration::days(90),
+        }
+    }
 
     async fn work_in_library() -> (Database, melyxar_core::work::Work) {
         let database = Database::open_in_memory().await.expect("database opens");
@@ -2136,6 +2197,70 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_series_is_asked_whether_it_is_still_made_soon_while_it_is_and_seldom_once_over() {
+        let (database, film) = work_in_library().await;
+        let series = database
+            .create_work(film.library_id, WorkKind::Series, "Amber Field", "amber field", None)
+            .await
+            .expect("work created");
+        for work in [film.id, series.id] {
+            database
+                .apply_identification(work, &found(), false)
+                .await
+                .expect("identification applied");
+            for kind in ["poster", "logo", "thumb"] {
+                store_one_picture(&database, work, kind).await;
+            }
+        }
+        let waiting = |statuses| {
+            let database = database.clone();
+            async move {
+                database
+                    .works_missing_their_metadata(film.library_id, "tmdb", "fr", RECIPE_NOW, statuses)
+                    .await
+                    .expect("read")
+                    .into_iter()
+                    .map(|work| (work.id, work.wants_its_status))
+                    .collect::<Vec<_>>()
+            }
+        };
+        assert_eq!(
+            waiting(statuses_now()).await,
+            vec![(series.id, true)],
+            "never asked, and a film has no such thing"
+        );
+        assert_eq!(database.series_status_of(series.id).await.expect("read"), None);
+
+        database
+            .set_series_status(series.id, Some(SeriesStatus::Continuing))
+            .await
+            .expect("kept");
+        assert_eq!(
+            database.series_status_of(series.id).await.expect("read"),
+            Some(SeriesStatus::Continuing)
+        );
+        assert!(waiting(statuses_now()).await.is_empty(), "just asked");
+        let a_day_on = SeriesStatusReadBefore {
+            continuing: now() + time::Duration::days(1),
+            settled: now() - time::Duration::days(90),
+        };
+        assert_eq!(
+            waiting(a_day_on).await,
+            vec![(series.id, true)],
+            "still made, so asked again once a while has gone"
+        );
+
+        database
+            .set_series_status(series.id, Some(SeriesStatus::Ended))
+            .await
+            .expect("kept");
+        assert!(waiting(a_day_on).await.is_empty(), "over, so asked again far later");
+
+        database.clear_identification(series.id).await.expect("cleared");
+        assert_eq!(database.series_status_of(series.id).await.expect("read"), None);
+    }
+
+    #[tokio::test]
     async fn a_film_whose_picture_never_arrived_is_offered_for_another_try() {
         let (database, work) = work_in_library().await;
         database
@@ -2144,7 +2269,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2165,7 +2290,7 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -2190,7 +2315,7 @@ mod tests {
         }
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2203,7 +2328,7 @@ mod tests {
         }
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -2225,7 +2350,7 @@ mod tests {
         store_one_picture(&database, work.id, "poster").await;
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2238,7 +2363,7 @@ mod tests {
         // The thumb came later still, and the same holds for it.
         store_one_picture(&database, work.id, "logo").await;
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2248,7 +2373,7 @@ mod tests {
         store_one_picture(&database, work.id, "thumb").await;
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
                 .await
                 .expect("read")
                 .is_empty(),
@@ -2293,7 +2418,7 @@ mod tests {
         }
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(
@@ -2325,7 +2450,7 @@ mod tests {
                     owner_kind: "work".to_string(),
                     owner_id: work_id.to_db_string(),
                     image_kind: kind.to_string(),
-                    relative_path: format!("works/x/{kind}-200.webp"),
+                    relative_path: format!("works/{work_id}/{kind}-200.webp"),
                     width: Some(200),
                     height: Some(300),
                     fingerprint: fingerprint.to_string(),
@@ -2347,7 +2472,7 @@ mod tests {
             .expect("identification applied");
 
         let waiting = database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read");
         assert_eq!(waiting.len(), 1);
@@ -2371,7 +2496,7 @@ mod tests {
         );
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
                 .await
                 .expect("read")
                 .iter()
@@ -2396,10 +2521,11 @@ mod tests {
 
         assert!(
             database
-                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+                .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
                 .await
                 .expect("read")
-                .is_empty(),
+                .iter()
+                .all(|waiting| !waiting.wants_a_synopsis),
             "a field somebody edited is theirs, empty or not"
         );
     }
@@ -2409,7 +2535,7 @@ mod tests {
         // There is nothing to ask with: no provider ever named it.
         let (database, work) = work_in_library().await;
         assert!(database
-            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW)
+            .works_missing_their_metadata(work.library_id, "tmdb", "fr", RECIPE_NOW, statuses_now())
             .await
             .expect("read")
             .is_empty());

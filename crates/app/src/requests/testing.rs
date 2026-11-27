@@ -101,6 +101,7 @@ fn described(id: &str, title: &str, seasons: &[(i32, i32)]) -> Details {
         release_year: Some(2020),
         release_date: None,
         end_date: None,
+        status: None,
         runtime: None,
         community_rating: None,
         age_rating_label: None,

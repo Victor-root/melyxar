@@ -355,7 +355,11 @@ describe("pictureName", () => {
 
 describe("whenItCameOut", () => {
   const t = (key: string, values?: Record<string, string | number>) =>
-    key === "work.ran" ? `${values?.from} to ${values?.to}` : key;
+    key === "work.ran"
+      ? `${values?.from} to ${values?.to}`
+      : key === "work.ran_since"
+        ? `since ${values?.from}`
+        : key;
   const film = { kind: "movie", year: 2019, release_date: null, end_date: null };
 
   it("says the day when it is known, and the year otherwise", () => {
@@ -368,6 +372,12 @@ describe("whenItCameOut", () => {
     const series = { kind: "series", year: 2019, release_date: "2019-03-12", end_date: "2023-06-01" };
     expect(whenItCameOut(series, "en", t)).toBe("2019 to 2023");
     expect(whenItCameOut({ ...series, end_date: "2019-12-01" }, "en", t)).toBe("2019");
+  });
+
+  it("says a series still made runs since its first year, whatever its latest episode", () => {
+    const series = { kind: "series", year: 2019, release_date: "2019-03-12", end_date: "2025-06-01" };
+    expect(whenItCameOut({ ...series, series_status: "continuing" }, "en", t)).toBe("since 2019");
+    expect(whenItCameOut({ ...series, series_status: "ended" }, "en", t)).toBe("2019 to 2025");
   });
 });
 

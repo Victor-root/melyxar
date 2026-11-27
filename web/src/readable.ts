@@ -187,13 +187,24 @@ export function readableDay(day: string, language: string): string | null {
 
 /**
  * When a work came out: the day when it is known, the year otherwise, and
- * for a series that has ended in another year, the years it ran.
+ * for a series that has ended in another year, the years it ran. A series
+ * still made runs since its first year: the day its latest episode went out
+ * is no end.
  */
 export function whenItCameOut(
-  work: { kind: string; year: number | null; release_date: string | null; end_date: string | null },
+  work: {
+    kind: string;
+    year: number | null;
+    release_date: string | null;
+    end_date: string | null;
+    series_status?: string | null;
+  },
   language: string,
   t: Wording,
 ): string | null {
+  if (work.kind === "series" && work.series_status === "continuing" && work.year !== null) {
+    return t("work.ran_since", { from: work.year });
+  }
   if (work.kind === "series" && work.end_date && work.year !== null) {
     const ended = Number(work.end_date.slice(0, 4));
     return ended === work.year ? String(work.year) : t("work.ran", { from: work.year, to: ended });
