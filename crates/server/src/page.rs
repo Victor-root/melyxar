@@ -594,6 +594,14 @@ enum UpNextMoment {
     WentOnInTheRow,
     /// The page had nowhere to go on to.
     NowhereToGo,
+    /// The player was left and the page went back a step, the film having
+    /// been started from elsewhere.
+    LeftGoingBack,
+    /// The player was left onto the page of what it played.
+    LeftOntoThePage,
+    /// The page was still drawing nothing a few seconds after it was left
+    /// for, or opened only to play.
+    PageStillBlank,
 }
 
 impl UpNextMoment {
@@ -609,6 +617,9 @@ impl UpNextMoment {
             Self::SteppedToTheNextEpisode => "stepped_to_the_next_episode",
             Self::WentOnInTheRow => "went_on_in_the_row",
             Self::NowhereToGo => "nowhere_to_go",
+            Self::LeftGoingBack => "left_going_back",
+            Self::LeftOntoThePage => "left_onto_the_page",
+            Self::PageStillBlank => "page_still_blank",
         }
     }
 }
@@ -1446,6 +1457,16 @@ mod tests {
                 assert_eq!(to, None);
             }
             other => panic!("read as the wrong fact: {other:?}"),
+        }
+        for word in ["left_going_back", "left_onto_the_page", "page_still_blank"] {
+            let said: FromThePage = serde_json::from_str(&format!(
+                r#"{{"source":"x","saw":"up_next","moment":"{word}"}}"#
+            ))
+            .expect("a step this module names is read");
+            match said.seen {
+                Seen::UpNext { moment, .. } => assert_eq!(moment.as_word(), word),
+                other => panic!("read as the wrong fact: {other:?}"),
+            }
         }
         assert!(serde_json::from_str::<FromThePage>(
             r#"{"source":"x","saw":"up_next","moment":"somewhere_the_page_invented"}"#

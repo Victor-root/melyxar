@@ -36,6 +36,10 @@ const START_AT_ONCE = "play";
 /** Which copy to play at once, when one is named. */
 const IN_THIS_COPY = "source";
 
+/** How long a page may draw nothing before the journal is told, in
+ *  milliseconds: well past a film starting or a step back landing. */
+const STILL_BLANK_AFTER_MS = 4000;
+
 /** Where a work is opened to be played at once, in this copy of it when one
  *  is named. */
 export function playingAddress(work: string, source: string | null = null): string {
@@ -317,8 +321,15 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
      nowhere in Melyxar to go back to. */
   const cameToPlay = useRef(false);
   /* The moment between leaving such a film and being back where it was
-     started from, when nothing of this page is drawn either. */
+     started from, when nothing of this page is drawn either. Over as soon as
+     the history has moved, wherever it landed: a step back onto this same
+     work would otherwise leave it drawing nothing for good. */
   const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    setLeaving(false);
+  }, [location.key]);
+  /* The file last played here, which the journal names a blank page after. */
+  const lastPlayed = useRef<string | null>(null);
 
   /* Started once and only once. The address is cleared as soon as it is
      acted on, so coming back to this page later does not start the film
@@ -398,6 +409,21 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
       !asked.failure &&
       (work === null || aWhole || (version !== undefined && !version.missing)));
 
+  /* A page drawing nothing for longer than any film takes to start, or than
+     going back takes, is a page stuck that way: said once in the journal,
+     with the file it last played or would play. */
+  const blankFor = lastPlayed.current ?? version?.id ?? null;
+  useEffect(() => {
+    if (!onlyToPlay || blankFor === null) {
+      return;
+    }
+    const timer = window.setTimeout(
+      () => tellOfUpNext(blankFor, "page_still_blank", { to: id ?? undefined }),
+      STILL_BLANK_AFTER_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [onlyToPlay, blankFor, id]);
+
   const readAgain = useCallback(() => setAgain((count) => count + 1), []);
   const play = useCallback(
     (source: string, fromTheStart: boolean, at?: number) =>
@@ -412,6 +438,12 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
   const stopThePlayer = useCallback(() => {
     // Leaving the film ends the sitting, and what was to follow it with it.
     forgetTheQueue();
+    if (playing) {
+      lastPlayed.current = playing.source;
+      tellOfUpNext(playing.source, cameToPlay.current ? "left_going_back" : "left_onto_the_page", {
+        to: id ?? undefined,
+      });
+    }
     setPlaying(null);
     if (cameToPlay.current) {
       setLeaving(true);
@@ -419,7 +451,7 @@ export function useWorkScreen(id: string | undefined): WorkScreen {
       return;
     }
     look();
-  }, [look, navigate]);
+  }, [look, navigate, playing, id]);
   /* The film is a step of its own in the history, over the page it was
      started from: the back key of a phone shuts it, as the player's own way
      out does, rather than leaving the page under it, or the app. The next

@@ -1461,7 +1461,10 @@ export type UpNextMoment =
   | "handed_over"
   | "stepped_to_the_next_episode"
   | "went_on_in_the_row"
-  | "nowhere_to_go";
+  | "nowhere_to_go"
+  | "left_going_back"
+  | "left_onto_the_page"
+  | "page_still_blank";
 
 /** What the summary of the administration says about the server. */
 export interface Overview {
