@@ -462,6 +462,7 @@ export const FINDABLE: FindableSection[] = [
     named: [
       ["import.found_title", "import.found_lead"],
       ["import.parts", "import.parts_lead"],
+      ["import.replace", "import.replace_why"],
       ["import.accounts", "import.accounts_lead"],
       ["import.lists", "import.lists_lead"],
     ],

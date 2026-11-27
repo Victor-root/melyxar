@@ -44,7 +44,7 @@ describe("readyToTakeUp and choicesOf", () => {
     plans["2"] = { ...plans["2"], name: " Ben ", password: "quiet harbour" };
     expect(readyToTakeUp(plans)).toBe(true);
     const parts = { ...ALL_PARTS, favourites: false };
-    expect(choicesOf(plans, new Set(["Rainy days"]), parts)).toEqual({
+    expect(choicesOf(plans, new Set(["Rainy days"]), parts, true)).toEqual({
       accounts: [
         { becomes: "existing", key: "1", user: "u-ada" },
         { becomes: "new", key: "2", name: "Ben", password: "quiet harbour" },
@@ -52,6 +52,7 @@ describe("readyToTakeUp and choicesOf", () => {
       ],
       collections: ["Rainy days"],
       parts,
+      replace: true,
     });
   });
 

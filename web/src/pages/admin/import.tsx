@@ -71,6 +71,8 @@ export function AdminImport() {
   const [plans, setPlans] = useState<Record<string, AccountPlan>>({});
   const [collections, setCollections] = useState<Set<string>>(new Set());
   const [parts, setParts] = useState<ImportParts>(ALL_PARTS);
+  // Merged unless asked otherwise: replacing loses what was done here.
+  const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   // What the last read or take-up came to, said in the panel it started from.
   const [said, setSaid] = useState<{ from: Server; refused: string | null; report: ImportReport | null } | null>(
@@ -99,6 +101,7 @@ export function AdminImport() {
       setPlans(firstPlans(preview));
       setCollections(firstCollections(preview));
       setParts(ALL_PARTS);
+      setReplace(false);
     } catch (error) {
       setSaid({ from, refused: refusalWording(error, t), report: null });
     } finally {
@@ -115,7 +118,7 @@ export function AdminImport() {
     setBusy(true);
     setSaid(null);
     try {
-      const report = await api.importTakeUp(read.path, choicesOf(plans, collections, parts));
+      const report = await api.importTakeUp(read.path, choicesOf(plans, collections, parts, replace));
       setSaid({ from, refused: null, report });
       setRead(null);
       // Every screen showing what was watched, liked or listened to reads it
@@ -154,6 +157,8 @@ export function AdminImport() {
             setCollections={setCollections}
             parts={parts}
             setParts={setParts}
+            replace={replace}
+            setReplace={setReplace}
             busy={busy}
             onTakeUp={() => setAsking(true)}
           />
@@ -175,7 +180,7 @@ export function AdminImport() {
             </>
           }
         >
-          <p>{t("import.ask_why")}</p>
+          <p>{t(replace ? "import.ask_why_replace" : "import.ask_why")}</p>
         </Modal>
       )}
     </>
@@ -291,6 +296,8 @@ function Preview({
   setCollections,
   parts,
   setParts,
+  replace,
+  setReplace,
   busy,
   onTakeUp,
 }: {
@@ -302,6 +309,8 @@ function Preview({
   setCollections: (collections: Set<string>) => void;
   parts: ImportParts;
   setParts: (parts: ImportParts) => void;
+  replace: boolean;
+  setReplace: (replace: boolean) => void;
   busy: boolean;
   onTakeUp: () => void;
 }) {
@@ -374,6 +383,9 @@ function Preview({
             />
           </Setting>
         ))}
+        <Setting label={t("import.replace")} why={t("import.replace_why")}>
+          <Toggle label={t("import.replace")} checked={replace} onChange={setReplace} />
+        </Setting>
       </Panel>
 
       <Panel icon={AccountIcon} title={t("import.accounts")} lead={t("import.accounts_lead")}>
@@ -470,7 +482,7 @@ function Preview({
       )}
 
       <div className="import-go">
-        <span className="setting-why">{t("import.kept_why")}</span>
+        <span className="setting-why">{t(replace ? "import.replaced_why" : "import.kept_why")}</span>
         <button
           type="button"
           className="button button-accent"

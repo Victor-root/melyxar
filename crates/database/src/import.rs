@@ -129,8 +129,29 @@ impl Database {
     /// in one transaction. The latest of the two says whether a work was
     /// watched and where it was left, a work without a moment counting as
     /// older than any; the play count is the greater of the two.
-    pub async fn take_up_progress(&self, user: UserId, taken: &[TakenProgress]) -> Result<()> {
+    ///
+    /// Or, when `replacing`, puts what the other server says in the place of
+    /// everything the account watched here: what it never played there is
+    /// back to not started. The tracks chosen for each work stay, being no
+    /// part of what was watched.
+    pub async fn take_up_progress(
+        &self,
+        user: UserId,
+        taken: &[TakenProgress],
+        replacing: bool,
+    ) -> Result<()> {
         let mut transaction = self.begin().await?;
+        if replacing {
+            sqlx::query(
+                "UPDATE playback_progress
+                 SET position_ms = 0, state = 'not_started', marked_manually = 0, play_count = 0,
+                     reported_at = NULL, last_played_at = NULL
+                 WHERE user_id = ?",
+            )
+            .bind(user.to_db_string())
+            .execute(&mut *transaction)
+            .await?;
+        }
         for one in taken {
             let kept: Option<(Option<String>, i64)> = sqlx::query_as(
                 "SELECT last_played_at, play_count FROM playback_progress WHERE user_id = ? AND work_id = ?",
@@ -140,6 +161,7 @@ impl Database {
             .fetch_optional(&mut *transaction)
             .await?;
             let wins = match &kept {
+                _ if replacing => true,
                 None => true,
                 Some((kept_at, _)) => match (parse_optional_timestamp(kept_at.as_deref())?, one.last_played) {
                     (_, None) => false,
@@ -147,7 +169,10 @@ impl Database {
                     (Some(kept_at), Some(at)) => at > kept_at,
                 },
             };
-            let play_count = i64::from(one.play_count).max(kept.as_ref().map_or(0, |(_, count)| *count));
+            let play_count = match replacing {
+                true => i64::from(one.play_count),
+                false => i64::from(one.play_count).max(kept.as_ref().map_or(0, |(_, count)| *count)),
+            };
             if !wins {
                 sqlx::query("UPDATE playback_progress SET play_count = ? WHERE user_id = ? AND work_id = ?")
                     .bind(play_count)
@@ -188,9 +213,20 @@ impl Database {
     }
 
     /// Adds the works an account liked on the other server to the ones it
-    /// likes here.
-    pub async fn take_up_favourites(&self, user: UserId, works: &[WorkId]) -> Result<()> {
+    /// likes here, or puts them in their place when `replacing`.
+    pub async fn take_up_favourites(
+        &self,
+        user: UserId,
+        works: &[WorkId],
+        replacing: bool,
+    ) -> Result<()> {
         let mut transaction = self.begin().await?;
+        if replacing {
+            sqlx::query("DELETE FROM favorites WHERE user_id = ?")
+                .bind(user.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
         let at = timestamp_to_text(now());
         for work in works {
             sqlx::query(
@@ -208,9 +244,21 @@ impl Database {
     }
 
     /// Merges how often an account listened to songs on the other server into
-    /// what it listened to here: the greater count, and the latest moment.
-    pub async fn take_up_listens(&self, user: UserId, taken: &[TakenListen]) -> Result<()> {
+    /// what it listened to here: the greater count, and the latest moment. Or
+    /// puts it in the place of what it listened to here, when `replacing`.
+    pub async fn take_up_listens(
+        &self,
+        user: UserId,
+        taken: &[TakenListen],
+        replacing: bool,
+    ) -> Result<()> {
         let mut transaction = self.begin().await?;
+        if replacing {
+            sqlx::query("DELETE FROM music_listens WHERE user_id = ?")
+                .bind(user.to_db_string())
+                .execute(&mut *transaction)
+                .await?;
+        }
         for one in taken {
             sqlx::query(
                 "INSERT INTO music_listens (user_id, song_id, listens, last_listened_at) VALUES (?, ?, ?, ?)
@@ -323,6 +371,7 @@ mod tests {
             .take_up_progress(
                 user,
                 &[TakenProgress { work: older_here, watched: false, play_count: 1, position: Millis::new(5_000), last_played: Some(early) }],
+                false,
             )
             .await
             .unwrap();
@@ -330,6 +379,7 @@ mod tests {
             .take_up_progress(
                 user,
                 &[TakenProgress { work: dated_here, watched: true, play_count: 2, position: Millis::ZERO, last_played: Some(early) }],
+                false,
             )
             .await
             .unwrap();
@@ -350,6 +400,7 @@ mod tests {
                     taken(older_here, false, 0, 90_000, Some(late)),
                     taken(dated_here, false, 0, 30_000, None),
                 ],
+                false,
             )
             .await
             .unwrap();
@@ -373,8 +424,8 @@ mod tests {
             .filter(|work| work.kind == WorkKind::Song)
             .map(|work| work.id)
             .collect();
-        database.take_up_favourites(user, &songs[..1]).await.unwrap();
-        database.take_up_favourites(user, &songs[..2]).await.unwrap();
+        database.take_up_favourites(user, &songs[..1], false).await.unwrap();
+        database.take_up_favourites(user, &songs[..2], false).await.unwrap();
         assert_eq!(database.music_favourite_ids(user).await.unwrap().len(), 2);
 
         let late = datetime!(2024-06-01 10:00 UTC);
@@ -386,11 +437,12 @@ mod tests {
                     TakenListen { song: songs[0], listens: 7, last_listened: None },
                     TakenListen { song: songs[1], listens: 3, last_listened: None },
                 ],
+                false,
             )
             .await
             .unwrap();
         database
-            .take_up_listens(user, &[TakenListen { song: songs[1], listens: 2, last_listened: Some(late) }])
+            .take_up_listens(user, &[TakenListen { song: songs[1], listens: 2, last_listened: Some(late) }], false)
             .await
             .unwrap();
         let listens: Vec<(String, i64, Option<String>)> =
@@ -402,5 +454,66 @@ mod tests {
         let of = |song: WorkId| listens.iter().find(|row| row.0 == song.to_db_string()).cloned().unwrap();
         assert_eq!((of(songs[0]).1, of(songs[0]).2), (7, Some(timestamp_to_text(late))));
         assert_eq!((of(songs[1]).1, of(songs[1]).2), (3, Some(timestamp_to_text(late))));
+    }
+
+    #[tokio::test]
+    async fn replacing_puts_the_other_server_in_the_place_of_what_was_here() {
+        let (database, _, _) = collection().await;
+        let user = somebody(&database).await;
+        let (films, _) = films(&database).await;
+        let mut works = Vec::new();
+        for title in ["one", "two", "three"] {
+            works.push(database.create_work(films, WorkKind::Movie, title, title, None).await.unwrap().id);
+        }
+        let [left_here, only_here, never_here] = works[..] else { unreachable!() };
+        let late = datetime!(2026-11-01 10:00 UTC);
+        for (work, at) in [(left_here, 600_000), (only_here, 300_000)] {
+            database
+                .record_playback_progress(user, work, Millis::new(at), PlaybackState::InProgress, late)
+                .await
+                .unwrap();
+        }
+        let early = datetime!(2026-09-01 10:00 UTC);
+        database
+            .take_up_progress(
+                user,
+                &[
+                    TakenProgress { work: left_here, watched: false, play_count: 1, position: Millis::new(90_000), last_played: Some(early) },
+                    TakenProgress { work: never_here, watched: true, play_count: 2, position: Millis::ZERO, last_played: None },
+                ],
+                true,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            kept(&database, user, left_here).await,
+            ("in_progress".into(), 90_000, 1, Some(timestamp_to_text(early))),
+            "the other server wins, older as it is"
+        );
+        assert_eq!(kept(&database, user, only_here).await, ("not_started".into(), 0, 0, None));
+        assert_eq!(kept(&database, user, never_here).await, ("watched".into(), 0, 2, None));
+
+        let songs: Vec<WorkId> = database
+            .works_to_match_against()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|work| work.kind == WorkKind::Song)
+            .map(|work| work.id)
+            .collect();
+        database.take_up_favourites(user, &songs[..2], false).await.unwrap();
+        database.take_up_favourites(user, &songs[2..3], true).await.unwrap();
+        assert_eq!(database.music_favourite_ids(user).await.unwrap().len(), 1);
+        database.record_listen(user, songs[0], late).await.unwrap();
+        database
+            .take_up_listens(user, &[TakenListen { song: songs[1], listens: 4, last_listened: None }], true)
+            .await
+            .unwrap();
+        let listens: Vec<(String, i64)> = sqlx::query_as("SELECT song_id, listens FROM music_listens WHERE user_id = ?")
+            .bind(user.to_db_string())
+            .fetch_all(database.reader())
+            .await
+            .unwrap();
+        assert_eq!(listens, vec![(songs[1].to_db_string(), 4)]);
     }
 }

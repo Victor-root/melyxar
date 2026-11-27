@@ -160,6 +160,10 @@ pub struct Choices {
     pub collections: Vec<String>,
     #[serde(default)]
     pub parts: Parts,
+    /// What each account taken up did over there replaces what it did here,
+    /// for the parts taken up, rather than being merged into it.
+    #[serde(default)]
+    pub replace: bool,
 }
 
 /// Which of what each account did is taken up; all of it unless said.
@@ -386,9 +390,14 @@ async fn taken_up(state: &AppState, who: &User, read: &Read, choices: &Choices) 
         report.taken.left_partway += progress.iter().filter(|one| !one.watched && one.position.get() > 0).count();
         report.taken.listens += listens.len();
         report.taken.favourites += favourites.len();
-        database.take_up_progress(*user, &progress).await?;
-        database.take_up_listens(*user, &listens).await?;
-        database.take_up_favourites(*user, &favourites).await?;
+        let replacing = choices.replace;
+        database
+            .take_up_progress(*user, &progress, replacing && (parts.watched || parts.left_partway))
+            .await?;
+        database.take_up_listens(*user, &listens, replacing && parts.listens).await?;
+        database
+            .take_up_favourites(*user, &favourites, replacing && parts.favourites)
+            .await?;
     }
 
     for playlist in backup.playlists.iter().filter(|_| choices.parts.playlists) {
@@ -729,6 +738,7 @@ mod tests {
             ],
             collections: vec!["Rainy days".into()],
             parts: Parts::default(),
+            replace: false,
         };
         let report = taken_up(&state, &ada, &read, &choices).await.unwrap();
         assert_eq!((report.accounts_joined, report.accounts_made), (1, 1));
@@ -761,12 +771,41 @@ mod tests {
                 accounts: vec![AccountChoice::Existing { key: "1".into(), user: ada.id }],
                 collections: vec!["Rainy days".into()],
                 parts: Parts::default(),
+                replace: false,
             },
         )
         .await
         .unwrap();
         assert_eq!((again.playlists, again.collections), (0, 0));
         assert_eq!(again.left_alone, vec!["Evening", "Rainy days"]);
+    }
+
+    #[tokio::test]
+    async fn replacing_leaves_an_account_with_what_it_did_over_there_and_nothing_else() {
+        let directory = tempfile::tempdir().unwrap();
+        let (state, ada, harbour, road, _) = a_server(directory.path()).await;
+        let database = state.database();
+        // Watched here since, and never played over there.
+        database
+            .record_playback_progress(ada.id, road, Millis::new(300_000), PlaybackState::InProgress, now())
+            .await
+            .unwrap();
+        let read = looked_for(&state, a_backup()).await.unwrap();
+        let choices = Choices {
+            accounts: vec![
+                AccountChoice::Existing { key: "1".into(), user: ada.id },
+                AccountChoice::Nothing { key: "2".into() },
+            ],
+            collections: vec![],
+            parts: Parts { playlists: false, ..Parts::default() },
+            replace: true,
+        };
+        taken_up(&state, &ada, &read, &choices).await.unwrap();
+
+        let watched = database.playback_progress(ada.id, harbour).await.unwrap().unwrap();
+        assert_eq!(watched.state, PlaybackState::Watched);
+        let left = database.playback_progress(ada.id, road).await.unwrap().unwrap();
+        assert_eq!((left.state, left.position), (PlaybackState::NotStarted, Millis::ZERO));
     }
 
     #[tokio::test]
@@ -781,6 +820,7 @@ mod tests {
             ],
             collections: vec![],
             parts: Parts { watched: false, favourites: false, playlists: false, ..Parts::default() },
+            replace: false,
         };
         let report = taken_up(&state, &ada, &read, &choices).await.unwrap();
         assert_eq!((report.taken.watched, report.taken.left_partway, report.taken.favourites), (0, 1, 0));

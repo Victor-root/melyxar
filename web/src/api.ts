@@ -1640,6 +1640,9 @@ export interface ImportChoices {
   /** The collections taken up, by their name over there. */
   collections: string[];
   parts: ImportParts;
+  /** What each account did over there replaces what it did here, for the
+   *  parts taken up, rather than being merged into it. */
+  replace: boolean;
 }
 
 /** What was taken up. */

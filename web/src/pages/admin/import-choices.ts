@@ -51,6 +51,7 @@ export function choicesOf(
   plans: Record<string, AccountPlan>,
   collections: Set<string>,
   parts: ImportParts,
+  replace: boolean,
 ): ImportChoices {
   const accounts: ImportAccountChoice[] = Object.entries(plans).map(([key, plan]) => {
     switch (plan.becomes) {
@@ -62,7 +63,7 @@ export function choicesOf(
         return { becomes: "nothing", key };
     }
   });
-  return { accounts, collections: [...collections], parts };
+  return { accounts, collections: [...collections], parts, replace };
 }
 
 /** Whether there is something to take up, and every account made has a name
